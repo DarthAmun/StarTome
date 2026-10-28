@@ -292,6 +292,9 @@
                   <option :value="null">— choose campaign —</option>
                   <option v-for="c in campaigns" :key="c.id" :value="c.id">{{ c.name }}</option>
                 </select>
+                <label class="sett-check sett-export-gm">
+                  <input type="checkbox" v-model="mdIncludeGmOnly" /> Include GM-only blocks
+                </label>
               </div>
               <button class="sett-btn" :disabled="!mdExportCampaignId || mdExporting" @click="exportCampaignMarkdown">
                 {{ mdExporting ? 'Exporting…' : '↓ Export' }}
@@ -306,6 +309,9 @@
                   <option :value="null">— choose campaign —</option>
                   <option v-for="c in campaigns" :key="c.id" :value="c.id">{{ c.name }}</option>
                 </select>
+                <label class="sett-check sett-export-gm">
+                  <input type="checkbox" v-model="claudeIncludeGmOnly" /> Include GM-only blocks
+                </label>
               </div>
               <button class="sett-btn sett-btn--claude" :disabled="!claudeExportCampaignId || claudeExporting" @click="exportCampaignForClaude">
                 {{ claudeExporting ? 'Building…' : '↓ Export' }}
@@ -421,6 +427,7 @@
 
 <script setup lang="ts">
 import { APP_NS, APP_NAME, exportFilename } from '~/utils/appNamespace'
+import { stripGmOnly } from '~/utils/gmContent'
 import JSZip from 'jszip'
 import { getDb, dbApi, compressDataUrl, now, getImageKeysByType } from '~/composables/useDb'
 import { THEMES, ACCENT_PRESETS } from '~/composables/useSettings'
@@ -489,8 +496,10 @@ const stats = ref<DbStats | null>(null)
 const campaigns = ref<{ id: number; name: string }[]>([])
 const mdExportCampaignId = ref<number | null>(null)
 const mdExporting = ref(false)
+const mdIncludeGmOnly = ref(true)
 const claudeExportCampaignId = ref<number | null>(null)
 const claudeExporting = ref(false)
+const claudeIncludeGmOnly = ref(true)
 
 const imgFolderOpen    = ref(false)
 const recompressing  = ref(false)
@@ -675,17 +684,18 @@ async function exportCampaignMarkdown() {
   try {
     const db = getDb()
     const campaignId = mdExportCampaignId.value
+    const gm = (md: string) => mdIncludeGmOnly.value ? md : stripGmOnly(md)
     const campaign = await db.campaigns.get(campaignId)
     if (!campaign) { alert('Campaign not found.'); return }
     const entities = (await dbApi.entities.list(campaignId)) as any[]
     const encounters = await db.encounters.where('campaign_id').equals(campaignId).toArray()
     const zip = new JSZip()
     const root = zip.folder(safeFilename(campaign.name))!
-    root.file('_index.md', [`---`, `name: "${campaign.name.replace(/"/g, '\\"')}"`, `---`, ``, `# ${campaign.name}`, ``, campaign.description ? wikilinkify(campaign.description) : '_No description._'].join('\n'))
+    root.file('_index.md', [`---`, `name: "${campaign.name.replace(/"/g, '\\"')}"`, `---`, ``, `# ${campaign.name}`, ``, campaign.description ? wikilinkify(gm(campaign.description)) : '_No description._'].join('\n'))
     const notesFolder = root.folder('notes')!
     for (const e of entities) {
       const folder = notesFolder.folder(safeFilename(e.type ?? 'misc'))!
-      folder.file(`${safeFilename(e.name ?? 'Unnamed')}.md`, [entityFrontmatter(e), '', `# ${e.name ?? 'Unnamed'}`, '', wikilinkify(e.content ?? e.notes ?? '') || '_No content._'].join('\n'))
+      folder.file(`${safeFilename(e.name ?? 'Unnamed')}.md`, [entityFrontmatter(e), '', `# ${e.name ?? 'Unnamed'}`, '', wikilinkify(gm(e.content ?? e.notes ?? '')) || '_No content._'].join('\n'))
     }
     if (encounters.length) {
       const encFolder = root.folder('encounters')!
@@ -773,6 +783,7 @@ async function exportCampaignForClaude() {
   try {
     const db = getDb()
     const campaignId = claudeExportCampaignId.value
+    const gm = (md: string) => claudeIncludeGmOnly.value ? md : stripGmOnly(md)
     const campaign = await db.campaigns.get(campaignId)
     if (!campaign) { alert('Campaign not found.'); return }
 
@@ -814,7 +825,7 @@ async function exportCampaignForClaude() {
       lines.push('')
       lines.push('## Campaign Overview')
       lines.push('')
-      lines.push(wikilinkify(campaign.description))
+      lines.push(wikilinkify(gm(campaign.description)))
     }
 
     const orderedTypes = [
@@ -840,7 +851,7 @@ async function exportCampaignForClaude() {
         const relatedLine = renderLinks(linksByEntity, e.id, entityIndex)
         if (relatedLine) lines.push(relatedLine)
 
-        const body = wikilinkify(e.content ?? e.notes ?? '')
+        const body = wikilinkify(gm(e.content ?? e.notes ?? ''))
         if (body.trim()) {
           lines.push('')
           lines.push(body.trim())
@@ -1117,6 +1128,7 @@ async function clearAll() {
 .sett-desc { font-size: 11px; color: var(--text3); line-height: 1.4; }
 .sett-check { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text2); cursor: pointer; user-select: none; }
 .sett-check input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
+.sett-export-gm { margin-top: 6px; }
 .sett-check-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 16px; margin-top: 8px; }
 .sett-data-cols { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
 

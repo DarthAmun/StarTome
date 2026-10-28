@@ -402,11 +402,12 @@
 </template>
 
 <script setup lang="ts">
+import { APP_NAME } from '~/utils/appNamespace'
 import { useSounds } from '~/composables/useSounds'
 import { useSoundPlayer } from '~/composables/useSoundPlayer'
 import type { DbSoundPlaylist, DbSoundTrack } from '~/composables/useDb'
 
-useHead({ title: 'Sounds — DM\'s Tome' })
+useHead({ title: `Sounds — ${APP_NAME}` })
 
 type AllView      = { type: 'all' }
 type TagView      = { type: 'tag'; tag: string }

@@ -20,7 +20,7 @@
 </template>
 
 <script setup lang="ts">
-import { CONDITION_CATALOG, getConditionColor, visibleConditions } from '~/composables/useConditions'
+import { conditionInfo, getConditionColor, visibleConditions } from '~/composables/useConditions'
 import type { TokenCondition } from '~/stores/encounter'
 
 interface Props {
@@ -95,7 +95,7 @@ const visibleChips = computed<ChipData[]>(() => {
 
     const flipLeft = midDeg > 180
 
-    const cat = CONDITION_CATALOG[cond.name]
+    const cat = conditionInfo(cond.name)
     const icon = cond.icon ?? cat?.icon ?? 'gi-circle'
     const color = cond.color ?? getConditionColor(cond.name)
     const label = cond.value !== null ? `${cond.name} ${cond.value}` : cond.name

@@ -136,7 +136,7 @@
               <button
                 class="tem-timer-btn"
                 :class="{ 'tem-timer-btn--on': tmr.visibleToPlayers }"
-                :title="tmr.visibleToPlayers ? 'Shown to players' : 'DM only'"
+                :title="tmr.visibleToPlayers ? 'Shown to players' : 'GM only'"
                 @click="tmr.visibleToPlayers = !tmr.visibleToPlayers"
               >
                 <OhVueIcon :name="tmr.visibleToPlayers ? 'md-visibility' : 'md-visibilityoff'" scale="0.75" />
@@ -198,7 +198,7 @@
               v-model="localNotes"
               class="tem-textarea"
               rows="3"
-              placeholder="Notes visible to DM only…"
+              placeholder="Notes visible to GM only…"
             />
           </div>
 

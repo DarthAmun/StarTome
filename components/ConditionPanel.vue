@@ -28,10 +28,15 @@
             />
           </div>
 
+          <div v-else-if="builtin" class="cond-panel-notfound">
+            <OhVueIcon :name="builtin.icon" scale="2.5" class="cond-panel-notfound-icon" :style="{ color: builtin.color }" />
+            <p class="cond-panel-notfound-text">{{ builtin.desc }}</p>
+            <p class="cond-panel-notfound-hint">Quick reminder only. Full rules text arrives with the compendium sync.</p>
+          </div>
+
           <div v-else class="cond-panel-notfound">
             <OhVueIcon name="gi-poison" scale="2.5" class="cond-panel-notfound-icon" />
-            <p class="cond-panel-notfound-text">No record found for<br><strong>{{ conditionName }}</strong></p>
-            <p class="cond-panel-notfound-hint">Add a "condition" entity type to your system and create a matching record to see details here.</p>
+            <p class="cond-panel-notfound-text">No details found for<br><strong>{{ conditionName }}</strong></p>
           </div>
         </div>
       </div>
@@ -42,10 +47,13 @@
 <script setup lang="ts">
 import { getDb, parseRecordData } from '~/composables/useDb'
 import { useSystems } from '~/composables/useSystems'
+import { conditionInfo } from '~/composables/useConditions'
+import type { GameId } from '~/types/game'
 
 const props = defineProps<{
   conditionName: string
   systemId: number | null
+  game?: GameId
   value?: number | null
   open: boolean
 }>()
@@ -56,6 +64,10 @@ const systemsStore = useSystems()
 const loading = ref(false)
 const record = ref<{ name: string; data: Record<string, any> } | null>(null)
 const entityType = ref<any | null>(null)
+const builtin = computed(() => {
+  const info = conditionInfo(props.conditionName)
+  return info && info.games.includes(props.game ?? 'pf2e') ? info : null
+})
 
 async function loadCondition() {
   if (!props.conditionName || !props.systemId) { record.value = null; entityType.value = null; return }

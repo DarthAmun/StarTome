@@ -18,8 +18,7 @@
         </button>
       </div>
       <div v-else class="wcg-empty">
-        No conditions found in linked system.<br>
-        <span class="wcg-empty-hint">Create a "condition" entity type in your system to populate this widget.</span>
+        No conditions found.
       </div>
     </template>
 
@@ -29,6 +28,7 @@
     <ConditionPanel
       :condition-name="panelName"
       :system-id="systemId"
+      :game="game"
       :open="panelOpen"
       @close="panelOpen = false"
     />
@@ -37,8 +37,10 @@
 
 <script setup lang="ts">
 import { getDb, parseRecordData } from '~/composables/useDb'
+import { builtinConditions } from '~/composables/useConditions'
+import type { GameId } from '~/types/game'
 
-const props = defineProps<{ systemId: number | null }>()
+const props = defineProps<{ systemId: number | null; game?: GameId }>()
 
 const loading = ref(false)
 const panelOpen = ref(false)
@@ -47,37 +49,6 @@ const panelName = ref('')
 interface Condition { name: string; summary: string }
 const conditions = ref<Condition[]>([])
 
-const FALLBACK: Condition[] = [
-  { name: 'Blinded',     summary: 'Cannot see; auto-fail sight checks.' },
-  { name: 'Charmed',     summary: 'Cannot attack charmer; charmer has advantage.' },
-  { name: 'Clumsy',      summary: 'Penalty to Dex-based checks and AC.' },
-  { name: 'Confused',    summary: 'Acts randomly; may attack allies.' },
-  { name: 'Dazzled',     summary: 'Everything is concealed.' },
-  { name: 'Deafened',    summary: 'Cannot hear; penalty to initiative.' },
-  { name: 'Doomed',      summary: 'Dying threshold is reduced.' },
-  { name: 'Drained',     summary: 'Penalty to Con checks; lose max HP.' },
-  { name: 'Dying',       summary: 'Unconscious and approaching death.' },
-  { name: 'Enfeebled',   summary: 'Penalty to Str-based checks and damage.' },
-  { name: 'Fatigued',    summary: '-1 AC and saves; no exploration activities.' },
-  { name: 'Flat-Footed', summary: '-2 circumstance penalty to AC.' },
-  { name: 'Fleeing',     summary: 'Must move away from the source each action.' },
-  { name: 'Frightened',  summary: 'Penalty to all checks; reduces each turn.' },
-  { name: 'Grabbed',     summary: 'Immobilized and flat-footed.' },
-  { name: 'Immobilized', summary: 'Cannot move voluntarily.' },
-  { name: 'Invisible',   summary: 'Cannot be seen; harder to detect.' },
-  { name: 'Paralyzed',   summary: 'Cannot act; flat-footed.' },
-  { name: 'Petrified',   summary: 'Turned to stone; object immunities.' },
-  { name: 'Poisoned',    summary: 'Afflicted by a poison; takes stage effects.' },
-  { name: 'Prone',       summary: '-2 attack rolls; melee +1 vs you.' },
-  { name: 'Quickened',   summary: 'Gain 1 extra action per turn.' },
-  { name: 'Restrained',  summary: 'Grabbed and immobilized.' },
-  { name: 'Sickened',    summary: 'Penalty to all checks and DCs.' },
-  { name: 'Slowed',      summary: 'Fewer actions per turn.' },
-  { name: 'Stunned',     summary: 'Lose actions each turn.' },
-  { name: 'Stupefied',   summary: 'Penalty to Int/Wis/Cha; spell failure.' },
-  { name: 'Unconscious', summary: 'Unable to act; prone, blinded, flat-footed.' },
-  { name: 'Wounded',     summary: 'Dying value increases next time you fall.' },
-]
 
 async function load() {
   loading.value = true
@@ -106,7 +77,7 @@ async function load() {
         return
       }
     }
-    conditions.value = FALLBACK
+    conditions.value = builtinConditions(props.game ?? 'pf2e').map(c => ({ name: c.name, summary: c.desc }))
   } finally {
     loading.value = false
   }
@@ -118,7 +89,7 @@ function openCondition(name: string) {
 }
 
 onMounted(load)
-watch(() => props.systemId, load)
+watch(() => [props.systemId, props.game], load)
 </script>
 
 <style scoped>

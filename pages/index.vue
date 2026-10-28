@@ -4,7 +4,7 @@
         <div class="home-header">
             <div class="home-greeting">
                 <h1 class="home-greeting-title">
-                    {{ greeting }}, Dungeon Master.
+                    {{ greeting }}, Game Master.
                 </h1>
                 <p class="home-greeting-sub">
                     {{ campaigns.length }} campaign{{
@@ -48,7 +48,7 @@
                                     {{ c.name }}
                                 </div>
                                 <div class="home-camp-banner-sys">
-                                    {{ systemName(c.system_id) || "No system" }}
+                                    {{ GAME_CONFIG[campaignGame(c)].label }}
                                 </div>
                             </div>
                             <div class="home-camp-card-actions" @click.stop>
@@ -328,7 +328,28 @@
                             />
                         </div>
                         <div class="dlg-field">
-                            <label class="f-label">System</label>
+                            <label class="f-label">Game</label>
+                            <select
+                                class="f-input-box f-select"
+                                v-model="editCampForm.game"
+                            >
+                                <option v-for="g in GAME_IDS" :key="g" :value="g">
+                                    {{ GAME_CONFIG[g].label }}
+                                </option>
+                            </select>
+                        </div>
+                        <div class="dlg-field">
+                            <label class="f-label">Advancement</label>
+                            <select
+                                class="f-input-box f-select"
+                                v-model="editCampForm.advancement"
+                            >
+                                <option value="xp">Experience points</option>
+                                <option value="milestone">Milestones</option>
+                            </select>
+                        </div>
+                        <div v-if="systems.length" class="dlg-field">
+                            <label class="f-label">Rules library (legacy)</label>
                             <select
                                 class="f-input-box f-select"
                                 v-model="editCampForm.systemId"
@@ -414,6 +435,7 @@
 
 <script setup lang="ts">
 import { useSystems } from "~/composables/useSystems";
+import { GAME_CONFIG, GAME_IDS, campaignGame, campaignRules, type AdvancementMode, type GameId } from "~/types/game";
 import { dbApi } from "~/composables/useDb";
 import { useFormatters } from "~/composables/useFormatters";
 import { useAppDialogs } from "~/composables/useAppDialogs";
@@ -547,10 +569,6 @@ const activeQuests = computed(() =>
 )
 
 // ── Navigation ────────────────────────────────────────────────────────────────
-function systemName(id?: number | null) {
-    return id ? (store.getSystem(id)?.name ?? null) : null;
-}
-
 const TYPE_PLURAL_ROUTE: Record<string, string> = {
     npc: "npcs",
     location: "locations",
@@ -598,6 +616,8 @@ const editCampForm = ref({
     name: "",
     description: "",
     systemId: null as number | null,
+    game: 'pf2e' as GameId,
+    advancement: 'xp' as AdvancementMode,
 });
 
 function startEditCampaign(c: any) {
@@ -606,6 +626,8 @@ function startEditCampaign(c: any) {
         name: c.name,
         description: c.description ?? "",
         systemId: c.system_id ?? null,
+        game: campaignGame(c),
+        advancement: campaignRules(c).advancement,
     };
 }
 
@@ -615,6 +637,8 @@ async function saveEditCampaign() {
         name: editCampForm.value.name,
         description: editCampForm.value.description,
         system_id: editCampForm.value.systemId ?? undefined,
+        game: editCampForm.value.game,
+        rules: { ...campaignRules(editingCamp.value), advancement: editCampForm.value.advancement },
     });
     const idx = campaigns.value.findIndex((c) => c.id === editingCamp.value.id);
     if (idx !== -1 && updated) campaigns.value[idx] = updated;

@@ -9,7 +9,7 @@
     />
     <div v-else class="map-waiting">
       <OhVueIcon name="gi-treasure-map" scale="4" style="opacity:0.12;margin-bottom:20px" />
-      <p class="map-waiting-text">Waiting for the DM to share a map…</p>
+      <p class="map-waiting-text">Waiting for the GM to share a map…</p>
     </div>
   </div>
 </template>

@@ -26,6 +26,7 @@
 import Dexie, { type Table } from 'dexie'
 import type { EntityTypeSchema } from '~/types/entities'
 import { DB_NAME, channelName, windowName } from '~/utils/appNamespace'
+import type { CampaignRules, GameId } from '~/types/game'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export interface DbCampaign {
@@ -34,6 +35,8 @@ export interface DbCampaign {
   description: string
   banner_source?: string | null  // base64 data URL or http URL
   banner_type?: 'file' | 'url'
+  game?: GameId                  // missing on campaigns imported from DM's Tome → read via campaignGame()
+  rules?: Partial<CampaignRules> // read via campaignRules()
   created_at: string
   updated_at: string
 }
@@ -336,13 +339,13 @@ export const dbApi = {
     async get(id: number) {
       return getDb().campaigns.get(id)
     },
-    async create(data: { name: string; description?: string }) {
+    async create(data: { name: string; description?: string; game?: GameId; rules?: Partial<CampaignRules> }) {
       const db = getDb()
       const ts = now()
-      const id = await db.campaigns.add({ name: data.name, description: data.description ?? '', created_at: ts, updated_at: ts })
+      const id = await db.campaigns.add({ name: data.name, description: data.description ?? '', game: data.game ?? 'pf2e', rules: data.rules ?? {}, created_at: ts, updated_at: ts })
       return db.campaigns.get(id)
     },
-    async update(id: number, data: { name?: string; description?: string; system_id?: number | null }) {
+    async update(id: number, data: { name?: string; description?: string; system_id?: number | null; game?: GameId; rules?: Partial<CampaignRules> }) {
       const db = getDb()
       await db.campaigns.update(id, { ...data, updated_at: now() })
       return db.campaigns.get(id)
@@ -374,6 +377,8 @@ export const dbApi = {
         banner_source: source.banner_source ?? null,
         banner_type: source.banner_type,
         system_id: (source as any).system_id ?? null,
+        game: source.game,
+        rules: source.rules,
         created_at: ts,
         updated_at: ts,
       } as DbCampaign) as number

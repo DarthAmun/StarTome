@@ -74,10 +74,10 @@
               <OhVueIcon name="gi-all-seeing-eye" scale="0.75" style="color: #7cc44e" />
             </NuxtLink>
             <NuxtLink
-              :to="`/campaign/${c.id}/dm-screen`"
+              :to="`/campaign/${c.id}/gm-screen`"
               class="sb-icon-link"
-              :class="{ active: route.path === `/campaign/${c.id}/dm-screen` }"
-              data-tip="DM Screen"
+              :class="{ active: route.path === `/campaign/${c.id}/gm-screen` }"
+              data-tip="GM Screen"
             >
               <OhVueIcon name="gi-crystal-ball" scale="0.75" style="color: #b87de8" />
             </NuxtLink>
@@ -189,12 +189,12 @@
                 <span>Graphs</span>
               </NuxtLink>
               <NuxtLink
-                :to="`/campaign/${c.id}/dm-screen`"
+                :to="`/campaign/${c.id}/gm-screen`"
                 class="sb-child-tool"
-                :class="{ active: route.path === `/campaign/${c.id}/dm-screen` }"
+                :class="{ active: route.path === `/campaign/${c.id}/gm-screen` }"
               >
                 <OhVueIcon name="gi-crystal-ball" scale="0.65" style="color:#b87de8;width:14px;flex-shrink:0" />
-                <span>DM Screen</span>
+                <span>GM Screen</span>
               </NuxtLink>
             </div>
           </Transition>

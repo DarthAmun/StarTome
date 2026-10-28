@@ -556,11 +556,11 @@ interface PartyLink {
 ## 11. Phases
 Each phase ends with a working, deployable app.
 
-### Phase 0: Fork, namespace, test runner (small) — ✅ done 2026-10-28 (uncommitted)
+### Phase 0: Fork, namespace, test runner (small) — ✅ done 2026-10-28 (`8fdc075`)
 Repo + upstream remote. Identity. `appNamespace.ts`. Dexie `startome` v1. Port 3001. **Vitest.**
 **Done when:** both apps run side by side on one origin.
 
-### Phase 1: Game identity & basics (small)
+### Phase 1: Game identity & basics (small) — ✅ done 2026-10-28
 `campaigns.game/rules`. `stripGmOnly()` (+ tests) in the exports. GM wording. New seed. A temporary built-in remaster condition list (replaced by synced conditions in phase 3).
 **Done when:** a PF2e campaign works end to end; the old library is untouched.
 

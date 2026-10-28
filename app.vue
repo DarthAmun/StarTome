@@ -31,7 +31,7 @@
           <div class="pv-dialog-content">
             <div class="dlg-field">
               <label class="f-label">Title</label>
-              <input class="f-input-box" v-model="newCamp.name" placeholder="Curse of Strahd…"
+              <input class="f-input-box" v-model="newCamp.name" placeholder="Abomination Vaults…"
                 @keyup.enter="createCampaign" autofocus />
             </div>
             <div class="dlg-field">
@@ -39,7 +39,13 @@
               <textarea class="f-input-box f-textarea" v-model="newCamp.description" placeholder="A dark tale of…" rows="3" />
             </div>
             <div class="dlg-field">
-              <label class="f-label">System</label>
+              <label class="f-label">Game</label>
+              <select class="f-input-box f-select" v-model="newCamp.game">
+                <option v-for="g in GAME_IDS" :key="g" :value="g">{{ GAME_CONFIG[g].label }}</option>
+              </select>
+            </div>
+            <div v-if="systems.length" class="dlg-field">
+              <label class="f-label">Rules library (legacy)</label>
               <select class="f-input-box f-select" v-model="newCamp.systemId">
                 <option :value="null">— none —</option>
                 <option v-for="s in systems" :key="s.id" :value="s.id">{{ s.name }}</option>
@@ -101,6 +107,7 @@ import { useBookmarks } from '~/composables/useBookmarks'
 import { useAppDialogs } from '~/composables/useAppDialogs'
 import { useSystems } from '~/composables/useSystems'
 import { dbApi } from '~/composables/useDb'
+import { GAME_CONFIG, GAME_IDS, type GameId } from '~/types/game'
 const { settings } = useSettings()
 useBookmarks()
 
@@ -118,14 +125,14 @@ const systemsStore = useSystems()
 const systems = computed(() => systemsStore.systems)
 onMounted(() => { if (!systems.value.length) systemsStore.loadAll() })
 
-const newCamp = ref({ name: '', description: '', systemId: null as number | null })
+const newCamp = ref({ name: '', description: '', game: 'pf2e' as GameId, systemId: null as number | null })
 const newSys = ref({ name: '', shortId: '', description: '' })
 
 async function createCampaign() {
   if (!newCamp.value.name.trim()) return
-  const c = await dbApi.campaigns.create({ name: newCamp.value.name, description: newCamp.value.description })
+  const c = await dbApi.campaigns.create({ name: newCamp.value.name, description: newCamp.value.description, game: newCamp.value.game })
   if (newCamp.value.systemId) await dbApi.campaigns.update(c.id, { system_id: newCamp.value.systemId })
-  newCamp.value = { name: '', description: '', systemId: null }
+  newCamp.value = { name: '', description: '', game: 'pf2e', systemId: null }
   showNewCampaign.value = false
   sidebarRef.value?.reload()
   router.push(`/campaign/${c.id}/sessions`)

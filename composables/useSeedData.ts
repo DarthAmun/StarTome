@@ -1,5 +1,5 @@
 /**
- * First-run seed data — creates a guided demo campaign and system.
+ * First-run seed data — creates a guided PF2e demo campaign.
  * Only runs once (guarded by localStorage flag) and only if the DB is empty.
  */
 import { getDb } from '~/composables/useDb'
@@ -34,7 +34,7 @@ The editor supports full markdown:
 Use Obsidian-style callouts for tips, warnings, and lore:
 
 > [!NOTE]
-> This is a note callout. Great for DM reminders or boxed text.
+> This is a note callout. Great for GM reminders or boxed text.
 
 > [!WARNING]
 > Use this for important warnings your future self needs to see.
@@ -51,6 +51,15 @@ Reference any other entry using double curly braces:
 These become **clickable links** in preview mode. Open either linked entry and you'll see this note listed under *Linked From* — forming a bidirectional knowledge graph.
 
 The **network icon** in the toolbar opens the full graph view showing how all your entries connect.
+
+## GM-only Blocks
+
+In **mixed** view, hover a paragraph and click the **lock** icon to mark it as GM-only. It becomes a hidden callout:
+
+> [!hidden]
+> Players never see this. It is left out of printouts, and exports can strip it too.
+
+Use it for secrets inside otherwise player-safe text — like the one in {{npc: Aldric Vane}}'s entry.
 
 ## View Modes
 
@@ -83,9 +92,10 @@ A weathered sellsword who has operated in the eastern territories for two decade
 
 **Personality:** Laconic, observant, drinks too much. Fiercely loyal once trust is established.
 
-**Secret:** Aldric was once a junior member of {{faction: The Obsidian Circle}}. He fled after witnessing their first ritual and has been running from them ever since.
+> [!hidden] Secret
+> Aldric was once a junior member of {{faction: The Obsidian Circle}}. He fled after witnessing their first ritual and has been running from them ever since.
 
-**Roleplaying Hook:** He'll initially deny knowing anything about the Circle. A DC 15 Insight check reveals he's lying. A DC 12 Persuasion check (after buying him a drink) gets him talking.`,
+**Roleplaying Hook:** He'll initially deny knowing anything about the Circle. Sense Motive (DC 20 Perception) reveals he's lying. Making an Impression with Diplomacy (DC 18, after buying him a drink) gets him talking.`,
   },
   {
     type: 'location',
@@ -177,7 +187,7 @@ Elder Maren has tasked the party with locating the Fourth Sealing Stone before {
 **Urgency:** The Circle has a two-day head start.
 
 **Complications:**
-- The Glass Fields around the epicenter are magically unstable (concentration checks every hour)
+- The Glass Fields around the epicenter are magically unstable (spells cast there need a DC 5 flat check or fizzle)
 - {{npc: Aldric Vane}} knows the cave routes but won't go inside
 
 **Objective Tracker:**
@@ -245,7 +255,7 @@ Review the quest hook: the party has accepted Elder Maren's commission and are t
 Read aloud when they crest the hill:
 > *"The road ahead cuts through open farmland, the kind of flat country where you can see trouble coming — or be seen. Smoke rises in thin columns from somewhere beyond the next ridge."*
 
-**Hook:** A merchant cart is racing toward them from the east. The merchant is pale and won't stop. A DC 10 Perception check spots blood on the cart wheel.
+**Hook:** A merchant cart is racing toward them from the east. The merchant is pale and won't stop. A DC 15 Perception check spots blood on the cart wheel.
 
 ---
 
@@ -272,9 +282,9 @@ Arrive at dusk. The air smells of sulfur. The black glass fields catch the last 
 
 The merchant encounter worked perfectly — they chased the cart down and got the backstory hook.
 
-The ambush went badly for the party. Carol cast Hypnotic Pattern and took out 2 goblins immediately, but the hobgoblin flanked and dropped her to 3 HP. Aldous burned a 2nd level slot to Cure Wounds mid-combat.
+The ambush went badly for the party. Carol cast Fear and sent 2 goblins fleeing, but the hobgoblin caught her off-guard and dropped her to 3 HP. Aldous spent two actions on a 2nd-rank Heal mid-combat.
 
-They found the letter. Carol spent 10 minutes translating the Goblin — turns out she hadn't taken the language, so we made it a DC 14 Int check (barely passed).
+They found the letter. Carol spent 10 minutes translating the Goblin — turns out she didn't know the language, so she had to Decipher Writing with Society (DC 15, barely passed).
 
 **The Aldric Scene:** Bob immediately suspected him of being a plant. The whole table got paranoid. We ended the session there — great cliffhanger.
 
@@ -291,7 +301,7 @@ Session entries track individual play sessions — your prep notes beforehand an
 
 Each session has **two separate markdown areas** accessible from the sidebar:
 
-- **Script / Prep** — written before the session: scenes, NPC stats, boxed read-aloud text, encounter triggers, potential hooks. Only the DM ever sees this.
+- **Script / Prep** — written before the session: scenes, NPC stats, boxed read-aloud text, encounter triggers, potential hooks. Only the GM ever sees this.
 - **Live Notes** — written during or after: what the players actually did, surprising decisions, notes for next time.
 
 Keeping them separate means your prep isn't cluttered with in-session chaos, and your session record isn't buried in prep you never used.
@@ -313,89 +323,6 @@ Use the **Mode** dropdown in the sidebar to move sessions through states:
 ## The Battlefield Tab
 
 For tactical encounters, use the **Encounters** section (sword icon on the campaign spine). Each encounter gets its own map, token grid, fog of war, and HP tracker — completely separate from these session notes.`,
-  },
-]
-
-// ── Demo system entity types ───────────────────────────────────────────────
-
-const DEMO_SYSTEM_ENTITY_TYPES = [
-  {
-    id: 'character',
-    name: 'Character',
-    plural: 'Characters',
-    icon: 'gi-person',
-    color: '#7cc44e',
-    fields: [
-      { key: 'class', label: 'Class', component: 'text', config: { placeholder: 'Fighter, Wizard, Rogue…' }, required: false, showInCard: true, showInHeader: true, sortable: true },
-      { key: 'level', label: 'Level', component: 'number', config: { min: 1, max: 20 }, required: false, showInCard: true, showInHeader: true, sortable: true },
-      { key: 'hp', label: 'Hit Points', component: 'tracker', config: { defaultMax: 10 }, required: false, showInCard: true, showInHeader: true, sortable: false },
-      { key: 'stats', label: 'Ability Scores', component: 'statblock', config: { stats: ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'], showModifier: true }, required: false, showInCard: false, showInHeader: false, sortable: false },
-      { key: 'conditions', label: 'Conditions', component: 'conditions', config: { conditions: ['Blinded', 'Charmed', 'Deafened', 'Frightened', 'Grappled', 'Incapacitated', 'Paralyzed', 'Poisoned', 'Prone', 'Stunned', 'Unconscious'] }, required: false, showInCard: false, showInHeader: false, sortable: false },
-      { key: 'notes', label: 'Notes', component: 'textarea', config: { rows: 5, placeholder: 'Background, bonds, flaws…' }, required: false, showInCard: false, showInHeader: false, sortable: false },
-    ],
-    sections: [
-      { id: 'overview', title: 'Overview', style: 'three-col', fields: ['class', 'level', 'hp'] },
-      { id: 'core', title: 'Ability Scores', style: 'full', fields: ['stats'] },
-      { id: 'status', title: 'Status', style: 'full', fields: ['conditions'] },
-      { id: 'misc', title: 'Notes', style: 'full', fields: ['notes'] },
-    ],
-  },
-  {
-    id: 'spell',
-    name: 'Spell',
-    plural: 'Spells',
-    icon: 'gi-sparkles',
-    color: '#a87de8',
-    fields: [
-      { key: 'spellLevel', label: 'Level', component: 'number', config: { min: 0, max: 9 }, required: false, showInCard: true, showInHeader: true, sortable: true },
-      { key: 'school', label: 'School', component: 'select', config: { options: ['Abjuration', 'Conjuration', 'Divination', 'Enchantment', 'Evocation', 'Illusion', 'Necromancy', 'Transmutation'] }, required: false, showInCard: true, showInHeader: false, sortable: true },
-      { key: 'castingTime', label: 'Casting Time', component: 'text', config: { placeholder: '1 action' }, required: false, showInCard: false, showInHeader: false, sortable: false },
-      { key: 'range', label: 'Range', component: 'text', config: { placeholder: '60 ft' }, required: false, showInCard: false, showInHeader: false, sortable: false },
-      { key: 'damage', label: 'Damage', component: 'dice', config: { defaultExpression: '2d6' }, required: false, showInCard: true, showInHeader: false, sortable: false },
-      { key: 'description', label: 'Description', component: 'textarea', config: { rows: 8, placeholder: 'What the spell does…' }, required: false, showInCard: false, showInHeader: false, sortable: false },
-    ],
-    sections: [
-      { id: 'header', title: 'Details', style: 'two-col', fields: ['spellLevel', 'school', 'castingTime', 'range', 'damage'] },
-      { id: 'body', title: 'Description', style: 'full', fields: ['description'] },
-    ],
-  },
-  {
-    id: 'monster',
-    name: 'Monster',
-    plural: 'Monsters',
-    icon: 'gi-evil-bat',
-    color: '#e05555',
-    fields: [
-      { key: 'cr', label: 'Challenge Rating', component: 'text', config: { placeholder: '1/4, 1, 5…' }, required: false, showInCard: true, showInHeader: true, sortable: true },
-      { key: 'type', label: 'Type', component: 'select', config: { options: ['Aberration', 'Beast', 'Celestial', 'Construct', 'Dragon', 'Elemental', 'Fey', 'Fiend', 'Giant', 'Humanoid', 'Monstrosity', 'Ooze', 'Plant', 'Undead'] }, required: false, showInCard: true, showInHeader: false, sortable: true },
-      { key: 'hp', label: 'Hit Points', component: 'tracker', config: { defaultMax: 20 }, required: false, showInCard: true, showInHeader: true, sortable: false },
-      { key: 'ac', label: 'Armor Class', component: 'number', config: { min: 1, max: 30 }, required: false, showInCard: true, showInHeader: true, sortable: true },
-      { key: 'speed', label: 'Speed', component: 'speed', config: { speedModes: ['Walk', 'Fly', 'Swim', 'Burrow'], speedUnit: 'ft' }, required: false, showInCard: false, showInHeader: false, sortable: false },
-      { key: 'stats', label: 'Ability Scores', component: 'statblock', config: { stats: ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'], showModifier: true }, required: false, showInCard: false, showInHeader: false, sortable: false },
-      { key: 'attack', label: 'Attack', component: 'attack', config: {}, required: false, showInCard: false, showInHeader: false, sortable: false },
-      { key: 'traits', label: 'Traits & Actions', component: 'textarea', config: { rows: 8, placeholder: 'Describe abilities, actions, reactions…' }, required: false, showInCard: false, showInHeader: false, sortable: false },
-    ],
-    sections: [
-      { id: 'header', title: 'Combat', style: 'three-col', fields: ['cr', 'hp', 'ac'] },
-      { id: 'movement', title: 'Speed', style: 'full', fields: ['speed'] },
-      { id: 'core', title: 'Ability Scores', style: 'full', fields: ['stats'] },
-      { id: 'attacks', title: 'Attacks', style: 'full', fields: ['attack'] },
-      { id: 'traits', title: 'Traits & Actions', style: 'full', fields: ['traits'] },
-    ],
-  },
-  {
-    id: 'item',
-    name: 'Item',
-    plural: 'Items',
-    icon: 'gi-open-treasure-chest',
-    color: '#ebbd34',
-    fields: [
-      { key: 'rarity', label: 'Rarity', component: 'select', config: { options: ['Common', 'Uncommon', 'Rare', 'Very Rare', 'Legendary', 'Artifact'] }, required: false, showInCard: true, showInHeader: true, sortable: true },
-      { key: 'value', label: 'Value', component: 'text', config: { placeholder: '100 gp' }, required: false, showInCard: true, showInHeader: false, sortable: false },
-      { key: 'attunement', label: 'Requires Attunement', component: 'toggle', config: {}, required: false, showInCard: true, showInHeader: false, sortable: false },
-      { key: 'charges', label: 'Charges', component: 'tracker', config: { defaultMax: 10 }, required: false, showInCard: false, showInHeader: false, sortable: false },
-      { key: 'description', label: 'Description', component: 'textarea', config: { rows: 8, placeholder: 'Properties, lore, appearance…' }, required: false, showInCard: false, showInHeader: false, sortable: false },
-    ],
   },
 ]
 
@@ -421,6 +348,8 @@ export async function seedIfEmpty() {
   const campaignId = await db.campaigns.add({
     name: 'Welcome to StarTome',
     description: "A guided tour of every feature. Each entry below explains how that section works. Delete this campaign whenever you're ready to start your real adventure.",
+    game: 'pf2e',
+    rules: { advancement: 'xp' },
     created_at: ts,
     updated_at: ts,
   }) as number
@@ -471,17 +400,6 @@ export async function seedIfEmpty() {
     viewport: JSON.stringify({ x: 0, y: 0, scale: 1 }),
     created_at: ts,
     updated_at: ts,
-  })
-
-  // ── Demo System ────────────────────────────────────────────────────────
-  await db.systems.add({
-    name: 'Demo System',
-    shortId: 'demo',
-    description: "A demonstration system showing the custom rule builder. It includes Characters, Spells, Monsters, and Items — each with a variety of field types so you can see what's possible. Open the Builder tab (anvil icon) to explore and edit.",
-    version: '1.0',
-    entityTypes: JSON.stringify(DEMO_SYSTEM_ENTITY_TYPES),
-    createdAt: ts,
-    updatedAt: ts,
   })
 
   localStorage.setItem(SEED_KEY, '1')

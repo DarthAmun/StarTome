@@ -205,7 +205,7 @@
                         v-if="!readonly && activeBlock !== i"
                         class="mixed-redact-btn"
                         :class="{ 'mixed-redact-btn--active': isBlockRedacted(i) }"
-                        :title="isBlockRedacted(i) ? 'Unmark as DM only' : 'Mark as DM only (hidden from players)'"
+                        :title="isBlockRedacted(i) ? 'Unmark as GM only' : 'Mark as GM only (hidden from players)'"
                         @click.stop="toggleBlockRedacted(i)"
                     ><OhVueIcon name="md-lock" scale="0.75" /></button>
                 </div>
@@ -2086,7 +2086,7 @@ onUnmounted(() => {
     --callout-color: #8b2030;
 }
 .callout--hidden .callout-title::after {
-    content: ' — DM only';
+    content: ' — GM only';
     font-size: 10px;
     opacity: 0.6;
     font-style: normal;

@@ -42,7 +42,7 @@
 
         <!-- FOV mode toggle (run mode only; grayed when FOV disabled) -->
         <div v-if="mode === 'run'" class="enc-fov-mode-toggle" :class="{ 'enc-fov-mode-toggle--off': !encounter?.fovEnabled }" :title="encounter?.fovEnabled ? '' : 'Enable FOV & Walls in Prepare mode to use vision control'">
-          <button class="fov-mode-btn" :class="{ active: store.fovMode === 'gm' }" :disabled="!encounter?.fovEnabled" title="DM sees all" @click="setFovMode('gm')">
+          <button class="fov-mode-btn" :class="{ active: store.fovMode === 'gm' }" :disabled="!encounter?.fovEnabled" title="GM sees all" @click="setFovMode('gm')">
             GM
           </button>
           <button class="fov-mode-btn" :class="{ active: store.fovMode === 'active' }" :disabled="!encounter?.fovEnabled" title="Active turn token's vision" @click="setFovMode('active')">
@@ -773,6 +773,7 @@
       <ConditionModal
         :token="conditionToken"
         :system-id="linkCampaignSystemId"
+        :game="campaignGameId"
         :open="!!conditionToken"
         @close="conditionToken = null"
         @update="onConditionUpdate"
@@ -846,6 +847,7 @@
       <ConditionPanel
         :condition-name="conditionPanelName"
         :system-id="linkCampaignSystemId"
+        :game="campaignGameId"
         :value="conditionPanelValue"
         :open="conditionPanelOpen"
         @close="conditionPanelOpen = false"
@@ -1068,6 +1070,7 @@
 
 <script setup lang="ts">
 import { lsKey } from '~/utils/appNamespace'
+import { campaignGame, type GameId } from '~/types/game'
 import { useEncounterStore } from "~/stores/encounter";
 import type { EncounterToken } from "~/stores/encounter";
 import { useEncounterCanvas, type ShapeType, type ShapeOverlay } from "../../../composables/useEncounterCanvas";
@@ -1167,6 +1170,7 @@ const editingToken = ref<EncounterToken | null>(null);
 const linkModalOpen = ref(false);
 const linkPendingTokenId = ref<number | null>(null);
 const linkCampaignSystemId = ref<number | null>(null);
+const campaignGameId = ref<GameId>("pf2e");
 const linkRecordsLoading = ref(false);
 const linkSelectedId = ref<number | null>(null);
 const linkSearch = ref('');
@@ -1831,6 +1835,7 @@ onMounted(async () => {
 
   // Load campaign's linked system id for the token edit modal
   const camp = await dbApi.campaigns.get(store.current!.campaignId);
+  campaignGameId.value = campaignGame(camp);
   if ((camp as any)?.system_id) {
     linkCampaignSystemId.value = (camp as any).system_id;
     // Warm the creature list so the "Link to Stat Block?" dialog opens instantly

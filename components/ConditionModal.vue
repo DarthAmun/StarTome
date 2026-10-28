@@ -159,11 +159,13 @@
 <script setup lang="ts">
 import type { EncounterToken, TokenCondition } from '~/stores/encounter'
 import { getDb, parseRecordData } from '~/composables/useDb'
-import { CONDITION_CATALOG, getConditionColor } from '~/composables/useConditions'
+import { builtinConditions, conditionInfo, getConditionColor } from '~/composables/useConditions'
+import type { GameId } from '~/types/game'
 
 const props = defineProps<{
   token: EncounterToken | null
   systemId: number | null
+  game?: GameId
   open: boolean
 }>()
 
@@ -207,53 +209,6 @@ interface AvailCondition {
 
 const availableConditions = ref<AvailCondition[]>([])
 
-// ── Known valued conditions (fallback list) ────────────────────────────────
-const VALUED_CONDITIONS = new Set([
-  'Clumsy', 'Confused', 'Doomed', 'Drained', 'Dying', 'Enfeebled',
-  'Frightened', 'Sickened', 'Slowed', 'Stunned', 'Stupefied', 'Wounded',
-  'Blinded', 'Controlled', 'Dazzled', 'Deafened', 'Fatigued', 'Grabbed',
-  'Immobilized', 'Paralyzed', 'Petrified', 'Quickened', 'Restrained',
-])
-
-const FALLBACK_CONDITIONS: AvailCondition[] = [
-  { name: 'Blinded',       summary: 'Cannot see; automatic failure on sight-based checks.',  hasValue: false },
-  { name: 'Broken',        summary: 'Item is non-functional until repaired.',                hasValue: false },
-  { name: 'Clumsy',        summary: 'Penalty to Dex-based checks and AC.',                  hasValue: true  },
-  { name: 'Confused',      summary: 'Acts randomly; may attack allies.',                     hasValue: false },
-  { name: 'Controlled',    summary: 'Another creature dictates actions.',                    hasValue: false },
-  { name: 'Dazzled',       summary: 'Everything is concealed.',                              hasValue: false },
-  { name: 'Deafened',      summary: 'Cannot hear; -2 to Initiative; spell failure chance.',  hasValue: false },
-  { name: 'Doomed',        summary: 'Dying value to reach death is reduced.',                hasValue: true  },
-  { name: 'Drained',       summary: 'Penalty to Con-based checks; lose max HP.',            hasValue: true  },
-  { name: 'Dying',         summary: 'Unconscious and approaching death.',                    hasValue: true  },
-  { name: 'Encumbered',    summary: 'Carrying too much; –5 ft Speed, clumsy 1.',            hasValue: false },
-  { name: 'Enfeebled',     summary: 'Penalty to Str-based checks and damage.',              hasValue: true  },
-  { name: 'Fascinated',    summary: 'Distracted by a subject; –2 Perception.',              hasValue: false },
-  { name: 'Fatigued',      summary: '\u20131 AC and saves; cannot use exploration activities.',  hasValue: false },
-  { name: 'Flat-Footed',   summary: '–2 circumstance penalty to AC.',                       hasValue: false },
-  { name: 'Fleeing',       summary: 'Must spend each action moving away from source.',      hasValue: false },
-  { name: 'Frightened',    summary: 'Penalty to all checks; reduces each turn.',            hasValue: true  },
-  { name: 'Grabbed',       summary: 'Immobilized and flat-footed.',                         hasValue: false },
-  { name: 'Hidden',        summary: 'Location unknown; must succeed on DC 11 flat check.',  hasValue: false },
-  { name: 'Immobilized',   summary: 'Cannot move voluntarily.',                             hasValue: false },
-  { name: 'Invisible',     summary: 'Cannot be seen; harder to detect.',                    hasValue: false },
-  { name: 'Observed',      summary: 'Fully visible to others.',                             hasValue: false },
-  { name: 'Paralyzed',     summary: 'Cannot act; flat-footed.',                             hasValue: false },
-  { name: 'Petrified',     summary: 'Turned to stone; object immunities.',                  hasValue: false },
-  { name: 'Poisoned',      summary: 'Afflicted by a poison; takes stage effects.',          hasValue: true  },
-  { name: 'Prone',         summary: '–2 to attack rolls; melee +1 vs you, ranged –2 vs you.', hasValue: false },
-  { name: 'Quickened',     summary: 'Gain 1 extra action per turn.',                        hasValue: false },
-  { name: 'Restrained',    summary: 'Grabbed and immobilized; cannot use Fly.',             hasValue: false },
-  { name: 'Sickened',      summary: 'Penalty to all checks and DCs.',                       hasValue: true  },
-  { name: 'Slowed',        summary: 'Fewer actions per turn.',                              hasValue: true  },
-  { name: 'Stunned',       summary: 'Lose actions; if stunned X lose X actions.',           hasValue: true  },
-  { name: 'Stupefied',     summary: 'Penalty to Int/Wis/Cha checks; spell failure chance.', hasValue: true  },
-  { name: 'Unconscious',   summary: 'Unable to act; prone, blinded, flat-footed.',          hasValue: false },
-  { name: 'Undetected',    summary: 'Location unknown; attackers must guess.',               hasValue: false },
-  { name: 'Unnoticed',     summary: 'Creature is completely unaware of you.',               hasValue: false },
-  { name: 'Wounded',       summary: 'Dying value increases by this amount when next dying.', hasValue: true  },
-]
-
 // ── Load conditions from DB or fall back ──────────────────────────────────
 async function loadConditions() {
   loading.value = true
@@ -290,7 +245,7 @@ async function loadConditions() {
               break
             }
           }
-          const cat = CONDITION_CATALOG[r.name]
+          const cat = conditionInfo(r.name)
           const color: string = (typeof data.color === 'string' && data.color)
             ? data.color
             : (cat?.color ?? getConditionColor(r.name))
@@ -301,7 +256,7 @@ async function loadConditions() {
             name: r.name,
             summary,
             description,
-            hasValue: data.hasValue === true || VALUED_CONDITIONS.has(r.name),
+            hasValue: data.hasValue === true || !!cat?.valued,
             color,
             icon,
             recordId: r.id as number | undefined,
@@ -310,11 +265,10 @@ async function loadConditions() {
         return
       }
     }
-    // No system linked or system has no condition records — use built-in list with catalog colors
-    availableConditions.value = FALLBACK_CONDITIONS.map(c => {
-      const cat = CONDITION_CATALOG[c.name]
-      return { ...c, color: cat?.color ?? getConditionColor(c.name), icon: cat?.icon }
-    })
+    // No system linked or system has no condition records — use the built-in remaster list
+    availableConditions.value = builtinConditions(props.game ?? 'pf2e').map(c => ({
+      name: c.name, summary: c.desc, hasValue: c.valued, color: c.color, icon: c.icon,
+    }))
   } finally {
     loading.value = false
   }
@@ -349,7 +303,7 @@ function emit_update() {
 function addCustomCondition() {
   const name = customConditionEntry.value
   if (!name || isActive(name)) return
-  const cat = CONDITION_CATALOG[name]
+  const cat = conditionInfo(name)
   localConditions.value.push({
     name,
     value: null,
