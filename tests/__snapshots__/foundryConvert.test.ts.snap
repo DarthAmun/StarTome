@@ -1,0 +1,2134 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Foundry converter — whole output > pf2e/Acolyte 1`] = `
+{
+  "createdAt": "",
+  "description": "You spent your early days in a religious monastery or cloister. You may have traveled out into the world to spread the message of your religion or because you cast away the teachings of your faith, but deep down, you'll always carry within you the lessons you learned.
+
+Choose two attribute boosts. One must be to **Intelligence** or **Wisdom**, and one is a free attribute boost.
+
+You're trained in the Religion skill and the Scribing Lore skill. You gain the {{feat: Student of the Canon}} skill feat.",
+  "facts": {
+    "Attribute boosts": [
+      "Intelligence or Wisdom",
+      "free",
+    ],
+    "Feat": [
+      "Student of the Canon",
+    ],
+    "Trained skills": [
+      "religion",
+      "Scribing Lore",
+    ],
+  },
+  "game": "pf2e",
+  "id": "fvtt:pf2e:backgrounds:CAjQrHZZbALE7Qjy",
+  "kind": "background",
+  "level": 0,
+  "name": "Acolyte",
+  "origin": "foundry",
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "rarity": "common",
+  "sortName": "acolyte",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.backgrounds.Item.CAjQrHZZbALE7Qjy",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Adventurer's Pack 1`] = `
+{
+  "bulk": 0,
+  "category": "kit",
+  "createdAt": "",
+  "description": "This item is the starter kit for an adventurer, containing the essential items for exploration and survival. The Bulk value is for the entire pack together, but see the descriptions of individual items as necessary.
+
+The pack contains the following items: a backpack, a bedroll, 10 pieces of chalk, flint and steel, 50 feet of rope, 2 weeks' rations, soap, 5 torches, and a waterskin.",
+  "game": "pf2e",
+  "id": "fvtt:pf2e:equipment-srd:2req0jGaxz8hScdB",
+  "kind": "item",
+  "level": 0,
+  "name": "Adventurer's Pack",
+  "origin": "foundry",
+  "price": {
+    "cp": 150,
+  },
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "rarity": "common",
+  "sortName": "adventurer's pack",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.equipment-srd.Item.2req0jGaxz8hScdB",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Amethyst 1`] = `
+{
+  "bulk": 0,
+  "category": "treasure",
+  "createdAt": "",
+  "description": "",
+  "game": "pf2e",
+  "id": "fvtt:pf2e:equipment-srd:epTuWsVDuPzUXMk9",
+  "kind": "item",
+  "level": 0,
+  "name": "Amethyst",
+  "origin": "foundry",
+  "price": {
+    "cp": 500,
+  },
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder GM Core",
+  },
+  "rarity": "common",
+  "sortName": "amethyst",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.equipment-srd.Item.epTuWsVDuPzUXMk9",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "subcategory": "gem",
+  "traits": [],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Arrows 1`] = `
+{
+  "baseItem": "arrows",
+  "bulk": 1,
+  "category": "ammunition",
+  "createdAt": "",
+  "description": "These projectiles are the ammunition for bows. The shaft of an arrow is made of wood. It is stabilized in flight by fletching at one end and bears a metal head on the other.",
+  "game": "pf2e",
+  "id": "fvtt:pf2e:equipment-srd:w2ENw2VMPcsbif8g",
+  "kind": "item",
+  "level": 0,
+  "name": "Arrows",
+  "origin": "foundry",
+  "price": {
+    "cp": 10,
+  },
+  "priceFor": 10,
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "rarity": "common",
+  "sortName": "arrows",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.equipment-srd.Item.w2ENw2VMPcsbif8g",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [
+    "consumable",
+  ],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Electric Arc 1`] = `
+{
+  "cast": 2,
+  "createdAt": "",
+  "damage": [
+    {
+      "formula": "2d4",
+      "type": "electricity",
+    },
+  ],
+  "defense": {
+    "basic": true,
+    "save": "ref",
+  },
+  "description": "An arc of lightning leaps from one target to another. Each target takes 2d4 electricity damage with a basic Reflex save.
+
+---
+
+**Heightened (+1)** The damage increases by 1d4.",
+  "game": "pf2e",
+  "id": "fvtt:pf2e:spells-srd:kBhaPuzLUSwS6vVf",
+  "kind": "spell",
+  "level": 1,
+  "name": "Electric Arc",
+  "origin": "foundry",
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "range": "30 feet",
+  "rarity": "common",
+  "sortName": "electric arc",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.spells-srd.Item.kBhaPuzLUSwS6vVf",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "spellType": "spell",
+  "targets": "1 or 2 creatures",
+  "traditions": [
+    "arcane",
+    "primal",
+  ],
+  "traits": [
+    "cantrip",
+    "concentrate",
+    "electricity",
+    "manipulate",
+  ],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Escape 1`] = `
+{
+  "category": "interaction",
+  "cost": 1,
+  "createdAt": "",
+  "description": "You attempt to escape from being {{condition: Grabbed}}, {{condition: Immobilized}}, or {{condition: Restrained}}. Choose one creature, object, spell effect, hazard, or other impediment imposing any of those conditions on you. Attempt a check using your unarmed attack modifier against the DC of the effect. This is typically the Athletics DC of a creature grabbing you, the Thievery DC of a creature who tied you up, the spell DC for a spell effect, or the listed Escape DC of an object, hazard, or other impediment. You can attempt an Acrobatics or Athletics check instead of using your attack modifier if you choose (but this action still has the attack trait).
+
+---
+
+**Critical Success** You get free and remove the grabbed, immobilized, and restrained conditions imposed by your chosen target. You can then Stride up to 5 feet.
+
+**Success** You get free and remove the grabbed, immobilized, and restrained conditions imposed by your chosen target.
+
+**Critical Failure** You don't get free, and you can't attempt to Escape again until your next turn.",
+  "game": "pf2e",
+  "id": "fvtt:pf2e:actionspf2e:SkZAQRkLLkmBQNB9",
+  "kind": "action",
+  "level": 0,
+  "name": "Escape",
+  "origin": "foundry",
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "rarity": "common",
+  "sortName": "escape",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.actionspf2e.Item.SkZAQRkLLkmBQNB9",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [
+    "attack",
+  ],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Fighter 1`] = `
+{
+  "createdAt": "",
+  "description": "*Fighting for honor, greed, loyalty, or simply the thrill of battle, you are an undisputed master of weaponry and combat techniques. You combine your actions through clever combinations of opening moves, finishing strikes, and counterattacks whenever your foes are unwise enough to drop their guard. Whether you are a knight, mercenary, sharpshooter, or blade master, you have honed your martial skills into an art form and perform devastating critical attacks on your enemies.*
+
+*Fighter*",
+  "facts": {
+    "Fortitude": "expert",
+    "HP per level": 10,
+    "Key attribute": "Dexterity or Strength",
+    "Perception": "expert",
+    "Reflex": "expert",
+    "Trained skills": [
+      "3 more",
+    ],
+    "Will": "trained",
+  },
+  "game": "pf2e",
+  "id": "fvtt:pf2e:classes:8zn3cD6GSmoo1LW4",
+  "kind": "class",
+  "level": 0,
+  "name": "Fighter",
+  "origin": "foundry",
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "rarity": "common",
+  "sortName": "fighter",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.classes.Item.8zn3cD6GSmoo1LW4",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Fighter Dedication 1`] = `
+{
+  "category": "class",
+  "cost": null,
+  "createdAt": "",
+  "description": "You become trained in martial weapons. You become trained in your choice of Acrobatics or Athletics; if you are already trained in both of these skills, you instead become trained in a skill of your choice. You become trained in fighter class DC.
+
+Fighter",
+  "game": "pf2e",
+  "id": "fvtt:pf2e:feats-srd:mvNa9KfQooHYEXoA",
+  "kind": "feat",
+  "level": 2,
+  "name": "Fighter Dedication",
+  "origin": "foundry",
+  "prerequisites": [
+    "Strength +2",
+    "Dexterity +2",
+  ],
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "rarity": "common",
+  "sortName": "fighter dedication",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.feats-srd.Item.mvNa9KfQooHYEXoA",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [
+    "archetype",
+    "dedication",
+    "multiclass",
+  ],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Fireball 1`] = `
+{
+  "area": "20-foot burst",
+  "cast": 2,
+  "createdAt": "",
+  "damage": [
+    {
+      "formula": "6d6",
+      "type": "fire",
+    },
+  ],
+  "defense": {
+    "basic": true,
+    "save": "ref",
+  },
+  "description": "A roaring blast of fire detonates at a spot you designate, dealing 6d6 fire damage.
+
+---
+
+**Heightened (+1)** The damage increases by 2d6.",
+  "game": "pf2e",
+  "id": "fvtt:pf2e:spells-srd:sxQZ6yqTn0czJxVd",
+  "kind": "spell",
+  "level": 3,
+  "name": "Fireball",
+  "origin": "foundry",
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "range": "500 feet",
+  "rarity": "common",
+  "sortName": "fireball",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.spells-srd.Item.sxQZ6yqTn0czJxVd",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "spellType": "spell",
+  "traditions": [
+    "arcane",
+    "primal",
+  ],
+  "traits": [
+    "concentrate",
+    "fire",
+    "manipulate",
+  ],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Frightened 1`] = `
+{
+  "createdAt": "",
+  "description": "You're gripped by fear and struggle to control your nerves. The frightened condition always includes a value. You take a status penalty equal to this value to all your checks and DCs. Unless specified otherwise, at the end of each of your turns, the value of your frightened condition decreases by 1.",
+  "game": "pf2e",
+  "id": "fvtt:pf2e:conditionitems:TBSHQspnbcqxsmjL",
+  "kind": "condition",
+  "level": 0,
+  "name": "Frightened",
+  "origin": "foundry",
+  "overrides": [],
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "rarity": "common",
+  "sortName": "frightened",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [],
+  "updatedAt": "",
+  "valued": true,
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Full Plate 1`] = `
+{
+  "armor": {
+    "acBonus": 6,
+    "category": "heavy",
+    "checkPenalty": -3,
+    "dexCap": 0,
+    "group": "plate",
+    "speedPenalty": -10,
+    "strength": 4,
+  },
+  "baseItem": "full-plate",
+  "bulk": 40,
+  "category": "armor",
+  "createdAt": "",
+  "description": "Plate mail consists of interlocking plates that encase nearly the entire body in a carapace of steel. It is costly and heavy, and the wearer often requires help to don it correctly, but it provides some of the best defense armor can supply. A suit of this armor comes with an undercoat of {{item: Padded Armor}} and a pair of {{item: Gauntlet}}s.",
+  "game": "pf2e",
+  "id": "fvtt:pf2e:equipment-srd:Gq1cZWSKOtJhKd2p",
+  "kind": "item",
+  "level": 2,
+  "name": "Full Plate",
+  "origin": "foundry",
+  "price": {
+    "cp": 3000,
+  },
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "rarity": "common",
+  "sortName": "full plate",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.equipment-srd.Item.Gq1cZWSKOtJhKd2p",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [
+    "bulwark",
+  ],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Goblin Warrior 1`] = `
+{
+  "abilities": {
+    "cha": 1,
+    "con": 1,
+    "dex": 3,
+    "int": 0,
+    "str": 0,
+    "wis": -1,
+  },
+  "ac": 16,
+  "actions": [
+    {
+      "cost": "reaction",
+      "name": "Goblin Scuttle",
+      "section": "defensive",
+      "text": "**Trigger** A goblin ally ends a move action adjacent to the goblin.
+
+---
+
+**Effect** The goblin warrior {{action: Step}}s.",
+      "traits": [],
+    },
+  ],
+  "createdAt": "",
+  "description": "The frontline fighters of goblin tribes prefer to fight in large groups—especially when they can outnumber their foes at least three to one.
+
+---
+
+These small humanoids typically have green or gray skin and large heads with wide ears. While some goblins are civilized and have worked hard to be considered upstanding members of humanoid communities, many are impetuous and vicious creatures who delight in wreaking havoc. These goblins think nothing of slaughtering livestock, stealing, or burning down a building purely for momentary delight. They revel in playing malicious tricks on taller humanoids, whom they call "longshanks."
+
+Goblins are superstitious, with an intense awe of magic and a fascination with fire; goblins who master magic or fire earn great respect from their kin. Most other humanoids find it difficult to understand goblins' outlook: they hate canines but eagerly share their lairs with so-called "goblin dogs," they fearlessly attack larger creatures but are terrified of horses, and they despise vegetables yet consider pickles a delicacy. To a goblin, of course, these are all perfectly sensible life choices.",
+  "game": "pf2e",
+  "hp": 6,
+  "id": "fvtt:pf2e:pathfinder-monster-core:fLLKuOXwPq1Iq0U4",
+  "immunities": [],
+  "inventory": [
+    {
+      "itemId": "fvtt:pf2e:equipment-srd:olwngGXM3hpgoLEP",
+      "name": "Dogslicer",
+      "quantity": 1,
+    },
+    {
+      "itemId": "fvtt:pf2e:equipment-srd:hIgqLgH3YcLZBeoT",
+      "name": "Shortbow",
+      "quantity": 1,
+    },
+    {
+      "itemId": "fvtt:pf2e:equipment-srd:4tIVTg9wj56RrveA",
+      "name": "Leather Armor",
+      "quantity": 1,
+    },
+    {
+      "itemId": "fvtt:pf2e:equipment-srd:w2ENw2VMPcsbif8g",
+      "name": "Arrows",
+      "quantity": 10,
+    },
+  ],
+  "kind": "creature",
+  "languages": [
+    "goblin",
+    "common",
+  ],
+  "level": -1,
+  "name": "Goblin Warrior",
+  "origin": "foundry",
+  "perception": 2,
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Monster Core",
+  },
+  "rarity": "common",
+  "resistances": [],
+  "saves": {
+    "fort": 5,
+    "ref": 7,
+    "will": 3,
+  },
+  "senses": [
+    {
+      "type": "darkvision",
+    },
+  ],
+  "size": "sm",
+  "skills": {
+    "acrobatics": 5,
+    "athletics": 2,
+    "nature": 1,
+    "stealth": 5,
+  },
+  "sortName": "goblin warrior",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.pathfinder-monster-core.Actor.fLLKuOXwPq1Iq0U4",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "speeds": {
+    "land": 25,
+  },
+  "spellcasting": [],
+  "strikes": [
+    {
+      "bonus": 7,
+      "damage": [
+        {
+          "formula": "1d6",
+          "type": "slashing",
+        },
+      ],
+      "name": "Dogslicer",
+      "range": "melee",
+      "traits": [
+        "agile",
+        "backstabber",
+        "finesse",
+      ],
+    },
+    {
+      "bonus": 7,
+      "damage": [
+        {
+          "formula": "1d6",
+          "type": "piercing",
+        },
+      ],
+      "name": "Shortbow",
+      "range": "ranged",
+      "traits": [
+        "deadly-d10",
+        "reload-0",
+      ],
+    },
+  ],
+  "traits": [
+    "goblin",
+    "humanoid",
+  ],
+  "updatedAt": "",
+  "weaknesses": [],
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Grapple 1`] = `
+{
+  "category": "interaction",
+  "cost": 1,
+  "createdAt": "",
+  "description": "**Requirements** You have at least one free hand and your target is no more than one size larger than you.
+
+---
+
+You attempt to grab a creature or object with your free hand. Attempt an Athletics check against the target's Fortitude DC. You can grapple a target you already have {{condition: Grabbed}} or {{condition: Restrained}} without having a hand free.
+
+---
+
+**Critical Success** Your target is restrained until the end of your next turn unless you move or your target Escapes.
+
+**Success** Your target is grabbed until the end of your next turn unless you move or your target Escapes.
+
+**Failure** You fail to grab your target. If you already had the target grabbed or restrained using a Grapple, those conditions on the target end.
+
+**Critical Failure** If you already had the target grabbed or restrained, it breaks free. Your target can either grab you, as if it succeeded at using the Grapple action against you, or force you to fall and land {{condition: Prone}}.",
+  "game": "pf2e",
+  "id": "fvtt:pf2e:actionspf2e:PMbdMWc2QroouFGD",
+  "kind": "action",
+  "level": 0,
+  "name": "Grapple",
+  "origin": "foundry",
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "rarity": "common",
+  "sortName": "grapple",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.actionspf2e.Item.PMbdMWc2QroouFGD",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [
+    "attack",
+  ],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Heal 1`] = `
+{
+  "cast": {
+    "max": 3,
+    "min": 1,
+  },
+  "createdAt": "",
+  "damage": [
+    {
+      "formula": "1d8",
+      "type": "vitality",
+    },
+  ],
+  "defense": {
+    "basic": true,
+    "save": "fort",
+  },
+  "description": "You channel vital energy to heal the living or damage the undead. If the target is a willing living creature, you restore 1d8 Hit Points. If the target is undead, you deal that amount of vitality damage to it, and it gets a basic Fortitude save. The number of actions you spend when Casting this Spell determines its targets, range, area, and other parameters.
+
+◆ The spell has a range of touch.
+
+◆◆ (concentrate) The spell has a range of 30 feet. If you're healing a living creature, increase the Hit Points restored by 8.
+
+◆◆◆ (concentrate) You disperse vital energy in a 30-foot emanation. This targets all living and undead creatures in the burst.
+
+---
+
+**Heightened (+1)** The amount of healing or damage increases by 1d8, and the extra healing for the 2-action version increases by 8.",
+  "game": "pf2e",
+  "id": "fvtt:pf2e:spells-srd:rfZpqmj0AIIdkVIs",
+  "kind": "spell",
+  "level": 1,
+  "name": "Heal",
+  "origin": "foundry",
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "range": "varies",
+  "rarity": "common",
+  "sortName": "heal",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.spells-srd.Item.rfZpqmj0AIIdkVIs",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "spellType": "spell",
+  "targets": "1 willing living creature or 1 undead",
+  "traditions": [
+    "divine",
+    "primal",
+  ],
+  "traits": [
+    "healing",
+    "manipulate",
+    "vitality",
+  ],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Healing Potion (Minor) 1`] = `
+{
+  "activation": [
+    {
+      "cost": 1,
+      "traits": [
+        "manipulate",
+      ],
+    },
+  ],
+  "bulk": 1,
+  "category": "consumable",
+  "createdAt": "",
+  "description": "**Activate** ◆ (manipulate)
+
+---
+
+A *healing potion* is a vial of a ruby-red liquid that imparts a tingling sensation as the drinker's wounds heal rapidly. When you drink a *healing potion*, you regain ::dice[1d8] healing Hit Points.",
+  "game": "pf2e",
+  "hands": "1",
+  "id": "fvtt:pf2e:equipment-srd:2RuepCemJhrpKKao",
+  "kind": "item",
+  "level": 1,
+  "name": "Healing Potion (Minor)",
+  "origin": "foundry",
+  "price": {
+    "cp": 400,
+  },
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder GM Core",
+  },
+  "rarity": "common",
+  "sortName": "healing potion (minor)",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.equipment-srd.Item.2RuepCemJhrpKKao",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "subcategory": "potion",
+  "traits": [
+    "consumable",
+    "healing",
+    "magical",
+    "potion",
+    "vitality",
+  ],
+  "updatedAt": "",
+  "usage": "held in one hand",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Herexen 1`] = `
+{
+  "abilities": {
+    "cha": 3,
+    "con": 1,
+    "dex": 2,
+    "int": 0,
+    "str": 2,
+    "wis": 4,
+  },
+  "ac": 17,
+  "actions": [
+    {
+      "cost": null,
+      "name": "Final Blasphemy",
+      "section": "defensive",
+      "text": "When the herexen is destroyed, it explodes in a wave of void energy with the effects of a 3-action {{spell: Harm}} spell (DC 18 Fortitude).
+
+The herexen is destroyed, so it doesn't gain any Hit Points from this use of *harm*, and it doesn't need to have any *harm* spells remaining to use this ability",
+      "traits": [
+        "divine",
+        "void",
+      ],
+    },
+    {
+      "cost": null,
+      "name": "Void Healing",
+      "section": "defensive",
+      "text": "A creature with void healing draws health from void energy rather than vitality energy. It is damaged by vitality damage and is not healed by vitality healing effects. It does not take void damage, and it is healed by void effects that heal undead.",
+      "traits": [],
+    },
+    {
+      "cost": null,
+      "name": "Heretic's Smite",
+      "section": "offensive",
+      "text": "While wielding the favored weapon of its former deity (such as a dagger for an ex-Pharasmin herexen), the herexen's Strikes deal an additional 1d6 spirit damage to creatures with the holy trait.",
+      "traits": [
+        "divine",
+      ],
+    },
+  ],
+  "createdAt": "",
+  "description": "When a cleric rebels against their deity and dies in the grip of blasphemous rage, the heresies they committed in life may fuel their transformation into an undead herexen. Herexens seek vengeance against the deity they once worshipped, defiling temples, slaying the faithful, and rallying lesser undead and death cultists to aid them in their unholy quests. Though a herexen's divine gifts have mostly been corrupted into the vileness of undeath, they stubbornly cling to remnants of their former power, still wielding magic and armaments favored by the deity they so greatly despise.
+
+Groups of herexens that blasphemed against the same deity sometimes combine to form a mockery of a congregation, conducting blasphemous rites with something approaching euphoria. These congregations are often formed from a blasphemous cult whose members practiced their heresy together in life and died together, though some gather independent herexens of the same former faith.",
+  "game": "pf2e",
+  "hp": 30,
+  "hpNote": "void healing",
+  "id": "fvtt:pf2e:pathfinder-monster-core:oNR29GreK0AxLucN",
+  "immunities": [
+    "death effects",
+    "disease",
+    "paralyzed",
+    "poison",
+    "unconscious",
+    "bleed",
+  ],
+  "inventory": [
+    {
+      "itemId": "fvtt:pf2e:equipment-srd:rQWaJhI5Bko5x14Z",
+      "name": "Dagger",
+      "quantity": 1,
+    },
+    {
+      "itemId": "fvtt:pf2e:equipment-srd:plplsXJsqrdqNQVI",
+      "name": "Defiled Religious Symbol of Pharasma (Wooden)",
+      "quantity": 1,
+    },
+  ],
+  "kind": "creature",
+  "languages": [
+    "common",
+    "necril",
+  ],
+  "level": 2,
+  "name": "Herexen",
+  "origin": "foundry",
+  "perception": 8,
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Monster Core",
+  },
+  "rarity": "uncommon",
+  "resistances": [],
+  "saves": {
+    "fort": 5,
+    "ref": 8,
+    "will": 10,
+  },
+  "senses": [
+    {
+      "type": "darkvision",
+    },
+  ],
+  "size": "med",
+  "skills": {
+    "athletics": 6,
+    "deception": 7,
+    "religion": 10,
+    "stealth": 6,
+  },
+  "sortName": "herexen",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.pathfinder-monster-core.Actor.oNR29GreK0AxLucN",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "speeds": {
+    "land": 25,
+  },
+  "spellcasting": [
+    {
+      "attack": 10,
+      "dc": 18,
+      "name": "Divine Prepared Spells",
+      "spells": [
+        {
+          "name": "Harm",
+          "rank": 1,
+          "spellId": "fvtt:pf2e:spells-srd:wdA52JJnsuQWeyqz",
+        },
+      ],
+      "tradition": "divine",
+      "type": "prepared",
+    },
+    {
+      "attack": 10,
+      "dc": 18,
+      "name": "Cleric Domain Spells",
+      "spells": [
+        {
+          "name": "Death's Call",
+          "rank": 1,
+          "spellId": "fvtt:pf2e:spells-srd:HG4afO9EOGEU9bZN",
+        },
+      ],
+      "tradition": "divine",
+      "type": "focus",
+    },
+  ],
+  "strikes": [
+    {
+      "bonus": 10,
+      "damage": [
+        {
+          "formula": "1d6 + 4",
+          "type": "piercing",
+        },
+      ],
+      "effects": [
+        "Heretic's Smite",
+      ],
+      "name": "Dagger",
+      "range": "melee",
+      "traits": [
+        "agile",
+        "versatile-s",
+      ],
+    },
+  ],
+  "traits": [
+    "undead",
+    "unholy",
+  ],
+  "updatedAt": "",
+  "weaknesses": [],
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Hidden Pit 1`] = `
+{
+  "ac": 10,
+  "actions": [
+    {
+      "cost": "reaction",
+      "name": "Pitfall",
+      "section": "offensive",
+      "text": "**Trigger** A creature walks onto the trapdoor.
+
+---
+
+**Effect** The triggering creature falls in and takes falling damage (typically 10 bludgeoning damage). That creature can use the {{action: Grab an Edge}} reaction to avoid falling.",
+      "traits": [],
+    },
+  ],
+  "complex": false,
+  "createdAt": "",
+  "description": "A wooden trapdoor covers a pit that's 10 feet square and 20 feet deep.",
+  "disable": "DC 12 Thievery to remove the trapdoor",
+  "game": "pf2e",
+  "hardness": 3,
+  "hp": 12,
+  "id": "fvtt:pf2e:hazards:BHq5wpQU8hQEke8D",
+  "immunities": [
+    "critical hits",
+    "precision",
+  ],
+  "kind": "hazard",
+  "level": 0,
+  "name": "Hidden Pit",
+  "origin": "foundry",
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder GM Core",
+  },
+  "rarity": "common",
+  "reset": "Creatures can still fall into the trap, but the trapdoor must be reset manually for the trap to become hidden again.",
+  "saves": {
+    "fort": 1,
+    "ref": 1,
+  },
+  "sortName": "hidden pit",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.hazards.Actor.BHq5wpQU8hQEke8D",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "stealth": {
+    "bonus": 8,
+    "note": "(or 0 if the trapdoor is disabled or broken)",
+  },
+  "traits": [
+    "mechanical",
+    "trap",
+  ],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Human 1`] = `
+{
+  "createdAt": "",
+  "description": "*As unpredictable and varied as any of Golarion's peoples, humans have exceptional drive and the capacity to endure and expand. Though many civilizations thrived before humanity rose to prominence, humans have built some of the greatest and the most terrible societies throughout the course of history, and today they are the most populous people in the realms around the Inner Sea.*
+
+*Human*",
+  "facts": {
+    "Attribute boosts": [
+      "free",
+      "free",
+    ],
+    "HP": 8,
+    "Languages": [
+      "common",
+    ],
+    "Size": "med",
+    "Speed": "25 feet",
+  },
+  "game": "pf2e",
+  "id": "fvtt:pf2e:ancestries:IiG7DgeLWYrSNXuX",
+  "kind": "ancestry",
+  "level": 0,
+  "name": "Human",
+  "origin": "foundry",
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "rarity": "common",
+  "sortName": "human",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.ancestries.Item.IiG7DgeLWYrSNXuX",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [
+    "human",
+    "humanoid",
+  ],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Kobold Scout 1`] = `
+{
+  "abilities": {
+    "cha": 1,
+    "con": 1,
+    "dex": 4,
+    "int": 0,
+    "str": 0,
+    "wis": 3,
+  },
+  "ac": 16,
+  "actions": [
+    {
+      "cost": null,
+      "name": "+1 Circumstance to All Defenses vs. Traps",
+      "section": "defensive",
+      "text": "",
+      "traits": [],
+    },
+    {
+      "cost": 3,
+      "name": "Construct Trap",
+      "section": "offensive",
+      "text": "The kobold scout creates a rudimentary trap on any square adjacent to it. This must be on a surface, such as a floor, wall, or ceiling. The trap activates the next time a creature moves adjacent to it.
+
+The creature takes ::dice[1d6] piercing plus 1 bleed with a DC 16 basic Reflex save. The trap is destroyed when activated or after 1 hour, whichever comes first.
+
+The scout typically carries enough raw materials to make one trap.",
+      "traits": [
+        "manipulate",
+      ],
+    },
+    {
+      "cost": 1,
+      "name": "Scamper",
+      "section": "offensive",
+      "text": "**Requirements** The kobold scout is adjacent to at least one enemy.
+
+---
+
+**Effect** The kobold scout Strides up to its Speed plus 5 feet and gains a +2 circumstance bonus to AC against reactions triggered by this movement. It must end this movement in a space that's not adjacent to any enemy.",
+      "traits": [],
+    },
+    {
+      "cost": null,
+      "name": "Sneak Attack",
+      "section": "offensive",
+      "text": "The kobold scout deals an extra 1d6 precision damage to {{condition: Off-Guard}} creatures.",
+      "traits": [],
+    },
+  ],
+  "createdAt": "",
+  "description": "Most kobolds encountered outside of a well-defended warren or lair are kobold scouts, those trained for stalking and hunting. They're also often in the thick of the fighting when a warren is invaded, buying time for their comrades to set up various traps and deadfalls.
+
+---
+
+Kobolds are small reptilian humanoids. They lurk in dark spaces, usually tunnels and mines beneath the earth, in either warrens of their own design or complexes discovered and colonized after the original builders have moved on. Though kobolds are far more pragmatic than courageous, they use every inch of their cunning to even the playing field between themselves and other, stronger creatures. They attack from the darkness and at range, and kobold artificers and engineers master the art of simple but effective traps, which they use to protect their lairs. Kobolds are skilled at working together by necessity, and they often set up ambushes or hit-and-run assaults that allow them to do the most damage possible without being harmed in return.
+
+Kobolds are diligent and hardworking creatures. While some kobolds live in communal collectives that maintain neutral relations with the creatures around them, they can be easily swayed into serving malevolent powers or megalomaniacal leaders. This is in part due to kobolds' innate pragmatism, as they would rather concede to servitude than risk being killed, but it is also in part due to a reverence for the power they generally lack. Notably, kobold eggs left in the proximity of magical creatures or places tend to absorb similar traits from the exposure. The resulting physical changes mark the appearance of each tribe, but a few lucky kobolds are also born with magical power that reflects their tribe's patron.",
+  "game": "pf2e",
+  "hp": 16,
+  "id": "fvtt:pf2e:pathfinder-monster-core:PcHQDmPTztw32PhL",
+  "immunities": [],
+  "inventory": [
+    {
+      "itemId": "fvtt:pf2e:equipment-srd:62nnVQvGhoVLLl2K",
+      "name": "Crossbow",
+      "quantity": 1,
+    },
+    {
+      "itemId": "fvtt:pf2e:equipment-srd:7tKkkF8eZ4iCLJtp",
+      "name": "Shortsword",
+      "quantity": 1,
+    },
+    {
+      "itemId": "fvtt:pf2e:equipment-srd:4tIVTg9wj56RrveA",
+      "name": "Leather Armor",
+      "quantity": 1,
+    },
+    {
+      "itemId": "fvtt:pf2e:equipment-srd:AITVZmakiu3RgfKo",
+      "name": "Bolts",
+      "quantity": 20,
+    },
+  ],
+  "kind": "creature",
+  "languages": [
+    "common",
+    "sakvroth",
+  ],
+  "level": 1,
+  "name": "Kobold Scout",
+  "origin": "foundry",
+  "perception": 8,
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Monster Core",
+  },
+  "rarity": "common",
+  "resistances": [],
+  "saveNote": "+1 circumstance to all defenses vs. traps",
+  "saves": {
+    "fort": 5,
+    "ref": 9,
+    "will": 6,
+  },
+  "senses": [
+    {
+      "type": "darkvision",
+    },
+  ],
+  "size": "sm",
+  "skills": {
+    "acrobatics": 7,
+    "crafting": 3,
+    "nature": 6,
+    "stealth": 7,
+    "survival": 6,
+  },
+  "sortName": "kobold scout",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.pathfinder-monster-core.Actor.PcHQDmPTztw32PhL",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "speeds": {
+    "land": 25,
+  },
+  "spellcasting": [],
+  "strikes": [
+    {
+      "bonus": 9,
+      "damage": [
+        {
+          "formula": "1d6",
+          "type": "piercing",
+        },
+      ],
+      "name": "Shortsword",
+      "range": "melee",
+      "traits": [
+        "agile",
+        "finesse",
+        "versatile-s",
+      ],
+    },
+    {
+      "bonus": 9,
+      "damage": [
+        {
+          "formula": "1d8",
+          "type": "piercing",
+        },
+      ],
+      "name": "Crossbow",
+      "range": "ranged",
+      "traits": [
+        "reload-1",
+      ],
+    },
+  ],
+  "traits": [
+    "humanoid",
+    "kobold",
+  ],
+  "updatedAt": "",
+  "weaknesses": [],
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Lay on Hands 1`] = `
+{
+  "cast": 1,
+  "createdAt": "",
+  "description": "Your hands become infused with powerful vitality, capable of healing a living creature or damaging an undead creature with a touch.
+
+- **Willing Living Creature** The target regains 6 Hit Points. If the target is someone other than yourself, it also gains a +2 status bonus to AC for 1 round.
+
+- **Undead Creature** The target takes 1d6 vitality damage with a basic Fortitude save; on a failure, the target also takes a –2 status penalty to AC for 1 round.
+
+---
+
+**Heightened (+1)** The amount of healing increases by 6, and the damage to an undead target increases by 1d6.
+
+Spell Effect: Lay on Hands",
+  "game": "pf2e",
+  "id": "fvtt:pf2e:spells-srd:zNN9212H2FGfM7VS",
+  "kind": "spell",
+  "level": 1,
+  "name": "Lay on Hands",
+  "origin": "foundry",
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core 2",
+  },
+  "range": "touch",
+  "rarity": "uncommon",
+  "sortName": "lay on hands",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.spells-srd.Item.zNN9212H2FGfM7VS",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "spellType": "focus",
+  "targets": "1 willing living creature or 1 undead creature",
+  "traditions": [],
+  "traits": [
+    "champion",
+    "focus",
+    "healing",
+    "manipulate",
+    "vitality",
+  ],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Longsword 1`] = `
+{
+  "baseItem": "longsword",
+  "bulk": 10,
+  "category": "weapon",
+  "createdAt": "",
+  "description": "Longswords, also known as arming swords, can be one-edged or two-edged swords. Their blades are heavy and they're between 3 and 4 feet in length.",
+  "game": "pf2e",
+  "hands": "1",
+  "id": "fvtt:pf2e:equipment-srd:LJdbVTOZog39EEbi",
+  "kind": "item",
+  "level": 0,
+  "name": "Longsword",
+  "origin": "foundry",
+  "price": {
+    "cp": 100,
+  },
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "rarity": "common",
+  "sortName": "longsword",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.equipment-srd.Item.LJdbVTOZog39EEbi",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [
+    "versatile-p",
+  ],
+  "updatedAt": "",
+  "usage": "held in one hand",
+  "weapon": {
+    "category": "martial",
+    "damage": {
+      "dice": 1,
+      "die": "d8",
+      "type": "slashing",
+    },
+    "group": "sword",
+  },
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Off-Guard 1`] = `
+{
+  "aliases": [
+    "Flat-Footed",
+  ],
+  "createdAt": "",
+  "description": "You're distracted or otherwise unable to focus your full attention on defense. You take a –2 circumstance penalty to AC. Some effects give you the off-guard condition only to certain creatures or against certain attacks. Others—especially conditions—can make you off-guard against everything. If a rule doesn't specify that the condition applies only to certain circumstances, it applies to all of them, such as "The target is off-guard."",
+  "game": "pf2e",
+  "id": "fvtt:pf2e:conditionitems:AJh5ex99aV6VTggg",
+  "kind": "condition",
+  "level": 0,
+  "name": "Off-Guard",
+  "origin": "foundry",
+  "overrides": [],
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "rarity": "common",
+  "sortName": "off-guard",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.conditionitems.Item.AJh5ex99aV6VTggg",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [],
+  "updatedAt": "",
+  "valued": false,
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Pathfinder's Pouch 1`] = `
+{
+  "activation": [
+    {
+      "cost": 1,
+    },
+  ],
+  "bulk": 0,
+  "category": "container",
+  "container": {
+    "bulkReduction": 10,
+    "capacity": 10,
+  },
+  "createdAt": "",
+  "description": "This unobtrusive belt pouch is popular among Pathfinders who operate in places where the Society is not welcome. It is constantly under the effects of a 3rd-rank {{spell: Disguise Magic}} spell to appear non-magical. The pouch's normal space holds as much as an ordinary belt pouch, but it also has a small extradimensional space that holds up to 1 Bulk of items. A creature actively inspecting the pouch in its ordinary state discovers the existence of the extradimensional space only on a critical success to Search the pouch (see the Concealing an Item action of the Stealth skill), though when the extradimensional space is active, it's obvious to anyone examining the pouch that it is more than it seems.
+
+**Activate** ◆ Interact
+
+---
+
+**Effect** You switch the pouch to allow access to its extradimensional space instead of its normal space, or vice versa. This lasts until you next activate it. Items in the other space are inaccessible and hard to find until you switch the pouch back.",
+  "game": "pf2e",
+  "id": "fvtt:pf2e:equipment-srd:0c7zLY9c88K2n0GC",
+  "kind": "item",
+  "level": 6,
+  "name": "Pathfinder's Pouch",
+  "origin": "foundry",
+  "price": {
+    "cp": 20000,
+  },
+  "publication": {
+    "license": "OGL",
+    "remaster": false,
+    "title": "Pathfinder Lost Omens Character Guide",
+  },
+  "rarity": "uncommon",
+  "sortName": "pathfinder's pouch",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.equipment-srd.Item.0c7zLY9c88K2n0GC",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [
+    "extradimensional",
+    "invested",
+    "magical",
+  ],
+  "updatedAt": "",
+  "usage": "worn",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Pharasma 1`] = `
+{
+  "createdAt": "",
+  "description": "Before there was time, or even a sun or moon by which to measure it, there was a beginning. That beginning had an end, which led to another fresh start. This spiral of time winds out forever, glimmering in the space between spaces. At the center of that spiral sits the Spire, and atop that Spire sits Pharasma, the Lady of Graves, goddess of death, birth, fate, and prophecy. The Lady of Graves is often depicted in a triptych of her three forms—an older midwife with silver hair pulled back into a harsh braid to keep it out of her face, a young prophet with wild hair that frames her face, and a tall, regal woman in black robes atop a throne of skulls, holding an hourglass full of blood red sand. Across all forms, Pharasma's silver hair, ashen skin, and white eyes are a constant.
+
+**Title** The Lady of Graves
+
+**Areas of Concern** birth, death, fate, prophecy, time
+
+**Edicts** strive to understand ancient prophecies, destroy undead, lay bodies to rest
+
+**Anathema** create undead, desecrate a corpse, take from the dead in bad faith
+
+**Religious Symbol** spiraling comet
+
+**Sacred Animal** whippoorwill
+
+**Sacred Colors** blue, white",
+  "facts": {
+    "Alternate domains": [
+      "soul",
+      "time",
+      "vigil",
+    ],
+    "Category": "deity",
+    "Cleric spells": [
+      "1: Mindlink",
+      "3: Ghostly Weapon",
+      "4: Vision of Death",
+    ],
+    "Divine attribute": [
+      "Constitution",
+      "Wisdom",
+    ],
+    "Divine font": [
+      "heal",
+    ],
+    "Divine skill": [
+      "medicine",
+    ],
+    "Domains": [
+      "death",
+      "fate",
+      "healing",
+      "knowledge",
+    ],
+    "Favored weapon": [
+      "dagger",
+    ],
+  },
+  "game": "pf2e",
+  "id": "fvtt:pf2e:deities:QZD0u1jxwz0kj8uI",
+  "kind": "deity",
+  "level": 0,
+  "name": "Pharasma",
+  "origin": "foundry",
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Lost Omens Divine Mysteries",
+  },
+  "rarity": "common",
+  "sortName": "pharasma",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.deities.Item.QZD0u1jxwz0kj8uI",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Reactive Shield 1`] = `
+{
+  "category": "class",
+  "cost": "reaction",
+  "createdAt": "",
+  "description": "**Trigger** An enemy hits you with a melee Strike.
+
+**Requirements** You are wielding a shield.
+
+---
+
+You can snap your shield into place just as you would take a blow, avoiding the hit at the last second. You immediately use the {{action: Raise a Shield}} action and gain your shield's bonus to AC. The circumstance bonus from the shield applies to your AC when you're determining the outcome of the triggering attack.",
+  "game": "pf2e",
+  "id": "fvtt:pf2e:feats-srd:w8Ycgeq2zfyshtoS",
+  "kind": "feat",
+  "level": 1,
+  "name": "Reactive Shield",
+  "origin": "foundry",
+  "prerequisites": [],
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "rarity": "common",
+  "sortName": "reactive shield",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.feats-srd.Item.w8Ycgeq2zfyshtoS",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [
+    "fighter",
+    "guardian",
+  ],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Skilled Human 1`] = `
+{
+  "createdAt": "",
+  "description": "Your ingenuity allows you to train in a wide variety of skills. You become trained in one skill of your choice. At 5th level, you become an expert in the chosen skill.",
+  "facts": {
+    "Ancestry": "Human",
+  },
+  "game": "pf2e",
+  "id": "fvtt:pf2e:heritages:zVf0Hlp5xG0Q7kmc",
+  "kind": "heritage",
+  "level": 0,
+  "name": "Skilled Human",
+  "origin": "foundry",
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "rarity": "common",
+  "sortName": "skilled human",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.heritages.Item.zVf0Hlp5xG0Q7kmc",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Spinning Blade Pillar 1`] = `
+{
+  "ac": 21,
+  "actions": [
+    {
+      "cost": "reaction",
+      "name": "Rising Pillar",
+      "section": "offensive",
+      "text": "**Trigger** A creature steps on one of the trapped floor tiles
+
+---
+
+**Effect** The trap pops up in a grid intersection and makes a spinning blade Strike against one adjacent creature (if any), then rolls initiative.",
+      "traits": [
+        "attack",
+      ],
+    },
+    {
+      "cost": null,
+      "name": "Speed",
+      "section": "interaction",
+      "text": "10 feet",
+      "traits": [],
+    },
+  ],
+  "complex": true,
+  "createdAt": "",
+  "description": "A metal pole with three razor-sharp spinning blades is hidden in the floor, connected to trigger plates in up to eight floor tiles and a hidden control panel within 30 feet.",
+  "disable": "DC 21 Thievery (trained) twice on the pillar, or DC 19 Thievery (expert) once on the control panel deactivates the whole trap. Breaking the control panel prevents anyone from disabling the trap using the control panel and prevents the trap from deactivating automatically.",
+  "game": "pf2e",
+  "hardness": 12,
+  "hp": 48,
+  "id": "fvtt:pf2e:hazards:HnPd9Vqh5NHKEdRq",
+  "immunities": [
+    "critical hits",
+    "precision",
+  ],
+  "kind": "hazard",
+  "level": 4,
+  "name": "Spinning Blade Pillar",
+  "origin": "foundry",
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder GM Core",
+  },
+  "rarity": "common",
+  "reset": "The trap deactivates and resets after 1 minute.",
+  "routine": "(3 actions) The trap uses its first action to make a spinning blade Strike against each adjacent creature, its second action to move straight in a random direction (roll ::dice[1d4] to determine the direction), and its third to make a spinning blade Strike against each adjacent creature. This trap doesn't take a multiple attack penalty.",
+  "saves": {
+    "fort": 10,
+    "ref": 12,
+  },
+  "sortName": "spinning blade pillar",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.hazards.Actor.HnPd9Vqh5NHKEdRq",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "stealth": {
+    "bonus": 11,
+    "note": "(trained) or DC 26 Perception (expert) to notice the control panel",
+  },
+  "strikes": [
+    {
+      "bonus": 12,
+      "damage": [
+        {
+          "formula": "2d10+5",
+          "type": "slashing",
+        },
+      ],
+      "name": "Spinning Blade",
+      "range": "melee",
+      "traits": [],
+    },
+  ],
+  "traits": [
+    "mechanical",
+    "trap",
+  ],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Steel Shield 1`] = `
+{
+  "baseItem": "steel-shield",
+  "bulk": 10,
+  "category": "shield",
+  "createdAt": "",
+  "description": "Like wooden shields, steel shields come in a variety of shapes and sizes. Though more expensive than wooden shields, they are much more durable.
+
+| Hardness | HP | BT |
+| --- | --- | --- |
+| 5 | 20 | 10 |",
+  "game": "pf2e",
+  "id": "fvtt:pf2e:equipment-srd:Yr9yCuJiAlFh3QEB",
+  "kind": "item",
+  "level": 0,
+  "name": "Steel Shield",
+  "origin": "foundry",
+  "price": {
+    "cp": 200,
+  },
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "rarity": "common",
+  "shield": {
+    "acBonus": 2,
+    "bt": 10,
+    "hardness": 5,
+    "hp": 20,
+  },
+  "sortName": "steel shield",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.equipment-srd.Item.Yr9yCuJiAlFh3QEB",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Sudden Charge 1`] = `
+{
+  "category": "class",
+  "cost": 2,
+  "createdAt": "",
+  "description": "With a quick sprint, you dash up to your foe and swing. Stride twice. If you end your movement within melee reach of at least one enemy, you can make a melee Strike against that enemy. You can use Sudden Charge while Burrowing, Climbing, Flying, or Swimming instead of Striding if you have the corresponding movement type.",
+  "game": "pf2e",
+  "id": "fvtt:pf2e:feats-srd:qQt3CMrhLkUV1wCv",
+  "kind": "feat",
+  "level": 1,
+  "name": "Sudden Charge",
+  "origin": "foundry",
+  "prerequisites": [],
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder Player Core",
+  },
+  "rarity": "common",
+  "sortName": "sudden charge",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.feats-srd.Item.qQt3CMrhLkUV1wCv",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [
+    "barbarian",
+    "fighter",
+    "flourish",
+  ],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > pf2e/Wand of Widening (1st-Rank Spell) 1`] = `
+{
+  "activation": [
+    {
+      "cost": {
+        "text": "Cast a Spell",
+      },
+    },
+  ],
+  "bulk": 1,
+  "category": "equipment",
+  "createdAt": "",
+  "description": "The end of this wand is forked with a peridot setting.
+
+**Activate** Cast a Spell; The activation takes ◆◆ if the spell normally takes ◆ to cast, or ◆◆◆ if the spell normally take ◆◆
+
+**Frequency** Once per day, plus overcharge
+
+---
+
+**Effect** You Cast the Spell, and increase its area. Add 5 feet to the radius of a burst that normally has a radius of at least 10 feet; add 5 feet to the length of a cone or line that is normally 15 feet long or smaller; or add 10 feet to the length of a larger cone or line.
+
+---
+
+**Craft Requirements** Supply a casting of a spell of the appropriate rank. The spell must have a casting time of ◆ or ◆◆, can't have a duration, and must have an area of burst (10 feet or more), cone, or line.",
+  "game": "pf2e",
+  "hands": "1",
+  "id": "fvtt:pf2e:equipment-srd:Zw3BKaJYxxxzNZ0f",
+  "kind": "item",
+  "level": 4,
+  "name": "Wand of Widening (1st-Rank Spell)",
+  "origin": "foundry",
+  "price": {
+    "cp": 10000,
+  },
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Pathfinder GM Core",
+  },
+  "rarity": "common",
+  "sortName": "wand of widening (1st-rank spell)",
+  "sourceRefs": [
+    {
+      "id": "Compendium.pf2e.equipment-srd.Item.Zw3BKaJYxxxzNZ0f",
+      "system": "foundry",
+      "version": "8.6.1",
+    },
+  ],
+  "traits": [
+    "magical",
+    "wand",
+  ],
+  "updatedAt": "",
+  "usage": "held in one hand",
+}
+`;
+
+exports[`Foundry converter — whole output > sf2e/Eclipse Burst 1`] = `
+{
+  "area": "60-foot burst",
+  "cast": 2,
+  "createdAt": "",
+  "damage": [
+    {
+      "formula": "8d10",
+      "type": "cold",
+    },
+    {
+      "formula": "8d4",
+      "type": "void",
+    },
+  ],
+  "defense": {
+    "basic": false,
+    "save": "ref",
+  },
+  "description": "A globe of freezing darkness explodes in the area, dealing 8d10 cold damage to creatures in the area, plus an additional 8d4 void damage to living creatures. Each creature in the area must attempt a Reflex save.
+
+If the globe overlaps with an area of magical light or affects a creature affected by magical light, *eclipse burst* attempts to counteract the light effect.
+
+---
+
+**Critical Success** The creature is unaffected.
+
+**Success** The creature takes half damage.
+
+**Failure** The creature takes full damage.
+
+**Critical Failure** The creature takes double damage and becomes {{condition: Blinded}} by the darkness for an unlimited duration.
+
+---
+
+**Heightened (+1)** The cold damage increases by 1d10 and the void damage against the living increases by 1d4.",
+  "game": "sf2e",
+  "id": "fvtt:sf2e:spells:0jadeyQIItIuRgeH",
+  "kind": "spell",
+  "level": 7,
+  "name": "Eclipse Burst",
+  "origin": "foundry",
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Starfinder Player Core",
+  },
+  "range": "500 feet",
+  "rarity": "common",
+  "sortName": "eclipse burst",
+  "sourceRefs": [
+    {
+      "id": "Compendium.sf2e.spells.Item.0jadeyQIItIuRgeH",
+      "system": "foundry",
+      "version": "1.6.1",
+    },
+  ],
+  "spellType": "spell",
+  "traditions": [
+    "arcane",
+    "divine",
+    "primal",
+  ],
+  "traits": [
+    "cold",
+    "concentrate",
+    "darkness",
+    "manipulate",
+    "void",
+  ],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > sf2e/Laser Pistol 1`] = `
+{
+  "baseItem": "laser-pistol",
+  "bulk": 10,
+  "category": "weapon",
+  "createdAt": "",
+  "description": "**Upgrades:** 1
+
+---
+
+This compact pistol is the most popular sidearm in the Pact Worlds thanks to its reliability, durability, and affordability. Most common laser pistols have a lightweight polycarbon body ending in a long, slim barrel.",
+  "game": "sf2e",
+  "hands": "1",
+  "id": "fvtt:sf2e:equipment:qIgcUV22LaDCzmb2",
+  "kind": "item",
+  "level": 0,
+  "name": "Laser Pistol",
+  "origin": "foundry",
+  "price": {
+    "cp": 300,
+  },
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Starfinder Player Core",
+  },
+  "rarity": "common",
+  "sortName": "laser pistol",
+  "sourceRefs": [
+    {
+      "id": "Compendium.sf2e.equipment.Item.qIgcUV22LaDCzmb2",
+      "system": "foundry",
+      "version": "1.6.1",
+    },
+  ],
+  "traits": [
+    "tech",
+  ],
+  "updatedAt": "",
+  "usage": "held in one hand",
+  "weapon": {
+    "ammo": {
+      "capacity": 1,
+      "type": "battery",
+    },
+    "category": "simple",
+    "damage": {
+      "dice": 1,
+      "die": "d6",
+      "type": "fire",
+    },
+    "expend": 2,
+    "grade": "commercial",
+    "group": "laser",
+    "range": 40,
+    "reload": "1",
+  },
+}
+`;
+
+exports[`Foundry converter — whole output > sf2e/Second Skin 1`] = `
+{
+  "armor": {
+    "acBonus": 1,
+    "category": "light",
+    "checkPenalty": -1,
+    "dexCap": 4,
+    "grade": "commercial",
+    "group": "polymer",
+    "speedPenalty": 0,
+    "strength": 0,
+  },
+  "baseItem": "second-skin",
+  "bulk": 1,
+  "category": "armor",
+  "createdAt": "",
+  "description": "**Upgrades:** 0
+
+---
+
+Soft but resilient fabric contours perfectly to the wearer's body, offering basic protection without sacrificing comfort. Second skin is commonly worn underneath casual clothing.",
+  "game": "sf2e",
+  "id": "fvtt:sf2e:equipment:BANdFbfuD16lPHs4",
+  "kind": "item",
+  "level": 0,
+  "name": "Second Skin",
+  "origin": "foundry",
+  "price": {
+    "cp": 200,
+  },
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Starfinder Player Core",
+  },
+  "rarity": "common",
+  "sortName": "second skin",
+  "sourceRefs": [
+    {
+      "id": "Compendium.sf2e.equipment.Item.BANdFbfuD16lPHs4",
+      "system": "foundry",
+      "version": "1.6.1",
+    },
+  ],
+  "traits": [
+    "comfort",
+    "flexible",
+    "tech",
+  ],
+  "updatedAt": "",
+}
+`;
+
+exports[`Foundry converter — whole output > sf2e/Warpstitcher 1`] = `
+{
+  "abilities": {
+    "cha": 4,
+    "con": 5,
+    "dex": 5,
+    "int": 3,
+    "str": 8,
+    "wis": 3,
+  },
+  "ac": 35,
+  "actions": [
+    {
+      "cost": "reaction",
+      "name": "Resist Reality",
+      "section": "defensive",
+      "text": "**Trigger** The warpstitcher would take damage
+
+---
+
+**Effect** The warpstitcher gains resistance 12 to the triggering damage type until the start of their next turn. The resistance applies to the triggering damage.",
+      "traits": [
+        "occult",
+      ],
+    },
+    {
+      "cost": 2,
+      "name": "Fold Reality",
+      "section": "offensive",
+      "text": "The warpstitcher collapses the space between themself and another location. They choose a 10-foot square within 120 feet. The warpstitcher then Strides, treating the chosen area as adjacent to them.",
+      "traits": [
+        "concentrate",
+        "occult",
+      ],
+    },
+    {
+      "cost": null,
+      "name": "Threads of Quintessence",
+      "section": "offensive",
+      "text": "The warpstitcher's claws are laced with strands of quintessence they force into victims' wounds. This functions as Grab, or Improved Grab on a critical hit.",
+      "traits": [],
+    },
+    {
+      "cost": 1,
+      "name": "Warp Suture",
+      "section": "offensive",
+      "text": "**Requirements** The warpstitcher has a creature {{condition: Grabbed}} or {{condition: Restrained}}
+
+---
+
+**Effect** The warpstitcher sews the creature into themself. The creature is pulled into the warpstitcher's space and moves with the warpstitcher. It becomes restrained and takes ::dice[3d12] force damage at the end of each of its turns until freed. Additionally, it takes ::dice[1d12] force damage whenever the warpstitcher uses Resist Reality (DC 34 basic Will save). The Escape DC is 34 (Escape), or the sutures can be severed (AC 25, Hardness 8, HP 30, weakness to slashing 5), freeing the creature. The warpstitcher can have up to 12 Bulk of creatures sewn into their body. The body of a creature that dies while sutured is absorbed into the warpstitcher's body and destroyed ::button[1d4 rounds | 1d4] later.",
+      "traits": [
+        "manipulate",
+      ],
+    },
+  ],
+  "createdAt": "",
+  "description": "Warpstitchers are self-proclaimed guardians of existence, holding the belief that they were created by the gods to sew together the space between alternate realities. These horrifying aberrations relentlessly hunt anything they suspect abuses magic or technology to change the fabric of the multiverse. Once they find their quarry, they wait only long enough to confirm their suspicions before attacking. Potential threats—a neophyte spellcaster trying their first cantrips, an academic theorist exploring interstellar travel—instead earn a telepathic warning of what awaits should they pursue their efforts too far. Everything other than threats (potential or otherwise) is a possible tool, a target for warpstitcher lies and coercion.
+
+Their mere appearance is fuel for nightmares, with insectile limbs supporting a massive, bulbous torso. From their back spring five multi-segmented limbs ending in wicked claws threaded with the very stuff of reality that they use to skewer their prey, who they then sew into their bodies. Such unfortunate creatures quickly dissolve, possibly sustaining the warpstitchers, though whether that's through their flesh, thoughts, or alternate reality potential is unknown. Those few who survive are plagued by disturbing, haunting visions; a smaller percentage instead see visions of happier possible lives, gaining peace and sometimes unprecedented witchwarper powers.",
+  "game": "sf2e",
+  "hp": 280,
+  "id": "fvtt:sf2e:alien-core-bestiary:AWuQOOAIKtToeiEh",
+  "immunities": [],
+  "inventory": [],
+  "kind": "creature",
+  "languages": [
+    "common",
+    "Telepathy 100 feet, Truespeech",
+  ],
+  "level": 14,
+  "name": "Warpstitcher",
+  "origin": "foundry",
+  "perception": 26,
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Starfinder Alien Core",
+  },
+  "rarity": "common",
+  "resistances": [],
+  "saves": {
+    "fort": 25,
+    "ref": 25,
+    "will": 27,
+  },
+  "senses": [
+    {
+      "type": "darkvision",
+    },
+  ],
+  "size": "lg",
+  "skills": {
+    "athletics": 28,
+    "deception": 25,
+    "occultism": 25,
+    "stealth": 28,
+  },
+  "sortName": "warpstitcher",
+  "sourceRefs": [
+    {
+      "id": "Compendium.sf2e.alien-core-bestiary.Actor.AWuQOOAIKtToeiEh",
+      "system": "foundry",
+      "version": "1.6.1",
+    },
+  ],
+  "speeds": {
+    "climb": 40,
+    "land": 40,
+  },
+  "spellcasting": [
+    {
+      "dc": 34,
+      "name": "Occult Innate Spells",
+      "spells": [
+        {
+          "name": "Truespeech (constant)",
+          "rank": 5,
+          "spellId": "fvtt:sf2e:spells:SwUiVavHKMWG7t5K",
+        },
+      ],
+      "tradition": "occult",
+      "type": "innate",
+    },
+  ],
+  "strikes": [
+    {
+      "bonus": 29,
+      "damage": [
+        {
+          "formula": "3d10+14",
+          "type": "piercing",
+        },
+      ],
+      "effects": [
+        "Threads of Quintessence",
+      ],
+      "name": "Claw",
+      "range": "melee",
+      "traits": [
+        "agile",
+        "deadly-d12",
+        "reach-10",
+      ],
+    },
+  ],
+  "traits": [
+    "aberration",
+  ],
+  "updatedAt": "",
+  "weaknesses": [],
+}
+`;

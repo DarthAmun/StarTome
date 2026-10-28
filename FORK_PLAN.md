@@ -568,7 +568,7 @@ Repo + upstream remote. Identity. `appNamespace.ts`. Dexie `startome` v1. Port 3
 `types/rules.ts`. `rules`/`images`/`syncState` tables. `useRules()`. Registries. Compendium section with overview columns (level, price, bulk, rarity, traits, remaster). Typed stat-block views for item, creature, hazard, spell, feat, action, condition. Simple views for the reference kinds. Editors write `localEdits` for synced entries and full fields for user entries. Search/palette/`{{kind:}}` refs/rules-lookup widget.
 **Done when:** user entries can be authored and found, and the old library still works alongside.
 
-### Phase 3: Foundry sync (large), the main new work
+### Phase 3: Foundry sync (large), the main new work — ✅ 3a done 2026-10-28
 - **3a (in scope)**: `converters/foundry/*` + HTML/enricher converter + golden tests pinned to `pf2e-8.6.1`/`sf2e-1.6.1`. **`ReleaseZipFile` source (ZIP drop)**. Worker pipeline. Merge policy. Report. Update check via raw manifests with a release link. Pack picker. License page.
 - **Deferred, not part of Phase 3**: `ReleaseZipMirror` (GitHub Action + auto-update) and the `GitTreeDev` dev channel. Revisit after using the ZIP drop for a while.
 **Done when:** a fresh browser goes from empty to a full PF2e + SF2e compendium from the release ZIP. A second sync of the same version is a no-op. A sync of a newer version keeps portraits, notes and local edits and reports conflicts.

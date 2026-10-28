@@ -1,0 +1,367 @@
+{
+ "index": {
+  "Compendium.pf2e.classfeatures.Item.0H2LxtiZTJ275pSD": {
+   "kind": "feat",
+   "name": "Versatile Legend"
+  },
+  "Compendium.pf2e.bestiary-ability-glossary-srd.Item.TTCw5NusiSSkJU1x": {
+   "kind": "action",
+   "name": "Void Healing"
+  },
+  "Compendium.pf2e.equipment-srd.Item.xShIDyydOMkGvGNb": {
+   "kind": "item",
+   "name": "Chalk"
+  },
+  "Compendium.pf2e.spells-srd.Item.PRrZ7anETWPm90YY": {
+   "kind": "spell",
+   "name": "Disguise Magic"
+  },
+  "Compendium.pf2e.equipment-srd.Item.olwngGXM3hpgoLEP": {
+   "kind": "item",
+   "name": "Dogslicer"
+  },
+  "Compendium.pf2e.actionspf2e.Item.xjGwis0uaC2305pm": {
+   "kind": "action",
+   "name": "Raise a Shield"
+  },
+  "Compendium.pf2e.classfeatures.Item.gdSmSTaGDxf4g2d8": {
+   "kind": "feat",
+   "name": "Battle Hardened"
+  },
+  "Compendium.pf2e.classfeatures.Item.F5VenhIQMDkeGvmV": {
+   "kind": "feat",
+   "name": "Weapon Legend"
+  },
+  "Compendium.sf2e.spells.Item.0jadeyQIItIuRgeH": {
+   "kind": "spell",
+   "name": "Eclipse Burst"
+  },
+  "Compendium.pf2e.heritages.Item.zVf0Hlp5xG0Q7kmc": {
+   "kind": "heritage",
+   "name": "Skilled Human"
+  },
+  "Compendium.pf2e.classfeatures.Item.gApJtAdNb9ST4Ms9": {
+   "kind": "feat",
+   "name": "Fighter Weapon Mastery"
+  },
+  "Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei": {
+   "kind": "condition",
+   "name": "Grabbed"
+  },
+  "Compendium.pf2e.classfeatures.Item.W2rwudMNcAxs8VoX": {
+   "kind": "feat",
+   "name": "Improved Flexibility"
+  },
+  "Compendium.pf2e.equipment-srd.Item.62nnVQvGhoVLLl2K": {
+   "kind": "item",
+   "name": "Crossbow"
+  },
+  "Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL": {
+   "kind": "condition",
+   "name": "Frightened"
+  },
+  "Compendium.pf2e.equipment-srd.Item.VnPh324pKwd2ZB66": {
+   "kind": "item",
+   "name": "Waterskin"
+  },
+  "Compendium.pf2e.conditionitems.Item.eIcWbB5o3pP6OIMe": {
+   "kind": "condition",
+   "name": "Immobilized"
+  },
+  "Compendium.sf2e.equipment.Item.BANdFbfuD16lPHs4": {
+   "kind": "item",
+   "name": "Second Skin"
+  },
+  "Compendium.pf2e.pathfinder-monster-core.Actor.oNR29GreK0AxLucN": {
+   "kind": "creature",
+   "name": "Herexen"
+  },
+  "Compendium.pf2e.spells-srd.Item.HG4afO9EOGEU9bZN": {
+   "kind": "spell",
+   "name": "Death's Call"
+  },
+  "Compendium.pf2e.actionspf2e.Item.UHpkTuCtyaPqiCAB": {
+   "kind": "action",
+   "name": "Step"
+  },
+  "Compendium.pf2e.bestiary-ability-glossary-srd.Item.kquBnQ0kObZztnBc": {
+   "kind": "action",
+   "name": "+1 Status to All Saves vs. Magic"
+  },
+  "Compendium.sf2e.alien-core-bestiary.Actor.AWuQOOAIKtToeiEh": {
+   "kind": "creature",
+   "name": "Warpstitcher"
+  },
+  "Compendium.pf2e.spells-srd.Item.zNN9212H2FGfM7VS": {
+   "kind": "spell",
+   "name": "Lay on Hands"
+  },
+  "Compendium.pf2e.feats-srd.Item.x7EMZNMavris2aHY": {
+   "kind": "feat",
+   "name": "Student of the Canon"
+  },
+  "Compendium.pf2e.equipment-srd.Item.2req0jGaxz8hScdB": {
+   "kind": "item",
+   "name": "Adventurer's Pack"
+  },
+  "Compendium.pf2e.equipment-srd.Item.hIgqLgH3YcLZBeoT": {
+   "kind": "item",
+   "name": "Shortbow"
+  },
+  "Compendium.pf2e.spells-srd.Item.sxQZ6yqTn0czJxVd": {
+   "kind": "spell",
+   "name": "Fireball"
+  },
+  "Compendium.pf2e.classfeatures.Item.GJKJafDGuX4BeAeN": {
+   "kind": "feat",
+   "name": "Bravery"
+  },
+  "Compendium.pf2e.deities.Item.QZD0u1jxwz0kj8uI": {
+   "kind": "deity",
+   "name": "Pharasma"
+  },
+  "Compendium.pf2e.spells-srd.Item.Jmxru8zMdYMRuO5n": {
+   "kind": "spell",
+   "name": "Vision of Death"
+  },
+  "Compendium.pf2e.equipment-srd.Item.Gq1cZWSKOtJhKd2p": {
+   "kind": "item",
+   "name": "Full Plate"
+  },
+  "Compendium.pf2e.spells-srd.Item.D442XMADp01qJ7Cs": {
+   "kind": "spell",
+   "name": "Mindlink"
+  },
+  "Compendium.pf2e.classfeatures.Item.x5jaCJxsmD5sx3KB": {
+   "kind": "feat",
+   "name": "Armor Expertise"
+  },
+  "Compendium.pf2e.equipment-srd.Item.zBYEU9E7034ENCmh": {
+   "kind": "item",
+   "name": "Padded Armor"
+  },
+  "Compendium.pf2e.conditionitems.Item.AJh5ex99aV6VTggg": {
+   "kind": "condition",
+   "name": "Off-Guard"
+  },
+  "Compendium.sf2e.equipment.Item.qIgcUV22LaDCzmb2": {
+   "kind": "item",
+   "name": "Laser Pistol"
+  },
+  "Compendium.pf2e.conditionitems.Item.j91X7x0XSomq8d60": {
+   "kind": "condition",
+   "name": "Prone"
+  },
+  "Compendium.pf2e.spells-srd.Item.AMEu5zzLN7uCX645": {
+   "kind": "spell",
+   "name": "Ghostly Weapon"
+  },
+  "Compendium.pf2e.feats-srd.Item.mvNa9KfQooHYEXoA": {
+   "kind": "feat",
+   "name": "Fighter Dedication"
+  },
+  "Compendium.pf2e.classfeatures.Item.2ImD2TB0RVic1VUc": {
+   "kind": "feat",
+   "name": "Tempered Reflexes"
+  },
+  "Compendium.sf2e.conditions.Item.XgEqL1kFApUbl5Z2": {
+   "kind": "condition",
+   "name": "Blinded"
+  },
+  "Compendium.pf2e.spells-srd.Item.kBhaPuzLUSwS6vVf": {
+   "kind": "spell",
+   "name": "Electric Arc"
+  },
+  "Compendium.sf2e.spells.Item.SwUiVavHKMWG7t5K": {
+   "kind": "spell",
+   "name": "Truespeech"
+  },
+  "Compendium.pf2e.classfeatures.Item.8g6HzARbhfcgilP8": {
+   "kind": "feat",
+   "name": "Combat Flexibility"
+  },
+  "Compendium.pf2e.feats-srd.Item.w8Ycgeq2zfyshtoS": {
+   "kind": "feat",
+   "name": "Reactive Shield"
+  },
+  "Compendium.pf2e.feats-srd.Item.qQt3CMrhLkUV1wCv": {
+   "kind": "feat",
+   "name": "Sudden Charge"
+  },
+  "Compendium.pf2e.pathfinder-monster-core.Actor.PcHQDmPTztw32PhL": {
+   "kind": "creature",
+   "name": "Kobold Scout"
+  },
+  "Compendium.pf2e.equipment-srd.Item.fagzYdmfYyMQ6J77": {
+   "kind": "item",
+   "name": "Bedroll"
+  },
+  "Compendium.pf2e.equipment-srd.Item.fyYnQf1NAx9fWFaS": {
+   "kind": "item",
+   "name": "Rope"
+  },
+  "Compendium.pf2e.equipment-srd.Item.UlIxxLm71UdRgCFE": {
+   "kind": "item",
+   "name": "Flint and Steel"
+  },
+  "Compendium.pf2e.equipment-srd.Item.rQWaJhI5Bko5x14Z": {
+   "kind": "item",
+   "name": "Dagger"
+  },
+  "Compendium.pf2e.classes.Item.8zn3cD6GSmoo1LW4": {
+   "kind": "class",
+   "name": "Fighter"
+  },
+  "Compendium.pf2e.classfeatures.Item.CGB1TczFhQhdQxml": {
+   "kind": "feat",
+   "name": "Armor Mastery"
+  },
+  "Compendium.pf2e.equipment-srd.Item.w2ENw2VMPcsbif8g": {
+   "kind": "item",
+   "name": "Arrows"
+  },
+  "Compendium.pf2e.equipment-srd.Item.4tIVTg9wj56RrveA": {
+   "kind": "item",
+   "name": "Leather Armor"
+  },
+  "Compendium.pf2e.equipment-srd.Item.3lgwjrFEsQVKzhh7": {
+   "kind": "item",
+   "name": "Backpack"
+  },
+  "Compendium.pf2e.backgrounds.Item.CAjQrHZZbALE7Qjy": {
+   "kind": "background",
+   "name": "Acolyte"
+  },
+  "Compendium.pf2e.equipment-srd.Item.LJdbVTOZog39EEbi": {
+   "kind": "item",
+   "name": "Longsword"
+  },
+  "Compendium.pf2e.equipment-srd.Item.AITVZmakiu3RgfKo": {
+   "kind": "item",
+   "name": "Bolts"
+  },
+  "Compendium.pf2e.actionspf2e.Item.3yoajuKjwHZ9ApUY": {
+   "kind": "action",
+   "name": "Grab an Edge"
+  },
+  "Compendium.pf2e.spells-srd.Item.rfZpqmj0AIIdkVIs": {
+   "kind": "spell",
+   "name": "Heal"
+  },
+  "Compendium.sf2e.conditions.Item.kWc1fhmv9LBiTuei": {
+   "kind": "condition",
+   "name": "Grabbed"
+  },
+  "Compendium.pf2e.hazards.Actor.HnPd9Vqh5NHKEdRq": {
+   "kind": "hazard",
+   "name": "Spinning Blade Pillar"
+  },
+  "Compendium.pf2e.actionspf2e.Item.SkZAQRkLLkmBQNB9": {
+   "kind": "action",
+   "name": "Escape"
+  },
+  "Compendium.pf2e.equipment-srd.Item.2RuepCemJhrpKKao": {
+   "kind": "item",
+   "name": "Healing Potion (Minor)"
+  },
+  "Compendium.pf2e.equipment-srd.Item.81aHsD27HFGnq1Nt": {
+   "kind": "item",
+   "name": "Soap"
+  },
+  "Compendium.pf2e.classfeatures.Item.bAaI7h937Nr3g93U": {
+   "kind": "feat",
+   "name": "Fighter Expertise"
+  },
+  "Compendium.pf2e.equipment-srd.Item.plplsXJsqrdqNQVI": {
+   "kind": "item",
+   "name": "Religious Symbol (Wooden)"
+  },
+  "Compendium.pf2e.classfeatures.Item.hmShTfPOcTaKgbf4": {
+   "kind": "feat",
+   "name": "Reactive Strike"
+  },
+  "Compendium.pf2e.conditionitems.Item.VcDeM8A5oI6VqhbM": {
+   "kind": "condition",
+   "name": "Restrained"
+  },
+  "Compendium.pf2e.equipment-srd.Item.L9ZV076913otGtiB": {
+   "kind": "item",
+   "name": "Rations"
+  },
+  "Compendium.pf2e.equipment-srd.Item.Zw3BKaJYxxxzNZ0f": {
+   "kind": "item",
+   "name": "Wand of Widening (1st-Rank Spell)"
+  },
+  "Compendium.pf2e.pathfinder-monster-core.Actor.fLLKuOXwPq1Iq0U4": {
+   "kind": "creature",
+   "name": "Goblin Warrior"
+  },
+  "Compendium.pf2e.equipment-srd.Item.7tKkkF8eZ4iCLJtp": {
+   "kind": "item",
+   "name": "Shortsword"
+  },
+  "Compendium.pf2e.classfeatures.Item.9EqIasqfI8YIM3Pt": {
+   "kind": "feat",
+   "name": "Weapon Specialization"
+  },
+  "Compendium.pf2e.equipment-srd.Item.Ix2vicchE79d6Cl3": {
+   "kind": "item",
+   "name": "Gauntlet"
+  },
+  "Compendium.pf2e.actionspf2e.Item.PMbdMWc2QroouFGD": {
+   "kind": "action",
+   "name": "Grapple"
+  },
+  "Compendium.pf2e.equipment-srd.Item.0c7zLY9c88K2n0GC": {
+   "kind": "item",
+   "name": "Pathfinder's Pouch"
+  },
+  "Compendium.pf2e.equipment-srd.Item.Yr9yCuJiAlFh3QEB": {
+   "kind": "item",
+   "name": "Steel Shield"
+  },
+  "Compendium.pf2e.classfeatures.Item.TIvzBALymvb56L79": {
+   "kind": "feat",
+   "name": "Battlefield Surveyor"
+  },
+  "Compendium.pf2e.hazards.Actor.BHq5wpQU8hQEke8D": {
+   "kind": "hazard",
+   "name": "Hidden Pit"
+  },
+  "Compendium.pf2e.spells-srd.Item.wdA52JJnsuQWeyqz": {
+   "kind": "spell",
+   "name": "Harm"
+  },
+  "Compendium.pf2e.equipment-srd.Item.epTuWsVDuPzUXMk9": {
+   "kind": "item",
+   "name": "Amethyst"
+  },
+  "Compendium.pf2e.ancestries.Item.IiG7DgeLWYrSNXuX": {
+   "kind": "ancestry",
+   "name": "Human"
+  },
+  "Compendium.sf2e.conditions.Item.VcDeM8A5oI6VqhbM": {
+   "kind": "condition",
+   "name": "Restrained"
+  },
+  "Compendium.pf2e.equipment-srd.Item.8Jdw4yAzWYylGePS": {
+   "kind": "item",
+   "name": "Torch"
+  },
+  "Compendium.pf2e.classfeatures.Item.eZNCckLzbH3GyncH": {
+   "kind": "feat",
+   "name": "Shield Block"
+  },
+  "Compendium.pf2e.classfeatures.Item.Z7HX6TeFsaup7Dx9": {
+   "kind": "feat",
+   "name": "Greater Weapon Specialization"
+  }
+ },
+ "lang": {
+  "PF2E.NPC.Abilities.Glossary.Grab": "<p><strong>Requirements</strong> The monster's last action was a successful Strike that lists Grab in its damage entry, or the monster has a creature @UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed} or @UUID[Compendium.pf2e.conditionitems.Item.VcDeM8A5oI6VqhbM]{Restrained}</p><hr /><p><strong>Effect</strong> If used after a Strike, the monster attempts to [[/act grapple]] the creature using the body part it attacked with. This attempt neither applies nor counts toward the creature's multiple attack penalty.</p><p>The monster can instead use Grab and choose one creature it's grabbing or restraining with an appendage that has Grab to automatically extend that condition to the end of the monster's next turn.</p>",
+  "PF2E.NPC.Abilities.Glossary.ImprovedGrab": "<p><strong>Trigger</strong> The monster's last action was a successful Strike that lists Improved Grab in its damage entry, or the monster has a creature @UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed} or @UUID[Compendium.pf2e.conditionitems.Item.VcDeM8A5oI6VqhbM]{Restrained}</p><hr /><p><strong>Effect</strong> If used after a Strike, the monster attempts to [[/act grapple]] the creature using the body part it attacked with as a free action. This attempt neither applies nor counts toward the creature's multiple attack penalty.</p><p>The monster can instead use Improved Grab as an action and choose one creature it's grabbing or restraining with an appendage that has Improved Grab to automatically extend that condition to the end of the monster's next turn.</p>",
+  "PF2E.AttackEffectImprovedGrab": "Improved Grab",
+  "PF2E.NPC.Abilities.Glossary.NegativeHealing": "<p>A creature with void healing draws health from void energy rather than vitality energy. It is damaged by vitality damage and is not healed by vitality healing effects. It does not take void damage, and it is healed by void effects that heal undead.</p>",
+  "PF2E.AttackEffectGrab": "Grab"
+ }
+}

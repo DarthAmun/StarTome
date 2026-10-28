@@ -17,7 +17,7 @@
     <!-- ── Item ───────────────────────────────────────────────── -->
     <template v-if="item">
       <p class="rsb-line">
-        <template v-if="item.price !== undefined"><b>Price</b> {{ formatMoney(item.price, entity.game) }}</template>
+        <template v-if="item.price !== undefined"><b>Price</b> {{ formatMoney(item.price, entity.game) }}<template v-if="item.priceFor && item.priceFor > 1"> for {{ item.priceFor }}</template></template>
       </p>
       <p class="rsb-line">
         <template v-if="item.usage"><b>Usage</b> {{ humanize(item.usage) }}; </template>
@@ -66,12 +66,18 @@
       <p class="rsb-line"><b>Perception</b> {{ signed(creature.perception) }}<template v-if="creature.senses.length">; {{ creature.senses.map(formatSense).join(', ') }}</template></p>
       <p v-if="creature.languages.length" class="rsb-line"><b>Languages</b> {{ creature.languages.join(', ') }}</p>
       <p v-if="skillLine" class="rsb-line"><b>Skills</b> {{ skillLine }}</p>
+      <p v-if="creature.inventory.length" class="rsb-line">
+        <b>Items</b>
+        <template v-for="(inv, ii) in creature.inventory" :key="ii">
+          <span v-if="inv.itemId" class="rsb-link" data-entity-type="item" :data-entity-name="inv.name">{{ inv.name }}</span><template v-else>{{ inv.name }}</template><template v-if="inv.quantity > 1"> ({{ inv.quantity }})</template><template v-if="ii < creature.inventory.length - 1">, </template></template>
+      </p>
       <p class="rsb-line rsb-abilities">
         <span v-for="k in ABILITY_KEYS" :key="k"><b>{{ titleCase(k) }}</b> {{ signed(creature.abilities[k]) }}</span>
       </p>
       <p v-for="a in actionsIn('interaction')" :key="a.name" class="rsb-line rsb-action">
         <b>{{ a.name }}</b> <span v-if="formatActionCost(a.cost)" class="rsb-glyph">{{ formatActionCost(a.cost) }}</span>
         <template v-if="a.traits.length"> ({{ a.traits.map(formatTrait).join(', ') }})</template>
+        <template v-if="a.frequency"> <b>Frequency</b> {{ a.frequency }};</template>
         {{ ' ' }}<span class="rsb-md" v-html="md(a.text)" />
       </p>
       <hr />
@@ -89,6 +95,7 @@
       <p v-for="a in actionsIn('defensive')" :key="a.name" class="rsb-line rsb-action">
         <b>{{ a.name }}</b> <span v-if="formatActionCost(a.cost)" class="rsb-glyph">{{ formatActionCost(a.cost) }}</span>
         <template v-if="a.traits.length"> ({{ a.traits.map(formatTrait).join(', ') }})</template>
+        <template v-if="a.frequency"> <b>Frequency</b> {{ a.frequency }};</template>
         {{ ' ' }}<span class="rsb-md" v-html="md(a.text)" />
       </p>
       <hr />
@@ -109,6 +116,7 @@
       <p v-for="a in actionsIn('offensive')" :key="a.name" class="rsb-line rsb-action">
         <b>{{ a.name }}</b> <span v-if="formatActionCost(a.cost)" class="rsb-glyph">{{ formatActionCost(a.cost) }}</span>
         <template v-if="a.traits.length"> ({{ a.traits.map(formatTrait).join(', ') }})</template>
+        <template v-if="a.frequency"> <b>Frequency</b> {{ a.frequency }};</template>
         {{ ' ' }}<span class="rsb-md" v-html="md(a.text)" />
       </p>
     </template>
@@ -122,9 +130,15 @@
       <hr />
       <div v-if="hazard.disable" class="rsb-md rsb-line" v-html="md(`**Disable** ${hazard.disable}`)" />
       <p v-if="hazardDefense" class="rsb-line" v-html="hazardDefense" />
+      <p v-for="(st, i) in hazard.strikes ?? []" :key="'hs' + i" class="rsb-line">
+        <b>{{ st.range === 'melee' ? 'Melee' : 'Ranged' }}</b> <span class="rsb-glyph">◆</span> {{ st.name }} {{ signed(st.bonus) }}
+        <template v-if="st.traits.length"> ({{ st.traits.map(formatTrait).join(', ') }})</template>,
+        <b>Damage</b> {{ st.damage.map(d => `${d.formula} ${d.type}`).join(' plus ') }}<template v-if="st.effects?.length"> plus {{ st.effects.join(', ') }}</template>
+      </p>
       <p v-for="a in hazard.actions" :key="a.name" class="rsb-line rsb-action">
         <b>{{ a.name }}</b> <span v-if="formatActionCost(a.cost)" class="rsb-glyph">{{ formatActionCost(a.cost) }}</span>
         <template v-if="a.traits.length"> ({{ a.traits.map(formatTrait).join(', ') }})</template>
+        <template v-if="a.frequency"> <b>Frequency</b> {{ a.frequency }};</template>
         {{ ' ' }}<span class="rsb-md" v-html="md(a.text)" />
       </p>
       <div v-if="hazard.routine" class="rsb-md rsb-line" v-html="md(`**Routine** ${hazard.routine}`)" />
@@ -314,13 +328,22 @@ function humanize(s: string) {
   return s.replace(/[-_]/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()
 }
 
+/** > [!hidden] Title blocks (Foundry's private notes) become the GM-only box; other callouts a plain aside. */
+function gmCallouts(html: string) {
+  return html.replace(/<blockquote>\s*<p>\[!(\w+)\]([^<\n]*)(?:<br\s*\/?>)?\s*([\s\S]*?)<\/blockquote>/g, (_m, type: string, title: string, body: string) => {
+    const hidden = type.toLowerCase() === 'hidden'
+    const label = esc(title.trim() || (hidden ? 'GM only' : type))
+    return `<div class="${hidden ? 'rsb-gm' : 'rsb-callout'}"><div class="rsb-gm-title">${label}</div><p>${body}</div>`
+  })
+}
+
 function md(text: string) {
   return renderMarkdown(text, { rich: true, extraTypes: RULES_KINDS, postProcess: rollChips })
 }
 
-/** ::dice[2d6+3] and ::button[Label | 2d6] become clickable rolls for the global dice roller. */
+/** Rendering extras for stat-block text: GM-only callouts and roll chips. */
 function rollChips(html: string) {
-  return html.replace(/::(dice|button)\[([^\]]+)\]/g, (_m, kind: string, args: string) => {
+  return gmCallouts(html).replace(/::(dice|button)\[([^\]]+)\]/g, (_m, kind: string, args: string) => {
     const [label, expr] = kind === 'button' ? args.split('|').map(x => x.trim()) : [args.trim(), args.trim()]
     const roll = esc(expr || label)
     return `<span class="roll-ref" data-roll="${roll}">${esc(label)}</span>`
@@ -372,7 +395,11 @@ async function onClick(e: MouseEvent) {
 .rsb-md :deep(.entity-ref) { color: var(--accent-l, var(--kind-color)); cursor: pointer; text-decoration: underline dotted; }
 hr { border: none; border-top: 1px solid var(--border-hi); margin: 8px 0; }
 .rsb-gm { margin-top: 12px; border-left: 3px solid #8b2030; background: oklch(54% 0.24 22 / 0.08); padding: 6px 10px; border-radius: 0 4px 4px 0; }
-.rsb-gm-title { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #e87a7a; margin-bottom: 2px; }
+.rsb :deep(.rsb-gm) { margin-top: 10px; border-left: 3px solid #8b2030; background: oklch(54% 0.24 22 / 0.08); padding: 6px 10px; border-radius: 0 4px 4px 0; }
+.rsb :deep(.rsb-callout) { margin-top: 10px; border-left: 3px solid var(--border-hi); background: var(--surface); padding: 6px 10px; border-radius: 0 4px 4px 0; }
+.rsb :deep(.rsb-gm .rsb-gm-title) { color: #e87a7a; }
+.rsb :deep(.rsb-callout .rsb-gm-title) { color: var(--text3); }
+.rsb-gm-title, .rsb :deep(.rsb-gm-title) { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #e87a7a; margin-bottom: 2px; }
 .rsb-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 14px; padding-top: 6px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text3); }
 .rsb-foot-game { font-family: var(--fm); }
 </style>

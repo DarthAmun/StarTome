@@ -239,3 +239,8 @@ export function useRulesIndex() {
 export function useRulesRevision() {
   return revision
 }
+
+/** For writers outside this module (the sync worker): tell lists, counts and the ref index to reload. */
+export function notifyRulesChanged() {
+  touch()
+}

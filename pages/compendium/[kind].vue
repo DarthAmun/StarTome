@@ -89,7 +89,7 @@
           </button>
           <div v-if="!loading && !page.items.length" class="cmp-empty">
             <template v-if="search || activeFilterCount">No matches.</template>
-            <template v-else>No {{ cfg!.plural.toLowerCase() }} yet.<br><span>The Foundry compendium sync fills this section; you can also add homebrew entries.</span></template>
+            <template v-else>No {{ cfg!.plural.toLowerCase() }} yet.<br><span><NuxtLink to="/compendium/sync">Import a Foundry release</NuxtLink> to fill this section, or add homebrew entries.</span></template>
           </div>
         </div>
       </div>

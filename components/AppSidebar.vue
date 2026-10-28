@@ -230,6 +230,11 @@
             <span class="sb-child-label">{{ k.plural }}</span>
             <span class="sb-child-count">{{ compendiumCounts[k.kind] || '' }}</span>
           </NuxtLink>
+          <div class="sb-child-sep" />
+          <NuxtLink to="/compendium/sync" class="sb-child-tool" :class="{ active: route.path === '/compendium/sync' }">
+            <OhVueIcon name="md-autorenew" scale="0.65" style="color:#e8c44a;width:14px;flex-shrink:0" />
+            <span>Foundry sync</span>
+          </NuxtLink>
         </div>
 
         <div class="sb-divider" />

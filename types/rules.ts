@@ -82,6 +82,8 @@ export interface Item extends RulesEntityBase {
   subcategory?: string
   baseItem?: string
   price: Money | null
+  /** The price buys this many (ammunition: 1 sp for 10). */
+  priceFor?: number
   bulk: BulkTenths
   bulkNote?: string
   usage?: string
@@ -119,6 +121,7 @@ export interface StatAction {
   cost: ActionCost
   section: 'interaction' | 'defensive' | 'offensive'
   traits: string[]
+  frequency?: string
   text: string
 }
 
@@ -155,7 +158,8 @@ export interface Creature extends RulesEntityBase {
   strikes: Strike[]
   actions: StatAction[]
   spellcasting: Spellcasting[]
-  inventory: { itemId: string; quantity: number }[]
+  /** Gear the creature carries; itemId links the compendium entry when Foundry provides one. */
+  inventory: { itemId?: string; name: string; quantity: number }[]
   tokenImg?: string | null
 }
 
@@ -172,6 +176,7 @@ export interface Hazard extends RulesEntityBase {
   immunities?: string[]
   weaknesses?: Weakness[]
   resistances?: Resistance[]
+  strikes?: Strike[]
   actions: StatAction[]
   routine?: string
   reset?: string
