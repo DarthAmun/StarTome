@@ -280,6 +280,7 @@ const WIDGET_ICONS = {
 </script>
 
 <script setup lang="ts">
+import { lsKey } from '~/utils/appNamespace'
 import { useEntities } from "~/composables/useEntities";
 import { useEntityMarkdown } from "~/composables/useEntityMarkdown";
 import { evaluateFormula } from "~/composables/useFormulaEvaluator";
@@ -637,7 +638,7 @@ watch(
 
 // ── View mode ─────────────────────────────────────────────────────────────────
 type ViewMode = "edit" | "mixed" | "preview";
-const VM_KEY = "dmstome.editor.viewmode";
+const VM_KEY = lsKey("editor.viewmode");
 const viewMode = ref<ViewMode>(props.initialViewMode ?? "mixed");
 if (import.meta.client && props.showTabBar !== false) {
     const s = localStorage.getItem(VM_KEY);

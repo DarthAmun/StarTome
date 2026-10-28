@@ -86,6 +86,7 @@
 </template>
 
 <script setup lang="ts">
+import { lsKey } from '~/utils/appNamespace'
 import { generateFullName, pick, cap, type NameGender } from '~/composables/useNameGenerator'
 import { useEntities } from '~/composables/useEntities'
 import { getDb } from '~/composables/useDb'
@@ -96,7 +97,7 @@ defineOptions({ inheritAttrs: false })
 const props = defineProps<{ campaignId: number; systemId: number | null }>()
 const store = useEntities()
 
-const LS_KEY = `dmscreen-npcgen-v1-${props.campaignId}`
+const LS_KEY = lsKey(`dmscreen-npcgen-v1-${props.campaignId}`)
 
 const config = reactive<{ raceSource: string | null; roleSource: string | null }>({
   raceSource: null,

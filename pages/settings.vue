@@ -388,10 +388,10 @@
       <section v-else-if="activeSection === 'about'" class="sett-section">
         <div class="sett-section-title">About</div>
         <div class="sett-about">
-          <img src="/icons/icon-512.png" class="sett-about-logo" alt="DM's Tome"
+          <img src="/icons/icon-512.png" class="sett-about-logo" alt="StarTome"
             @error="(e: Event) => (e.target as HTMLImageElement).style.display = 'none'" />
           <div class="sett-about-info">
-            <div class="sett-about-name">DM's Tome</div>
+            <div class="sett-about-name">{{ APP_NAME }}</div>
             <div class="sett-about-version">Version {{ version }}</div>
             <div class="sett-about-desc">Offline-first D&amp;D campaign manager. All data lives in your browser — no account required.</div>
           </div>
@@ -420,6 +420,7 @@
 </template>
 
 <script setup lang="ts">
+import { APP_NS, APP_NAME, exportFilename } from '~/utils/appNamespace'
 import JSZip from 'jszip'
 import { getDb, dbApi, compressDataUrl, now, getImageKeysByType } from '~/composables/useDb'
 import { THEMES, ACCENT_PRESETS } from '~/composables/useSettings'
@@ -623,7 +624,7 @@ async function exportAll() {
       db.entities.toArray(), db.entityLinks.toArray(), db.entitySnapshots.toArray(), db.entityConnections.toArray(), db.graphLayouts.toArray(),
       db.tokens.toArray(), db.systems.toArray(), db.records.toArray(),
     ])
-  download({ version: 1, type: 'all', exportedAt: now(), campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts, tokens, systems, records }, `dmstome-all-${slug()}.json`)
+  download({ version: 1, app: APP_NS, type: 'all', exportedAt: now(), campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts, tokens, systems, records }, exportFilename(`all-${slug()}.json`))
 }
 
 async function exportCampaigns() {
@@ -640,20 +641,20 @@ async function exportCampaigns() {
   const entitySnapshots = entIds.length ? await db.entitySnapshots.where('entity_id').anyOf(entIds).toArray() : []
   const entityConnections = campIds.length ? await db.entityConnections.where('campaign_id').anyOf(campIds).toArray() : []
   const graphLayouts = campIds.length ? await db.graphLayouts.where('campaign_id').anyOf(campIds).toArray() : []
-  download({ version: 1, type: 'campaigns', exportedAt: now(), campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts }, `dmstome-campaigns-${slug()}.json`)
+  download({ version: 1, app: APP_NS, type: 'campaigns', exportedAt: now(), campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts }, exportFilename(`campaigns-${slug()}.json`))
 }
 
 async function exportSystems(withRecords: boolean) {
   const db = getDb()
   const systems = await db.systems.toArray()
   const records = withRecords ? await db.records.toArray() : []
-  download({ version: 1, type: withRecords ? 'systems-full' : 'systems', exportedAt: now(), systems, records }, `dmstome-systems${withRecords ? '-full' : ''}-${slug()}.json`)
+  download({ version: 1, app: APP_NS, type: withRecords ? 'systems-full' : 'systems', exportedAt: now(), systems, records }, exportFilename(`systems${withRecords ? '-full' : ''}-${slug()}.json`))
 }
 
 async function exportTokens() {
   const db = getDb()
   const tokens = await db.tokens.toArray()
-  download({ version: 1, type: 'tokens', exportedAt: now(), tokens }, `dmstome-tokens-${slug()}.json`)
+  download({ version: 1, app: APP_NS, type: 'tokens', exportedAt: now(), tokens }, exportFilename(`tokens-${slug()}.json`))
 }
 
 function wikilinkify(text: string): string {
@@ -808,7 +809,7 @@ async function exportCampaignForClaude() {
     const exportDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 
     lines.push(`# ${campaign.name} — Campaign Knowledge Base`)
-    lines.push(`*Exported from DM's Tome · ${exportDate}*`)
+    lines.push(`*Exported from ${APP_NAME} · ${exportDate}*`)
     if (campaign.description) {
       lines.push('')
       lines.push('## Campaign Overview')

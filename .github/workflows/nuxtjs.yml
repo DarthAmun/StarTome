@@ -36,7 +36,7 @@ jobs:
       - name: Generate static site
         run: pnpm generate
         env:
-          NUXT_APP_BASE_URL: /DmsTome/
+          NUXT_APP_BASE_URL: /StarTome/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

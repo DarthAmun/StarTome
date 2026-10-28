@@ -15,6 +15,7 @@
 </template>
 
 <script setup lang="ts">
+import { channelName } from '~/utils/appNamespace'
 // window.dmstome used for file dialog / IPC only
 import { useEntities } from '~/composables/useEntities'
 
@@ -35,7 +36,7 @@ onMounted(async () => {
   })
 
   window.addEventListener('beforeunload', () => {
-    const ch = new BroadcastChannel('dmforge-map')
+    const ch = new BroadcastChannel(channelName('map'))
     ch.postMessage({ type: 'map-player-closed' })
     ch.close()
   })

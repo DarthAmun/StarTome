@@ -5,6 +5,7 @@ import type { DbEncounterWall } from "./useDb";
 import { useFovCompute, type Point } from "./useFovCompute";
 import { AlphaFilter, Container } from "pixi.js";
 import { visibleConditions, getConditionColorHex, hpColorHex, hexColorToNumber, healthState } from "./useConditions";
+import { channelName } from "../utils/appNamespace";
 
 export type ShapeType = "circle" | "square" | "cone";
 
@@ -714,7 +715,7 @@ export function useEncounterCanvas(options: CanvasOptions) {
 
   function broadcastFov(polygons: Point[][], outlinePolygons: Point[][] = []) {
     try {
-      const ch = new BroadcastChannel("dmforge-player");
+      const ch = new BroadcastChannel(channelName("player"));
       ch.postMessage({ type: "fov-update", polygons, outlinePolygons });
       ch.close();
     } catch {

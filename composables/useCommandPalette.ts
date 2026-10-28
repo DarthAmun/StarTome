@@ -2,6 +2,7 @@ import { getDb, parseRecordData } from '~/composables/useDb'
 import { useEntities } from '~/composables/useEntities'
 import { useSystems } from '~/composables/useSystems'
 import type { EntityTypeSchema } from '~/types/entities'
+import { lsKey } from '~/utils/appNamespace'
 
 export interface CmdContext {
   campaign: { id: number; name: string } | null
@@ -80,13 +81,13 @@ const _ctx = ref<CmdContext>({ campaign: null, system: null })
 
 if (import.meta.client) {
   try {
-    const s = localStorage.getItem('dmstome-cmd-ctx')
+    const s = localStorage.getItem(lsKey('cmd-ctx'))
     if (s) Object.assign(_ctx.value, JSON.parse(s))
   } catch {}
 }
 
 function _saveCtx() {
-  if (import.meta.client) localStorage.setItem('dmstome-cmd-ctx', JSON.stringify(_ctx.value))
+  if (import.meta.client) localStorage.setItem(lsKey('cmd-ctx'), JSON.stringify(_ctx.value))
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

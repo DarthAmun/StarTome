@@ -12,8 +12,8 @@
         class="sb-logo-img"
         @error="(e: Event) => (e.target as HTMLImageElement).style.display = 'none'"
       />
-      <NuxtLink v-if="!collapsed" to="/" class="sb-wordmark" title="DM's Tome">
-        DM's Tome
+      <NuxtLink v-if="!collapsed" to="/" class="sb-wordmark" title="StarTome">
+        StarTome
       </NuxtLink>
 
       <!-- Collapse toggle -->
@@ -27,7 +27,7 @@
     </div>
 
     <!-- Logo below the toggle button, only in collapsed mode -->
-    <NuxtLink v-if="collapsed" to="/" class="sb-logo-below" title="DM's Tome">
+    <NuxtLink v-if="collapsed" to="/" class="sb-logo-below" title="StarTome">
       <img src="/icons/icon-192.png" alt="" width="24" height="24" class="sb-logo-img"
         @error="(e: Event) => (e.target as HTMLImageElement).style.display = 'none'" />
     </NuxtLink>
@@ -283,6 +283,7 @@
 </template>
 
 <script setup lang="ts">
+import { lsKey } from '~/utils/appNamespace'
 import { dbApi, getDb } from '~/composables/useDb'
 import { useSystems } from '~/composables/useSystems'
 import { useEntities } from '~/composables/useEntities'
@@ -302,10 +303,10 @@ const encounterStore = useEncounterStore()
 // ── Collapse state ─────────────────────────────────────────────────────────
 const collapsed = ref(false)
 if (import.meta.client) {
-  collapsed.value = localStorage.getItem('sb-collapsed') === '1'
+  collapsed.value = localStorage.getItem(lsKey('sidebar.collapsed')) === '1'
 }
 watch(collapsed, v => {
-  if (import.meta.client) localStorage.setItem('sb-collapsed', v ? '1' : '0')
+  if (import.meta.client) localStorage.setItem(lsKey('sidebar.collapsed'), v ? '1' : '0')
 })
 
 // Keyboard shortcut B

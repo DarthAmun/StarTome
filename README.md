@@ -1,13 +1,17 @@
-# DM's Tome
+# StarTome
 
-An offline-first Progressive Web App for Game Masters — campaign notes, world maps, a full VTT encounter system, and a customisable rules library. Runs entirely in the browser with no server required. Can be hosted for free on GitHub Pages.
+An offline-first Progressive Web App for Pathfinder 2e and Starfinder 2e Game Masters — campaign notes, world maps, a full VTT encounter system, and a rules compendium. Runs entirely in the browser with no server required. Can be hosted for free on GitHub Pages.
+
+StarTome is a fork of [DM's Tome](https://github.com/DarthAmun/DmsTome). The fork plan — typed PF2e/SF2e entities, Foundry compendium sync, Pf2e Play Buddy integration — is in [FORK_PLAN.md](FORK_PLAN.md).
+
+StarTome is unofficial and not affiliated with Paizo Inc. Pathfinder and Starfinder are trademarks of Paizo Inc.
 
 ## Technology Stack
 
 | Layer | Tech |
 |-------|------|
 | App | PWA (installable, offline-capable) |
-| Database | IndexedDB via Dexie.js (schema v13) |
+| Database | IndexedDB via Dexie.js (database `startome`, schema v1) |
 | Frontend | Nuxt 3 (static/CSR) + Vue 3 |
 | Styling | Tailwind CSS |
 | UI Components | PrimeVue v4 (unstyled) |
@@ -28,7 +32,7 @@ pnpm install
 pnpm dev
 ```
 
-Open http://localhost:3000 — all data is stored in your browser's IndexedDB.
+Open http://localhost:3001 — all data is stored in your browser's IndexedDB.
 
 ## Production Build
 
@@ -40,7 +44,7 @@ pnpm generate     # outputs to .output/public/
 
 1. Push to GitHub
 2. Go to **Settings → Pages → Source** → select **GitHub Actions**
-3. Edit `.github/workflows/deploy.yml` — set `NUXT_APP_BASE_URL` to `/your-repo-name/`
+3. Edit `.github/workflows/nuxtjs.yml` — set `NUXT_APP_BASE_URL` to `/your-repo-name/`
 4. Push to `main` → auto-deploys
 
 Live at: `https://your-username.github.io/your-repo-name/`
@@ -131,7 +135,7 @@ Every entity supports:
 ## Project Structure
 
 ```
-dmstome/
+startome/
 ├── composables/
 │   ├── useDb.ts                  # Dexie/IndexedDB layer — all tables and queries
 │   ├── useEncounterCanvas.ts     # PixiJS VTT engine
@@ -171,14 +175,16 @@ dmstome/
 │   └── encounter.ts              # Encounter state + BroadcastChannel player sync
 │
 └── .github/workflows/
-    └── deploy.yml                # GitHub Pages auto-deploy
+    └── nuxtjs.yml                # GitHub Pages auto-deploy
 ```
 
 ---
 
 ## Data & Backups
 
-All data lives in browser IndexedDB under the key `dmstome`.
+All data lives in browser IndexedDB in the database `startome`. Every localStorage key starts with `startome.` and the player-view channels are `startome-player` / `startome-map` (see `utils/appNamespace.ts`), so StarTome and DM's Tome can run side by side on the same origin without sharing data.
+
+Exports from DM's Tome (`dmstome-*.json`) can be imported into StarTome.
 
 The app includes an import/export modal (JSZip) for in-app backup and restore of campaigns, encounters, entities, and system records.
 

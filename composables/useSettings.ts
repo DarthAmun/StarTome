@@ -1,3 +1,5 @@
+import { lsKey } from '~/utils/appNamespace'
+
 export type ThemeId = 'dark' | 'light' | 'void' | 'parchment' | 'forest'
 
 export interface ThemeInfo {
@@ -106,7 +108,7 @@ function applySettings() {
 
 if (import.meta.client) {
   try {
-    const stored = localStorage.getItem('dmstome-settings')
+    const stored = localStorage.getItem(lsKey('settings'))
     if (stored) Object.assign(settings.value, JSON.parse(stored))
   } catch {}
   applySettings()
@@ -116,7 +118,7 @@ export function useSettings() {
   function update<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
     settings.value[key] = value
     if (import.meta.client) {
-      localStorage.setItem('dmstome-settings', JSON.stringify(settings.value))
+      localStorage.setItem(lsKey('settings'), JSON.stringify(settings.value))
       applySettings()
     }
   }

@@ -1,6 +1,6 @@
 <template>
   <div class="spine-seal">
-    <img src="/icons/icon-512.png" class="spine-seal-logo" alt="DM's Tome" />
+    <img src="/icons/icon-512.png" class="spine-seal-logo" alt="StarTome" />
     <span class="spine-seal-version">v{{ version }}</span>
   </div>
 </template>

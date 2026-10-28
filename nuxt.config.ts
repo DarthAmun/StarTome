@@ -16,11 +16,11 @@ export default defineNuxtConfig({
   app: {
     baseURL,
     head: {
-      title: "DM's Tome",
+      title: 'StarTome',
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-        { name: 'description', content: 'Offline-first campaign manager for Dungeon Masters' },
+        { name: 'description', content: 'Offline-first campaign manager for Pathfinder 2e and Starfinder 2e GMs' },
         { name: 'theme-color', content: '#8b1a1a' },
       ],
       link: [
@@ -36,9 +36,10 @@ export default defineNuxtConfig({
   pwa: {
     registerType: 'autoUpdate',
     manifest: {
-      name: "DM's Tome",
-      short_name: "DM's Tome",
-      description: "DM's Tome — your grimoire for all things tabletop",
+      id: 'startome',
+      name: 'StarTome',
+      short_name: 'StarTome',
+      description: 'StarTome — your companion for Pathfinder 2e and Starfinder 2e campaigns',
       theme_color: '#8b1a1a',
       background_color: '#100808',
       display: 'standalone',

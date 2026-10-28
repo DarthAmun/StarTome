@@ -25,6 +25,7 @@
  */
 import Dexie, { type Table } from 'dexie'
 import type { EntityTypeSchema } from '~/types/entities'
+import { DB_NAME, channelName, windowName } from '~/utils/appNamespace'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export interface DbCampaign {
@@ -210,7 +211,7 @@ export interface DbSoundPlaylist {
 }
 
 // ── Database class ─────────────────────────────────────────────────────────
-class DmForgeDb extends Dexie {
+class StarTomeDb extends Dexie {
   campaigns!:         Table<DbCampaign>
   encounters!:        Table<DbEncounter>
   tokens!:            Table<DbToken>
@@ -227,168 +228,11 @@ class DmForgeDb extends Dexie {
   soundPlaylists!:    Table<DbSoundPlaylist>
 
   constructor() {
-    super('dmforge')
+    super(DB_NAME)
+    // v1: StarTome starts its own database. The store list equals DM's Tome's
+    // `dmforge` v13; its upgrade history (v1–v13) never runs here because this
+    // database is always created fresh. Data arrives via import, not migration.
     this.version(1).stores({
-      campaigns:      '++id, updated_at',
-      encounters:     '++id, campaign_id, created_at',
-      tokens:         '++id, is_template, name',
-      encounterTokens:'++id, encounter_id, token_id',
-      entities:       '++id, campaign_id, type, name',
-      entityLinks:    '++id, source_id, target_type, target_name',
-    })
-    // v2: add systems + records tables, add system_id to campaigns
-    this.version(2).stores({
-      campaigns:      '++id, updated_at, system_id',
-      encounters:     '++id, campaign_id, created_at',
-      tokens:         '++id, is_template, name',
-      encounterTokens:'++id, encounter_id, token_id',
-      entities:       '++id, campaign_id, type, name',
-      entityLinks:    '++id, source_id, target_type, target_name',
-      systems:        '++id, shortId, updatedAt',
-      records:        '++id, systemId, entityTypeId, name, updatedAt',
-    })
-    // v3: index linked_record_id on encounterTokens for stat-block linking
-    this.version(3).stores({
-      campaigns:      '++id, updated_at, system_id',
-      encounters:     '++id, campaign_id, created_at',
-      tokens:         '++id, is_template, name',
-      encounterTokens:'++id, encounter_id, token_id, linked_record_id',
-      entities:       '++id, campaign_id, type, name',
-      entityLinks:    '++id, source_id, target_type, target_name',
-      systems:        '++id, shortId, updatedAt',
-      records:        '++id, systemId, entityTypeId, name, updatedAt',
-    })
-    // v4: no store changes — combat_log is a non-indexed JSON column; schema unchanged
-    this.version(4).stores({
-      campaigns:      '++id, updated_at, system_id',
-      encounters:     '++id, campaign_id, created_at',
-      tokens:         '++id, is_template, name',
-      encounterTokens:'++id, encounter_id, token_id, linked_record_id',
-      entities:       '++id, campaign_id, type, name',
-      entityLinks:    '++id, source_id, target_type, target_name',
-      systems:        '++id, shortId, updatedAt',
-      records:        '++id, systemId, entityTypeId, name, updatedAt',
-    })
-    // v5: add encounterWalls table; fov_enabled/vision_range/is_player_token are non-indexed columns
-    this.version(5).stores({
-      campaigns:      '++id, updated_at, system_id',
-      encounters:     '++id, campaign_id, created_at',
-      tokens:         '++id, is_template, name',
-      encounterTokens:'++id, encounter_id, token_id, linked_record_id',
-      entities:       '++id, campaign_id, type, name',
-      entityLinks:    '++id, source_id, target_type, target_name',
-      systems:        '++id, shortId, updatedAt',
-      records:        '++id, systemId, entityTypeId, name, updatedAt',
-      encounterWalls: '++id, encounter_id',
-    })
-    // v6: banner_source/banner_type added to campaigns — non-indexed columns, no store change needed
-    this.version(6).stores({
-      campaigns:      '++id, updated_at, system_id',
-      encounters:     '++id, campaign_id, created_at',
-      tokens:         '++id, is_template, name',
-      encounterTokens:'++id, encounter_id, token_id, linked_record_id',
-      entities:       '++id, campaign_id, type, name',
-      entityLinks:    '++id, source_id, target_type, target_name',
-      systems:        '++id, shortId, updatedAt',
-      records:        '++id, systemId, entityTypeId, name, updatedAt',
-      encounterWalls: '++id, encounter_id',
-    })
-    // v7: add entitySnapshots table for historical states of npcs/locations/factions/quests
-    this.version(7).stores({
-      campaigns:        '++id, updated_at, system_id',
-      encounters:       '++id, campaign_id, created_at',
-      tokens:           '++id, is_template, name',
-      encounterTokens:  '++id, encounter_id, token_id, linked_record_id',
-      entities:         '++id, campaign_id, type, name',
-      entityLinks:      '++id, source_id, target_type, target_name',
-      systems:          '++id, shortId, updatedAt',
-      records:          '++id, systemId, entityTypeId, name, updatedAt',
-      encounterWalls:   '++id, encounter_id',
-      entitySnapshots:  '++id, entity_id, event_id, created_at',
-    })
-    // v8: add event_id index to entitySnapshots for efficient event→snapshot queries
-    this.version(8).stores({
-      campaigns:        '++id, updated_at, system_id',
-      encounters:       '++id, campaign_id, created_at',
-      tokens:           '++id, is_template, name',
-      encounterTokens:  '++id, encounter_id, token_id, linked_record_id',
-      entities:         '++id, campaign_id, type, name',
-      entityLinks:      '++id, source_id, target_type, target_name',
-      systems:          '++id, shortId, updatedAt',
-      records:          '++id, systemId, entityTypeId, name, updatedAt',
-      encounterWalls:   '++id, encounter_id',
-      entitySnapshots:  '++id, entity_id, event_id, created_at',
-    })
-    // v9: add entityConnections and graphLayouts tables for graph overhaul
-    this.version(9).stores({
-      campaigns:          '++id, updated_at, system_id',
-      encounters:         '++id, campaign_id, created_at',
-      tokens:             '++id, is_template, name',
-      encounterTokens:    '++id, encounter_id, token_id, linked_record_id',
-      entities:           '++id, campaign_id, type, name',
-      entityLinks:        '++id, source_id, target_type, target_name',
-      systems:            '++id, shortId, updatedAt',
-      records:            '++id, systemId, entityTypeId, name, updatedAt',
-      encounterWalls:     '++id, encounter_id',
-      entitySnapshots:    '++id, entity_id, event_id, created_at',
-      entityConnections:  '++id, campaign_id, source_entity_id, target_entity_id',
-      graphLayouts:       '++id, campaign_id',
-    })
-    // v10: add name field to graphLayouts; migrate single layouts to named "Default"
-    this.version(10).stores({
-      campaigns:          '++id, updated_at, system_id',
-      encounters:         '++id, campaign_id, created_at',
-      tokens:             '++id, is_template, name',
-      encounterTokens:    '++id, encounter_id, token_id, linked_record_id',
-      entities:           '++id, campaign_id, type, name',
-      entityLinks:        '++id, source_id, target_type, target_name',
-      systems:            '++id, shortId, updatedAt',
-      records:            '++id, systemId, entityTypeId, name, updatedAt',
-      encounterWalls:     '++id, encounter_id',
-      entitySnapshots:    '++id, entity_id, event_id, created_at',
-      entityConnections:  '++id, campaign_id, source_entity_id, target_entity_id',
-      graphLayouts:       '++id, campaign_id, name',
-    }).upgrade(async tx => {
-      await tx.table('graphLayouts').toCollection().modify((layout: any) => {
-        if (!layout.name) layout.name = 'Default'
-      })
-    })
-    // v11: add global sound library — tracks + playlists
-    this.version(11).stores({
-      campaigns:          '++id, updated_at, system_id',
-      encounters:         '++id, campaign_id, created_at',
-      tokens:             '++id, is_template, name',
-      encounterTokens:    '++id, encounter_id, token_id, linked_record_id',
-      entities:           '++id, campaign_id, type, name',
-      entityLinks:        '++id, source_id, target_type, target_name',
-      systems:            '++id, shortId, updatedAt',
-      records:            '++id, systemId, entityTypeId, name, updatedAt',
-      encounterWalls:     '++id, encounter_id',
-      entitySnapshots:    '++id, entity_id, event_id, created_at',
-      entityConnections:  '++id, campaign_id, source_entity_id, target_entity_id',
-      graphLayouts:       '++id, campaign_id, name',
-      soundTracks:        '++id, name, type',
-      soundPlaylists:     '++id, name',
-    })
-    // v12: tokens gain linked_record_id + is_player_character; encounterTokens.token_id becomes nullable
-    this.version(12).stores({
-      campaigns:          '++id, updated_at, system_id',
-      encounters:         '++id, campaign_id, created_at',
-      tokens:             '++id, is_template, name, linked_record_id',
-      encounterTokens:    '++id, encounter_id, token_id, linked_record_id',
-      entities:           '++id, campaign_id, type, name',
-      entityLinks:        '++id, source_id, target_type, target_name',
-      systems:            '++id, shortId, updatedAt',
-      records:            '++id, systemId, entityTypeId, name, updatedAt',
-      encounterWalls:     '++id, encounter_id',
-      entitySnapshots:    '++id, entity_id, event_id, created_at',
-      entityConnections:  '++id, campaign_id, source_entity_id, target_entity_id',
-      graphLayouts:       '++id, campaign_id, name',
-      soundTracks:        '++id, name, type',
-      soundPlaylists:     '++id, name',
-    })
-    // v13: encounterTokens gains image_source/image_type for creature-direct tokens
-    this.version(13).stores({
       campaigns:          '++id, updated_at, system_id',
       encounters:         '++id, campaign_id, created_at',
       tokens:             '++id, is_template, name, linked_record_id',
@@ -408,9 +252,9 @@ class DmForgeDb extends Dexie {
 }
 
 // Singleton
-let _db: DmForgeDb | null = null
-export function getDb(): DmForgeDb {
-  if (!_db) _db = new DmForgeDb()
+let _db: StarTomeDb | null = null
+export function getDb(): StarTomeDb {
+  if (!_db) _db = new StarTomeDb()
   return _db
 }
 
@@ -477,7 +321,7 @@ export function compressDataUrl(dataUrl: string, toJpeg = true): Promise<string>
   })
 }
 
-// ── API — mirrors window.dmforge from electron/preload.js ─────────────────
+// ── API — exposed as window.dmstome by plugins/tome-api.client.ts ────────
 
 const imageKeyCache = new Map<string, Map<string, string[]>>()
 
@@ -938,7 +782,7 @@ export const dbApi = {
     _handlers: new Map<string, (data: any) => void>(),
     _ensureChannel() {
       if (!this._channel) {
-        this._channel = new BroadcastChannel('dmforge-player')
+        this._channel = new BroadcastChannel(channelName('player'))
         this._channel.addEventListener('message', (e: MessageEvent) => {
           this._handlers.get(e.data?.type)?.(e.data)
         })
@@ -949,7 +793,7 @@ export const dbApi = {
       // Hash mode routing: strip any existing hash from pathname, then append the player route
       const base = location.origin + location.pathname.replace(/\/+$/, '')
       const url = `${base}/#/encounter/${encounterId}/player`
-      window.open(url, 'dmforge-player', 'width=1280,height=800')
+      window.open(url, windowName('player'), 'width=1280,height=800')
       return Promise.resolve()
     },
     closePlayer(): Promise<void> {
@@ -991,7 +835,7 @@ export const dbApi = {
     _mapHandlers: new Map<string, (data: any) => void>(),
     _ensureMapChannel() {
       if (!this._mapChannel) {
-        this._mapChannel = new BroadcastChannel('dmforge-map')
+        this._mapChannel = new BroadcastChannel(channelName('map'))
         this._mapChannel.addEventListener('message', (e: MessageEvent) => {
           this._mapHandlers.get(e.data?.type)?.(e.data)
         })
@@ -1001,7 +845,7 @@ export const dbApi = {
     openMapPlayer(campaignId: number, locationId: number): Promise<void> {
       const base = location.origin + location.pathname.replace(/\/+$/, '')
       const url = `${base}/#/campaign/${campaignId}/map-player?locationId=${locationId}`
-      window.open(url, 'dmforge-map-player', 'width=1280,height=900')
+      window.open(url, windowName('map-player'), 'width=1280,height=900')
       return Promise.resolve()
     },
     syncMap(locationId: number | null): void {

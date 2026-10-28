@@ -35,6 +35,7 @@
 </template>
 
 <script setup lang="ts">
+import { channelName } from '~/utils/appNamespace'
 import { useEncounterCanvas, type ShapeOverlay } from '../../../composables/useEncounterCanvas'
 import { useEncounterStore } from '~/stores/encounter'
 
@@ -163,7 +164,7 @@ onMounted(async () => {
 
   // Notify DM window when this tab closes
   window.addEventListener('beforeunload', () => {
-    const ch = new BroadcastChannel('dmforge-player')
+    const ch = new BroadcastChannel(channelName('player'))
     ch.postMessage({ type: 'player-closed' })
     ch.close()
   })

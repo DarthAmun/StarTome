@@ -1,4 +1,4 @@
-# DM Forge — PWA Setup
+# StarTome — PWA Setup
 
 ## Local Development
 
@@ -7,7 +7,7 @@ pnpm install
 pnpm dev
 ```
 
-Open http://localhost:3000 — the app runs entirely in the browser.
+Open http://localhost:3001 — the app runs entirely in the browser.
 Data is stored in IndexedDB (persists across sessions).
 
 ## Build for Production
@@ -22,7 +22,7 @@ Output goes to `.output/public/` — a fully static site, no server needed.
 
 1. Push this repo to GitHub
 2. Go to **Settings → Pages → Source** → select **GitHub Actions**
-3. Edit `.github/workflows/deploy.yml` and set `NUXT_APP_BASE_URL` to match your repo name:
+3. Edit `.github/workflows/nuxtjs.yml` and set `NUXT_APP_BASE_URL` to match your repo name:
    ```yaml
    NUXT_APP_BASE_URL: /your-repo-name/
    ```
@@ -48,9 +48,9 @@ convert -background none public/icons/icon.svg -resize 512x512 public/icons/icon
 
 ## Data & Backups
 
-All data lives in your browser's IndexedDB under the key `dmforge`.
+All data lives in your browser's IndexedDB in the database `startome`.
 
-**To back up**: Open DevTools → Application → IndexedDB → dmforge → export
+**To back up**: Open DevTools → Application → IndexedDB → startome → export
 **Location**: Chrome stores it in `~/.config/chromium/Default/IndexedDB/`
 
 For a proper backup/restore feature this can be added later using the Dexie export/import plugin.

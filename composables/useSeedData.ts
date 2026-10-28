@@ -4,8 +4,9 @@
  */
 import { getDb } from '~/composables/useDb'
 import { extractLinks } from '~/composables/useEntityParser'
+import { lsKey } from '~/utils/appNamespace'
 
-const SEED_KEY = 'dmstome.seeded'
+const SEED_KEY = lsKey('seeded')
 
 // ── Entity content — written as guided tutorials ──────────────────────────
 
@@ -418,7 +419,7 @@ export async function seedIfEmpty() {
 
   // ── Demo Campaign ──────────────────────────────────────────────────────
   const campaignId = await db.campaigns.add({
-    name: "Welcome to DM's Tome",
+    name: 'Welcome to StarTome',
     description: "A guided tour of every feature. Each entry below explains how that section works. Delete this campaign whenever you're ready to start your real adventure.",
     created_at: ts,
     updated_at: ts,
@@ -476,7 +477,7 @@ export async function seedIfEmpty() {
   await db.systems.add({
     name: 'Demo System',
     shortId: 'demo',
-    description: "A demonstration system showing DM's Tome's custom rule builder. It includes Characters, Spells, Monsters, and Items — each with a variety of field types so you can see what's possible. Open the Builder tab (anvil icon) to explore and edit.",
+    description: "A demonstration system showing the custom rule builder. It includes Characters, Spells, Monsters, and Items — each with a variety of field types so you can see what's possible. Open the Builder tab (anvil icon) to explore and edit.",
     version: '1.0',
     entityTypes: JSON.stringify(DEMO_SYSTEM_ENTITY_TYPES),
     createdAt: ts,

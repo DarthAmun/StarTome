@@ -106,6 +106,7 @@
 </template>
 
 <script setup lang="ts">
+import { exportFilename } from '~/utils/appNamespace'
 import { useCampaignEntity } from '~/composables/useCampaignEntity'
 import { useEntityBrowse } from '~/composables/useEntityBrowse'
 import type { EntityType } from '~/types/entities'
@@ -189,7 +190,7 @@ function exportEntries() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `dmstome-${props.type}s-${campaignId.value}-${new Date().toISOString().slice(0, 10)}.json`
+  a.download = exportFilename(`${props.type}s-${campaignId.value}-${new Date().toISOString().slice(0, 10)}.json`)
   a.click()
   URL.revokeObjectURL(url)
 }

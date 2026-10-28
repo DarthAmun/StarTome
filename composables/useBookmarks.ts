@@ -1,5 +1,6 @@
 import { ENTITY_TYPE_CONFIG } from '~/types/entities'
 import type { EntityType } from '~/types/entities'
+import { lsKey } from '~/utils/appNamespace'
 
 export interface Bookmark {
   id: string
@@ -10,7 +11,7 @@ export interface Bookmark {
   type: 'campaign' | 'entity' | 'record' | 'page'
 }
 
-const STORAGE_KEY = 'dmstome.bookmarks'
+const STORAGE_KEY = lsKey('bookmarks')
 
 const bookmarks = ref<Bookmark[]>([])
 

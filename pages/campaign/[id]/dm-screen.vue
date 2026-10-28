@@ -293,6 +293,7 @@
 </template>
 
 <script setup lang="ts">
+import { lsKey } from '~/utils/appNamespace'
 import { dbApi, getDb } from '~/composables/useDb'
 import { useEntities } from '~/composables/useEntities'
 import { usePageChrome } from '~/composables/usePageChrome'
@@ -412,10 +413,10 @@ const WIDGET_GAP  = 8    // enforced gap between any two widgets
 const PLANE_CENTER = 4000 // CSS origin of the plane; (0,0) in logical terms lives here
 function snap(v: number) { return Math.round(v / SNAP) * SNAP }
 
-const LS_KEY    = `dmscreen-v4-${id}`
-const LS_KEY_V3 = `dmscreen-v3-${id}`
-const LS_KEY_V2 = `dmscreen-v2-${id}`
-const LS_SCRATCH = `dmscreen-scratch-v2-${id}`
+const LS_KEY    = lsKey(`dmscreen-v4-${id}`)
+const LS_KEY_V3 = lsKey(`dmscreen-v3-${id}`)
+const LS_KEY_V2 = lsKey(`dmscreen-v2-${id}`)
+const LS_SCRATCH = lsKey(`dmscreen-scratch-v2-${id}`)
 
 const widgets  = ref<DmWidget[]>([])
 const scratchpad = ref('')
@@ -580,7 +581,7 @@ function updateWidgetConfig(wid: string, config: Record<string, any>) {
 
 // ── Layout presets ─────────────────────────────────────────────────────────
 interface LayoutPreset { name: string; widgets: DmWidget[] }
-const LS_PRESETS = `dmscreen-presets-${id}`
+const LS_PRESETS = lsKey(`dmscreen-presets-${id}`)
 const presets = ref<LayoutPreset[]>([])
 const showPresets = ref(false)
 const presetsRef = ref<HTMLElement | null>(null)

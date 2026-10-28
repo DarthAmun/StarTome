@@ -86,7 +86,7 @@
     </Teleport>
 
     <Transition name="install">
-      <button v-if="installPrompt" class="install-pill no-print" @click="installApp" title="Install DM's Tome">
+      <button v-if="installPrompt" class="install-pill no-print" @click="installApp" title="Install StarTome">
         <OhVueIcon name="md-install-mobile" scale="0.9" />
         Install App
       </button>

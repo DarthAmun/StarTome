@@ -1067,6 +1067,7 @@
 </template>
 
 <script setup lang="ts">
+import { lsKey } from '~/utils/appNamespace'
 import { useEncounterStore } from "~/stores/encounter";
 import type { EncounterToken } from "~/stores/encounter";
 import { useEncounterCanvas, type ShapeType, type ShapeOverlay } from "../../../composables/useEncounterCanvas";
@@ -1112,7 +1113,7 @@ const activeCoverType = ref<'full' | 'three-quarter' | 'half' | 'quarter' | 'doo
 
 // ── Mode ───────────────────────────────────────────────────────────────────
 const mode = ref<'prepare' | 'run'>('prepare');
-const MODE_KEY = computed(() => `dmstome.enc.mode.${route.params.id}`);
+const MODE_KEY = computed(() => lsKey(`enc.mode.${route.params.id}`));
 
 function setMode(next: 'prepare' | 'run') {
   if (next === 'prepare' && mode.value === 'run' && store.roundNumber > 0) {

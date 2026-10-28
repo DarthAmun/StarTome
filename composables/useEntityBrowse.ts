@@ -8,6 +8,7 @@ import {
 import { ENTITY_REGEX } from '~/composables/useEntityParser'
 import { useFormatters } from '~/composables/useFormatters'
 import { cap as capRaw } from '~/composables/useNameGenerator'
+import { lsKey } from '~/utils/appNamespace'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Entity browsing — one shared query per entity type, read by both the
@@ -423,7 +424,7 @@ interface BrowseState extends Prefs {
   focusSearchTick: number
 }
 
-const PREFS_KEY = (t: string) => `dmstome.overview.${t}`
+const PREFS_KEY = (t: string) => lsKey(`overview.${t}`)
 
 function loadPrefs(type: EntityType): Prefs {
   const d = BROWSE_TYPES[type]

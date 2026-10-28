@@ -1,15 +1,17 @@
 {
-  "name": "dmstome",
-  "version": "0.9.1",
-  "description": "DM's Tome — offline-first campaign manager for GMs",
+  "name": "startome",
+  "version": "0.1.0",
+  "description": "StarTome \u2014 offline-first campaign manager for Pathfinder 2e and Starfinder 2e GMs",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.0.0",
   "scripts": {
-    "dev": "nuxt dev",
+    "dev": "nuxt dev --port 3001",
     "build": "nuxt build",
     "preview": "nuxt preview",
-    "generate": "nuxt generate"
+    "generate": "nuxt generate",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@nuxtjs/tailwindcss": "^6.14.0",
@@ -36,6 +38,8 @@
     "@nuxt/devtools": "latest",
     "@types/dompurify": "^3.0.5",
     "@types/markdown-it": "^14.1.2",
-    "nuxt": "^3.11.1"
+    "fake-indexeddb": "^6.0.0",
+    "nuxt": "^3.11.1",
+    "vitest": "^3.2.4"
   }
 }

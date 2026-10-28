@@ -6,6 +6,7 @@ import type { ShapeOverlay } from '~/composables/useEncounterCanvas'
 import { useStatBlockLinker } from '~/composables/useStatBlockLinker'
 import { evaluateFormula, dataToScope } from '~/composables/useFormulaEvaluator'
 import { healthState, type HealthState } from '~/composables/useConditions'
+import { lsKey } from '~/utils/appNamespace'
 
 function tryParseJson<T>(s: unknown, fallback: T): T {
   if (typeof s !== 'string') return fallback
@@ -93,7 +94,7 @@ export interface TurnOrderEntry {
   isMystery?: boolean
 }
 
-const PLAYER_VIEW_PREFS_KEY = 'dmstome.playerView'
+const PLAYER_VIEW_PREFS_KEY = lsKey('playerView')
 const DEFAULT_PLAYER_VIEW_PREFS: PlayerViewPrefs = { turnRailPosition: 'right', turnRailSize: 'medium', turnRailShowNames: true, hiddenTurns: 'omit' }
 
 export interface EncounterToken {
