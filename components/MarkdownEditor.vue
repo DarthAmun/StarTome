@@ -280,6 +280,8 @@ const WIDGET_ICONS = {
 </script>
 
 <script setup lang="ts">
+import { rulesQuery, rulesRefRoute } from '~/composables/useRules'
+import { RULES_KINDS } from '~/types/rules'
 import { lsKey } from '~/utils/appNamespace'
 import { useEntities } from "~/composables/useEntities";
 import { useEntityMarkdown } from "~/composables/useEntityMarkdown";
@@ -310,7 +312,7 @@ const emit = defineEmits<{
 
 const store = useEntities();
 const router = useRouter();
-const { entityLookup, extraTypes: systemExtraTypes, campaignSystemId, systemEntityTypes, campaignEncounters } = useEntityRendering(() => props.campaignId);
+const { entityLookup, extraTypes: systemExtraTypes, campaignSystemId, systemEntityTypes, campaignEncounters, campaignGameId } = useEntityRendering(() => props.campaignId);
 
 const dmCtx = useDmScreenContext()
 
@@ -1018,11 +1020,24 @@ async function checkAutocomplete(
             }));
         }
     }
+    // Compendium entries once the typed kind is unambiguous ({{spell: fir…)
+    let rulesCandidates: { type: string; name: string; id: number }[] = [];
+    const rulesKinds = RULES_KINDS.filter((k) => k.startsWith(partialType));
+    if (partialType && rulesKinds.length === 1 && partialName.trim()) {
+        const page = await rulesQuery({
+            kind: rulesKinds[0],
+            text: partialName.trim(),
+            games: [campaignGameId.value],
+            limit: 6,
+        });
+        rulesCandidates = page.items.map((e) => ({ type: e.kind, name: e.name, id: -1 }));
+    }
     const candidates = [
         ...campaignCandidates,
         ...encounterCandidates,
         ...graphCandidates,
-        ...sysCandidates,
+        ...rulesCandidates,
+        ...sysCandidates.filter((c) => !rulesCandidates.some((r) => r.type === c.type && r.name === c.name)),
     ].slice(0, 8);
     autocomplete.value = {
         show: candidates.length > 0,
@@ -1244,6 +1259,11 @@ async function onPreviewClick(e: MouseEvent) {
         const graphs = await dbApi.graphLayout.list(props.campaignId);
         const g = graphs.find((gr) => (gr.name ?? "Default").toLowerCase() === name.toLowerCase());
         if (g?.id) router.push(`/campaign/${props.campaignId}/graphs?graph=${g.id}`);
+        return;
+    }
+    const rulesRoute = await rulesRefRoute(type, name, campaignGameId.value);
+    if (rulesRoute) {
+        router.push(rulesRoute);
         return;
     }
     const sysType = systemEntityTypes.value.find(

@@ -16,6 +16,7 @@
 </template>
 
 <script setup lang="ts">
+import { rulesRefRoute } from '~/composables/useRules'
 import type { Component } from 'vue'
 import { useCampaignEntity } from '~/composables/useCampaignEntity'
 import { ENTITY_TYPE_ROUTE } from '~/types/entities'
@@ -45,9 +46,13 @@ const campaignId = Number(route.params.id)
 
 const { currentEntry, goToList, ensureLoaded, store } = useCampaignEntity(props.type)
 
-function onNavigate(type: string, name: string) {
+async function onNavigate(type: string, name: string) {
   const entry = store.findByTypeAndName(type, name)
-  if (!entry) return
+  if (!entry) {
+    const rulesRoute = await rulesRefRoute(type, name)
+    if (rulesRoute) router.push(rulesRoute)
+    return
+  }
   router.push(`/campaign/${campaignId}/${ENTITY_TYPE_ROUTE[type as keyof typeof ENTITY_TYPE_ROUTE] ?? type + 's'}/${entry.id}`)
 }
 

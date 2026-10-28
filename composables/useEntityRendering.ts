@@ -11,6 +11,9 @@ import { getDb } from '~/composables/useDb'
 import { ENTITY_TYPE_CONFIG } from '~/types/entities'
 import type { EntityType } from '~/types/entities'
 import type { MaybeRefOrGetter } from 'vue'
+import { useRulesIndex } from '~/composables/useRules'
+import { campaignGame, type GameId } from '~/types/game'
+import { isRulesKind, RULES_KIND_CONFIG, RULES_KINDS } from '~/types/rules'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -20,6 +23,7 @@ export const typeColorMap: Record<string, string> = {
   ...Object.fromEntries(Object.entries(ENTITY_TYPE_CONFIG).map(([t, c]) => [t, c.color])),
   encounter: ENCOUNTER_COLOR,
   graph: '#7cc44e',
+  ...Object.fromEntries(RULES_KINDS.map(k => [k, RULES_KIND_CONFIG[k].color])),
 }
 
 // ── Icon helpers ──────────────────────────────────────────────────────────────
@@ -55,6 +59,8 @@ export function useEntityRendering(campaignId: MaybeRefOrGetter<number>) {
   const campaignSystemId = ref<number | null>(null)
   const systemEntityTypes = ref<{ id: string; name: string; color: string; icon: string }[]>([])
   const systemRecordCache = ref<Map<string, { color: string }>>(new Map())
+  const campaignGameId = ref<GameId>('pf2e')
+  const rulesIndex = useRulesIndex()
 
   watch(
     () => toValue(campaignId),
@@ -64,6 +70,7 @@ export function useEntityRendering(campaignId: MaybeRefOrGetter<number>) {
         .encounters.where('campaign_id').equals(id).toArray()
         .then(rows => rows.map(r => ({ id: r.id!, name: r.name, mapSource: r.map_source ?? undefined })))
       const campaign = await getDb().campaigns.get(id)
+      campaignGameId.value = campaignGame(campaign)
       const sysId = campaign?.system_id ?? null
       campaignSystemId.value = sysId
       if (!sysId) { systemEntityTypes.value = []; return }
@@ -81,7 +88,8 @@ export function useEntityRendering(campaignId: MaybeRefOrGetter<number>) {
     { immediate: true },
   )
 
-  const extraTypes = computed(() => systemEntityTypes.value.map(t => t.id))
+  // Compendium kinds are always linkable; legacy system type ids are added while that library exists
+  const extraTypes = computed(() => [...new Set([...RULES_KINDS, ...systemEntityTypes.value.map(t => t.id.toLowerCase())])])
 
   function entityLookup(type: string, name: string) {
     const typeKey = type.toLowerCase()
@@ -100,6 +108,11 @@ export function useEntityRendering(campaignId: MaybeRefOrGetter<number>) {
       const imageUrl = attrs.portraitSource || attrs.logoSource || attrs.imageSource || undefined
       const color = typeColorMap[ent.type] ?? '#888'
       return { imageUrl, iconHtml: imageUrl ? undefined : typeIconHtml(ent.type, color), color }
+    }
+    if (isRulesKind(typeKey) && rulesIndex.has(typeKey, name)) {
+      const cfg = RULES_KIND_CONFIG[typeKey]
+      const icon = giIconByName(cfg.icon)
+      return { iconHtml: icon ? iconToSvg(icon, cfg.color) : undefined, color: cfg.color }
     }
     const sysType = systemEntityTypes.value.find(t => t.id.toLowerCase() === typeKey)
     if (sysType) {
@@ -120,5 +133,6 @@ export function useEntityRendering(campaignId: MaybeRefOrGetter<number>) {
     systemEntityTypes,
     campaignEncounters,
     systemRecordCache,
+    campaignGameId,
   }
 }

@@ -86,6 +86,13 @@
 
         <div class="sb-divider" />
 
+        <!-- Compendium -->
+        <NuxtLink to="/compendium/items" class="sb-icon-link sb-compendium-icon" :class="{ active: route.path.startsWith('/compendium') }" data-tip="Compendium">
+          <OhVueIcon name="gi-bookshelf" scale="0.85" style="color: #e8c44a" />
+        </NuxtLink>
+
+        <div class="sb-divider" />
+
         <!-- Systems -->
         <div v-for="sys in systems" :key="sys.id!">
           <div
@@ -206,6 +213,27 @@
 
         <div class="sb-divider" />
 
+        <!-- COMPENDIUM section -->
+        <div class="sb-section-row">
+          <span class="sb-section-label">Compendium</span>
+        </div>
+        <div class="sb-children sb-compendium">
+          <NuxtLink
+            v-for="k in COMPENDIUM_KINDS"
+            :key="k.kind"
+            :to="`/compendium/${k.segment}`"
+            class="sb-child"
+            :class="{ active: route.path === `/compendium/${k.segment}` }"
+            :style="{ '--child-color': k.color }"
+          >
+            <OhVueIcon :name="k.icon" scale="0.7" :style="{ color: k.color, flexShrink: 0, width: '14px' }" />
+            <span class="sb-child-label">{{ k.plural }}</span>
+            <span class="sb-child-count">{{ compendiumCounts[k.kind] || '' }}</span>
+          </NuxtLink>
+        </div>
+
+        <div class="sb-divider" />
+
         <!-- SYSTEMS section -->
         <div class="sb-section-row">
           <span class="sb-section-label">Systems</span>
@@ -284,6 +312,8 @@
 
 <script setup lang="ts">
 import { lsKey } from '~/utils/appNamespace'
+import { rulesCounts, useRulesRevision } from '~/composables/useRules'
+import { RULES_KIND_CONFIG, RULES_KINDS, type RulesKind } from '~/types/rules'
 import { dbApi, getDb } from '~/composables/useDb'
 import { useSystems } from '~/composables/useSystems'
 import { useEntities } from '~/composables/useEntities'
@@ -327,6 +357,14 @@ async function loadCampaigns() {
 }
 onMounted(loadCampaigns)
 defineExpose({ reload: loadCampaigns })
+
+// ── Compendium ─────────────────────────────────────────────────────────────
+const COMPENDIUM_KINDS = RULES_KINDS.map(kind => ({ kind, ...RULES_KIND_CONFIG[kind] }))
+const compendiumCounts = ref<Partial<Record<RulesKind, number>>>({})
+const rulesRevision = useRulesRevision()
+async function loadCompendiumCounts() { compendiumCounts.value = await rulesCounts() }
+onMounted(loadCompendiumCounts)
+watch(rulesRevision, loadCompendiumCounts)
 
 // ── Systems ────────────────────────────────────────────────────────────────
 const systems = computed(() => systemsStore.systems)
@@ -615,6 +653,7 @@ function campaignColor(id: number): string {
 }
 .sb-icon-link:hover { background: var(--surface); color: var(--text); }
 .sb-icon-link.active { background: var(--accent-bg); color: var(--accent); }
+.sb-compendium-icon { margin: 2px auto; }
 
 /* Smaller system icon variant inside campaign-style header */
 .sb-system-icon--sm {

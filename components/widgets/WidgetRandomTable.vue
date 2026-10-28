@@ -22,6 +22,7 @@
 </template>
 
 <script setup lang="ts">
+import { rulesRefRoute } from '~/composables/useRules'
 import type { Entity } from '~/composables/useEntities'
 import type { RandomTableAttributes, RandomTableRow } from '~/types/entities'
 import { ENTITY_TYPE_ROUTE } from '~/types/entities'
@@ -33,10 +34,10 @@ const props = defineProps<{ entity: Entity }>()
 
 const store = useEntities()
 const { renderInline } = useEntityMarkdown()
-const { entityLookup, extraTypes, campaignSystemId, systemEntityTypes } = useEntityRendering(() => props.entity.campaignId)
+const { entityLookup, extraTypes, campaignSystemId, systemEntityTypes, campaignGameId } = useEntityRendering(() => props.entity.campaignId)
 const router = useRouter()
 
-function onEntityClick(e: MouseEvent) {
+async function onEntityClick(e: MouseEvent) {
   const el = (e.target as HTMLElement).closest('[data-entity-type]') as HTMLElement | null
   if (!el) return
   const type = el.dataset.entityType!
@@ -47,6 +48,8 @@ function onEntityClick(e: MouseEvent) {
     if (segment) router.push(`/campaign/${ent.campaignId}/${segment}/${ent.id}`)
     return
   }
+  const rulesRoute = await rulesRefRoute(type, name, campaignGameId.value)
+  if (rulesRoute) { router.push(rulesRoute); return }
   const sysType = systemEntityTypes.value.find(t => t.id.toLowerCase() === type.toLowerCase())
   if (sysType && campaignSystemId.value) {
     router.push(`/system/${campaignSystemId.value}/${sysType.id}?open=${encodeURIComponent(name)}`)

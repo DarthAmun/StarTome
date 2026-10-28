@@ -154,7 +154,7 @@
 
                 <!-- Records -->
                 <div v-if="results.records.length" class="gs-group">
-                  <div class="gs-group-label">Records</div>
+                  <div class="gs-group-label">Compendium</div>
                   <div
                     v-for="(item, i) in results.records"
                     :key="`r-${item.id}`"
@@ -247,6 +247,9 @@
 </template>
 
 <script setup lang="ts">
+import { rulesSearch } from '~/composables/useRules'
+import { RULES_KIND_CONFIG, type RulesKind } from '~/types/rules'
+import { GAME_CONFIG } from '~/types/game'
 import { dbApi } from '~/composables/useDb'
 import { ENTITY_TYPE_CONFIG } from '~/types/entities'
 import type { EntityType } from '~/types/entities'
@@ -367,8 +370,9 @@ function execPickItem(item: Extract<CmdItem, { kind: 'pick' }>) {
 // ── Normal search state ───────────────────────────────────────────────────────
 
 interface SearchResult {
-  kind: 'campaign' | 'entity' | 'record' | 'encounter' | 'graph'
-  id: number
+  kind: 'campaign' | 'entity' | 'record' | 'rules' | 'encounter' | 'graph'
+  id: number | string
+  rulesKind?: RulesKind
   name: string
   type?: string
   campaignId?: number
@@ -503,6 +507,15 @@ async function runSearch(q: string) {
     },
   }))
 
+  const rulesRows = await rulesSearch(lq, 6)
+  const rulesHits: SearchResult[] = rulesRows.map(e => ({
+    kind: 'rules' as const,
+    id: e.id,
+    name: e.name,
+    rulesKind: e.kind,
+    _subtitle: `${RULES_KIND_CONFIG[e.kind].label}${RULES_KIND_CONFIG[e.kind].hasLevel ? ` ${e.level}` : ''}${e.game === 'both' ? '' : ` · ${GAME_CONFIG[e.game].short}`}`,
+  }))
+
   const allRecords = await dbApi.records.search(lq, 5)
   const records: SearchResult[] = await Promise.all(
     allRecords.map(async (r) => {
@@ -537,7 +550,7 @@ async function runSearch(q: string) {
     _subtitle: `Campaign ${g.campaign_id}`,
   }))
 
-  results.value = { campaigns, entities, records, encounters, graphs }
+  results.value = { campaigns, entities, records: [...rulesHits, ...records], encounters, graphs }
   cursor.value = 0
   loading.value = false
 }
@@ -555,11 +568,13 @@ function entityLabel(type: string): string {
 }
 
 function recordIcon(item: SearchResult): string {
+  if (item.kind === 'rules') return RULES_KIND_CONFIG[item.rulesKind!].icon
   const sys = systemsStore.getSystem(item.systemId!)
   const et = sys?.entityTypes?.find((t: any) => t.id === item.entityTypeId)
   return et?.icon ?? 'gi-scroll-unfurled'
 }
 function recordColor(item: SearchResult): string {
+  if (item.kind === 'rules') return RULES_KIND_CONFIG[item.rulesKind!].color
   const sys = systemsStore.getSystem(item.systemId!)
   const et = sys?.entityTypes?.find((t: any) => t.id === item.entityTypeId)
   return et?.color ?? 'var(--ink-ghost)'
@@ -580,6 +595,7 @@ function getRoute(item: SearchResult): string {
     const segment = TYPE_PLURAL_ROUTE[item.type ?? ''] ?? (item.type + 's')
     return `/campaign/${item.campaignId}/${segment}/${item.id}`
   }
+  if (item.kind === 'rules') return `/compendium/${RULES_KIND_CONFIG[item.rulesKind!].segment}?id=${item.id}`
   if (item.kind === 'record') return `/system/${item.systemId}/${item.entityTypeId}?record=${encodeURIComponent(item.name)}`
   if (item.kind === 'encounter') return `/encounter/${item.id}`
   if (item.kind === 'graph') return `/campaign/${item.campaignId}/graphs?graph=${item.id}`
@@ -603,9 +619,11 @@ function toggleResultBookmark(item: SearchResult) {
     const bm = bookmarks.value.find(b => b.route === r)
     if (bm) removeBookmark(bm.id)
   } else if (item.kind === 'entity' && item.entity) {
-    bookmarkEntity({ id: item.id, name: item.name, type: item.type ?? 'note', campaignId: item.campaignId ?? 0 })
+    bookmarkEntity({ id: item.id as number, name: item.name, type: item.type ?? 'note', campaignId: item.campaignId ?? 0 })
+  } else if (item.kind === 'rules') {
+    bookmarkPage(r, item.name, recordIcon(item), recordColor(item))
   } else if (item.kind === 'record') {
-    bookmarkRecord({ id: item.id, name: item.name, systemId: item.systemId ?? 0, entityTypeId: item.entityTypeId ?? '', icon: recordIcon(item), color: recordColor(item) })
+    bookmarkRecord({ id: item.id as number, name: item.name, systemId: item.systemId ?? 0, entityTypeId: item.entityTypeId ?? '', icon: recordIcon(item), color: recordColor(item) })
   } else if (item.kind === 'campaign') {
     bookmarkPage(`/campaign/${item.id}`, item.name, 'gi-broadsword', 'var(--blood)')
   } else if (item.kind === 'encounter') {

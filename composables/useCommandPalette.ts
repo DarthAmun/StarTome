@@ -2,6 +2,7 @@ import { getDb, parseRecordData } from '~/composables/useDb'
 import { useEntities } from '~/composables/useEntities'
 import { useSystems } from '~/composables/useSystems'
 import type { EntityTypeSchema } from '~/types/entities'
+import { RULES_KIND_CONFIG, RULES_KINDS } from '~/types/rules'
 import { lsKey } from '~/utils/appNamespace'
 
 export interface CmdContext {
@@ -39,6 +40,18 @@ const GOTO_TARGETS: GotoTarget[] = [
   { aliases: ['chronicle', 'timeline', 'history'],                               label: 'Chronicle',     segment: 'chronicle',      needsCampaign: true  },
   { aliases: ['dashboard', 'home', 'overview', 'index'],                         label: 'Dashboard',     segment: '',               needsCampaign: true  },
   { aliases: ['settings', 'preferences', 'config'],                              label: 'Settings',      segment: 'settings',       absolute: '/settings', needsCampaign: false },
+  { aliases: ['compendium', 'library', 'rules'],                                  label: 'Compendium',    segment: 'compendium',     absolute: '/compendium/items', needsCampaign: false },
+  // One target per compendium kind: "goto spells", "goto monsters"
+  ...RULES_KINDS.map(kind => {
+    const cfg = RULES_KIND_CONFIG[kind]
+    return {
+      aliases: [cfg.segment, kind, ...(kind === 'creature' ? ['monsters', 'monster', 'bestiary'] : [])],
+      label: `Compendium: ${cfg.plural}`,
+      segment: cfg.segment,
+      absolute: `/compendium/${cfg.segment}`,
+      needsCampaign: false,
+    }
+  }),
 ]
 
 interface EntityTypeCmd {

@@ -9,6 +9,7 @@
 </template>
 
 <script setup lang="ts">
+import { rulesRefRoute } from '~/composables/useRules'
 import { useEntities } from "~/composables/useEntities";
 
 const route = useRoute();
@@ -23,9 +24,13 @@ const TYPE_PLURAL_ROUTE: Record<string, string> = {
     quest: "quests", event: "events", session: "sessions", note: "notes",
 };
 
-function onNavigate(type: string, name: string) {
+async function onNavigate(type: string, name: string) {
     const entry = store.findByTypeAndName(type, name);
-    if (!entry) return;
+    if (!entry) {
+        const rulesRoute = await rulesRefRoute(type, name);
+        if (rulesRoute) router.push(rulesRoute);
+        return;
+    }
     router.push(`/campaign/${campaignId.value}/${TYPE_PLURAL_ROUTE[type] ?? type + "s"}/${entry.id}`);
 }
 

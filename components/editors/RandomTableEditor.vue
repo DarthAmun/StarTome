@@ -92,6 +92,7 @@
 </template>
 
 <script setup lang="ts">
+import { rulesRefRoute } from '~/composables/useRules'
 import { useEntities } from '~/composables/useEntities'
 import type { RandomTableAttributes, RandomTableRow } from '~/types/entities'
 import { useEntityMarkdown } from '~/composables/useEntityMarkdown'
@@ -102,7 +103,7 @@ const emit = defineEmits<{ navigate: [type: string, name: string]; deleted: [] }
 
 const store = useEntities()
 const { renderInline } = useEntityMarkdown()
-const { entityLookup, extraTypes, campaignSystemId, systemEntityTypes } = useEntityRendering(() => props.campaignId)
+const { entityLookup, extraTypes, campaignSystemId, systemEntityTypes, campaignGameId } = useEntityRendering(() => props.campaignId)
 const router = useRouter()
 const entity = computed(() => store.entities.find(e => e.id === props.entityId) ?? store.currentEntity)
 
@@ -155,11 +156,13 @@ function onResultKeydown(e: KeyboardEvent, rowIdx: number) {
 
 function hideAc() { setTimeout(() => { ac.value.show = false; ac.value.rowIdx = -1 }, 150) }
 
-function onResultClick(e: MouseEvent) {
+async function onResultClick(e: MouseEvent) {
   const el = (e.target as HTMLElement).closest('[data-entity-type]') as HTMLElement | null
   if (!el) return
   const type = el.dataset.entityType!
   const name = el.dataset.entityName!
+  const rulesRoute = await rulesRefRoute(type, name, campaignGameId.value)
+  if (rulesRoute) { router.push(rulesRoute); return }
   const sysType = systemEntityTypes.value.find(t => t.id.toLowerCase() === type.toLowerCase())
   if (sysType && campaignSystemId.value) {
     router.push(`/system/${campaignSystemId.value}/${sysType.id}?open=${encodeURIComponent(name)}`)

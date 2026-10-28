@@ -66,6 +66,7 @@
 </template>
 
 <script setup lang="ts">
+import { rulesRefRoute } from '~/composables/useRules'
 import { dbApi } from '~/composables/useDb'
 import type { DbGraphLayout } from '~/composables/useDb'
 import { useEntities } from '~/composables/useEntities'
@@ -147,9 +148,13 @@ function cancelRename() {
   editingId.value = null
 }
 
-function onNavigate(type: string, name: string) {
+async function onNavigate(type: string, name: string) {
   const entry = store.findByTypeAndName(type, name)
-  if (!entry) return
+  if (!entry) {
+    const rulesRoute = await rulesRefRoute(type, name)
+    if (rulesRoute) router.push(rulesRoute)
+    return
+  }
   router.push(`/campaign/${campaignId}/${TYPE_PLURAL_ROUTE[type] ?? type + 's'}/${entry.id}`)
 }
 </script>

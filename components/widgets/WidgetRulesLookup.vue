@@ -5,13 +5,51 @@
         ref="inputRef"
         v-model="query"
         class="wrl-input"
-        placeholder="Search rules…"
+        :placeholder="source === 'compendium' ? 'Search the compendium…' : 'Search rules…'"
         autocomplete="off"
         spellcheck="false"
       />
     </div>
 
-    <div v-if="entityTypes.length > 1" class="wrl-filters">
+    <div v-if="systemId" class="wrl-filters">
+      <button :class="['wrl-chip', { active: source === 'compendium' }]" @click="source = 'compendium'">Compendium</button>
+      <button :class="['wrl-chip', { active: source === 'library' }]" @click="source = 'library'">Rules library (legacy)</button>
+    </div>
+
+    <!-- ── Compendium ─────────────────────────────────────────── -->
+    <template v-if="source === 'compendium'">
+      <div class="wrl-filters">
+        <button :class="['wrl-chip', { active: rulesKind === null }]" @click="rulesKind = null">All</button>
+        <button
+          v-for="k in LOOKUP_KINDS" :key="k"
+          :class="['wrl-chip', { active: rulesKind === k }]"
+          :style="rulesKind === k ? { '--chip-color': RULES_KIND_CONFIG[k].color } : {}"
+          @click="rulesKind = rulesKind === k ? null : k"
+        >{{ RULES_KIND_CONFIG[k].plural }}</button>
+      </div>
+      <div class="wrl-results">
+        <div v-if="!query.trim()" class="wrl-empty">Type to search items, creatures, spells, conditions…</div>
+        <div v-else-if="!rulesHits.length" class="wrl-empty">No matches.</div>
+        <template v-else>
+          <div
+            v-for="e in rulesHits" :key="e.id"
+            :class="['wrl-item', { 'wrl-item--open': expandedRulesId === e.id }]"
+          >
+            <button class="wrl-item-row wrl-item-toggle" @click="expandedRulesId = expandedRulesId === e.id ? null : e.id">
+              <span class="wrl-item-name">{{ e.name }}</span>
+              <span class="wrl-item-type" :style="{ color: RULES_KIND_CONFIG[e.kind].color }">
+                {{ RULES_KIND_CONFIG[e.kind].label }}{{ RULES_KIND_CONFIG[e.kind].hasLevel ? ` ${e.level}` : '' }}
+              </span>
+            </button>
+            <div v-if="expandedRulesId === e.id" class="wrl-item-detail wrl-statblock">
+              <RulesStatBlock :entity="e" :game="game" />
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <div v-if="source === 'library' && entityTypes.length > 1" class="wrl-filters">
       <button :class="['wrl-chip', { active: activeType === null }]" @click="activeType = null">All</button>
       <button
         v-for="t in entityTypes" :key="t.id"
@@ -21,7 +59,7 @@
       >{{ t.name }}</button>
     </div>
 
-    <div class="wrl-results">
+    <div v-if="source === 'library'" class="wrl-results">
       <div v-if="loading" class="wrl-empty">
         <OhVueIcon name="md-autorenew" scale="1" class="wrl-spin" /> Loading…
       </div>
@@ -56,13 +94,34 @@
 
 <script setup lang="ts">
 import { getDb, parseRecordData } from '~/composables/useDb'
+import { rulesQuery, rulesSearch } from '~/composables/useRules'
+import type { GameId } from '~/types/game'
+import { RULES_KIND_CONFIG, type RulesEntity, type RulesKind } from '~/types/rules'
 
-const props = defineProps<{ systemId: number | null }>()
+const props = defineProps<{ systemId: number | null; game?: GameId }>()
 
 const query = ref('')
 const activeType = ref<string | null>(null)
 const expandedId = ref<number | null>(null)
 const loading = ref(false)
+
+// ── Compendium search ──────────────────────────────────────────────────────
+const LOOKUP_KINDS: RulesKind[] = ['condition', 'action', 'spell', 'item', 'creature', 'hazard', 'feat']
+const source = ref<'compendium' | 'library'>('compendium')
+const rulesKind = ref<RulesKind | null>(null)
+const rulesHits = ref<RulesEntity[]>([])
+const expandedRulesId = ref<string | null>(null)
+let rulesTimer: ReturnType<typeof setTimeout> | null = null
+
+async function searchCompendium() {
+  const q = query.value.trim()
+  if (!q) { rulesHits.value = []; return }
+  const games = props.game ? [props.game] : undefined
+  rulesHits.value = rulesKind.value
+    ? (await rulesQuery({ kind: rulesKind.value, text: q, games, limit: 30 })).items
+    : await rulesSearch(q, 30, games)
+}
+
 
 const SKIP_KEYS = new Set(['id', 'systemId', 'entityTypeId', 'name', 'createdAt', 'updatedAt'])
 const BODY_KEYS = /\b(description|desc|summary|effect|text|body|rules|detail|notes)\b/i
@@ -144,6 +203,10 @@ const filtered = computed(() => {
 
 onMounted(load)
 watch(() => props.systemId, load)
+watch([() => query.value, rulesKind, () => props.game], () => {
+  if (rulesTimer) clearTimeout(rulesTimer)
+  rulesTimer = setTimeout(searchCompendium, 150)
+})
 </script>
 
 <style scoped>
@@ -198,6 +261,10 @@ watch(() => props.systemId, load)
 .wrl-item-type { font-size: 10px; font-weight: 600; font-family: var(--fm); text-transform: uppercase; letter-spacing: 0.06em; flex-shrink: 0; }
 
 .wrl-item-detail { margin-top: 6px; }
+.wrl-item-toggle { width: 100%; background: none; border: none; padding: 0; cursor: pointer; text-align: left; }
+.wrl-statblock { padding: 4px 2px 6px; cursor: default; }
+.wrl-statblock :deep(.rsb) { font-size: 12.5px; }
+.wrl-statblock :deep(.rsb-name) { font-size: 16px; }
 .wrl-item-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 4px; margin-bottom: 6px; }
 .wrl-item-field {
   background: var(--surface-hi); border: 1px solid var(--border); border-radius: 5px;

@@ -564,7 +564,7 @@ Repo + upstream remote. Identity. `appNamespace.ts`. Dexie `startome` v1. Port 3
 `campaigns.game/rules`. `stripGmOnly()` (+ tests) in the exports. GM wording. New seed. A temporary built-in remaster condition list (replaced by synced conditions in phase 3).
 **Done when:** a PF2e campaign works end to end; the old library is untouched.
 
-### Phase 2: Typed compendium core (large)
+### Phase 2: Typed compendium core (large) — ✅ done 2026-10-28
 `types/rules.ts`. `rules`/`images`/`syncState` tables. `useRules()`. Registries. Compendium section with overview columns (level, price, bulk, rarity, traits, remaster). Typed stat-block views for item, creature, hazard, spell, feat, action, condition. Simple views for the reference kinds. Editors write `localEdits` for synced entries and full fields for user entries. Search/palette/`{{kind:}}` refs/rules-lookup widget.
 **Done when:** user entries can be authored and found, and the old library still works alongside.
 

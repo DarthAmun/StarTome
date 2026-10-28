@@ -272,7 +272,7 @@
             <WidgetEncounterLink v-else-if="w.kind === 'encounter-link'" :campaign-id="id" :encounter-id="w.encounterId" class="dms-w-fill" @update:encounter-id="setEncounterId(w.id, $event)" />
             <WidgetConditionsGrid v-else-if="w.kind === 'conditions-grid'" :system-id="linkedSystemId" :game="campaignGameId" class="dms-w-fill" />
             <WidgetTimer       v-else-if="w.kind === 'timer'"        class="dms-w-fill" />
-            <WidgetRulesLookup v-else-if="w.kind === 'rules-lookup'" :system-id="linkedSystemId" class="dms-w-fill" />
+            <WidgetRulesLookup v-else-if="w.kind === 'rules-lookup'" :system-id="linkedSystemId" :game="campaignGameId" class="dms-w-fill" />
             <WidgetRandomTable v-else-if="w.kind === 'random-table' && getEntity(w)" :entity="getEntity(w)!" class="dms-w-fill" />
             <WidgetRumor       v-else-if="w.kind === 'rumor'       && getEntity(w)" :entity="getEntity(w)!" class="dms-w-fill" />
             <WidgetScratchpad    v-else-if="w.kind === 'scratchpad'"     v-model="scratchpad" class="dms-w-fill" />

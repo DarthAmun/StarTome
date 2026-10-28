@@ -1,6 +1,6 @@
 {
   "name": "startome",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "StarTome \u2014 offline-first campaign manager for Pathfinder 2e and Starfinder 2e GMs",
   "private": true,
   "type": "module",
@@ -32,7 +32,8 @@
     "oh-vue-icons": "1.0.0-rc3",
     "pinia": "^3.0.4",
     "pixi.js": "^8.17.0",
-    "primevue": "^4.3.3"
+    "primevue": "^4.3.3",
+    "vue": "^3.5.30"
   },
   "devDependencies": {
     "@nuxt/devtools": "latest",

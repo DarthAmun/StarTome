@@ -27,6 +27,7 @@ import Dexie, { type Table } from 'dexie'
 import type { EntityTypeSchema } from '~/types/entities'
 import { DB_NAME, channelName, windowName } from '~/utils/appNamespace'
 import type { CampaignRules, GameId } from '~/types/game'
+import type { RulesEntity } from '~/types/rules'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export interface DbCampaign {
@@ -213,6 +214,23 @@ export interface DbSoundPlaylist {
   updatedAt: string
 }
 
+/** User-owned image blobs (portraits, token art) referenced from rules entities. */
+export interface DbImage {
+  id: string
+  blob: Blob
+  mime: string
+  createdAt: string
+}
+
+/** Compendium sync bookkeeping, one row per game (phase 3). */
+export interface DbSyncState {
+  game: GameId
+  channel: string
+  version: string
+  packs: Record<string, { hash: string; count: number }>
+  syncedAt: string
+}
+
 // ── Database class ─────────────────────────────────────────────────────────
 class StarTomeDb extends Dexie {
   campaigns!:         Table<DbCampaign>
@@ -229,6 +247,9 @@ class StarTomeDb extends Dexie {
   graphLayouts!:      Table<DbGraphLayout>
   soundTracks!:       Table<DbSoundTrack>
   soundPlaylists!:    Table<DbSoundPlaylist>
+  rules!:             Table<RulesEntity, string>
+  images!:            Table<DbImage, string>
+  syncState!:         Table<DbSyncState, string>
 
   constructor() {
     super(DB_NAME)
@@ -250,6 +271,12 @@ class StarTomeDb extends Dexie {
       graphLayouts:       '++id, campaign_id, name',
       soundTracks:        '++id, name, type',
       soundPlaylists:     '++id, name',
+    })
+    // v2: typed PF2e/SF2e compendium (types/rules.ts), user image blobs, sync state
+    this.version(2).stores({
+      rules:              'id, kind, game, sortName, level, rarity, *traits, origin, [kind+sortName], [kind+level+sortName], updatedAt',
+      images:             'id',
+      syncState:          'game',
     })
   }
 }
