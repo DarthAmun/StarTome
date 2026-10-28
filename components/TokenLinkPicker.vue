@@ -32,10 +32,10 @@ defineProps<{
   placeholder: string
   selected: string | null
   search: string
-  results: Array<{ id: number; name: string; tag: string }>
+  results: Array<{ id: number | string; name: string; tag: string }>
   accent?: string
 }>()
-defineEmits<{ 'update:search': [value: string]; focus: []; select: [id: number]; clear: [] }>()
+defineEmits<{ 'update:search': [value: string]; focus: []; select: [id: number | string]; clear: [] }>()
 </script>
 
 <style scoped>

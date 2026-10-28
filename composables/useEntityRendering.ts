@@ -1,12 +1,11 @@
 /**
- * Shared entity rendering context: icon helpers, system entity type / record
- * loading, and the entityLookup + extraTypes needed by renderMarkdown /
+ * Shared entity rendering context: icon helpers, encounter/compendium lookups,
+ * and the entityLookup + extraTypes needed by renderMarkdown /
  * renderInline.  Extracted from MarkdownEditor so other components (e.g.
  * random-table widgets/editors) can reuse the exact same logic.
  */
 import * as GiIcons from 'oh-vue-icons/icons/gi'
 import { useEntities } from '~/composables/useEntities'
-import { useSystems } from '~/composables/useSystems'
 import { getDb } from '~/composables/useDb'
 import { ENTITY_TYPE_CONFIG } from '~/types/entities'
 import type { EntityType } from '~/types/entities'
@@ -53,12 +52,8 @@ export function giIconByName(name: string): any | null {
 
 export function useEntityRendering(campaignId: MaybeRefOrGetter<number>) {
   const store = useEntities()
-  const systemsStore = useSystems()
 
   const campaignEncounters = ref<{ id: number; name: string; mapSource?: string }[]>([])
-  const campaignSystemId = ref<number | null>(null)
-  const systemEntityTypes = ref<{ id: string; name: string; color: string; icon: string }[]>([])
-  const systemRecordCache = ref<Map<string, { color: string }>>(new Map())
   const campaignGameId = ref<GameId>('pf2e')
   const rulesIndex = useRulesIndex()
 
@@ -71,25 +66,12 @@ export function useEntityRendering(campaignId: MaybeRefOrGetter<number>) {
         .then(rows => rows.map(r => ({ id: r.id!, name: r.name, mapSource: r.map_source ?? undefined })))
       const campaign = await getDb().campaigns.get(id)
       campaignGameId.value = campaignGame(campaign)
-      const sysId = campaign?.system_id ?? null
-      campaignSystemId.value = sysId
-      if (!sysId) { systemEntityTypes.value = []; return }
-      const sys = systemsStore.getSystem(sysId)
-      if (!sys) { systemEntityTypes.value = []; return }
-      systemEntityTypes.value = sys.entityTypes.map(t => ({ id: t.id, name: t.name, color: t.color, icon: t.icon }))
-      const records = await getDb().records.where('systemId').equals(sysId).toArray()
-      const cache = new Map<string, { color: string }>()
-      for (const rec of records) {
-        const et = sys.entityTypes.find(t => t.id === rec.entityTypeId)
-        if (et) cache.set(`${rec.entityTypeId}:${rec.name.toLowerCase()}`, { color: et.color })
-      }
-      systemRecordCache.value = cache
     },
     { immediate: true },
   )
 
-  // Compendium kinds are always linkable; legacy system type ids are added while that library exists
-  const extraTypes = computed(() => [...new Set([...RULES_KINDS, ...systemEntityTypes.value.map(t => t.id.toLowerCase())])])
+  // Compendium kinds are linkable next to the lore types
+  const extraTypes = computed(() => [...RULES_KINDS])
 
   function entityLookup(type: string, name: string) {
     const typeKey = type.toLowerCase()
@@ -114,25 +96,13 @@ export function useEntityRendering(campaignId: MaybeRefOrGetter<number>) {
       const icon = giIconByName(cfg.icon)
       return { iconHtml: icon ? iconToSvg(icon, cfg.color) : undefined, color: cfg.color }
     }
-    const sysType = systemEntityTypes.value.find(t => t.id.toLowerCase() === typeKey)
-    if (sysType) {
-      const cached = systemRecordCache.value.get(`${sysType.id}:${name.toLowerCase()}`)
-      const icon = giIconByName(sysType.icon)
-      return {
-        iconHtml: icon ? iconToSvg(icon, cached?.color ?? sysType.color) : undefined,
-        color: cached?.color ?? sysType.color,
-      }
-    }
     return null
   }
 
   return {
     entityLookup,
     extraTypes,
-    campaignSystemId,
-    systemEntityTypes,
     campaignEncounters,
-    systemRecordCache,
     campaignGameId,
   }
 }

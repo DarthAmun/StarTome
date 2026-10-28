@@ -86,9 +86,9 @@
                 >
                   <div class="cm-row-body">
                     <div class="cm-row-top">
-                      <!-- Color/icon swatch — only for DB-backed conditions -->
+                      <!-- Color/icon swatch — only for compendium conditions, where the style is saved -->
                       <button
-                        v-if="cond.recordId"
+                        v-if="cond.rulesId"
                         class="cm-style-swatch"
                         :style="{ background: cond.color ?? '#666' }"
                         :title="'Edit color / icon for ' + cond.name"
@@ -108,7 +108,6 @@
                       </button>
                     </div>
                     <span v-if="cond.summary" class="cm-cond-summary">{{ cond.summary }}</span>
-                    <span v-if="cond.description" class="cm-cond-desc">{{ cond.description }}</span>
 
                     <!-- Style popover -->
                     <div v-if="editingStyle === cond.name" class="cm-style-popover" @click.stop>
@@ -158,13 +157,12 @@
 
 <script setup lang="ts">
 import type { EncounterToken, TokenCondition } from '~/stores/encounter'
-import { getDb, parseRecordData } from '~/composables/useDb'
-import { builtinConditions, conditionInfo, getConditionColor } from '~/composables/useConditions'
+import { conditionInfo, getConditionColor } from '~/composables/useConditions'
+import { loadAvailableConditions, saveConditionStyle as storeConditionStyle, type AvailableCondition } from '~/composables/useConditionCatalog'
 import type { GameId } from '~/types/game'
 
 const props = defineProps<{
   token: EncounterToken | null
-  systemId: number | null
   game?: GameId
   open: boolean
 }>()
@@ -197,78 +195,16 @@ const loading = ref(false)
 const localConditions = ref<TokenCondition[]>([])
 const editingStyle = ref<string | null>(null)  // condition name whose style popover is open
 
-interface AvailCondition {
-  name: string
-  summary: string
-  hasValue: boolean
-  description?: string
-  color?: string
-  icon?: string
-  recordId?: number  // set when loaded from DB; allows color/icon write-back
-}
+type AvailCondition = AvailableCondition
 
 const availableConditions = ref<AvailCondition[]>([])
 
-// ── Load conditions from DB or fall back ──────────────────────────────────
+// ── Synced compendium conditions, topped up by the built-in list ──────────
 async function loadConditions() {
   loading.value = true
   availableConditions.value = []
   try {
-    if (props.systemId) {
-      const db = getDb()
-
-      // Discover entity type IDs that look like conditions in this system
-      const sys = await db.systems.get(props.systemId)
-      const entityTypes: any[] = sys
-        ? (typeof sys.entityTypes === 'string' ? JSON.parse(sys.entityTypes || '[]') : (sys.entityTypes ?? []))
-        : []
-      const condTypeIds = entityTypes
-        .filter((et: any) => /condition/i.test(et.id ?? '') || /condition/i.test(et.name ?? ''))
-        .map((et: any) => et.id as string)
-      // Always include the bare 'condition' id as fallback
-      if (!condTypeIds.includes('condition')) condTypeIds.push('condition')
-
-      const recs = await db.records
-        .where('systemId').equals(props.systemId)
-        .filter((r: any) => condTypeIds.includes(r.entityTypeId))
-        .toArray()
-
-      if (recs.length) {
-        const TEXT_KEY = /\b(description|desc|summary|effect|text|body|rules|detail)\b/i
-        availableConditions.value = recs.map((r: any) => {
-          const data: Record<string, any> = parseRecordData(r.data)
-          const summary: string = data.summary ?? data.effect ?? data.description ?? ''
-          let description: string | undefined
-          for (const [k, v] of Object.entries(data)) {
-            if (TEXT_KEY.test(k) && typeof v === 'string' && v !== summary && v.length > summary.length) {
-              description = v
-              break
-            }
-          }
-          const cat = conditionInfo(r.name)
-          const color: string = (typeof data.color === 'string' && data.color)
-            ? data.color
-            : (cat?.color ?? getConditionColor(r.name))
-          const icon: string | undefined = (typeof data.icon === 'string' && data.icon)
-            ? data.icon
-            : cat?.icon
-          return {
-            name: r.name,
-            summary,
-            description,
-            hasValue: data.hasValue === true || !!cat?.valued,
-            color,
-            icon,
-            recordId: r.id as number | undefined,
-          }
-        }).sort((a: AvailCondition, b: AvailCondition) => a.name.localeCompare(b.name))
-        return
-      }
-    }
-    // No system linked or system has no condition records — use the built-in remaster list
-    availableConditions.value = builtinConditions(props.game ?? 'pf2e').map(c => ({
-      name: c.name, summary: c.desc, hasValue: c.valued, color: c.color, icon: c.icon,
-    }))
+    availableConditions.value = await loadAvailableConditions(props.game ?? 'pf2e')
   } finally {
     loading.value = false
   }
@@ -361,17 +297,8 @@ function adjustValue(idx: number, delta: number) {
 async function saveConditionStyle(cond: AvailCondition, color?: string, icon?: string) {
   if (color !== undefined) cond.color = color
   if (icon !== undefined) cond.icon = icon
-  // Write back to DB record if we have an ID
-  if (cond.recordId) {
-    const db = getDb()
-    const rec = await db.records.get(cond.recordId)
-    if (rec) {
-      const data = parseRecordData(rec.data)
-      if (color !== undefined) data.color = color
-      if (icon !== undefined) data.icon = icon
-      await db.records.update(cond.recordId, { data: JSON.stringify(data) })
-    }
-  }
+  // Saved on the compendium entry (a user-owned field, kept across re-syncs)
+  if (cond.rulesId) await storeConditionStyle(cond.rulesId, { color: cond.color, icon: cond.icon })
   // Propagate to any active condition on the current token
   const active = localConditions.value.find(c => c.name === cond.name)
   if (active) {

@@ -34,7 +34,7 @@ const props = defineProps<{ entity: Entity }>()
 
 const store = useEntities()
 const { renderInline } = useEntityMarkdown()
-const { entityLookup, extraTypes, campaignSystemId, systemEntityTypes, campaignGameId } = useEntityRendering(() => props.entity.campaignId)
+const { entityLookup, extraTypes, campaignGameId } = useEntityRendering(() => props.entity.campaignId)
 const router = useRouter()
 
 async function onEntityClick(e: MouseEvent) {
@@ -49,11 +49,7 @@ async function onEntityClick(e: MouseEvent) {
     return
   }
   const rulesRoute = await rulesRefRoute(type, name, campaignGameId.value)
-  if (rulesRoute) { router.push(rulesRoute); return }
-  const sysType = systemEntityTypes.value.find(t => t.id.toLowerCase() === type.toLowerCase())
-  if (sysType && campaignSystemId.value) {
-    router.push(`/system/${campaignSystemId.value}/${sysType.id}?open=${encodeURIComponent(name)}`)
-  }
+  if (rulesRoute) router.push(rulesRoute)
 }
 
 const attrs = computed(() => (props.entity.attributes ?? {}) as RandomTableAttributes)

@@ -53,6 +53,32 @@ export function resolveImage(src: string | null | undefined): Promise<string | n
   return p
 }
 
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
+}
+
+const dataUrls = new Map<string, Promise<string | null>>()
+
+/** Like resolveImage, but blobs come back as data URLs: for the VTT canvas
+ *  (Pixi picks its loader by extension or data-URL mime, a blob: URL has
+ *  neither) and the player window, which can't see this window's object URLs. */
+export function resolveImageDataUrl(src: string | null | undefined): Promise<string | null> {
+  if (!src) return Promise.resolve(null)
+  if (!isImageRef(src)) return Promise.resolve(src)
+  const id = imageRefId(src)
+  let p = dataUrls.get(id)
+  if (!p) {
+    p = getDb().images.get(id).then(row => (row ? blobToDataUrl(row.blob) : null)).catch(() => null)
+    dataUrls.set(id, p)
+  }
+  return p
+}
+
 /** Reactive URL for an entry's `img` (or any image reference). */
 export function useRulesImage(src: Ref<string | null | undefined>): Ref<string | null> {
   const url = ref<string | null>(null)

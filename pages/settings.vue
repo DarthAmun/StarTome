@@ -198,8 +198,9 @@
               <span class="sett-stat">{{ stats.campaigns }} campaigns</span>
               <span class="sett-stat">{{ stats.entities }} notes</span>
               <span class="sett-stat">{{ stats.graphs }} graphs</span>
-              <span class="sett-stat">{{ stats.systems }} systems</span>
-              <span class="sett-stat">{{ stats.records }} records</span>
+              <span class="sett-stat">{{ stats.rulesSynced }} synced entries</span>
+              <span class="sett-stat">{{ stats.rulesOwn }} own entries</span>
+              <span class="sett-stat">{{ stats.images }} portraits</span>
               <span class="sett-stat">{{ stats.tokens }} tokens</span>
             </div>
           </div>
@@ -213,7 +214,7 @@
             <div class="sett-row">
               <div class="sett-row-text">
                 <span class="sett-label">Image Folder Import</span>
-                <span class="sett-desc">Match a folder of images to system records by filename, then bulk-assign them to the image field of your choice.</span>
+                <span class="sett-desc">Match a folder of images to compendium entries by filename, then set them as portraits or token art.</span>
               </div>
               <button class="sett-btn" @click="imgFolderOpen = true">↑ Import</button>
             </div>
@@ -237,7 +238,7 @@
                   </label>
                   <label class="sett-check">
                     <input type="checkbox" v-model="rcJpegRecords" :disabled="recompressing" />
-                    System record images → JPEG
+                    Compendium portraits → JPEG
                   </label>
                 </div>
               </div>
@@ -254,7 +255,7 @@
             <div class="sett-row">
               <div class="sett-row-text">
                 <span class="sett-label">Everything</span>
-                <span class="sett-desc">All campaigns, systems, tokens and records. Coming from DM's Tome? Use the <NuxtLink to="/compendium/legacy">DM's Tome import</NuxtLink> instead — it links your library to the compendium.</span>
+                <span class="sett-desc">All campaigns, tokens, your own compendium entries and your portraits, notes and edits on synced ones (the synced content itself is not included; sync it again after importing). Coming from DM's Tome? Use the <NuxtLink to="/compendium/legacy">DM's Tome import</NuxtLink> instead — it links your library to the compendium.</span>
               </div>
               <div class="sett-btn-pair">
                 <button class="sett-btn" @click="exportAll">↓ Export</button>
@@ -321,37 +322,21 @@
           </div>
         </section>
 
-        <!-- Systems -->
+        <!-- Quest board -->
         <section class="sett-section">
-          <div class="sett-section-title">Systems</div>
+          <div class="sett-section-title">Quest Board</div>
           <div class="sett-group">
-
             <div class="sett-row">
               <div class="sett-row-text">
-                <span class="sett-label">Schemas only</span>
-                <span class="sett-desc">Rule system schemas without records</span>
+                <span class="sett-label">Quest board export</span>
+                <span class="sett-desc">A campaign's quests for players: GM-only blocks removed, reward items resolved against the compendium (level, price, rarity)</span>
+                <select v-if="campaigns.length" v-model="questBoardCampaignId" class="sett-md-select">
+                  <option :value="null">— choose campaign —</option>
+                  <option v-for="c in campaigns" :key="c.id" :value="c.id">{{ c.name }}</option>
+                </select>
               </div>
-              <div class="sett-btn-pair">
-                <button class="sett-btn" @click="exportSystems(false)">↓ Export</button>
-                <label class="sett-btn">↑ Import
-                  <input type="file" accept=".json" style="display:none" @change="openImport($event, 'systems')" />
-                </label>
-              </div>
+              <button class="sett-btn" :disabled="!questBoardCampaignId" @click="exportQuestBoard">↓ Export</button>
             </div>
-
-            <div class="sett-row">
-              <div class="sett-row-text">
-                <span class="sett-label">Schemas + Records</span>
-                <span class="sett-desc">System schemas with all data records</span>
-              </div>
-              <div class="sett-btn-pair">
-                <button class="sett-btn" @click="exportSystems(true)">↓ Export</button>
-                <label class="sett-btn">↑ Import
-                  <input type="file" accept=".json" style="display:none" @change="openImport($event, 'systems-full')" />
-                </label>
-              </div>
-            </div>
-
           </div>
         </section>
 
@@ -383,7 +368,7 @@
           <div class="sett-row">
             <div class="sett-row-text">
               <span class="sett-label">Wipe All Data</span>
-              <span class="sett-desc">Permanently delete every campaign, system and token. This cannot be undone.</span>
+              <span class="sett-desc">Permanently delete every campaign, token and compendium entry. This cannot be undone.</span>
             </div>
             <button class="sett-btn sett-btn--danger" @click="clearAll">Wipe</button>
           </div>
@@ -429,7 +414,12 @@
 import { APP_NS, APP_NAME, exportFilename } from '~/utils/appNamespace'
 import { stripGmOnly } from '~/utils/gmContent'
 import JSZip from 'jszip'
-import { getDb, dbApi, compressDataUrl, now, getImageKeysByType } from '~/composables/useDb'
+import { getDb, dbApi, compressDataUrl, now, parseRecordData } from '~/composables/useDb'
+import { notifyRulesChanged, rulesFindByName } from '~/composables/useRules'
+import { dataUrlToBlob, resolveImageDataUrl } from '~/rules/images'
+import { buildQuestBoard, imageIdsOf, itemRefNames, planRulesImport, rulesForExport, type ExportedImage, type RulesOverlay } from '~/converters/export'
+import { campaignGame } from '~/types/game'
+import type { Item, RulesEntity } from '~/types/rules'
 import { THEMES, ACCENT_PRESETS } from '~/composables/useSettings'
 import { ENTITY_TYPE_CONFIG } from '~/types/entities'
 import type { EntityType } from '~/types/entities'
@@ -488,7 +478,7 @@ const activeSection = ref('appearance')
 interface DbStats {
   campaigns: number; encounters: number; encounterTokens: number
   entities: number; entityLinks: number; tokens: number
-  systems: number; records: number
+  rulesSynced: number; rulesOwn: number; images: number
   graphs: number; entityConnections: number
 }
 
@@ -500,6 +490,7 @@ const mdIncludeGmOnly = ref(true)
 const claudeExportCampaignId = ref<number | null>(null)
 const claudeExporting = ref(false)
 const claudeIncludeGmOnly = ref(true)
+const questBoardCampaignId = ref<number | null>(null)
 
 const imgFolderOpen    = ref(false)
 const recompressing  = ref(false)
@@ -527,17 +518,15 @@ async function recompressImages() {
     const jpegTokens  = rcJpegTokens.value
     const jpegRecords = rcJpegRecords.value
 
-    const [c, enc, tok, etok, systemRows, allRecs] = await Promise.all([
+    const [c, enc, tok, etok, imageIds] = await Promise.all([
       db.campaigns.toArray(),
       db.encounters.toArray(),
       db.tokens.toArray(),
       db.encounterTokens.toArray(),
-      db.systems.toArray(),
-      db.records.toArray(),
+      db.images.toCollection().primaryKeys(),
     ])
 
     type Task = { table: any; id: number; field: string; value: string; toJpeg: boolean }
-    type RecordTask = { id: number; data: Record<string, any>; imageKeys: string[] }
 
     const tableDefs = [
       { table: db.campaigns,       rows: c,    field: 'banner_source', toJpeg: jpegBanners },
@@ -554,28 +543,19 @@ async function recompressImages() {
       }
     }
 
-    const imgKeysByType = getImageKeysByType(systemRows)
-    const recordTasks: RecordTask[] = []
-    for (const rec of allRecs) {
-      const imgKeys = imgKeysByType.get(rec.entityTypeId)
-      if (!imgKeys?.length) continue
-      let data: Record<string, any> = {}
-      try { data = JSON.parse(rec.data) } catch { continue }
-      const keysWithData = imgKeys.filter(k => typeof data[k] === 'string' && data[k].startsWith('data:'))
-      if (keysWithData.length) recordTasks.push({ id: rec.id!, data, imageKeys: keysWithData })
-    }
-
-    recompressTotal.value = tasks.length + recordTasks.length
+    recompressTotal.value = tasks.length + imageIds.length
     for (const task of tasks) {
       const compressed = await compressDataUrl(task.value, task.toJpeg)
       await task.table.update(task.id, { [task.field]: compressed })
       recompressDone.value++
     }
-    for (const rt of recordTasks) {
-      for (const key of rt.imageKeys) {
-        rt.data[key] = await compressDataUrl(rt.data[key], jpegRecords)
+    // Compendium portraits live as blobs in the image store
+    for (const id of imageIds) {
+      const dataUrl = await resolveImageDataUrl(`img:${id}`)
+      if (dataUrl) {
+        const blob = dataUrlToBlob(await compressDataUrl(dataUrl, jpegRecords))
+        await db.images.update(id, { blob, mime: blob.type })
       }
-      await db.records.update(rt.id, { data: JSON.stringify(rt.data), updatedAt: now() })
       recompressDone.value++
     }
   } finally {
@@ -589,13 +569,13 @@ async function loadCampaigns() {
 
 async function loadStats() {
   const db = getDb()
-  const [c, enc, et, ent, el, tok, sys, rec, gl, ec] = await Promise.all([
+  const [c, enc, et, ent, el, tok, synced, total, img, gl, ec] = await Promise.all([
     db.campaigns.count(), db.encounters.count(), db.encounterTokens.count(),
     db.entities.count(), db.entityLinks.count(), db.tokens.count(),
-    db.systems.count(), db.records.count(),
+    db.rules.where('origin').equals('foundry').count(), db.rules.count(), db.images.count(),
     db.graphLayouts.count(), db.entityConnections.count(),
   ])
-  stats.value = { campaigns: c, encounters: enc, encounterTokens: et, entities: ent, entityLinks: el, tokens: tok, systems: sys, records: rec, graphs: gl, entityConnections: ec }
+  stats.value = { campaigns: c, encounters: enc, encounterTokens: et, entities: ent, entityLinks: el, tokens: tok, rulesSynced: synced, rulesOwn: total - synced, images: img, graphs: gl, entityConnections: ec }
 }
 
 onMounted(() => { loadStats(); loadCampaigns() })
@@ -625,15 +605,27 @@ async function readJson(e: Event): Promise<any | null> {
   finally { (e.target as HTMLInputElement).value = '' }
 }
 
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error)
+    reader.readAsDataURL(blob)
+  })
+}
+
 async function exportAll() {
   const db = getDb()
-  const [campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts, tokens, systems, records] =
+  const [campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts, tokens, rulesRows, syncState] =
     await Promise.all([
       db.campaigns.toArray(), db.encounters.toArray(), db.encounterTokens.toArray(), db.encounterWalls.toArray(),
       db.entities.toArray(), db.entityLinks.toArray(), db.entitySnapshots.toArray(), db.entityConnections.toArray(), db.graphLayouts.toArray(),
-      db.tokens.toArray(), db.systems.toArray(), db.records.toArray(),
+      db.tokens.toArray(), db.rules.toArray(), db.syncState.toArray(),
     ])
-  download({ version: 1, app: APP_NS, type: 'all', exportedAt: now(), campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts, tokens, systems, records }, exportFilename(`all-${slug()}.json`))
+  const { entries: rules, overlays: rulesOverlays } = rulesForExport(rulesRows)
+  const imageRows = await db.images.bulkGet(imageIdsOf([...rules, ...rulesOverlays] as unknown as Record<string, unknown>[]))
+  const images: ExportedImage[] = await Promise.all(imageRows.filter(r => !!r).map(async r => ({ id: r!.id, mime: r!.mime, data: await blobToDataUrl(r!.blob) })))
+  download({ version: 1, app: APP_NS, type: 'all', exportedAt: now(), campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts, tokens, rules, rulesOverlays, images, syncState }, exportFilename(`all-${slug()}.json`))
 }
 
 async function exportCampaigns() {
@@ -653,11 +645,22 @@ async function exportCampaigns() {
   download({ version: 1, app: APP_NS, type: 'campaigns', exportedAt: now(), campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts }, exportFilename(`campaigns-${slug()}.json`))
 }
 
-async function exportSystems(withRecords: boolean) {
+/** Player-facing quest list for the quest board (FORK_PLAN §8.5). */
+async function exportQuestBoard() {
+  const id = questBoardCampaignId.value
+  if (!id) return
   const db = getDb()
-  const systems = await db.systems.toArray()
-  const records = withRecords ? await db.records.toArray() : []
-  download({ version: 1, app: APP_NS, type: withRecords ? 'systems-full' : 'systems', exportedAt: now(), systems, records }, exportFilename(`systems${withRecords ? '-full' : ''}-${slug()}.json`))
+  const campaign = await db.campaigns.get(id)
+  if (!campaign) return
+  const game = campaignGame(campaign)
+  const rows = await db.entities.where('campaign_id').equals(id).filter(e => e.type === 'quest').toArray()
+  const quests = rows.map(r => ({ id: r.id!, name: r.name, content: r.content ?? '', attributes: parseRecordData(r.attributes) }))
+  // Resolve every referenced item once, then build synchronously
+  const items = new Map<string, Item | undefined>()
+  const refs = new Set(quests.flatMap(q => [...itemRefNames(q.attributes.reward ?? ''), ...itemRefNames(q.content)]))
+  for (const name of refs) items.set(name.toLowerCase(), (await rulesFindByName('item', name, game)) as Item | undefined)
+  const board = buildQuestBoard(APP_NS, { name: campaign.name, game }, quests, name => items.get(name.toLowerCase()), now())
+  download(board, exportFilename(`questboard-${safeFilename(campaign.name)}-${slug()}.json`))
 }
 
 async function exportTokens() {
@@ -896,20 +899,10 @@ function buildImportSections(payload: any) {
   addSection('entities', 'Notes & Entities'); addSection('entityLinks', 'Entity Links')
   addSection('entitySnapshots', 'Entity Snapshots'); addSection('entityConnections', 'Entity Connections')
   addSection('graphLayouts', 'Graphs'); addSection('tokens', 'Tokens')
-  addSection('systems', 'System Schemas')
+  addSection('rules', 'Own compendium entries'); addSection('rulesOverlays', 'Portraits, notes & edits on synced entries')
   importSections.value = sections
-  const records: any[] = payload.records ?? []
-  if (records.length > 0) {
-    const byType = new Map<string, number>()
-    for (const r of records) byType.set(r.entityTypeId, (byType.get(r.entityTypeId) ?? 0) + 1)
-    const nameLookup = new Map<string, string>()
-    for (const sys of payload.systems ?? []) {
-      let etArr: any[] = []
-      try { etArr = typeof sys.entityTypes === 'string' ? JSON.parse(sys.entityTypes) : sys.entityTypes ?? [] } catch {}
-      for (const et of etArr) { if (!nameLookup.has(et.id)) nameLookup.set(et.id, et.name) }
-    }
-    entityTypeRows.value = [...byType.entries()].map(([id, count]) => ({ id, name: nameLookup.get(id) ?? id, count, enabled: true }))
-  } else { entityTypeRows.value = [] }
+  // DM's Tome's rules library is no longer imported here; its records go through the legacy import
+  entityTypeRows.value = []
 }
 
 async function runImport() {
@@ -918,26 +911,12 @@ async function runImport() {
   const db = getDb()
   modalPhase.value = 'running'; logLines.value = []; progressDone.value = 0
   const addLog = (ok: boolean, msg: string) => { logLines.value = [...logLines.value, { ok, msg }] }
-  const systemIdRemap = new Map<number, number>()
-  const systemsSec = importSections.value.find(s => s.key === 'systems')
-  const hasEnabledRecords = entityTypeRows.value.some(r => r.enabled) && (payload.records?.length > 0)
-  for (const sys of (payload.systems ?? [])) {
-    const existing = sys.shortId ? await db.systems.where('shortId').equals(sys.shortId).first() : null
-    if (systemsSec?.enabled) {
-      try {
-        if (existing) { await db.systems.put({ ...sys, id: existing.id }); systemIdRemap.set(sys.id, existing.id); addLog(true, `System updated: ${sys.name}`) }
-        else { await db.systems.put(sys); systemIdRemap.set(sys.id, sys.id); addLog(true, `System imported: ${sys.name}`) }
-      } catch (err) { addLog(false, `System failed: ${sys.name} — ${err}`) }
-      progressDone.value++
-    } else if (hasEnabledRecords) {
-      if (existing) systemIdRemap.set(sys.id, existing.id)
-      else addLog(false, `Warning: No existing system found for "${sys.name}" (shortId: ${sys.shortId}). Records for this system will be skipped.`)
-    }
+  if (payload.systems?.length || payload.records?.length) {
+    addLog(false, `Skipped ${payload.systems?.length ?? 0} systems and ${payload.records?.length ?? 0} records: DM's Tome's rules library is imported through Compendium › DM's Tome import, which links it to the synced compendium.`)
   }
   type WorkItem = { table: any; row: any }
   const work: WorkItem[] = []
   function queueSection(key: string, table: any) {
-    if (key === 'systems') return
     const sec = importSections.value.find(s => s.key === key)
     if (!sec?.enabled) return
     for (const row of (payload[key] ?? [])) {
@@ -952,19 +931,24 @@ async function runImport() {
   queueSection('entities', db.entities); queueSection('entityLinks', db.entityLinks)
   queueSection('entitySnapshots', db.entitySnapshots); queueSection('entityConnections', db.entityConnections)
   queueSection('graphLayouts', db.graphLayouts); queueSection('tokens', db.tokens)
-  const enabledTypeIds = new Set(entityTypeRows.value.filter(r => r.enabled).map(r => r.id))
-  for (const row of (payload.records ?? [])) {
-    if (!enabledTypeIds.has(row.entityTypeId)) continue
-    const targetSystemId = systemIdRemap.get(row.systemId)
-    if (targetSystemId === undefined) continue
-    const rec: any = { ...row, systemId: targetSystemId }
-    if (rec.attributes !== undefined && rec.data === undefined) { rec.data = typeof rec.attributes === 'string' ? rec.attributes : JSON.stringify(rec.attributes); delete rec.attributes }
-    if (typeof rec.data !== 'string') rec.data = JSON.stringify(rec.data ?? {})
-    if (!rec.data) rec.data = '{}'
-    work.push({ table: db.records, row: rec })
+  // Compendium: images first (entries point at them), then entries and overlays
+  const rulesSec = importSections.value.find(s => s.key === 'rules')
+  const overlaySec = importSections.value.find(s => s.key === 'rulesOverlays')
+  const rulesEntries: RulesEntity[] = rulesSec?.enabled ? (payload.rules ?? []) : []
+  const rulesOverlays: RulesOverlay[] = overlaySec?.enabled ? (payload.rulesOverlays ?? []) : []
+  if (rulesEntries.length || rulesOverlays.length) {
+    const wanted = new Set(imageIdsOf([...rulesEntries, ...rulesOverlays] as unknown as Record<string, unknown>[]))
+    for (const img of (payload.images ?? []) as ExportedImage[]) {
+      if (!wanted.has(img.id)) continue
+      const blob = dataUrlToBlob(img.data)
+      work.push({ table: db.images, row: { id: img.id, blob, mime: img.mime || blob.type, createdAt: now() } })
+    }
+    const existing = new Map((await db.rules.bulkGet(rulesOverlays.map(o => o.id))).filter((r): r is RulesEntity => !!r).map(r => [r.id, r]))
+    const plan = planRulesImport(existing, rulesEntries, rulesOverlays, now())
+    for (const row of plan.put) work.push({ table: db.rules, row })
+    if (plan.missing.length) addLog(false, `${plan.missing.length} portraits/notes belong to synced entries this browser doesn't have yet. Run the Foundry sync, then import this file again.`)
   }
-  const systemCount = systemsSec?.enabled ? (payload.systems?.length ?? 0) : 0
-  progressTotal.value = systemCount + work.length
+  progressTotal.value = work.length
   if (progressTotal.value === 0) { addLog(false, 'Nothing was selected to import.'); modalPhase.value = 'done'; return }
   const BATCH = 50
   for (let i = 0; i < work.length; i += BATCH) {
@@ -981,19 +965,22 @@ async function runImport() {
     logLines.value = [...logLines.value, ...newLines]
     await new Promise(resolve => setTimeout(resolve, 0))
   }
+  notifyRulesChanged()
   await loadStats()
   modalPhase.value = 'done'
 }
 
 async function clearAll() {
-  if (!confirm('Permanently delete ALL data — campaigns, systems, tokens, everything?')) return
+  if (!confirm('Permanently delete ALL data — campaigns, tokens, the compendium, everything?')) return
   if (!confirm('Last chance: this cannot be undone. Continue?')) return
   const db = getDb()
   await Promise.all([
     db.campaigns.clear(), db.encounters.clear(), db.encounterTokens.clear(), db.encounterWalls.clear(),
     db.entities.clear(), db.entityLinks.clear(), db.entitySnapshots.clear(), db.entityConnections.clear(), db.graphLayouts.clear(),
     db.tokens.clear(), db.systems.clear(), db.records.clear(),
+    db.rules.clear(), db.images.clear(), db.syncState.clear(),
   ])
+  notifyRulesChanged()
   await loadStats()
   alert('All data has been wiped.')
 }

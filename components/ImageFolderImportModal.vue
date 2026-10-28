@@ -18,36 +18,24 @@
             <div class="ifm-fields">
 
               <div class="ifm-field">
-                <label class="ifm-label">System</label>
-                <select v-model="systemId" class="ifm-select">
-                  <option :value="null" disabled>— choose system —</option>
-                  <option v-for="s in systems" :key="s.id" :value="s.id">{{ s.name }}</option>
+                <label class="ifm-label">Game</label>
+                <select v-model="game" class="ifm-select">
+                  <option v-for="g in GAME_IDS" :key="g" :value="g">{{ GAME_CONFIG[g].label }}</option>
                 </select>
               </div>
-
               <div class="ifm-field">
-                <label class="ifm-label">Entity Type</label>
-                <select v-model="entityTypeId" class="ifm-select" :disabled="!systemId">
-                  <option :value="null" disabled>— choose entity type —</option>
-                  <option v-for="et in entityTypes" :key="et.id" :value="et.id">{{ et.name }}</option>
-                </select>
-                <span v-if="systemId && entityTypes.length === 0" class="ifm-hint">
-                  No entity types with image fields found.
-                </span>
-              </div>
-
-              <div v-if="imageFields.length > 1" class="ifm-field">
-                <label class="ifm-label">Image Field</label>
-                <select v-model="imageFieldKey" class="ifm-select">
-                  <option :value="null" disabled>— choose field —</option>
-                  <option v-for="f in imageFields" :key="f.key" :value="f.key">{{ f.label }}</option>
+                <label class="ifm-label">Compendium</label>
+                <select v-model="kind" class="ifm-select">
+                  <option v-for="k in RULES_KINDS" :key="k" :value="k">{{ RULES_KIND_CONFIG[k].plural }}</option>
                 </select>
               </div>
-              <div v-else-if="imageFields.length === 1" class="ifm-field">
-                <label class="ifm-label">Image Field</label>
-                <div class="ifm-field-static">{{ imageFields[0].label }}</div>
+              <div class="ifm-field">
+                <label class="ifm-label">Image</label>
+                <select v-model="imageField" class="ifm-select">
+                  <option value="img">Portrait</option>
+                  <option v-if="kind === 'creature'" value="tokenImg">Token art</option>
+                </select>
               </div>
-
               <div class="ifm-field">
                 <label class="ifm-label">Image Folder</label>
                 <div class="ifm-folder-row">
@@ -102,7 +90,7 @@
                   <tr>
                     <th class="ifm-th-thumb"></th>
                     <th class="ifm-th-file">File</th>
-                    <th class="ifm-th-record">→ Record</th>
+                    <th class="ifm-th-record">→ Entry</th>
                     <th class="ifm-th-score">Score</th>
                     <th class="ifm-th-apply">Use</th>
                   </tr>
@@ -124,7 +112,7 @@
                       <select
                         class="ifm-record-select"
                         :value="m.selectedId ?? ''"
-                        @change="onSelectChange(m, +($event.target as HTMLSelectElement).value || null)"
+                        @change="onSelectChange(m, ($event.target as HTMLSelectElement).value || null)"
                       >
                         <option value="">— no match —</option>
                         <option v-for="rec in sortedRecords" :key="rec.id" :value="rec.id">
@@ -164,7 +152,7 @@
               </span>
             </div>
             <div v-if="phase === 'done'" class="ifm-done-summary">
-              <span class="ifm-done-ok">{{ updatedCount }} records updated</span>
+              <span class="ifm-done-ok">{{ updatedCount }} entries updated</span>
               <template v-if="skippedCount > 0">
                 · <span class="ifm-done-skip">{{ skippedCount }} skipped</span>
               </template>
@@ -202,64 +190,42 @@
 
 <script setup lang="ts">
 import { markRaw, shallowRef } from 'vue'
-import { getDb, fileToDataUrl, now, parseRecordData } from '~/composables/useDb'
+import { fileToDataUrl } from '~/composables/useDb'
+import { rulesNameList, rulesSetImage } from '~/composables/useRules'
 import { scoreNormalized, normalize } from '~/composables/useImageMatcher'
-import type { EntityTypeSchema, FieldSchema } from '~/types/entities'
-import type { DbSystem, DbRecord } from '~/composables/useDb'
+import { GAME_CONFIG, GAME_IDS, type GameId } from '~/types/game'
+import { RULES_KIND_CONFIG, RULES_KINDS, type RulesKind } from '~/types/rules'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
-
-const db = getDb()
 
 type Phase = 'configure' | 'matching' | 'review' | 'applying' | 'done'
 const phase = ref<Phase>('configure')
 
 // ── Configure state ────────────────────────────────────────────────────────
-const systems = ref<DbSystem[]>([])
-const systemId = ref<number | null>(null)
-const entityTypeId = ref<string | null>(null)
-const imageFieldKey = ref<string | null>(null)
+const game = ref<GameId>('pf2e')
+const kind = ref<RulesKind>('creature')
+const imageField = ref<'img' | 'tokenImg'>('img')
 const convertToJpeg = ref(true)
 // shallowRef: File is a browser-native object — deep Vue proxying causes memory corruption
 const pickedFiles = shallowRef<File[]>([])
 const folderInput = ref<HTMLInputElement | null>(null)
 
-const entityTypes = computed<EntityTypeSchema[]>(() => {
-  const sys = systems.value.find(s => s.id === systemId.value)
-  if (!sys) return []
-  try {
-    const types: EntityTypeSchema[] = typeof sys.entityTypes === 'string'
-      ? JSON.parse(sys.entityTypes) : (sys.entityTypes as any) ?? []
-    return types.filter(t => t.fields.some(f => f.component === 'image'))
-  } catch { return [] }
-})
-
-const imageFields = computed<FieldSchema[]>(() => {
-  const et = entityTypes.value.find(t => t.id === entityTypeId.value)
-  return et?.fields.filter(f => f.component === 'image') ?? []
-})
-
-const canPreview = computed(() =>
-  systemId.value !== null &&
-  entityTypeId.value !== null &&
-  imageFieldKey.value !== null &&
-  pickedFiles.value.length > 0
-)
+const canPreview = computed(() => pickedFiles.value.length > 0)
 
 // ── Match state ────────────────────────────────────────────────────────────
 interface MatchRow {
   file: File
   objectUrl: string
   normalizedName: string
-  bestId: number | null
+  bestId: string | null
   score: number
-  selectedId: number | null
+  selectedId: string | null
   apply: boolean
 }
 
 const matches = ref<MatchRow[]>([])
-const allRecords = ref<DbRecord[]>([])
+const allRecords = shallowRef<{ id: string; name: string }[]>([])
 const _objUrls: string[] = []
 const matchProgress = ref(0)
 const showUnmatched = ref(false)
@@ -290,19 +256,8 @@ const updatedCount = ref(0)
 const skippedCount = ref(0)
 
 // ── Watchers ───────────────────────────────────────────────────────────────
-watch(() => props.open, async (v) => {
-  if (v) {
-    const all = await db.systems.toArray()
-    systems.value = all.sort((a, b) => a.name.localeCompare(b.name))
-  } else {
-    reset()
-  }
-})
-
-watch(systemId, () => { entityTypeId.value = null; imageFieldKey.value = null })
-watch(entityTypeId, () => {
-  imageFieldKey.value = imageFields.value.length === 1 ? imageFields.value[0].key : null
-})
+watch(() => props.open, (v) => { if (!v) reset() })
+watch(kind, (k) => { if (k !== 'creature') imageField.value = 'img' })
 
 // ── Folder pick ────────────────────────────────────────────────────────────
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.avif'])
@@ -328,16 +283,13 @@ async function runMatching() {
   phase.value = 'matching'
   matchProgress.value = 0
 
-  const records = await db.records
-    .where('systemId').equals(systemId.value!)
-    .filter(r => r.entityTypeId === entityTypeId.value)
-    .toArray()
+  const records = await rulesNameList(kind.value, [game.value])
   allRecords.value = records
 
   revokeObjUrls()
 
   // Pre-normalize record names once — avoids re-running 6 regexes per (file × record) pair
-  const normRecords = records.map(r => ({ id: r.id!, norm: normalize(r.name) }))
+  const normRecords = records.map(r => ({ id: r.id, norm: normalize(r.name) }))
 
   const files = pickedFiles.value
   const rows: MatchRow[] = []
@@ -346,7 +298,7 @@ async function runMatching() {
     const chunk = files.slice(i, i + MATCH_BATCH)
     for (const file of chunk) {
       const normFile = normalize(file.name)
-      let bestId: number | null = null
+      let bestId: string | null = null
       let bestScore = 0
       for (const { id, norm } of normRecords) {
         const s = scoreNormalized(normFile, norm)
@@ -396,15 +348,10 @@ async function applyMatches() {
   for (const m of toApply) {
     try {
       const dataUrl = await fileToDataUrl(m.file, convertToJpeg.value)
-      const rec = allRecords.value.find(r => r.id === m.selectedId)
-      if (!rec) { skippedCount.value++; progressDone.value++; continue }
-      const data: Record<string, any> = parseRecordData(rec.data)
-      data[imageFieldKey.value!] = dataUrl
-      await db.records.update(m.selectedId!, {
-        data: JSON.stringify(data),
-        updatedAt: now(),
-      })
-      updatedCount.value++
+      // Stored as a blob in the image store; a re-sync keeps it (user-owned field)
+      const updated = await rulesSetImage(m.selectedId!, imageField.value, dataUrl)
+      if (updated) updatedCount.value++
+      else skippedCount.value++
     } catch {
       skippedCount.value++
     }
@@ -421,7 +368,7 @@ function toggleApply(m: MatchRow) {
   matches.value[i] = { ...m, apply: !m.apply }
 }
 
-function onSelectChange(m: MatchRow, id: number | null) {
+function onSelectChange(m: MatchRow, id: string | null) {
   const i = matches.value.indexOf(m)
   if (i === -1) return
   matches.value[i] = { ...m, selectedId: id, apply: id !== null }
@@ -471,9 +418,7 @@ function close() { emit('close') }
 
 function reset() {
   phase.value = 'configure'
-  systemId.value = null
-  entityTypeId.value = null
-  imageFieldKey.value = null
+  imageField.value = 'img'
   convertToJpeg.value = true
   pickedFiles.value = []
   matches.value = []

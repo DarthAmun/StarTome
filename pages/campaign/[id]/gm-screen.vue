@@ -10,7 +10,7 @@
       <div class="dms-sep-v" />
       <div class="dms-camp">
         <div class="dms-camp-name">{{ campaignName }}</div>
-        <div class="dms-camp-sub">{{ linkedSystemName ? `${linkedSystemName} · ` : '' }}{{ widgets.length }} widget{{ widgets.length !== 1 ? 's' : '' }}</div>
+        <div class="dms-camp-sub">{{ GAME_CONFIG[campaignGameId].short }} · {{ widgets.length }} widget{{ widgets.length !== 1 ? 's' : '' }}</div>
       </div>
       <div class="dms-top-stretch" />
       <div class="dms-density">
@@ -72,13 +72,9 @@
             <span class="rail-dot" :style="{ background: g.color }" />
             <span class="rail-count">{{ g.items.length }}</span>
           </button>
-          <div v-if="systemGroups.length" class="dms-palette-rail-sep" />
-          <button v-for="sg in systemGroups" :key="sg.id"
-            class="dms-palette-rail-btn"
-            :title="sg.name"
-            @click="palCollapsed = false; openGroups[`sys-${sg.id}`] = true; loadSysGroupRecords(sg.id)">
-            <span class="rail-dot" :style="{ background: sg.color || 'var(--accent)' }" />
-            <span class="rail-count">{{ sg.loaded ? sg.records.length : '…' }}</span>
+          <div class="dms-palette-rail-sep" />
+          <button class="dms-palette-rail-btn" title="Compendium" @click="palCollapsed = false; openGroups.compendium = true">
+            <span class="rail-dot" :style="{ background: WIDGET_COLORS['rules-entry'] }" />
           </button>
           <div class="dms-palette-rail-sep" />
           <button class="dms-palette-rail-btn" title="Quick widgets" @click="palCollapsed = false; openGroups.quick = true">
@@ -166,36 +162,35 @@
             </template>
           </div>
 
-          <!-- System entity groups (records loaded lazily on first expand) -->
-          <template v-if="systemGroups.length">
-            <div v-for="sg in systemGroups" :key="sg.id" class="dms-pal-group">
-              <div class="dms-pal-group-head" @click="toggleSysGroup(sg.id)">
-                <span :class="['dms-pal-group-arrow', { open: openGroups[`sys-${sg.id}`] }]">▶</span>
-                <span class="dms-pal-group-dot" :style="{ background: sg.color || 'var(--accent)' }" />
-                <span class="dms-pal-group-label">{{ sg.name }}</span>
-                <span class="dms-pal-group-count">{{ sg.loaded ? sg.records.length : '…' }}</span>
-              </div>
-              <template v-if="openGroups[`sys-${sg.id}`]">
-                <div v-if="!sg.loaded" class="dms-pal-empty">Loading…</div>
-                <template v-else>
-                  <div v-for="r in sg.records" :key="r.id"
-                    :class="['dms-pal-item', { pinned: isRecordPinned(r.id) }]"
-                    :draggable="!isRecordPinned(r.id)"
-                    :title="isRecordPinned(r.id) ? 'Already pinned' : 'Drag or double-click to add'"
-                    @dragstart="!isRecordPinned(r.id) && onPalDragStart($event, 'system-entity', undefined, r.id)"
-                    @dragend="onDragEnd"
-                    @dblclick="!isRecordPinned(r.id) && addWidget({ kind: 'system-entity', recordId: r.id })">
-                    <span class="dms-pal-item-dot" :style="{ background: sg.color || 'var(--accent)' }" />
-                    <span class="dms-pal-item-name">{{ r.name }}</span>
-                    <span v-if="isRecordPinned(r.id)" class="dms-pal-item-meta" style="color:var(--success)">✓</span>
-                  </div>
-                  <div v-if="!sg.records.length" class="dms-pal-empty">No entries</div>
-                </template>
-              </template>
+          <!-- Compendium entries: searched with the palette query -->
+          <div class="dms-pal-group">
+            <div class="dms-pal-group-head" @click="openGroups.compendium = !openGroups.compendium">
+              <span :class="['dms-pal-group-arrow', { open: openGroups.compendium }]">▶</span>
+              <span class="dms-pal-group-dot" :style="{ background: WIDGET_COLORS['rules-entry'] }" />
+              <span class="dms-pal-group-label">Compendium</span>
+              <span class="dms-pal-group-count">{{ paletteQuery.trim() ? compendiumHits.length : '' }}</span>
             </div>
-          </template>
+            <template v-if="openGroups.compendium">
+              <div v-if="!paletteQuery.trim()" class="dms-pal-empty">Type in the search above to find entries</div>
+              <template v-else>
+                <div v-for="r in compendiumHits" :key="r.id"
+                  :class="['dms-pal-item', { pinned: isRulesPinned(r.id) }]"
+                  :draggable="!isRulesPinned(r.id)"
+                  :title="isRulesPinned(r.id) ? 'Already pinned' : 'Drag or double-click to add'"
+                  @dragstart="!isRulesPinned(r.id) && onPalDragStart($event, 'rules-entry', undefined, r.id)"
+                  @dragend="onDragEnd"
+                  @dblclick="!isRulesPinned(r.id) && addWidget({ kind: 'rules-entry', rulesId: r.id })">
+                  <span class="dms-pal-item-dot" :style="{ background: RULES_KIND_CONFIG[r.kind].color }" />
+                  <span class="dms-pal-item-name">{{ r.name }}</span>
+                  <span v-if="isRulesPinned(r.id)" class="dms-pal-item-meta" style="color:var(--success)">✓</span>
+                  <span v-else class="dms-pal-item-meta">{{ RULES_KIND_CONFIG[r.kind].label }}</span>
+                </div>
+                <div v-if="!compendiumHits.length" class="dms-pal-empty">No entries</div>
+              </template>
+            </template>
+          </div>
 
-          <div v-if="!palGroups.some(g => g.items.length) && paletteQuery" class="dms-pal-empty" style="padding:20px;text-align:center">
+          <div v-if="!palGroups.some(g => g.items.length) && !compendiumHits.length && paletteQuery" class="dms-pal-empty" style="padding:20px;text-align:center">
             No matches for "{{ paletteQuery }}"
           </div>
         </div>
@@ -270,14 +265,14 @@
             <WidgetQuest      v-else-if="w.kind === 'quest'    && getEntity(w)" :entity="getEntity(w)!" class="dms-w-fill" />
             <WidgetNote       v-else-if="(w.kind === 'note' || w.kind === 'event') && getEntity(w)" :entity="getEntity(w)!" class="dms-w-fill" />
             <WidgetEncounterLink v-else-if="w.kind === 'encounter-link'" :campaign-id="id" :encounter-id="w.encounterId" class="dms-w-fill" @update:encounter-id="setEncounterId(w.id, $event)" />
-            <WidgetConditionsGrid v-else-if="w.kind === 'conditions-grid'" :system-id="linkedSystemId" :game="campaignGameId" class="dms-w-fill" />
+            <WidgetConditionsGrid v-else-if="w.kind === 'conditions-grid'" :game="campaignGameId" class="dms-w-fill" />
             <WidgetTimer       v-else-if="w.kind === 'timer'"        class="dms-w-fill" />
-            <WidgetRulesLookup v-else-if="w.kind === 'rules-lookup'" :system-id="linkedSystemId" :game="campaignGameId" class="dms-w-fill" />
+            <WidgetRulesLookup v-else-if="w.kind === 'rules-lookup'" :game="campaignGameId" class="dms-w-fill" />
             <WidgetRandomTable v-else-if="w.kind === 'random-table' && getEntity(w)" :entity="getEntity(w)!" class="dms-w-fill" />
             <WidgetRumor       v-else-if="w.kind === 'rumor'       && getEntity(w)" :entity="getEntity(w)!" class="dms-w-fill" />
             <WidgetScratchpad    v-else-if="w.kind === 'scratchpad'"     v-model="scratchpad" class="dms-w-fill" />
-            <WidgetNpcGenerator v-else-if="w.kind === 'npc-generator'" :ref="(el: any) => { npcGenRef = el }" :campaign-id="id" :system-id="linkedSystemId" class="dms-w-fill" />
-            <WidgetSystemEntity v-else-if="w.kind === 'system-entity' && w.recordId" :record-id="w.recordId" class="dms-w-fill" />
+            <WidgetNpcGenerator v-else-if="w.kind === 'npc-generator'" :ref="(el: any) => { npcGenRef = el }" :campaign-id="id" :game="campaignGameId" class="dms-w-fill" />
+            <WidgetRulesEntry v-else-if="w.kind === 'rules-entry' && w.rulesId" :rules-id="w.rulesId" :game="campaignGameId" class="dms-w-fill" @loaded="rulesTitles[w.rulesId] = $event" />
             <WidgetWeather v-else-if="w.kind === 'weather'" :config="w.config ?? {}" class="dms-w-fill" @update:config="updateWidgetConfig(w.id, $event)" />
             <div v-else class="dms-w-missing">Entity removed or not found.</div>
 
@@ -294,8 +289,10 @@
 
 <script setup lang="ts">
 import { lsKey } from '~/utils/appNamespace'
-import { campaignGame, type GameId } from '~/types/game'
-import { dbApi, getDb } from '~/composables/useDb'
+import { GAME_CONFIG, campaignGame, type GameId } from '~/types/game'
+import { dbApi } from '~/composables/useDb'
+import { rulesSearch } from '~/composables/useRules'
+import { RULES_KIND_CONFIG, type RulesEntity } from '~/types/rules'
 import { useEntities } from '~/composables/useEntities'
 import { usePageChrome } from '~/composables/usePageChrome'
 import { useBookmarks } from '~/composables/useBookmarks'
@@ -316,21 +313,12 @@ onUnmounted(showSpine)
 // ── Data loading ────────────────────────────────────────────────────────────
 const entitiesStore = useEntities()
 const campaignName = ref('')
-const linkedSystemId = ref<number | null>(null)
-const linkedSystemName = ref('')
 const campaignGameId = ref<GameId>('pf2e')
 
 onMounted(async () => {
   const c = await dbApi.campaigns.get(id)
   campaignName.value = c?.name ?? ''
-  linkedSystemId.value = (c as any)?.system_id ?? null
   campaignGameId.value = campaignGame(c)
-
-  if (linkedSystemId.value) {
-    const s = await dbApi.systems.get(linkedSystemId.value)
-    linkedSystemName.value = s?.name ?? ''
-    if (s) loadSystemGroupShells(s)
-  }
 
   if (!entitiesStore.entities.some(e => e.campaignId === id)) {
     await entitiesStore.loadAll(id)
@@ -340,48 +328,7 @@ onMounted(async () => {
   fitZoom()
 })
 
-// ── System entity groups (for palette) ─────────────────────────────────────
-interface SystemGroup {
-  id: string
-  name: string
-  color: string
-  records: { id: number; name: string }[]
-  loaded: boolean
-}
-const systemGroups = ref<SystemGroup[]>([])
 
-function loadSystemGroupShells(sys: any) {
-  const entityTypes: any[] = typeof sys.entityTypes === 'string'
-    ? JSON.parse(sys.entityTypes || '[]')
-    : (sys.entityTypes ?? [])
-
-  systemGroups.value = entityTypes.map((et: any) => ({
-    id: et.id,
-    name: et.plural || et.name,
-    color: et.color || 'var(--accent)',
-    records: [],
-    loaded: false,
-  }))
-}
-
-async function loadSysGroupRecords(groupId: string) {
-  const g = systemGroups.value.find(g => g.id === groupId)
-  if (!linkedSystemId.value || !g || g.loaded) return
-  const db = getDb()
-  const recs = await db.records
-    .where('systemId').equals(linkedSystemId.value)
-    .filter((r: any) => r.entityTypeId === groupId)
-    .toArray()
-  g.records = recs.map((r: any) => ({ id: r.id!, name: r.name }))
-    .sort((a: any, b: any) => a.name.localeCompare(b.name))
-  g.loaded = true
-}
-
-function toggleSysGroup(groupId: string) {
-  const key = `sys-${groupId}`
-  openGroups[key] = !openGroups[key]
-  if (openGroups[key]) loadSysGroupRecords(groupId)
-}
 
 // ── NPC Generator ref (singleton widget) ──────────────────────────────────
 const npcGenRef = ref<{ openConfig: () => void } | null>(null)
@@ -521,7 +468,7 @@ if (import.meta.client) {
     if (raw) {
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed) && parsed.length) {
-        widgets.value = parsed.filter((w: any) => w.kind !== 'dice' && w.kind !== 'search')
+        widgets.value = parsed.filter((w: any) => w.kind !== 'dice' && w.kind !== 'search' && w.kind !== 'system-entity')
       }
     }
   } catch {}
@@ -640,27 +587,27 @@ function getEntity(w: DmWidget) {
   return entitiesStore.entities.find(e => e.id === w.entityId && e.campaignId === id) ?? null
 }
 
-function canAdd(kind: WidgetKind, entityId?: number, recordId?: number): boolean {
+function canAdd(kind: WidgetKind, entityId?: number, rulesId?: string): boolean {
   if (SINGLETONS.includes(kind) && widgets.value.some(w => w.kind === kind)) return false
   if (entityId != null && widgets.value.some(w => w.kind === kind && w.entityId === entityId)) return false
-  if (recordId != null && widgets.value.some(w => w.kind === kind && w.recordId === recordId)) return false
+  if (rulesId != null && widgets.value.some(w => w.kind === kind && w.rulesId === rulesId)) return false
   return true
 }
 
-function addWidget(opts: { kind: WidgetKind; entityId?: number; recordId?: number }) {
-  const { kind, entityId, recordId } = opts
+function addWidget(opts: { kind: WidgetKind; entityId?: number; rulesId?: string }) {
+  const { kind, entityId, rulesId } = opts
   const [width, height] = DEFAULT_SIZES[kind]
   const [x, y] = findFreeXY(width, height)
-  addWidgetAt({ kind, entityId, recordId, x, y, width, height })
+  addWidgetAt({ kind, entityId, rulesId, x, y, width, height })
 }
 
-function addWidgetAt(opts: { kind: WidgetKind; entityId?: number; recordId?: number; x: number; y: number; width: number; height: number }) {
-  const { kind, entityId, recordId, x, y, width, height } = opts
-  if (!canAdd(kind, entityId, recordId)) return
+function addWidgetAt(opts: { kind: WidgetKind; entityId?: number; rulesId?: string; x: number; y: number; width: number; height: number }) {
+  const { kind, entityId, rulesId, x, y, width, height } = opts
+  if (!canAdd(kind, entityId, rulesId)) return
   const wid = entityId != null ? `w-${kind}-${entityId}`
-    : recordId != null ? `w-${kind}-${recordId}`
+    : rulesId != null ? `w-${kind}-${rulesId}`
     : `w-${kind}-${Date.now()}`
-  widgets.value.push({ id: wid, kind, entityId, recordId, x, y, width, height })
+  widgets.value.push({ id: wid, kind, entityId, rulesId, x, y, width, height })
 }
 
 function removeWidget(wid: string) {
@@ -725,15 +672,15 @@ const pinnedEntityKeys = computed(() => {
   for (const w of widgets.value) if (w.entityId != null) s.add(`${w.kind}:${w.entityId}`)
   return s
 })
-const pinnedRecordIds = computed(() => {
-  const s = new Set<number>()
-  for (const w of widgets.value) if (w.recordId != null) s.add(w.recordId)
+const pinnedRulesIds = computed(() => {
+  const s = new Set<string>()
+  for (const w of widgets.value) if (w.rulesId != null) s.add(w.rulesId)
   return s
 })
 
 function isWidgetPinned(kind: WidgetKind)              { return pinnedKinds.value.has(kind) }
 function isEntityPinned(kind: string, entityId: number) { return pinnedEntityKeys.value.has(`${kind}:${entityId}`) }
-function isRecordPinned(recordId: number)               { return pinnedRecordIds.value.has(recordId) }
+function isRulesPinned(rulesId: string)                 { return pinnedRulesIds.value.has(rulesId) }
 
 function widgetTitle(w: DmWidget): string {
   if (w.kind === 'encounter-link')   return 'Encounter'
@@ -741,10 +688,7 @@ function widgetTitle(w: DmWidget): string {
   if (w.kind === 'timer')        return 'Timer'
   if (w.kind === 'rules-lookup') return 'Rules Lookup'
   if (w.kind === 'scratchpad')   return 'Scratchpad'
-  if (w.kind === 'system-entity' && w.recordId) {
-    const grp = systemGroups.value.flatMap(g => g.records).find(r => r.id === w.recordId)
-    return grp?.name ?? 'Record'
-  }
+  if (w.kind === 'rules-entry' && w.rulesId) return rulesTitles[w.rulesId] ?? 'Compendium'
   const e = getEntity(w)
   return e?.name ?? '(missing)'
 }
@@ -769,6 +713,18 @@ const density = ref('comfortable')
 const palCollapsed = ref(false)
 const paletteQuery = ref('')
 
+// ── Compendium entries (for palette) ──────────────────────────────────────
+const compendiumHits = shallowRef<RulesEntity[]>([])
+const rulesTitles = reactive<Record<string, string>>({})
+let compendiumTimer: ReturnType<typeof setTimeout> | null = null
+watch([paletteQuery, campaignGameId], () => {
+  if (compendiumTimer) clearTimeout(compendiumTimer)
+  compendiumTimer = setTimeout(async () => {
+    const q = paletteQuery.value.trim()
+    compendiumHits.value = q ? await rulesSearch(q, 15, [campaignGameId.value]) : []
+  }, 150)
+})
+
 const ENTITY_TYPES = ENTITY_TYPE_LIST
 
 const QUICK_WIDGETS = [
@@ -785,7 +741,7 @@ const openGroups = reactive<Record<string, boolean>>({
   bookmarks: true, quick: true,
   session: false, npc: false, location: false, faction: false,
   quest: false, event: false, note: false,
-  'random-table': false, rumor: false,
+  'random-table': false, rumor: false, compendium: true,
 })
 
 const palGroups = computed(() => {
@@ -803,7 +759,7 @@ const palGroups = computed(() => {
 interface DragState {
   kind: WidgetKind
   entityId?: number
-  recordId?: number
+  rulesId?: string
   width: number
   height: number
   from?: { widgetId: string; x: number; y: number }
@@ -826,9 +782,9 @@ function screenToPlane(clientX: number, clientY: number): { x: number; y: number
   }
 }
 
-function onPalDragStart(e: DragEvent, kind: WidgetKind, entityId?: number, recordId?: number) {
+function onPalDragStart(e: DragEvent, kind: WidgetKind, entityId?: number, rulesId?: string) {
   const [width, height] = DEFAULT_SIZES[kind]
-  dragState.value = { kind, entityId, recordId, width, height }
+  dragState.value = { kind, entityId, rulesId, width, height }
   if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'
 }
 
@@ -844,7 +800,7 @@ function onWidgetPointerDown(e: PointerEvent, w: DmWidget) {
   // Regular click: select only this widget unless already in multi-selection
   if (!isSelected(w.id)) selectOnly(w.id)
 
-  dragState.value = { kind: w.kind, entityId: w.entityId, recordId: w.recordId, width: w.width, height: w.height, from: { widgetId: w.id, x: w.x, y: w.y } }
+  dragState.value = { kind: w.kind, entityId: w.entityId, rulesId: w.rulesId, width: w.width, height: w.height, from: { widgetId: w.id, x: w.x, y: w.y } }
 
   const el = e.currentTarget as HTMLElement
   el.setPointerCapture(e.pointerId)
@@ -933,7 +889,7 @@ function onCanvasDrop() {
       widgets.value = widgets.value.map(w => w.id === srcId ? { ...w, x: pos.x, y: pos.y } : w)
     }
   } else {
-    addWidgetAt({ kind: dragState.value.kind, entityId: dragState.value.entityId, recordId: dragState.value.recordId, x: pos.x, y: pos.y, width: pos.width, height: pos.height })
+    addWidgetAt({ kind: dragState.value.kind, entityId: dragState.value.entityId, rulesId: dragState.value.rulesId, x: pos.x, y: pos.y, width: pos.width, height: pos.height })
   }
   onDragEnd()
 }

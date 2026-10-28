@@ -103,7 +103,7 @@ const emit = defineEmits<{ navigate: [type: string, name: string]; deleted: [] }
 
 const store = useEntities()
 const { renderInline } = useEntityMarkdown()
-const { entityLookup, extraTypes, campaignSystemId, systemEntityTypes, campaignGameId } = useEntityRendering(() => props.campaignId)
+const { entityLookup, extraTypes, campaignGameId } = useEntityRendering(() => props.campaignId)
 const router = useRouter()
 const entity = computed(() => store.entities.find(e => e.id === props.entityId) ?? store.currentEntity)
 
@@ -163,12 +163,7 @@ async function onResultClick(e: MouseEvent) {
   const name = el.dataset.entityName!
   const rulesRoute = await rulesRefRoute(type, name, campaignGameId.value)
   if (rulesRoute) { router.push(rulesRoute); return }
-  const sysType = systemEntityTypes.value.find(t => t.id.toLowerCase() === type.toLowerCase())
-  if (sysType && campaignSystemId.value) {
-    router.push(`/system/${campaignSystemId.value}/${sysType.id}?open=${encodeURIComponent(name)}`)
-  } else {
-    emit('navigate', type, name)
-  }
+  emit('navigate', type, name)
 }
 const attrs = computed(() => (entity.value?.attributes ?? {}) as RandomTableAttributes)
 

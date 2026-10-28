@@ -75,23 +75,6 @@ export function useBookmarks() {
     })
   }
 
-  function bookmarkRecord(record: {
-    id: number
-    name: string
-    systemId: number
-    entityTypeId: string
-    icon: string
-    color: string
-  }) {
-    addBookmark({
-      label: record.name,
-      route: `/system/${record.systemId}/${record.entityTypeId}?record=${encodeURIComponent(record.name)}`,
-      icon: record.icon,
-      color: record.color,
-      type: 'record',
-    })
-  }
-
   function bookmarkPage(route: string, label: string, icon: string, color: string) {
     addBookmark({ label, route, icon, color, type: 'page' })
   }
@@ -103,7 +86,6 @@ export function useBookmarks() {
     isBookmarked,
     reorder,
     bookmarkEntity,
-    bookmarkRecord,
     bookmarkPage,
   }
 }

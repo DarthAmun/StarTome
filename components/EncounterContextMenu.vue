@@ -96,7 +96,7 @@
         </div>
 
         <button
-          v-if="targetToken.linkedRecordId"
+          v-if="targetToken.linkedRulesId"
           class="ctx-item"
           @click="emit('view-record', targetToken.id); emit('close')"
         >

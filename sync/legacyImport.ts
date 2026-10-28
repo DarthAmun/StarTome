@@ -16,7 +16,7 @@
 import Dexie from 'dexie'
 import { getDb, type DbImage } from '~/composables/useDb'
 import { LEGACY_DB_NAME } from '~/utils/appNamespace'
-import { remapLibrary, remapLore, LORE_TABLES, type LibraryTables, type LoreTable, type LoreTables, type RemapIssue } from '~/converters/legacy/lore'
+import { remapLore, LORE_TABLES, type LibraryTables, type LoreTable, type LoreTables, type RemapIssue } from '~/converters/legacy/lore'
 import { CompendiumNameIndex, normalizeName, type MatchTarget, type MatchVia, type RankedCandidate } from '~/converters/legacy/match'
 import {
   convertLegacyRecord, legacyKindOf, legacyLevel, recordData, recordImage, type LegacyRecord,
@@ -134,7 +134,7 @@ export interface AnalyseResult {
   index: CompendiumNameIndex
 }
 
-export type LegacyProgress = { phase: 'read' | 'analyse' | 'images' | 'records' | 'library' | 'lore'; done?: number; total?: number }
+export type LegacyProgress = { phase: 'read' | 'analyse' | 'images' | 'records' | 'lore'; done?: number; total?: number }
 
 const HOMEBREW_SOURCE = /self ?made|homebrew|eigen/i
 
@@ -266,8 +266,6 @@ export interface ApplyOptions {
   /** recordId → decision, overriding the analysis default. */
   decisions?: Record<number, RecordDecision>
   lore: boolean
-  /** Also carry the old systems/records library over (until phase 5/6 retire it). */
-  library: boolean
   onProgress?: (p: LegacyProgress) => void
 }
 
@@ -277,7 +275,7 @@ export interface LegacyReport {
   dropped: number
   imagesAttached: number
   entriesWithImages: number
-  written: Partial<Record<LoreTable | 'systems' | 'records', number>>
+  written: Partial<Record<LoreTable, number>>
   placements: { linkedToCompendium: number; linkedToFoundry: number; cleared: number }
   issues: RemapIssue[]
   durationMs: number
@@ -376,28 +374,12 @@ export async function applyLegacy(bundle: LegacyBundle, analysed: AnalyseResult,
   for (let i = 0; i < newEntries.length; i += CHUNK) await db.rules.bulkAdd(newEntries.slice(i, i + CHUNK))
   report.entriesWithImages += newEntries.filter(e => e.img).length
 
-  // The old library as it was (all record types), so encounters keep their stat blocks until phase 5
-  let recordIds: Map<number, number> | undefined
-  let systemIds: Map<number, number> | undefined
-  if (opts.library && bundle.systems.length) {
-    progress({ phase: 'library' })
-    const lib = remapLibrary(bundle, { systems: await nextId(db.systems), records: await nextId(db.records) })
-    await db.transaction('rw', db.systems, db.records, async () => {
-      await db.systems.bulkAdd(lib.systems)
-      for (let i = 0; i < lib.records.length; i += CHUNK) await db.records.bulkAdd(lib.records.slice(i, i + CHUNK))
-    })
-    recordIds = lib.recordIds
-    systemIds = lib.systemIds
-    report.written.systems = lib.systems.length
-    report.written.records = lib.records.length
-  }
-
   if (opts.lore) {
     progress({ phase: 'lore' })
     const tables = LORE_TABLES.map(t => db.table(t))
     const res = await db.transaction('rw', tables, async () => {
       const start = Object.fromEntries(await Promise.all(LORE_TABLES.map(async t => [t, await nextId(db.table(t))]))) as Record<LoreTable, number>
-      const res = remapLore(bundle, start, { rulesLinks, recordIds, systemIds, refRenames }, normalizeName)
+      const res = remapLore(bundle, start, { rulesLinks, refRenames }, normalizeName)
       for (const t of LORE_TABLES) {
         const rows = res.tables[t] as { id?: number }[]
         for (let i = 0; i < rows.length; i += CHUNK) await db.table(t).bulkAdd(rows.slice(i, i + CHUNK))

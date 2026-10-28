@@ -54,7 +54,8 @@
 import { useBookmarks } from '~/composables/useBookmarks'
 import { useEntities } from '~/composables/useEntities'
 import { useEncounterStore } from '~/stores/encounter'
-import { useSystems } from '~/composables/useSystems'
+import { rulesGet } from '~/composables/useRules'
+import { RULES_KIND_CONFIG } from '~/types/rules'
 import { useSettings } from '~/composables/useSettings'
 import { ENTITY_TYPE_CONFIG } from '~/types/entities'
 import type { EntityType } from '~/types/entities'
@@ -66,18 +67,17 @@ const isDark = computed(() => settings.value.theme !== 'light')
 function toggleTheme() { updateSettings('theme', isDark.value ? 'light' : 'dark') }
 
 const route = useRoute()
-const { bookmarks, removeBookmark, reorder, isBookmarked, bookmarkPage, bookmarkEntity, bookmarkRecord } = useBookmarks()
+const { bookmarks, removeBookmark, reorder, isBookmarked, bookmarkPage, bookmarkEntity } = useBookmarks()
 const notesStore = useEntities()
 const encounterStore = useEncounterStore()
-const systemsStore = useSystems()
 
 function navigate(bm: { route: string }) { router.push(bm.route) }
 
 // Full current route including query params that represent distinct bookmark targets
 const currentFullRoute = computed(() => {
-  const recordName = route.query.record as string | undefined
-  if (recordName && route.path.match(/^\/system\/\d+\//)) {
-    return `${route.path}?record=${encodeURIComponent(recordName)}`
+  const rulesId = route.query.id as string | undefined
+  if (rulesId && route.path.startsWith('/compendium/')) {
+    return `${route.path}?id=${encodeURIComponent(rulesId)}`
   }
   const snapId = route.query.snap as string | undefined
   if (snapId && route.path.match(/\/campaign\/\d+\/\w+\/\d+$/)) {
@@ -94,11 +94,11 @@ const currentFullRoute = computed(() => {
 function isCurrentRoute(bmRoute: string): boolean {
   const [bmPath, bmQueryStr] = bmRoute.split('?')
   const bmParams = new URLSearchParams(bmQueryStr ?? '')
-  const bmRecord = bmParams.get('record')
+  const bmRules = bmParams.get('id')
   const bmSnap = bmParams.get('snap')
   const bmMap = bmParams.get('map')
   const bmGraph = bmParams.get('graph')
-  if (bmRecord) return route.path === bmPath && (route.query.record as string) === bmRecord
+  if (bmRules) return route.path === bmPath && (route.query.id as string) === bmRules
   if (bmSnap) return route.path === bmPath && (route.query.snap as string) === bmSnap
   if (bmMap) return route.path === bmPath && (route.query.map as string) === bmMap
   if (bmGraph) return route.path === bmPath && (route.query.graph as string) === bmGraph
@@ -164,23 +164,15 @@ async function toggleCurrentPage() {
     bookmarkPage(route.path, encounterStore.current.name, 'gi-broadsword', 'var(--accent)')
     return
   }
-  // System record: /system/{id}/{typeId} with ?record=name in URL
-  const sysRecordMatch = route.path.match(/^\/system\/(\d+)\/(.+)$/)
-  const recordName = route.query.record as string | undefined
-  if (sysRecordMatch && recordName) {
-    const systemId = Number(sysRecordMatch[1])
-    const typeId = sysRecordMatch[2]
-    const sys = systemsStore.getSystem(systemId)
-    const et = sys?.entityTypes?.find((t: any) => t.id === typeId)
-    bookmarkRecord({
-      id: 0,
-      name: recordName,
-      systemId,
-      entityTypeId: typeId,
-      icon: et?.icon ?? 'gi-scroll-unfurled',
-      color: et?.color ?? 'var(--ink-ghost)',
-    })
-    return
+  // Compendium entry: /compendium/{segment}?id=…
+  const rulesId = route.query.id as string | undefined
+  if (rulesId && route.path.startsWith('/compendium/')) {
+    const entry = await rulesGet(rulesId)
+    if (entry) {
+      const cfg = RULES_KIND_CONFIG[entry.kind]
+      bookmarkPage(currentFullRoute.value, entry.name, cfg.icon, cfg.color)
+      return
+    }
   }
   const label = (document.querySelector('.page-title, .camp-banner-title') as HTMLElement)?.textContent?.trim()
     ?? route.path.split('/').filter(s => Boolean(s) && isNaN(Number(s))).pop()

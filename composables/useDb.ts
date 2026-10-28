@@ -6,28 +6,23 @@
  */
 
 /**
- * DATA MODEL NOTE — Two parallel record systems exist:
+ * DATA MODEL NOTE — campaign lore and rules data are separate:
  *
- * 1. DbEntity (entities table) — Campaign-scoped notes and lore.
- *    Used by: composables/useEntities.ts, pages/campaign/[id]/notes.vue
- *    Fields: campaign_id, type (note/npc/item/location/faction/quest/event/session),
- *            name, content (markdown), attributes (JSON)
- *    Linked by: DbEntityLink (entityLinks table) for the knowledge graph
+ * 1. DbEntity (entities table) — campaign-scoped notes and lore (npc, location,
+ *    quest, …): markdown content + typed attributes, linked by DbEntityLink.
+ * 2. RulesEntity (rules table, types/rules.ts) — the typed PF2e/SF2e compendium,
+ *    synced from Foundry or user-made. Read and written only via useRules.ts.
  *
- * 2. DbRecord (records table) — System-scoped structured records.
- *    Used by: composables/useSystems.ts, pages/system/[id]/[typeId].vue
- *    Fields: systemId, entityTypeId (spell/creature/etc), name, data (JSON)
- *    These are the "library" entries created via the system builder.
- *
- * They are intentionally separate: DbEntity is campaign narrative (freeform markdown + typed attributes).
- * DbRecord is rules library data (structured fields defined by EntityTypeSchema).
- * A future 'entity-link' field type in DbRecord can reference DbRecords by name.
+ * The `systems`/`records` tables are DM's Tome's generic rules library. Nothing
+ * reads them at runtime any more; they are dropped with the old library code.
  */
 import Dexie, { type Table } from 'dexie'
 import type { EntityTypeSchema } from '~/types/entities'
 import { DB_NAME, channelName, windowName } from '~/utils/appNamespace'
 import type { CampaignRules, GameId } from '~/types/game'
 import type { RulesEntity } from '~/types/rules'
+import type { Adjustment } from '~/rules/combat'
+import { resolveImageDataUrl } from '~/rules/images'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export interface DbCampaign {
@@ -71,8 +66,9 @@ export interface DbToken {
   image_type: 'file' | 'url'
   is_template: number
   is_player_character: number  // 0 | 1
-  linked_record_id: number | null
-  linked_rules_id?: string | null   // compendium entry (types/rules.ts); set by the legacy import, read from phase 5 on
+  linked_record_id: number | null   // DM's Tome record; no longer read, dropped with the old library
+  linked_rules_id?: string | null   // compendium entry (types/rules.ts) the token stands for
+  rules_adjustment?: Adjustment | null
   linked_entity_id?: number | null  // campaign entity (NPC) this token represents
   sync_image?: number               // 0 | 1 — token image mirrors the linked entry's image
   created_at: string
@@ -81,7 +77,7 @@ export interface DbToken {
 export interface DbEncounterToken {
   id?: number
   encounter_id: number
-  token_id: number | null      // null = placed directly from creature record
+  token_id: number | null      // null = placed directly from a compendium creature
   grid_x: number
   grid_y: number
   size: number
@@ -96,6 +92,7 @@ export interface DbEncounterToken {
   notes: string | null
   linked_record_id: number | null
   linked_rules_id?: string | null
+  rules_adjustment?: Adjustment | null  // weak/elite version of the linked creature
   linked_entity_id?: number | null
   vision_range: number | null // tiles, null = infinite
   is_player_token: number     // 0 | 1
@@ -280,6 +277,11 @@ class StarTomeDb extends Dexie {
       images:             'id',
       syncState:          'game',
     })
+    // v3: tokens and placements link compendium entries (phase 5)
+    this.version(3).stores({
+      tokens:             '++id, is_template, name, linked_record_id, linked_rules_id',
+      encounterTokens:    '++id, encounter_id, token_id, linked_record_id, linked_rules_id',
+    })
   }
 }
 
@@ -355,7 +357,6 @@ export function compressDataUrl(dataUrl: string, toJpeg = true): Promise<string>
 
 // ── API — exposed as window.dmstome by plugins/tome-api.client.ts ────────
 
-const imageKeyCache = new Map<string, Map<string, string[]>>()
 
 export const dbApi = {
 
@@ -374,7 +375,7 @@ export const dbApi = {
       const id = await db.campaigns.add({ name: data.name, description: data.description ?? '', game: data.game ?? 'pf2e', rules: data.rules ?? {}, created_at: ts, updated_at: ts })
       return db.campaigns.get(id)
     },
-    async update(id: number, data: { name?: string; description?: string; system_id?: number | null; game?: GameId; rules?: Partial<CampaignRules> }) {
+    async update(id: number, data: { name?: string; description?: string; banner_source?: string | null; banner_type?: 'file' | 'url'; game?: GameId; rules?: Partial<CampaignRules> }) {
       const db = getDb()
       await db.campaigns.update(id, { ...data, updated_at: now() })
       return db.campaigns.get(id)
@@ -405,7 +406,6 @@ export const dbApi = {
         description: source.description,
         banner_source: source.banner_source ?? null,
         banner_type: source.banner_type,
-        system_id: (source as any).system_id ?? null,
         game: source.game,
         rules: source.rules,
         created_at: ts,
@@ -513,54 +513,34 @@ export const dbApi = {
   async _resolveTokenDisplay(et: DbEncounterToken) {
     const db = getDb()
     const tok = et.token_id ? await db.tokens.get(et.token_id) : null
-    const rec = (!tok && et.linked_record_id) ? await db.records.get(et.linked_record_id) : null
-    const synced = tok?.sync_image ? await dbApi.linkedImages.get(tok.linked_entity_id, tok.linked_record_id) : null
+    const entry = (!tok && et.linked_rules_id) ? await db.rules.get(et.linked_rules_id) : null
+    const synced = tok?.sync_image ? await dbApi.linkedImages.get(tok.linked_entity_id, tok.linked_rules_id) : null
     return {
-      name: tok?.name ?? rec?.name ?? '',
+      name: tok?.name ?? entry?.name ?? '',
       image_source: synced?.source ?? tok?.image_source ?? et.image_source ?? null,
       image_type: (synced?.type ?? tok?.image_type ?? et.image_type ?? 'file') as 'file' | 'url',
     }
   },
 
-  // ── Linked-entry images (token ↔ NPC portrait / creature record image) ──
+  // ── Linked-entry images (token ↔ NPC portrait / compendium token art) ──
   linkedImages: {
-    /** Image of the entry a token is linked to. The NPC portrait wins over
-     *  the creature record's image field when both links are set. */
-    async get(entityId?: number | null, recordId?: number | null): Promise<{ source: string; type: 'file' | 'url' } | null> {
+    /** Image of the entry a token is linked to. The NPC portrait wins over the
+     *  compendium entry's token art (or portrait) when both links are set.
+     *  Compendium blobs come back as data URLs, which the canvas and the player
+     *  window can both load. */
+    async get(entityId?: number | null, rulesId?: string | null): Promise<{ source: string; type: 'file' | 'url' } | null> {
       const db = getDb()
       if (entityId) {
         const ent = await db.entities.get(entityId)
         const attrs = parseRecordData(ent?.attributes)
         if (attrs.portraitSource) return { source: attrs.portraitSource, type: attrs.portraitType ?? 'file' }
       }
-      if (recordId) {
-        const rec = await db.records.get(recordId)
-        const key = rec && await dbApi.linkedImages._recordImageKey(rec)
-        const val = key ? parseRecordData(rec!.data)[key] : null
-        if (typeof val === 'string' && val) return { source: val, type: imageTypeOf(val) }
+      if (rulesId) {
+        const entry = await db.rules.get(rulesId) as (RulesEntity & { tokenImg?: string | null }) | undefined
+        const src = await resolveImageDataUrl(entry?.tokenImg || entry?.img)
+        if (src) return { source: src, type: imageTypeOf(src) }
       }
       return null
-    },
-    /** Writes a creature record's image field. NPC portraits are written by the
-     *  caller through the entities store so its in-memory cache stays current. */
-    async setOnRecord(recordId: number, source: string): Promise<boolean> {
-      const db = getDb()
-      const rec = await db.records.get(recordId)
-      const key = rec && await dbApi.linkedImages._recordImageKey(rec)
-      if (!rec || !key) return false
-      const data = parseRecordData(rec.data)
-      data[key] = source
-      await db.records.update(recordId, { data: JSON.stringify(data), updatedAt: now() })
-      return true
-    },
-    async _recordImageKey(rec: DbRecord): Promise<string | null> {
-      const sys = await getDb().systems.get(rec.systemId)
-      if (!sys) return null
-      // Parsing the system schema is the expensive part — cache it per system version
-      const cacheKey = `${rec.systemId}:${sys.updatedAt}`
-      let keys = imageKeyCache.get(cacheKey)
-      if (!keys) { keys = getImageKeysByType([sys]); imageKeyCache.set(cacheKey, keys) }
-      return keys.get(rec.entityTypeId)?.[0] ?? null
     },
   },
 
@@ -612,7 +592,7 @@ export const dbApi = {
       const db = getDb()
       return db.tokens.where('is_template').equals(1).sortBy('name')
     },
-    async create(data: { name: string; imageSource?: string | null; imageType?: string; linkedRecordId?: number | null; linkedEntityId?: number | null; isPlayerCharacter?: boolean; syncImage?: boolean }) {
+    async create(data: { name: string; imageSource?: string | null; imageType?: string; linkedRulesId?: string | null; adjustment?: Adjustment | null; linkedEntityId?: number | null; isPlayerCharacter?: boolean; syncImage?: boolean }) {
       const db = getDb()
       const id = await db.tokens.add({
         name: data.name,
@@ -620,20 +600,23 @@ export const dbApi = {
         image_type: (data.imageType ?? 'file') as any,
         is_template: 1,
         is_player_character: data.isPlayerCharacter ? 1 : 0,
-        linked_record_id: data.linkedRecordId ?? null,
+        linked_record_id: null,
+        linked_rules_id: data.linkedRulesId ?? null,
+        rules_adjustment: data.adjustment ?? null,
         linked_entity_id: data.linkedEntityId ?? null,
         sync_image: data.syncImage ? 1 : 0,
         created_at: now(),
       })
       return db.tokens.get(id)
     },
-    async update(id: number, data: { name?: string; imageSource?: string | null; imageType?: 'file' | 'url'; linkedRecordId?: number | null; linkedEntityId?: number | null; isPlayerCharacter?: boolean; syncImage?: boolean }) {
+    async update(id: number, data: { name?: string; imageSource?: string | null; imageType?: 'file' | 'url'; linkedRulesId?: string | null; adjustment?: Adjustment | null; linkedEntityId?: number | null; isPlayerCharacter?: boolean; syncImage?: boolean }) {
       const db = getDb()
       const changes: Record<string, any> = {}
       if (data.name !== undefined) changes.name = data.name
       if (data.imageSource !== undefined) changes.image_source = data.imageSource
       if (data.imageType !== undefined) changes.image_type = data.imageType
-      if ('linkedRecordId' in data) changes.linked_record_id = data.linkedRecordId ?? null
+      if ('linkedRulesId' in data) changes.linked_rules_id = data.linkedRulesId ?? null
+      if ('adjustment' in data) changes.rules_adjustment = data.adjustment ?? null
       if ('linkedEntityId' in data) changes.linked_entity_id = data.linkedEntityId ?? null
       if ('isPlayerCharacter' in data) changes.is_player_character = data.isPlayerCharacter ? 1 : 0
       if ('syncImage' in data) changes.sync_image = data.syncImage ? 1 : 0
@@ -658,7 +641,9 @@ export const dbApi = {
         hp_current: data.hpCurrent ?? null, hp_max: data.hpMax ?? null,
         ac: data.ac ?? null,
         initiative: data.initiative ?? null, notes: null,
-        linked_record_id: data.linkedRecordId ?? null,
+        linked_record_id: null,
+        linked_rules_id: data.linkedRulesId ?? null,
+        rules_adjustment: data.adjustment ?? null,
         linked_entity_id: data.linkedEntityId ?? null,
         vision_range: data.visionRange ?? null,
         is_player_token: data.isPlayerToken ? 1 : 0,

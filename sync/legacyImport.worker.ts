@@ -8,7 +8,7 @@ import { analyseLegacy, applyLegacy, readLegacyDb, readLegacyFile, type AnalyseR
 
 export type LegacyWorkerRequest =
   | { type: 'open'; file?: Blob; browserDb?: boolean }
-  | { type: 'apply'; decisions: Record<number, RecordDecision>; lore: boolean; library: boolean }
+  | { type: 'apply'; decisions: Record<number, RecordDecision>; lore: boolean }
 
 let bundle: LegacyBundle | null = null
 let analysed: AnalyseResult | null = null
@@ -25,7 +25,7 @@ self.onmessage = async (e: MessageEvent<LegacyWorkerRequest>) => {
       return
     }
     if (!bundle || !analysed) throw new Error('Open a DM\'s Tome export first.')
-    const report = await applyLegacy(bundle, analysed, { decisions: msg.decisions, lore: msg.lore, library: msg.library, onProgress })
+    const report = await applyLegacy(bundle, analysed, { decisions: msg.decisions, lore: msg.lore, onProgress })
     // One import per opened bundle: a second apply would duplicate the campaign
     bundle = null
     analysed = null

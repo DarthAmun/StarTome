@@ -99,33 +99,6 @@
                 </NuxtLink>
             </div>
 
-            <!-- System link -->
-            <div class="camp-section-label" style="margin-top: 24px">
-                Settings
-            </div>
-            <div class="camp-setting-row">
-                <div>
-                    <div class="camp-setting-title">Linked System</div>
-                    <div class="camp-setting-hint">
-                        Link a rules system to enable stat auto-fill in
-                        encounters.
-                    </div>
-                </div>
-                <select
-                    class="camp-setting-select"
-                    :value="linkedSystemId ?? ''"
-                    @change="setLinkedSystem($event)"
-                >
-                    <option value="">— None —</option>
-                    <option
-                        v-for="s in availableSystems"
-                        :key="s.id"
-                        :value="s.id"
-                    >
-                        {{ s.name }}
-                    </option>
-                </select>
-            </div>
         </div>
     </div>
 </template>
@@ -141,8 +114,6 @@ const notesStore = useEntities();
 
 const name = ref("");
 const desc = ref("");
-const linkedSystemId = ref<number | null>(null);
-const availableSystems = ref<Array<{ id: number; name: string }>>([]);
 const bannerSource = ref<string | null>(null);
 
 onMounted(async () => {
@@ -150,11 +121,7 @@ onMounted(async () => {
     const c = camps.find((x: any) => x.id === id);
     name.value = c?.name ?? "";
     desc.value = c?.description ?? "";
-    linkedSystemId.value = (c as any)?.system_id ?? null;
     bannerSource.value = (c as any)?.banner_source ?? null;
-
-    const sys = await dbApi.systems.list();
-    availableSystems.value = sys.map((s: any) => ({ id: s.id!, name: s.name }));
 
     await notesStore.loadAll(id);
 });
@@ -176,13 +143,6 @@ async function clearBanner() {
         banner_source: null,
         banner_type: undefined,
     });
-}
-
-async function setLinkedSystem(e: Event) {
-    const val = (e.target as HTMLSelectElement).value;
-    const sysId = val ? Number(val) : null;
-    linkedSystemId.value = sysId;
-    await dbApi.campaigns.update(id, { system_id: sysId });
 }
 
 const ENTITY_TYPES = ENTITY_TYPE_LIST;

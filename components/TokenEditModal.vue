@@ -23,8 +23,13 @@
 
             <div class="tem-field">
               <label class="tem-label">Linked Creature</label>
-              <div v-if="linkedRecordName && !changingLink" class="tem-linked-row">
-                <span class="tem-linked-badge">{{ linkedRecordName }}</span>
+              <div v-if="linkedName && !changingLink" class="tem-linked-row">
+                <span class="tem-linked-badge">{{ linkedName }}</span>
+                <select v-model="localAdjustment" class="tem-adjust" title="Weak/elite adjustment">
+                  <option :value="null">Normal</option>
+                  <option value="weak">Weak</option>
+                  <option value="elite">Elite</option>
+                </select>
                 <button class="tem-clear-link" @click="changingLink = true">Change</button>
                 <button class="tem-clear-link tem-clear-link--danger" @click="clearLink">× Clear</button>
               </div>
@@ -32,25 +37,23 @@
                 <input
                   v-model="linkSearch"
                   class="tem-text-input"
-                  placeholder="Search creatures…"
-                  @input="filterRecords"
-                  @focus="filterRecords"
+                  placeholder="Search creatures and hazards…"
                 />
-                <div v-if="filteredRecords.length" class="tem-dropdown">
+                <div v-if="linkResults.length" class="tem-dropdown">
                   <button
-                    v-for="rec in filteredRecords.slice(0, 8)"
-                    :key="rec.id"
+                    v-for="opt in linkResults"
+                    :key="opt.id"
                     class="tem-dropdown-row"
-                    @click="selectRecord(rec)"
+                    @click="selectEntry(opt)"
                   >
-                    <span class="tem-rec-type">{{ rec.entityTypeId }}</span>
-                    {{ rec.name }}
+                    <span class="tem-rec-type">{{ opt.kind }} {{ opt.level }}</span>
+                    {{ opt.name }}
                   </button>
                 </div>
               </div>
-              <label v-if="pendingLink" class="tem-sync-row">
+              <label v-if="linkChanged" class="tem-sync-row">
                 <input type="checkbox" v-model="syncHpAc" class="tem-checkbox" />
-                <span>Update HP, AC and conditions from this record</span>
+                <span>Update HP, AC and size from the stat block</span>
               </label>
             </div>
           </div>
@@ -217,15 +220,15 @@
 
 <script setup lang="ts">
 import type { EncounterToken, TokenCondition, TokenTimer } from '~/stores/encounter'
-import { getDb, parseRecordData } from '~/composables/useDb'
-import { useSystems } from '~/composables/useSystems'
-import { useStatBlockLinker, SIZE_STRING_MAP } from '~/composables/useStatBlockLinker'
-
-const { extractStatsFromData } = useStatBlockLinker()
+import { rulesGet } from '~/composables/useRules'
+import { useCreatureSearch, type CreatureOption } from '~/composables/useCreatureSearch'
+import { tokenStats, type Adjustment } from '~/rules/combat'
+import { SIZE_SQUARES } from '~/rules/format'
+import type { GameId } from '~/types/game'
 
 const props = defineProps<{
   token: EncounterToken | null
-  systemId: number | null
+  game: GameId
   open: boolean
 }>()
 
@@ -244,7 +247,8 @@ const localInitiative = ref<number | null>(null)
 const localSize       = ref(1)
 const localNotes      = ref('')
 const localConditions = ref<TokenCondition[]>([])
-const localLinkedRecordId = ref<number | null>(null)
+const localLinkedRulesId = ref<string | null>(null)
+const localAdjustment = ref<Adjustment | null>(null)
 const localIsPlayerToken = ref(false)
 const localVisionRange = ref<number | null>(null)
 const localElevation = ref<number | null>(null)
@@ -286,69 +290,48 @@ watch(() => props.token, (tok) => {
   localInitiative.value = tok.initiative
   localSize.value       = tok.size
   localNotes.value      = tok.notes ?? ''
-  localLinkedRecordId.value = tok.linkedRecordId
+  localLinkedRulesId.value = tok.linkedRulesId
+  localAdjustment.value = tok.adjustment
   localIsPlayerToken.value = tok.isPlayerToken ?? false
   localVisionRange.value = tok.visionRange ?? null
   localElevation.value = tok.elevation ?? null
   localTimers.value = (tok.timers ?? []).map(t => ({ ...t }))
-  linkedRecordName.value = null
+  linkedName.value = null
   changingLink.value = false
-  linkSearch.value = ''
-  filteredRecords.value = []
-  pendingLink.value = null
+  resetLinkSearch()
   syncHpAc.value = true
   damageAmt.value = null
-  if (tok.linkedRecordId) loadLinkedRecordName(tok.linkedRecordId)
-  if (props.systemId) loadAllRecords()
+  if (tok.linkedRulesId) loadLinkedName(tok.linkedRulesId)
 }, { immediate: true })
 
-// ── Linked record ──────────────────────────────────────────────────────────
-const linkedRecordName = ref<string | null>(null)
+// ── Linked compendium entry ────────────────────────────────────────────────
+const linkedName = ref<string | null>(null)
 const changingLink = ref(false)
-const linkSearch = ref('')
-const allRecords = ref<Array<{ id: number; name: string; entityTypeId: string; data: string }>>([])
-const filteredRecords = ref<typeof allRecords.value>([])
-const pendingLink = ref<{ id: number; name: string; data: string } | null>(null)
 const syncHpAc = ref(true)
+const { search: linkSearch, results: linkResults, reset: resetLinkSearch } = useCreatureSearch(toRef(props, 'game'), { limit: 8, hazards: true })
 
-const CREATURE_TYPES = new Set(['creature', 'npc', 'monster', 'character', 'enemy', 'boss', 'humanoid', 'beast'])
+const linkChanged = computed(() =>
+  !!props.token && !!localLinkedRulesId.value &&
+  (localLinkedRulesId.value !== props.token.linkedRulesId || localAdjustment.value !== props.token.adjustment))
 
-async function loadLinkedRecordName(id: number) {
-  const rec = await getDb().records.get(id)
-  linkedRecordName.value = rec?.name ?? '(unknown)'
+async function loadLinkedName(id: string) {
+  const entry = await rulesGet(id)
+  linkedName.value = entry?.name ?? '(missing from the compendium)'
 }
 
-async function loadAllRecords() {
-  if (!props.systemId) return
-  const recs = await getDb().records.where('systemId').equals(props.systemId).toArray()
-  allRecords.value = recs.filter(r =>
-    CREATURE_TYPES.has(r.entityTypeId.toLowerCase()) ||
-    /creature|npc|monster|character|enemy|beast/i.test(r.entityTypeId)
-  ).map(r => ({ id: r.id!, name: r.name, entityTypeId: r.entityTypeId, data: r.data as string }))
-}
-
-function filterRecords() {
-  const q = linkSearch.value.toLowerCase()
-  filteredRecords.value = q
-    ? allRecords.value.filter(r => r.name.toLowerCase().includes(q) || r.entityTypeId.toLowerCase().includes(q))
-    : allRecords.value
-}
-
-function selectRecord(rec: typeof allRecords.value[0]) {
-  pendingLink.value = rec
-  linkedRecordName.value = rec.name
-  localLinkedRecordId.value = rec.id
+function selectEntry(opt: CreatureOption) {
+  linkedName.value = opt.name
+  localLinkedRulesId.value = opt.id
   changingLink.value = false
-  linkSearch.value = ''
-  filteredRecords.value = []
+  resetLinkSearch()
 }
 
 function clearLink() {
-  localLinkedRecordId.value = null
-  linkedRecordName.value = null
-  pendingLink.value = null
+  localLinkedRulesId.value = null
+  localAdjustment.value = null
+  linkedName.value = null
   changingLink.value = false
-  linkSearch.value = ''
+  resetLinkSearch()
 }
 
 // ── Damage / healing quick row ─────────────────────────────────────────────
@@ -374,11 +357,11 @@ function applyHealing() {
 const SIZE_LABELS: Record<number, string> = {
   1: 'medium', 2: 'large', 3: 'huge', 4: 'gargantuan',
 }
-const tokenSizeOptions = [...new Set(Object.values(SIZE_STRING_MAP))]
+const tokenSizeOptions = [...new Set(Object.values(SIZE_SQUARES))]
   .sort((a, b) => a - b)
   .map(v => ({ label: `${v}×${v} (${SIZE_LABELS[v] ?? v})`, value: v }))
 
-function save() {
+async function save() {
   if (!props.token) return
   const changes: Partial<EncounterToken> = {}
 
@@ -389,22 +372,26 @@ function save() {
   if (localInitiative.value !== props.token.initiative) changes.initiative = localInitiative.value
   if (localSize.value !== props.token.size) changes.size = localSize.value
   if (localNotes.value !== (props.token.notes ?? '')) changes.notes = localNotes.value || null
-  if (localLinkedRecordId.value !== props.token.linkedRecordId) changes.linkedRecordId = localLinkedRecordId.value
+  if (localLinkedRulesId.value !== props.token.linkedRulesId) changes.linkedRulesId = localLinkedRulesId.value
+  const adjustment = localLinkedRulesId.value ? localAdjustment.value : null
+  if (adjustment !== props.token.adjustment) changes.adjustment = adjustment
   if (localIsPlayerToken.value !== (props.token.isPlayerToken ?? false)) changes.isPlayerToken = localIsPlayerToken.value
   if (localVisionRange.value !== props.token.visionRange) changes.visionRange = localVisionRange.value || null
   if (localElevation.value !== props.token.elevation) changes.elevation = localElevation.value ?? null
   const timers = cleanTimers(localTimers.value)
   if (JSON.stringify(timers) !== JSON.stringify(props.token.timers ?? [])) changes.timers = timers
 
-  // Optionally sync HP/AC from newly linked record
-  if (pendingLink.value && syncHpAc.value) {
-    const data: Record<string, any> = parseRecordData(pendingLink.value.data)
-    const extracted = extractStatsFromData(data)
-    if (extracted.hpMax !== null) {
-      changes.hpMax = extracted.hpMax
-      changes.hpCurrent = extracted.hpCurrent
+  // Optionally take over HP/AC/size from the newly linked (or re-adjusted) stat block.
+  // Damage already taken carries over.
+  if (linkChanged.value && syncHpAc.value) {
+    const stats = tokenStats(await rulesGet(localLinkedRulesId.value!), adjustment)
+    if (stats.hpMax !== null) {
+      const damage = localHpMax.value !== null && localHpCurrent.value !== null ? localHpMax.value - localHpCurrent.value : 0
+      changes.hpMax = stats.hpMax
+      changes.hpCurrent = Math.max(0, stats.hpMax - damage)
     }
-    if (extracted.ac !== null) changes.ac = extracted.ac
+    if (stats.ac !== null) changes.ac = stats.ac
+    changes.size = stats.size
   }
 
   if (Object.keys(changes).length) emit('update', props.token.id, changes)
@@ -611,6 +598,14 @@ function save() {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+.tem-adjust {
+  font-size: 12px;
+  padding: 2px 4px;
+  border: 1px solid var(--parch-line);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--ink);
 }
 .tem-linked-badge {
   flex: 1;

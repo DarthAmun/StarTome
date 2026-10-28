@@ -118,7 +118,7 @@ describe('legacy import', () => {
   it('applies: portraits on both twins, homebrew entries, lore with fresh ids and compendium links', async () => {
     const b = await bundle()
     const analysed = await analyseLegacy(b)
-    const report = await applyLegacy(b, analysed, { lore: true, library: true, decisions: { 103: { action: 'keep' } } })
+    const report = await applyLegacy(b, analysed, { lore: true, decisions: { 103: { action: 'keep' } } })
     const db = getDb()
 
     expect(report).toMatchObject({ linked: 2, kept: 2, dropped: 0, imagesAttached: 2, entriesWithImages: 3 })
@@ -136,15 +136,15 @@ describe('legacy import', () => {
     expect(campaigns.map(c => c.name)).toEqual(['Seed', 'The Codex'])
     const codex = campaigns[1]
     expect(codex.description).toBe('See {{spell: Breathe Fire}}')
-    const system = await db.systems.toArray()
-    expect((codex as any).system_id).toBe(system[0].id)
+    expect(codex).not.toHaveProperty('system_id')
 
     const placements = await db.encounterTokens.toArray()
     expect(placements[0].linked_rules_id).toBe('fvtt:b1')   // the Bestiary printing the record came from
-    expect(placements[0].linked_record_id).toBe((await db.records.toArray()).find(r => r.name === 'Minotaur')!.id)
+    expect(placements[0].linked_record_id).toBeNull()
     expect(placements[1]).toMatchObject({ linked_rules_id: null, linked_record_id: null })
     expect(report.placements).toEqual({ linkedToCompendium: 1, linkedToFoundry: 1, cleared: 1 })
-    expect(report.written).toMatchObject({ campaigns: 1, entities: 4, records: 5, systems: 1 })
+    expect(report.written).toMatchObject({ campaigns: 1, entities: 4 })
+    expect(await db.records.count()).toBe(0)
 
     // A second analysis notices the campaign is already here
     expect((await analyseLegacy(await bundle())).analysis.alreadyImported).toEqual(['The Codex'])
@@ -152,9 +152,9 @@ describe('legacy import', () => {
 
   it('reuses homebrew entries from an earlier import instead of duplicating them', async () => {
     const b = await bundle()
-    await applyLegacy(b, await analyseLegacy(b), { lore: false, library: false })
+    await applyLegacy(b, await analyseLegacy(b), { lore: false })
     const again = await bundle()
-    const report = await applyLegacy(again, await analyseLegacy(again), { lore: false, library: false })
+    const report = await applyLegacy(again, await analyseLegacy(again), { lore: false })
     expect(report.kept).toBe(1)
     expect(await getDb().rules.where('origin').equals('legacy').count()).toBe(1)
   })

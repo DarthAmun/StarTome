@@ -9,6 +9,7 @@ import { ref, shallowRef, toRaw, watch } from 'vue'
 import { getDb } from '~/composables/useDb'
 import { newRulesEntity, newRulesId } from '~/rules/factory'
 import { isOverlayPath, setPath, withLocalEdits } from '~/rules/edits'
+import { dataUrlToBlob, storeImage } from '~/rules/images'
 import type { GameId } from '~/types/game'
 import { isRulesKind, RULES_KIND_CONFIG, RULES_KINDS, type Rarity, type RulesEntity, type RulesKind, type RulesOrigin } from '~/types/rules'
 
@@ -104,6 +105,18 @@ export async function rulesGet(id: string): Promise<RulesEntity | undefined> {
   return e && withLocalEdits(e)
 }
 
+/** Id and name of every entry of a kind (optionally by game), without loading
+ *  more than one row at a time — for pickers over thousands of entries. */
+export async function rulesNameList(kind: RulesKind, games?: GameId[]): Promise<{ id: string; name: string }[]> {
+  const gameSet = games?.length ? new Set<string>([...games, 'both']) : null
+  const out: { id: string; name: string }[] = []
+  await getDb().rules.where('[kind+sortName]').between([kind, ''], [kind, '\uffff']).each((raw) => {
+    if (raw.supersededBy || (gameSet && !gameSet.has(raw.game))) return
+    out.push({ id: raw.id, name: withLocalEdits(raw).name })
+  })
+  return out
+}
+
 /** The raw stored row, without local edits — for "reset" and conflict views. */
 export async function rulesGetRaw(id: string): Promise<RulesEntity | undefined> {
   return getDb().rules.get(id)
@@ -157,6 +170,12 @@ export async function rulesUpdate(id: string, path: string, value: unknown): Pro
   await db.rules.put(next)
   touch()
   return withLocalEdits(next)
+}
+
+/** Sets a portrait or token art from a data URL (stored as a blob) or an http URL. */
+export async function rulesSetImage(id: string, field: 'img' | 'tokenImg', source: string | null): Promise<RulesEntity | undefined> {
+  const value = source?.startsWith('data:') ? await storeImage(dataUrlToBlob(source)) : source
+  return rulesUpdate(id, field, value)
 }
 
 /** Drops local edits — all of them, or only one path. */

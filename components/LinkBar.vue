@@ -186,7 +186,7 @@
 
 <script setup lang="ts">
 import { useEntities } from "~/composables/useEntities";
-import { useSystems } from "~/composables/useSystems";
+import { isRulesKind, RULES_KIND_CONFIG } from "~/types/rules";
 import { extractLinks } from "~/composables/useEntityParser";
 import { getDb } from "~/composables/useDb";
 import { ENTITY_TYPE_CONFIG, ENTITY_TYPE_ROUTE } from "~/types/entities";
@@ -204,7 +204,6 @@ const emit = defineEmits<{
 }>();
 
 const store = useEntities();
-const systemsStore = useSystems();
 const router = useRouter();
 
 const entity = computed(
@@ -215,7 +214,6 @@ const entity = computed(
 
 // ── Campaign data (for linkAvatar) ────────────────────────────────────────────
 const campaignEncounters = ref<{ id: number; name: string; mapSource?: string }[]>([]);
-const systemEntityTypes = ref<{ id: string; name: string; color: string; icon: string }[]>([]);
 
 watch(
     () => props.campaignId,
@@ -232,13 +230,6 @@ watch(
                     mapSource: r.map_source ?? undefined,
                 })),
             );
-        const campaign = await getDb().campaigns.get(id);
-        const sysId = (campaign as any)?.system_id ?? null;
-        if (!sysId) { systemEntityTypes.value = []; return; }
-        const sys = systemsStore.getSystem(sysId);
-        systemEntityTypes.value = sys
-            ? sys.entityTypes.map((t) => ({ id: t.id, name: t.name, color: t.color, icon: t.icon }))
-            : [];
     },
     { immediate: true },
 );
@@ -262,8 +253,7 @@ function linkAvatar(type: string, name: string) {
         const cfg = ENTITY_TYPE_CONFIG[ent.type as keyof typeof ENTITY_TYPE_CONFIG];
         return { imageUrl, iconName: cfg?.defaultIcon ?? "gi-scroll-unfurled", color: typeColorMap[ent.type] ?? "#888" };
     }
-    const sysType = systemEntityTypes.value.find((t) => t.id.toLowerCase() === typeKey);
-    if (sysType) return { imageUrl: null, iconName: sysType.icon, color: sysType.color };
+    if (isRulesKind(typeKey)) return { imageUrl: null, iconName: RULES_KIND_CONFIG[typeKey].icon, color: RULES_KIND_CONFIG[typeKey].color };
     const cfg = ENTITY_TYPE_CONFIG[typeKey as keyof typeof ENTITY_TYPE_CONFIG];
     return { imageUrl: null, iconName: cfg?.defaultIcon ?? "gi-scroll-unfurled", color: typeColorMap[typeKey] ?? "#888" };
 }

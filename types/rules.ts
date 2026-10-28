@@ -64,6 +64,7 @@ export interface RulesEntityBase {
   gmNotes?: string
   tags?: string[]
   isFavorite?: boolean
+  style?: { color?: string; icon?: string }   // token badge look (conditions)
   localEdits?: Record<string, unknown>   // dotted path → value, applied over upstream fields
   legacy?: Record<string, unknown>
   createdAt: string

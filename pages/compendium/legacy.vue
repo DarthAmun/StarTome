@@ -164,11 +164,6 @@
         <section class="leg-section">
           <h2 class="leg-h">Import</h2>
           <label class="leg-check"><input v-model="optLore" type="checkbox" /> Campaigns, notes, encounters, maps and tokens</label>
-          <label class="leg-check">
-            <input v-model="optLibrary" type="checkbox" />
-            Also carry over the old library (systems &amp; records)
-            <span class="leg-muted">— keeps encounter stat blocks working until they switch to the compendium</span>
-          </label>
           <div class="leg-actions">
             <span class="leg-muted">
               {{ totals.link.toLocaleString() }} linked · {{ totals.keep.toLocaleString() }} kept · {{ totals.drop.toLocaleString() }} left out
@@ -219,7 +214,7 @@ useHead({ title: 'DM\'s Tome import — StarTome' })
 
 const LORE_LABELS: [string, string][] = [
   ['entities', 'notes & entries'], ['encounters', 'encounters'], ['encounterTokens', 'placements'], ['tokens', 'library tokens'],
-  ['graphLayouts', 'graphs'], ['records', 'library records'],
+  ['graphLayouts', 'graphs'],
 ]
 
 const TABS = [
@@ -262,7 +257,6 @@ const search = ref('')
 const limit = ref(200)
 const importAnyway = ref(false)
 const optLore = ref(true)
-const optLibrary = ref(true)
 
 watch(analysis, (a) => {
   overrides.value = {}
@@ -329,7 +323,7 @@ const totals = computed(() => {
 })
 
 async function start() {
-  await apply(overrides.value, { lore: optLore.value, library: optLibrary.value })
+  await apply(overrides.value, { lore: optLore.value })
 }
 
 function reset() {
@@ -342,9 +336,9 @@ const writtenRows = computed(() => Object.entries(report.value?.written ?? {}).f
 // ── Progress ───────────────────────────────────────────────────────────────
 const PHASE_LABEL = {
   read: 'Reading DM\'s Tome data', analyse: 'Matching the library', records: 'Converting records', images: 'Storing portraits',
-  library: 'Copying the old library', lore: 'Importing campaigns',
+  lore: 'Importing campaigns',
 } as const
-const PHASE_PCT = { read: 10, analyse: 45, records: 55, images: 65, library: 80, lore: 90 } as const
+const PHASE_PCT = { read: 10, analyse: 45, records: 55, images: 65, lore: 85 } as const
 
 const progressPct = computed(() => {
   const p = progress.value

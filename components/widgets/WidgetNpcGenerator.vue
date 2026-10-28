@@ -54,9 +54,9 @@
             <label class="wng-cfg-lbl">Race source</label>
             <select v-model="config.raceSource" class="wng-select">
               <option :value="null">Free text input</option>
-              <option v-for="et in entityTypes" :key="et.id" :value="et.id">
-                {{ et.name }}
-                <template v-if="recordNamesByType[et.id]?.length"> ({{ recordNamesByType[et.id].length }})</template>
+              <option v-for="k in RACE_KINDS" :key="k" :value="k">
+                Compendium {{ RULES_KIND_CONFIG[k].plural.toLowerCase() }}
+                <template v-if="namesByKind[k]?.length"> ({{ namesByKind[k].length }})</template>
               </option>
             </select>
           </div>
@@ -64,17 +64,14 @@
             <label class="wng-cfg-lbl">Class source</label>
             <select v-model="config.roleSource" class="wng-select">
               <option :value="null">Free text input</option>
-              <option v-for="et in entityTypes" :key="et.id" :value="et.id">
-                {{ et.name }}
-                <template v-if="recordNamesByType[et.id]?.length"> ({{ recordNamesByType[et.id].length }})</template>
+              <option v-for="k in ROLE_KINDS" :key="k" :value="k">
+                Compendium {{ RULES_KIND_CONFIG[k].plural.toLowerCase() }}
+                <template v-if="namesByKind[k]?.length"> ({{ namesByKind[k].length }})</template>
               </option>
             </select>
           </div>
-          <p v-if="systemId && !entityTypes.length" class="wng-cfg-note">
-            No entity types found in linked system.
-          </p>
-          <p v-else-if="!systemId" class="wng-cfg-note">
-            No system linked to this campaign. Link one in campaign settings.
+          <p class="wng-cfg-note">
+            Compendium sources pick a random common entry of the campaign's game.
           </p>
         </div>
         <div class="wng-modal-foot">
@@ -89,17 +86,23 @@
 import { lsKey } from '~/utils/appNamespace'
 import { generateFullName, pick, cap, type NameGender } from '~/composables/useNameGenerator'
 import { useEntities } from '~/composables/useEntities'
-import { getDb } from '~/composables/useDb'
-import type { NpcAttributes, EntityTypeSchema } from '~/types/entities'
+import { rulesQuery } from '~/composables/useRules'
+import type { NpcAttributes } from '~/types/entities'
+import type { GameId } from '~/types/game'
+import { RULES_KIND_CONFIG, type RulesKind } from '~/types/rules'
 
 defineOptions({ inheritAttrs: false })
 
-const props = defineProps<{ campaignId: number; systemId: number | null }>()
+const props = defineProps<{ campaignId: number; game?: GameId }>()
+
+const RACE_KINDS = ['ancestry', 'heritage'] as const satisfies readonly RulesKind[]
+const ROLE_KINDS = ['class', 'background'] as const satisfies readonly RulesKind[]
+type SourceKind = typeof RACE_KINDS[number] | typeof ROLE_KINDS[number]
 const store = useEntities()
 
 const LS_KEY = lsKey(`dmscreen-npcgen-v1-${props.campaignId}`)
 
-const config = reactive<{ raceSource: string | null; roleSource: string | null }>({
+const config = reactive<{ raceSource: SourceKind | null; roleSource: SourceKind | null }>({
   raceSource: null,
   roleSource: null,
 })
@@ -109,60 +112,46 @@ onMounted(() => {
     const saved = localStorage.getItem(LS_KEY)
     if (saved) {
       const parsed = JSON.parse(saved)
-      // migrate old "entityTypeId::fieldKey" format → reset to null
-      if (typeof parsed.raceSource === 'string' && parsed.raceSource.includes('::')) parsed.raceSource = null
-      if (typeof parsed.roleSource === 'string' && parsed.roleSource.includes('::')) parsed.roleSource = null
+      // Old saves name DM's Tome entity types; only compendium kinds are valid now
+      const valid = (v: unknown) => ([...RACE_KINDS, ...ROLE_KINDS] as string[]).includes(v as string) ? v : null
+      parsed.raceSource = valid(parsed.raceSource)
+      parsed.roleSource = valid(parsed.roleSource)
       Object.assign(config, parsed)
     }
   } catch {}
 })
 
-watch(() => props.systemId, (id) => { if (id != null) loadSystemSchema() }, { immediate: true })
+
 
 watch(config, () => {
   localStorage.setItem(LS_KEY, JSON.stringify({ raceSource: config.raceSource, roleSource: config.roleSource }))
 }, { deep: true })
 
-const entityTypes       = ref<EntityTypeSchema[]>([])
-const recordNamesByType = ref<Record<string, string[]>>({})
+const namesByKind = ref<Partial<Record<SourceKind, string[]>>>({})
 
-async function loadSystemSchema() {
-  if (!props.systemId) return
-  const db = getDb()
-  const [sys, allRecords] = await Promise.all([
-    db.systems.get(props.systemId),
-    db.records.where('systemId').equals(props.systemId).toArray(),
-  ])
-  if (!sys) return
-
-  entityTypes.value = typeof sys.entityTypes === 'string'
-    ? JSON.parse(sys.entityTypes || '[]')
-    : (sys.entityTypes ?? [])
-
-  const map: Record<string, string[]> = {}
-  for (const r of allRecords) {
-    if (!map[r.entityTypeId]) map[r.entityTypeId] = []
-    map[r.entityTypeId].push(r.name)
-  }
-  recordNamesByType.value = map
+async function loadNames() {
+  const games = props.game ? [props.game] : undefined
+  const kinds = [...RACE_KINDS, ...ROLE_KINDS]
+  const pages = await Promise.all(kinds.map(kind => rulesQuery({ kind, games, rarities: ['common'], limit: 1000 })))
+  namesByKind.value = Object.fromEntries(kinds.map((k, i) => [k, pages[i].items.map(e => e.name)]))
 }
+watch(() => props.game, loadNames, { immediate: true })
 
-function resolveEntityTypeLabel(source: string | null): string {
+function resolveSourceLabel(source: SourceKind | null): string {
   if (!source) return ''
-  const et    = entityTypes.value.find(e => e.id === source)
-  const count = recordNamesByType.value[source]?.length ?? 0
-  return et ? `${et.name}${count ? ` · ${count} records` : ''}` : source
+  const count = namesByKind.value[source]?.length ?? 0
+  return `${RULES_KIND_CONFIG[source].plural}${count ? ` · ${count}` : ''}`
 }
 
-function pickFromSource(source: string | null): string | null {
+function pickFromSource(source: SourceKind | null): string | null {
   if (!source) return null
-  const names = recordNamesByType.value[source]
+  const names = namesByKind.value[source]
   if (!names?.length) return null
   return pick(names)
 }
 
-const linkedRaceLabel = computed(() => resolveEntityTypeLabel(config.raceSource))
-const linkedRoleLabel = computed(() => resolveEntityTypeLabel(config.roleSource))
+const linkedRaceLabel = computed(() => resolveSourceLabel(config.raceSource))
+const linkedRoleLabel = computed(() => resolveSourceLabel(config.roleSource))
 
 const gender = ref<NameGender>('male')
 const race   = ref('')

@@ -3,8 +3,10 @@ import { dbApi, parseRecordData, imageTypeOf } from '~/composables/useDb'
 import { useEntities } from '~/composables/useEntities'
 import type { DbEncounterWall, DbToken } from '~/composables/useDb'
 import type { ShapeOverlay } from '~/composables/useEncounterCanvas'
-import { useStatBlockLinker } from '~/composables/useStatBlockLinker'
-import { evaluateFormula, dataToScope } from '~/composables/useFormulaEvaluator'
+import { rulesGet, rulesGetMany, rulesSetImage } from '~/composables/useRules'
+import { evaluateFormula } from '~/composables/useFormulaEvaluator'
+import { rollInitiative, rulesScope, tokenStats, type Adjustment } from '~/rules/combat'
+import type { RulesEntity } from '~/types/rules'
 import { healthState, type HealthState } from '~/composables/useConditions'
 import { lsKey } from '~/utils/appNamespace'
 
@@ -13,9 +15,9 @@ function tryParseJson<T>(s: unknown, fallback: T): T {
   try { return JSON.parse(s) } catch { return fallback }
 }
 
-function buildTokenScope(token: EncounterToken, recordData: Record<string, any> = {}): Record<string, number> {
+function buildTokenScope(token: EncounterToken, entry?: RulesEntity): Record<string, number> {
   return {
-    ...dataToScope(recordData),
+    ...rulesScope(entry, token.adjustment),
     ac: token.ac ?? 0,
     hp: token.hpCurrent ?? 0,
     hpmax: token.hpMax ?? 0,
@@ -39,17 +41,19 @@ export interface Token {
   name: string
   imageSource: string | null
   imageType: 'file' | 'url'
-  linkedRecordId: number | null
+  linkedRulesId: string | null   // compendium creature/hazard
+  adjustment: Adjustment | null  // weak/elite version of it
   linkedEntityId: number | null  // NPC entity this token represents
   isPlayerCharacter: boolean
-  syncImage: boolean             // image mirrors the linked NPC portrait / creature image
+  syncImage: boolean             // image mirrors the linked NPC portrait / creature token art
 }
 
 export interface LibraryTokenInput {
   name: string
   imageSource: string | null
   imageType: 'file' | 'url'
-  linkedRecordId: number | null
+  linkedRulesId: string | null
+  adjustment: Adjustment | null
   linkedEntityId: number | null
   isPlayerCharacter: boolean
   syncImage: boolean
@@ -120,7 +124,8 @@ export interface EncounterToken {
   ac: number | null
   initiative: number | null
   notes: string | null
-  linkedRecordId: number | null
+  linkedRulesId: string | null
+  adjustment: Adjustment | null
   linkedEntityId: number | null
   visionRange: number | null  // tiles, null = infinite
   isPlayerToken: boolean      // default false
@@ -148,8 +153,6 @@ export interface Encounter {
 }
 
 export const useEncounterStore = defineStore('encounter', () => {
-  const { extractStatsFromData, extractAllFromRecord, linkRecordToToken } = useStatBlockLinker()
-
   // ── State ──────────────────────────────────────────────────────────────────
   const current = ref<Encounter | null>(null)
   const tokenLibrary = ref<Token[]>([])
@@ -308,15 +311,13 @@ export const useEncounterStore = defineStore('encounter', () => {
   async function addTokenToEncounter(tokenId: number, gridX: number, gridY: number): Promise<{ token: EncounterToken | null; needsLinkPrompt: boolean }> {
     if (!current.value) return { token: null, needsLinkPrompt: false }
     const libToken = tokenLibrary.value.find(t => t.id === tokenId)
-    const linkedRecordId = libToken?.linkedRecordId ?? null
+    const linkedRulesId = libToken?.linkedRulesId ?? null
+    const adjustment = libToken?.adjustment ?? null
     const linkedEntityId = libToken?.linkedEntityId ?? null
 
-    let stats = { hpCurrent: null as number | null, hpMax: null as number | null, ac: null as number | null, size: 1 }
-    if (linkedRecordId) {
-      // A broken link (deleted record, missing system) must not block placement.
-      try { stats = await linkRecordToToken(linkedRecordId) }
-      catch (err) { console.warn('[EncounterStore] linked record lookup failed:', err) }
-    }
+    // A broken link (entry gone after a re-sync) must not block placement.
+    const entry = linkedRulesId ? await rulesGet(linkedRulesId).catch(() => undefined) : undefined
+    const stats = tokenStats(entry, adjustment)
 
     try {
       const result = await dbApi.encounterTokens.add({
@@ -326,16 +327,17 @@ export const useEncounterStore = defineStore('encounter', () => {
         gridY,
         size: stats.size,
         isVisible: 1,
-        hpCurrent: stats.hpCurrent,
+        hpCurrent: stats.hpMax,
         hpMax: stats.hpMax,
         ac: stats.ac,
-        linkedRecordId,
+        linkedRulesId,
+        adjustment,
         linkedEntityId,
         isPlayerToken: libToken?.isPlayerCharacter ?? false,
       })
       current.value.tokens.push(normalizeToken(result))
       syncToPlayer()
-      const needsLinkPrompt = !linkedRecordId && !linkedEntityId && !libToken?.isPlayerCharacter
+      const needsLinkPrompt = !linkedRulesId && !linkedEntityId && !libToken?.isPlayerCharacter
       // Return the reactive instance from the array, not the raw object
       return { token: current.value.tokens[current.value.tokens.length - 1], needsLinkPrompt }
     } catch (err) {
@@ -344,29 +346,55 @@ export const useEncounterStore = defineStore('encounter', () => {
     }
   }
 
-  async function addCreatureToEncounter(recordId: number, gridX: number, gridY: number) {
+  /** Places a compendium creature (or hazard) directly, without a library token. */
+  async function addCreatureToEncounter(rulesId: string, gridX: number, gridY: number, adjustment: Adjustment | null = null) {
     if (!current.value) return
     try {
-      const extracted = await extractAllFromRecord(recordId)
+      const entry = await rulesGet(rulesId)
+      if (!entry) return
+      const stats = tokenStats(entry, adjustment)
+      const img = await dbApi.linkedImages.get(null, rulesId)
       const result = await dbApi.encounterTokens.add({
         encounterId: current.value.id,
         tokenId: null,
         gridX,
         gridY,
-        size: extracted.size,
+        size: stats.size,
         isVisible: 1,
-        hpCurrent: extracted.hpCurrent,
-        hpMax: extracted.hpMax,
-        ac: extracted.ac,
-        linkedRecordId: recordId,
-        imageSource: extracted.imageSource,
-        imageType: extracted.imageType,
+        hpCurrent: stats.hpMax,
+        hpMax: stats.hpMax,
+        ac: stats.ac,
+        linkedRulesId: rulesId,
+        adjustment,
+        imageSource: img?.source ?? null,
+        imageType: img?.type ?? 'file',
       })
       current.value.tokens.push(normalizeToken(result))
       syncToPlayer()
     } catch (err) {
       console.error('[EncounterStore] addCreatureToEncounter:', err)
     }
+  }
+
+  /** Links a placed token to a compendium entry (or switches weak/elite) and
+   *  takes over its HP, AC and size. Damage already taken carries over. */
+  async function setTokenRulesLink(instanceId: number, rulesId: string | null, adjustment: Adjustment | null = null) {
+    const token = getToken(instanceId)
+    if (!token) return
+    const entry = rulesId ? await rulesGet(rulesId) : undefined
+    if (!entry) {
+      await updateToken(instanceId, { linkedRulesId: null, adjustment: null })
+      return
+    }
+    const stats = tokenStats(entry, adjustment)
+    const damage = token.hpMax !== null && token.hpCurrent !== null ? token.hpMax - token.hpCurrent : 0
+    const updates: Partial<EncounterToken> = { linkedRulesId: rulesId, adjustment, size: stats.size }
+    if (stats.hpMax !== null) {
+      Object.assign(updates, { hpMax: stats.hpMax, hpCurrent: Math.max(0, stats.hpMax - damage) })
+      token.hpCurrent = updates.hpCurrent!  // a stat change, not damage or healing: keep it out of the combat log
+    }
+    if (stats.ac !== null) updates.ac = stats.ac
+    await updateToken(instanceId, updates)
   }
 
   async function moveToken(instanceId: number, gridX: number, gridY: number) {
@@ -415,7 +443,8 @@ export const useEncounterStore = defineStore('encounter', () => {
     if ('label' in updates) dbUpdates.label = updates.label
     if ('notes' in updates) dbUpdates.notes = updates.notes
     if ('conditions' in updates) dbUpdates.conditions = JSON.stringify(updates.conditions)
-    if ('linkedRecordId' in updates) dbUpdates.linkedRecordId = updates.linkedRecordId
+    if ('linkedRulesId' in updates) dbUpdates.linkedRulesId = updates.linkedRulesId
+    if ('adjustment' in updates) dbUpdates.rulesAdjustment = updates.adjustment
     if ('linkedEntityId' in updates) dbUpdates.linkedEntityId = updates.linkedEntityId
     if ('visionRange' in updates) dbUpdates.visionRange = updates.visionRange
     if ('isPlayerToken' in updates) dbUpdates.isPlayerToken = updates.isPlayerToken ? 1 : 0
@@ -477,13 +506,13 @@ export const useEncounterStore = defineStore('encounter', () => {
 
   /** With image sync on, the token and its linked entry share one image: a token
    *  image that differs is written to the entry (the NPC portrait when an NPC is
-   *  linked, else the creature record's image field); an empty one adopts the
+   *  linked, else the compendium entry's token art); an empty one adopts the
    *  entry's image. Returns the input with the resolved image. */
   async function syncLinkedImage(data: LibraryTokenInput): Promise<LibraryTokenInput> {
-    if (!data.syncImage || (!data.linkedEntityId && !data.linkedRecordId)) return data
+    if (!data.syncImage || (!data.linkedEntityId && !data.linkedRulesId)) return data
     const own = data.imageSource?.trim() || null
     if (!own) {
-      const linked = await dbApi.linkedImages.get(data.linkedEntityId, data.linkedRecordId)
+      const linked = await dbApi.linkedImages.get(data.linkedEntityId, data.linkedRulesId)
       return linked ? { ...data, imageSource: linked.source, imageType: linked.type } : data
     }
     if (data.linkedEntityId) {
@@ -493,9 +522,9 @@ export const useEncounterStore = defineStore('encounter', () => {
       if (attrs.portraitSource !== own) {
         await entities.updateEntity(data.linkedEntityId, { attributes: { ...attrs, portraitSource: own, portraitType: imageTypeOf(own) } as any })
       }
-    } else if (data.linkedRecordId) {
-      const current = await dbApi.linkedImages.get(null, data.linkedRecordId)
-      if (current?.source !== own) await dbApi.linkedImages.setOnRecord(data.linkedRecordId, own)
+    } else if (data.linkedRulesId) {
+      const current = await dbApi.linkedImages.get(null, data.linkedRulesId)
+      if (current?.source !== own) await rulesSetImage(data.linkedRulesId, 'tokenImg', own)
     }
     return { ...data, imageSource: own, imageType: imageTypeOf(own) }
   }
@@ -541,13 +570,14 @@ export const useEncounterStore = defineStore('encounter', () => {
       name: t.name,
       imageSource: t.image_source,
       imageType: t.image_type,
-      linkedRecordId: t.linked_record_id ?? null,
+      linkedRulesId: t.linked_rules_id ?? null,
+      adjustment: t.rules_adjustment ?? null,
       linkedEntityId: t.linked_entity_id ?? null,
       isPlayerCharacter: Boolean(t.is_player_character),
       syncImage: Boolean(t.sync_image),
     }
     if (token.syncImage) {
-      const img = await dbApi.linkedImages.get(token.linkedEntityId, token.linkedRecordId).catch(() => null)
+      const img = await dbApi.linkedImages.get(token.linkedEntityId, token.linkedRulesId).catch(() => null)
       if (img) { token.imageSource = img.source; token.imageType = img.type }
     }
     return token
@@ -852,7 +882,8 @@ export const useEncounterStore = defineStore('encounter', () => {
       ac: raw.ac ?? null,
       initiative: raw.initiative,
       notes: raw.notes,
-      linkedRecordId: raw.linked_record_id ?? null,
+      linkedRulesId: raw.linked_rules_id ?? null,
+      adjustment: raw.rules_adjustment ?? null,
       linkedEntityId: raw.linked_entity_id ?? null,
       visionRange: raw.vision_range ?? null,
       isPlayerToken: Boolean(raw.is_player_token),
@@ -882,29 +913,17 @@ export const useEncounterStore = defineStore('encounter', () => {
     const formula = current.value.initiativeFormula?.trim()
     const useFormula = !!formula
 
-    // Pre-fetch linked record data for all tokens that need a roll
+    // Linked compendium entries give Perception (Stealth for hazards) and the formula scope
     const tokensToRoll = current.value.tokens.filter(t => t.initiative === null)
-    const recordIds = [...new Set(tokensToRoll.map(t => t.linkedRecordId).filter((id): id is number => id !== null))]
-    const recordScopes: Map<number, Record<string, number>> = new Map()
-
-    if (useFormula && recordIds.length) {
-      const records = await Promise.all(recordIds.map(id => dbApi.records.get(id)))
-      for (const rec of records) {
-        if (!rec?.id) continue
-        const data: Record<string, any> = parseRecordData(rec.data)
-        recordScopes.set(rec.id, dataToScope(data))
-      }
-    }
+    const ids = [...new Set(tokensToRoll.map(t => t.linkedRulesId).filter((id): id is string => !!id))]
+    const entries = new Map((await rulesGetMany(ids)).map(e => [e.id, e]))
 
     const toUpdate: { id: number; initiative: number }[] = []
     for (const token of tokensToRoll) {
-      let roll: number
-      if (useFormula) {
-        const recordData = token.linkedRecordId ? (recordScopes.get(token.linkedRecordId) ?? {}) : {}
-        roll = evaluateFormula(formula!, buildTokenScope(token, recordData))
-      } else {
-        roll = Math.floor(Math.random() * 20) + 1
-      }
+      const entry = token.linkedRulesId ? entries.get(token.linkedRulesId) : undefined
+      const roll = useFormula
+        ? evaluateFormula(formula!, buildTokenScope(token, entry))
+        : rollInitiative(entry, token.adjustment)
       token.initiative = roll
       toUpdate.push({ id: token.id, initiative: roll })
     }
@@ -940,14 +959,14 @@ export const useEncounterStore = defineStore('encounter', () => {
     updateToken(tokenId, { conditions: next })
   }
 
-  async function addCreatureToEncounterAuto(recordId: number) {
+  async function addCreatureToEncounterAuto(rulesId: string, adjustment: Adjustment | null = null) {
     const occupied = new Set((current.value?.tokens ?? []).map(t => `${t.gridX},${t.gridY}`))
     let gx = 5, gy = 5
     for (let i = 0; i < 30 && occupied.has(`${gx},${gy}`); i++) {
       gx = 4 + (i % 6)
       gy = 4 + Math.floor(i / 6)
     }
-    return addCreatureToEncounter(recordId, gx, gy)
+    return addCreatureToEncounter(rulesId, gx, gy, adjustment)
   }
 
   return {
@@ -961,7 +980,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     addWall, undoLastWall, updateWall, deleteWall, toggleDoor,
     setFovEnabled,
     setSoundPlaylistId,
-    addTokenToEncounter, addCreatureToEncounter, addCreatureToEncounterAuto, moveToken, updateToken, removeToken, addToLibrary, updateLibraryToken,
+    addTokenToEncounter, addCreatureToEncounter, addCreatureToEncounterAuto, setTokenRulesLink, moveToken, updateToken, removeToken, addToLibrary, updateLibraryToken,
     openPlayerWindow, closePlayerWindow, setShapeOverlays,
     nextTurn, prevTurn,
     getToken, applyDamage, rollAllInitiative, setInitiativeFormula, bulkRemoveTokens, bulkSetTokenVisibility, toggleCondition,

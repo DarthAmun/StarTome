@@ -18,20 +18,14 @@
             <OhVueIcon name="md-autorenew" scale="1.2" class="spin" />
           </div>
 
-          <div v-else-if="record && entityType" class="cond-panel-entity">
-            <EntityLayout
-              :entity-type="entityType"
-              :data="record.data"
-              mode="view"
-              :system-id="systemId ?? undefined"
-              :accent-color="entityType.color"
-            />
+          <div v-else-if="entry" class="cond-panel-entity">
+            <RulesStatBlock :entity="entry" :game="game" />
           </div>
 
           <div v-else-if="builtin" class="cond-panel-notfound">
             <OhVueIcon :name="builtin.icon" scale="2.5" class="cond-panel-notfound-icon" :style="{ color: builtin.color }" />
             <p class="cond-panel-notfound-text">{{ builtin.desc }}</p>
-            <p class="cond-panel-notfound-hint">Quick reminder only. Full rules text arrives with the compendium sync.</p>
+            <p class="cond-panel-notfound-hint">Quick reminder only. <NuxtLink to="/compendium/sync">Sync the compendium</NuxtLink> for the full rules text.</p>
           </div>
 
           <div v-else class="cond-panel-notfound">
@@ -45,14 +39,13 @@
 </template>
 
 <script setup lang="ts">
-import { getDb, parseRecordData } from '~/composables/useDb'
-import { useSystems } from '~/composables/useSystems'
 import { conditionInfo } from '~/composables/useConditions'
+import { findConditionEntry } from '~/composables/useConditionCatalog'
 import type { GameId } from '~/types/game'
+import type { Condition } from '~/types/rules'
 
 const props = defineProps<{
   conditionName: string
-  systemId: number | null
   game?: GameId
   value?: number | null
   open: boolean
@@ -60,40 +53,26 @@ const props = defineProps<{
 
 defineEmits<{ close: [] }>()
 
-const systemsStore = useSystems()
 const loading = ref(false)
-const record = ref<{ name: string; data: Record<string, any> } | null>(null)
-const entityType = ref<any | null>(null)
+const entry = ref<Condition | null>(null)
+
 const builtin = computed(() => {
   const info = conditionInfo(props.conditionName)
   return info && info.games.includes(props.game ?? 'pf2e') ? info : null
 })
 
 async function loadCondition() {
-  if (!props.conditionName || !props.systemId) { record.value = null; entityType.value = null; return }
+  if (!props.conditionName) { entry.value = null; return }
   loading.value = true
   try {
-    const db = getDb()
-    const lower = props.conditionName.toLowerCase()
-    const rows = await db.records
-      .where('systemId').equals(props.systemId)
-      .filter(r => r.entityTypeId === 'condition' && r.name.toLowerCase() === lower)
-      .first()
-    if (!rows) { record.value = null; entityType.value = null; return }
-    if (!systemsStore.getSystem(props.systemId)) await systemsStore.loadAll()
-    const sys = systemsStore.getSystem(props.systemId)
-    entityType.value = sys?.entityTypes?.find((e: any) => e.id === 'condition') ?? null
-    record.value = {
-      name: rows.name,
-      data: parseRecordData(rows.data),
-    }
+    entry.value = (await findConditionEntry(props.conditionName, props.game ?? 'pf2e')) ?? null
   } finally {
     loading.value = false
   }
 }
 
 watch(
-  () => [props.open, props.conditionName, props.systemId] as const,
+  () => [props.open, props.conditionName, props.game] as const,
   ([open]) => { if (open) loadCondition() },
   { immediate: true }
 )

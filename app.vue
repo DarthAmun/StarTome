@@ -44,13 +44,6 @@
                 <option v-for="g in GAME_IDS" :key="g" :value="g">{{ GAME_CONFIG[g].label }}</option>
               </select>
             </div>
-            <div v-if="systems.length" class="dlg-field">
-              <label class="f-label">Rules library (legacy)</label>
-              <select class="f-input-box f-select" v-model="newCamp.systemId">
-                <option :value="null">— none —</option>
-                <option v-for="s in systems" :key="s.id" :value="s.id">{{ s.name }}</option>
-              </select>
-            </div>
           </div>
           <div class="pv-dialog-footer">
             <button class="ghost-btn" @click="showNewCampaign = false">Cancel</button>
@@ -59,36 +52,6 @@
         </div>
       </div>
 
-      <!-- New System dialog -->
-      <div v-if="showNewSystem" class="pv-dialog-mask" @click.self="showNewSystem = false">
-        <div class="pv-dialog">
-          <div class="pv-dialog-header">
-            <span class="pv-dialog-title">Define a New System</span>
-            <button class="pv-dialog-close" @click="showNewSystem = false">
-              <OhVueIcon name="md-close" scale="0.85" />
-            </button>
-          </div>
-          <div class="pv-dialog-content">
-            <div class="dlg-field">
-              <label class="f-label">Name</label>
-              <input class="f-input-box" v-model="newSys.name" placeholder="Pathfinder 2e…" autofocus />
-            </div>
-            <div class="dlg-field">
-              <label class="f-label">Short ID</label>
-              <input class="f-input-box" style="font-family:var(--fm);font-size:12px"
-                v-model="newSys.shortId" placeholder="pf2e" />
-            </div>
-            <div class="dlg-field">
-              <label class="f-label">Description</label>
-              <textarea class="f-input-box f-textarea" v-model="newSys.description" placeholder="Optional…" rows="3" />
-            </div>
-          </div>
-          <div class="pv-dialog-footer">
-            <button class="ghost-btn" @click="showNewSystem = false">Cancel</button>
-            <button class="seal-btn" @click="createSystem">Create</button>
-          </div>
-        </div>
-      </div>
     </Teleport>
 
     <Transition name="install">
@@ -105,7 +68,6 @@
 import { useSettings } from '~/composables/useSettings'
 import { useBookmarks } from '~/composables/useBookmarks'
 import { useAppDialogs } from '~/composables/useAppDialogs'
-import { useSystems } from '~/composables/useSystems'
 import { dbApi } from '~/composables/useDb'
 import { GAME_CONFIG, GAME_IDS, type GameId } from '~/types/game'
 const { settings } = useSettings()
@@ -118,33 +80,18 @@ const isPlayerRoute = computed(() =>
 )
 
 const sidebarRef = ref<{ reload: () => void } | null>(null)
-const { showNewCampaign, showNewSystem } = useAppDialogs()
+const { showNewCampaign } = useAppDialogs()
 
 // ── New Campaign ─────────────────────────────────────────────────
-const systemsStore = useSystems()
-const systems = computed(() => systemsStore.systems)
-onMounted(() => { if (!systems.value.length) systemsStore.loadAll() })
-
-const newCamp = ref({ name: '', description: '', game: 'pf2e' as GameId, systemId: null as number | null })
-const newSys = ref({ name: '', shortId: '', description: '' })
+const newCamp = ref({ name: '', description: '', game: 'pf2e' as GameId })
 
 async function createCampaign() {
   if (!newCamp.value.name.trim()) return
   const c = await dbApi.campaigns.create({ name: newCamp.value.name, description: newCamp.value.description, game: newCamp.value.game })
-  if (newCamp.value.systemId) await dbApi.campaigns.update(c.id, { system_id: newCamp.value.systemId })
-  newCamp.value = { name: '', description: '', game: 'pf2e', systemId: null }
+  newCamp.value = { name: '', description: '', game: 'pf2e' }
   showNewCampaign.value = false
   sidebarRef.value?.reload()
   router.push(`/campaign/${c.id}/sessions`)
-}
-
-async function createSystem() {
-  if (!newSys.value.name.trim()) return
-  const sys = await systemsStore.createSystem(newSys.value)
-  newSys.value = { name: '', shortId: '', description: '' }
-  showNewSystem.value = false
-  sidebarRef.value?.reload()
-  router.push(`/system/${sys.id}/builder`)
 }
 
 // ── Ink write animation ──────────────────────────────────────────

@@ -10,7 +10,7 @@ import type { RulesEntity } from '~/types/rules'
 
 /** Fields the user owns on every entry; never written by sync, never overlaid. */
 export const USER_OWNED_FIELDS = new Set([
-  'img', 'tokenImg', 'gmNotes', 'tags', 'isFavorite', 'unidentified', 'legacy', 'localEdits',
+  'img', 'tokenImg', 'gmNotes', 'tags', 'isFavorite', 'style', 'unidentified', 'legacy', 'localEdits',
 ])
 
 /** Bookkeeping fields that are neither edited by the user nor overlaid. */

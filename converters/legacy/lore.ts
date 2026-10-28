@@ -34,16 +34,12 @@ export const LORE_TABLES = [
 
 export type LoreTable = typeof LORE_TABLES[number]
 
-/** The old rules library, carried over unchanged until phase 6 removes it. */
+/** DM's Tome's rules library: read for matching (sync/legacyImport.ts), never imported as is. */
 export interface LibraryTables { systems: DbSystem[]; records: DbRecord[] }
 
 export interface RemapOptions {
   /** Old record id → compendium entry it was reconciled to. */
   rulesLinks: Map<number, string>
-  /** Old record id → new record id, when the old library is imported too. */
-  recordIds?: Map<number, number>
-  /** Old system id → new system id, ditto. */
-  systemIds?: Map<number, number>
   /** "kind:normalised legacy name" → compendium name, for {{kind: Name}} refs whose entry was renamed. */
   refRenames?: Map<string, string>
 }
@@ -112,12 +108,11 @@ export function remapLore(
   }
 
   const campaigns = src.campaigns.map(c => {
-    const { system_id, ...rest } = c as DbCampaign & { system_id?: number | null }
-    const sys = system_id !== null && system_id !== undefined ? opts.systemIds?.get(system_id) : undefined
+    // The campaign's DM's Tome system has no counterpart: the game decides which compendium it uses
+    const { system_id: _system, ...rest } = c as DbCampaign & { system_id?: number | null }
     return {
       ...rest, id: ids.campaigns.get(c.id!)!, game: c.game ?? 'pf2e', rules: c.rules ?? {},
       description: refs(c.description ?? ''),
-      ...(sys !== undefined ? { system_id: sys } : {}),
     } as DbCampaign
   })
 
@@ -177,16 +172,15 @@ export function remapLore(
     }
   })
 
-  /** Token → library record link, compendium link and campaign-entry link, all remapped. */
+  /** Token → compendium link (from the record it pointed at) and campaign-entry link, remapped. */
   function links<T extends { id?: number; linked_record_id: number | null; linked_entity_id?: number | null }>(table: string, t: T) {
     const rec = t.linked_record_id
     const rulesId = rec !== null && rec !== undefined ? opts.rulesLinks.get(rec) ?? null : null
-    const recordId = rec !== null && rec !== undefined ? opts.recordIds?.get(rec) ?? null : null
-    if (rec !== null && rec !== undefined && rulesId === null && recordId === null) {
+    if (rec !== null && rec !== undefined && rulesId === null) {
       issues.push({ table, id: t.id ?? -1, detail: `link to record ${rec} cleared — the record is gone or was dropped` })
     }
     const entityId = t.linked_entity_id !== null && t.linked_entity_id !== undefined ? ent(t.linked_entity_id) ?? null : t.linked_entity_id
-    return { linked_record_id: recordId, linked_rules_id: rulesId, ...(entityId !== undefined ? { linked_entity_id: entityId } : {}) }
+    return { linked_record_id: null, linked_rules_id: rulesId, ...(entityId !== undefined ? { linked_entity_id: entityId } : {}) }
   }
 
   const tokens = src.tokens.map(t => ({ ...t, id: ids.tokens.get(t.id!)!, ...links('tokens', t) }))
@@ -223,18 +217,3 @@ export function remapLore(
   }
 }
 
-/** The old library with fresh ids: systems first, records re-pointed at them. */
-export function remapLibrary(src: LibraryTables, start: { systems: number; records: number }) {
-  const systemIds = allocate(src.systems, start.systems)
-  const recordIds = new Map<number, number>()
-  let next = start.records
-  const records: DbRecord[] = []
-  for (const r of src.records) {
-    const systemId = systemIds.get(r.systemId)
-    if (systemId === undefined || r.id === undefined) continue
-    recordIds.set(r.id, next)
-    records.push({ ...r, id: next++, systemId, data: typeof r.data === 'string' ? r.data : JSON.stringify(r.data ?? {}) })
-  }
-  const systems = src.systems.map(s => ({ ...s, id: systemIds.get(s.id!)! }))
-  return { systems, records, systemIds, recordIds }
-}

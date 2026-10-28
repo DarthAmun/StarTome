@@ -27,7 +27,6 @@
     <!-- Condition detail panel -->
     <ConditionPanel
       :condition-name="panelName"
-      :system-id="systemId"
       :game="game"
       :open="panelOpen"
       @close="panelOpen = false"
@@ -36,48 +35,21 @@
 </template>
 
 <script setup lang="ts">
-import { getDb, parseRecordData } from '~/composables/useDb'
-import { builtinConditions } from '~/composables/useConditions'
+import { loadAvailableConditions, type AvailableCondition } from '~/composables/useConditionCatalog'
 import type { GameId } from '~/types/game'
 
-const props = defineProps<{ systemId: number | null; game?: GameId }>()
+const props = defineProps<{ game?: GameId }>()
 
 const loading = ref(false)
 const panelOpen = ref(false)
 const panelName = ref('')
 
-interface Condition { name: string; summary: string }
-const conditions = ref<Condition[]>([])
-
+const conditions = ref<AvailableCondition[]>([])
 
 async function load() {
   loading.value = true
   try {
-    if (props.systemId) {
-      const db = getDb()
-      const sys = await db.systems.get(props.systemId)
-      const entityTypes: any[] = sys
-        ? (typeof sys.entityTypes === 'string' ? JSON.parse(sys.entityTypes || '[]') : (sys.entityTypes ?? []))
-        : []
-      const condTypeIds = entityTypes
-        .filter((et: any) => /condition/i.test(et.id ?? '') || /condition/i.test(et.name ?? ''))
-        .map((et: any) => et.id as string)
-      if (!condTypeIds.includes('condition')) condTypeIds.push('condition')
-
-      const recs = await db.records
-        .where('systemId').equals(props.systemId)
-        .filter((r: any) => condTypeIds.includes(r.entityTypeId))
-        .toArray()
-
-      if (recs.length) {
-        conditions.value = recs.map((r: any) => {
-          const data: Record<string, any> = parseRecordData(r.data)
-          return { name: r.name, summary: data.summary ?? data.effect ?? data.description ?? '' }
-        }).sort((a: Condition, b: Condition) => a.name.localeCompare(b.name))
-        return
-      }
-    }
-    conditions.value = builtinConditions(props.game ?? 'pf2e').map(c => ({ name: c.name, summary: c.desc }))
+    conditions.value = await loadAvailableConditions(props.game ?? 'pf2e')
   } finally {
     loading.value = false
   }
@@ -89,7 +61,7 @@ function openCondition(name: string) {
 }
 
 onMounted(load)
-watch(() => [props.systemId, props.game], load)
+watch(() => props.game, load)
 </script>
 
 <style scoped>

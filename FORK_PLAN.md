@@ -587,9 +587,15 @@ Measured against `pf2e-8.6.1` + `sf2e-1.6.1` (all syncable packs) and your 2026-
 - Matching runs in ~10 s on the 250 MB export in the browser, the import in ~4 s. Checked in the browser: campaign, banner, library tokens and compendium portraits. Not yet checked by eye: an imported encounter's map canvas.
 - Adventure-path creatures/hazards only match when that bestiary is synced; the page says so when the match rate is low.
 
-### Phase 5: Switch consumers (medium)
+### Phase 5: Switch consumers (medium) — ✅ done 2026-10-28 (v0.6.0)
 Tokens `linked_ref` + weak/elite. Typed stat panel. Perception initiative. Conditions modal reads synced conditions. Image import/recompress. Exports v1-compatible with the new keys + the quest-board export.
 **Done when:** nothing reads `records`/`systems` at runtime.
+
+Built: Dexie v3 indexes `linked_rules_id` on tokens and placements, plus `rules_adjustment` (`'weak' | 'elite'`). The link stays a plain rules id: the kind is part of the entry, so a separate `linked_ref {kind,id}` wasn't needed. `rules/combat.ts` (pure, tested) holds the GM Core weak/elite adjustments, token stats (HP/AC/size from the stat block) and the initiative scope. Initiative rolls d20 + Perception by default (Stealth for hazards), and custom formulas get `perception`, `level`, saves, abilities and skills. On the encounter page, the Creatures tab, the "Link to Stat Block?" dialog and the token modals search creatures and hazards of the campaign's game, with a Normal/Weak/Elite choice. "View Entry" shows the typed stat block with the adjustment applied. Changing the link or the adjustment keeps damage already taken. Conditions (modal, reference panel, GM-screen grid) come from the synced entries, topped up by the built-in list. Badge colours/icons are saved on the entry (`style`, a user-owned field). The GM screen pins compendium entries (`rules-entry` widget). The NPC generator draws from ancestries/heritages/classes/backgrounds. Search, palette, bookmarks, ref links and autocomplete use only the compendium now. The image folder import sets portraits/token art, and recompress also covers the portrait blobs. The full backup exports `rules` (user/legacy entries), `rulesOverlays` (user-owned fields of synced entries), `images` and `syncState`, and no longer exports `systems`/`records`. The quest board export (`type: 'questboard'`) strips GM-only text and resolves `{{item:}}` rewards. The legacy import no longer carries the old library over.
+
+Checked in the browser on the imported Codex data: encounter map and tokens, elite placement (Goblin Warrior AC 16→18, HP 6→16, portrait), weak switch, initiative, synced Off-Guard text, Fireball widget, backup export (235 MB: 76 own entries, 1,032 overlays, 1,098 portraits). Not checked in the browser: re-importing a backup file (covered by unit tests only).
+
+Left for phase 6: `pages/system/*`, `useSystems`, `FieldRenderer` + field components still read `systems`/`records`. Nothing links to them any more (sidebar, home, palette and search are switched), so they only run when someone types their URL.
 
 ### Phase 6: Remove the generic system (medium, mostly deletion)
 Builder, record pages, `useSystems`, `useStatBlockLinker`, `FieldRenderer` + unused fields, schema types, `system_id`, `window.dmstome`. Dexie drops `systems`/`records` after an automatic backup.

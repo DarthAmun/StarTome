@@ -91,32 +91,6 @@
           <OhVueIcon name="gi-bookshelf" scale="0.85" style="color: #e8c44a" />
         </NuxtLink>
 
-        <div class="sb-divider" />
-
-        <!-- Systems -->
-        <div v-for="sys in systems" :key="sys.id!">
-          <div
-            class="sb-system"
-            :class="{ active: activeSystemId === sys.id }"
-            :data-tip="sys.name"
-            @click="expandedSystems.has(sys.id!) ? toggleExpandSystem(sys) : navigateToSystem(sys)"
-          >
-            <div class="sb-system-icon">{{ (sys.shortId || sys.name).slice(0, 2).toUpperCase() }}</div>
-          </div>
-          <!-- System entity type icons when expanded -->
-          <div v-if="expandedSystems.has(sys.id!) && sys.entityTypes?.length" class="sb-icon-rail">
-            <NuxtLink
-              v-for="et in sys.entityTypes"
-              :key="et.id"
-              :to="`/system/${sys.id}/${et.id}`"
-              class="sb-icon-link"
-              :class="{ active: route.path.includes(`/system/${sys.id}/${et.id}`) }"
-              :data-tip="et.name"
-            >
-              <OhVueIcon :name="et.icon" scale="0.75" :style="{ color: et.color }" />
-            </NuxtLink>
-          </div>
-        </div>
       </div>
 
       <!-- Collapsed bottom: sounds + settings -->
@@ -241,65 +215,6 @@
           </NuxtLink>
         </div>
 
-        <div class="sb-divider" />
-
-        <!-- SYSTEMS section -->
-        <div class="sb-section-row">
-          <span class="sb-section-label">Systems</span>
-          <button class="sb-section-add" title="New system" @click="showNewSystem = true">+</button>
-        </div>
-
-        <div v-for="sys in systems" :key="sys.id!" class="sb-campaign">
-          <div
-            class="sb-campaign-header"
-            :class="{ active: activeSystemId === sys.id }"
-            @click="navigateToSystem(sys)"
-          >
-            <span
-              class="sb-campaign-arrow"
-              :class="{ open: expandedSystems.has(sys.id!) }"
-              @click.stop="toggleExpandSystem(sys)"
-            >›</span>
-            <div class="sb-system-icon sb-system-icon--sm">{{ (sys.shortId || sys.name).slice(0, 2).toUpperCase() }}</div>
-            <span class="sb-campaign-name">{{ sys.name }}</span>
-            <span class="sb-system-version">v{{ sys.version }}</span>
-          </div>
-
-          <Transition name="sb-children" :css="false"
-            @before-enter="onBeforeEnter" @enter="onEnter" @after-enter="onAfterEnter"
-            @before-leave="onBeforeLeave" @leave="onLeave" @after-leave="onAfterLeave"
-          >
-            <div v-if="expandedSystems.has(sys.id!)" class="sb-children">
-              <NuxtLink
-                v-for="et in (sys.entityTypes ?? [])"
-                :key="et.id"
-                :to="`/system/${sys.id}/${et.id}`"
-                class="sb-child"
-                :class="{ active: route.path.includes(`/system/${sys.id}/${et.id}`) }"
-                :style="{ '--child-color': et.color }"
-              >
-                <OhVueIcon :name="et.icon" scale="0.7" :style="{ color: et.color, flexShrink: 0, width: '14px' }" />
-                <span class="sb-child-label">{{ et.name }}</span>
-                <span class="sb-child-count">{{ recordCounts[sys.id!]?.[et.id] ?? '' }}</span>
-              </NuxtLink>
-              <div v-if="!sys.entityTypes?.length" class="sb-empty" style="font-size:11px;padding:4px 12px">No entity types</div>
-              <div class="sb-child-sep" />
-              <NuxtLink :to="`/system/${sys.id}/library`" class="sb-child-tool" :class="{ active: route.path === `/system/${sys.id}/library` }">
-                <OhVueIcon name="gi-bookshelf" scale="0.65" style="color:#6b9fe8;width:14px;flex-shrink:0" />
-                <span>Library</span>
-              </NuxtLink>
-              <NuxtLink :to="`/system/${sys.id}/builder`" class="sb-child-tool" :class="{ active: route.path.includes(`/system/${sys.id}/builder`) }">
-                <OhVueIcon name="gi-anvil" scale="0.65" style="color:#e8924a;width:14px;flex-shrink:0" />
-                <span>Builder</span>
-              </NuxtLink>
-            </div>
-          </Transition>
-        </div>
-
-        <div v-if="!systems.length" class="sb-empty">
-          <span>No systems yet</span>
-        </div>
-
       </div>
 
       <!-- Bottom nav (expanded) -->
@@ -323,19 +238,17 @@
 import { lsKey } from '~/utils/appNamespace'
 import { rulesCounts, useRulesRevision } from '~/composables/useRules'
 import { RULES_KIND_CONFIG, RULES_KINDS, type RulesKind } from '~/types/rules'
-import { dbApi, getDb } from '~/composables/useDb'
-import { useSystems } from '~/composables/useSystems'
+import { dbApi } from '~/composables/useDb'
 import { useEntities } from '~/composables/useEntities'
 import { useAppDialogs } from '~/composables/useAppDialogs'
 import type { DbCampaign } from '~/composables/useDb'
 import { ENTITY_TYPE_LIST } from '~/types/entities'
 import { useEncounterStore } from '~/stores/encounter'
 
-const { showNewCampaign, showNewSystem } = useAppDialogs()
+const { showNewCampaign } = useAppDialogs()
 
 const route = useRoute()
 const router = useRouter()
-const systemsStore = useSystems()
 const notesStore = useEntities()
 const encounterStore = useEncounterStore()
 
@@ -375,10 +288,6 @@ async function loadCompendiumCounts() { compendiumCounts.value = await rulesCoun
 onMounted(loadCompendiumCounts)
 watch(rulesRevision, loadCompendiumCounts)
 
-// ── Systems ────────────────────────────────────────────────────────────────
-const systems = computed(() => systemsStore.systems)
-onMounted(() => { if (!systems.value.length) systemsStore.loadAll() })
-
 // ── Active context ─────────────────────────────────────────────────────────
 const activeCampaignId = computed(() => {
   if (route.path.startsWith('/encounter')) {
@@ -393,25 +302,12 @@ const activeCampaignId = computed(() => {
   return null
 })
 
-const activeSystemId = computed(() => {
-  const id = route.params.id
-  if (!route.path.startsWith('/system/')) return null
-  return id ? Number(id) : null
-})
-
 // ── Expanded campaigns ─────────────────────────────────────────────────────
 const expandedCampaigns = ref<Set<number>>(new Set())
-const expandedSystems = ref<Set<number>>(new Set())
 
-// Route-driven expand: navigating to a campaign collapses systems and vice versa
-watch([activeCampaignId, activeSystemId], ([campId, sysId]) => {
-  if (campId) {
-    expandedCampaigns.value = new Set([campId])
-    expandedSystems.value = new Set()
-  } else if (sysId) {
-    expandedSystems.value = new Set([sysId])
-    expandedCampaigns.value = new Set()
-  }
+// Route-driven expand
+watch(activeCampaignId, (campId) => {
+  if (campId) expandedCampaigns.value = new Set([campId])
 }, { immediate: true })
 
 function toggleExpand(c: DbCampaign) {
@@ -420,34 +316,13 @@ function toggleExpand(c: DbCampaign) {
   if (next.has(c.id)) next.delete(c.id)
   else { next.clear(); next.add(c.id) }
   expandedCampaigns.value = next
-  expandedSystems.value = new Set()
 }
 
 function navigateToCampaign(c: DbCampaign) {
   if (c.id) {
     expandedCampaigns.value = new Set([c.id])
-    expandedSystems.value = new Set()
   }
   router.push(`/campaign/${c.id}`)
-}
-
-// ── Systems expand ─────────────────────────────────────────────────────────
-
-function toggleExpandSystem(sys: any) {
-  if (!sys.id) return
-  const next = new Set(expandedSystems.value)
-  if (next.has(sys.id)) next.delete(sys.id)
-  else { next.clear(); next.add(sys.id) }
-  expandedSystems.value = next
-  expandedCampaigns.value = new Set()
-}
-
-function navigateToSystem(sys: any) {
-  if (sys.id) {
-    expandedSystems.value = new Set([sys.id])
-    expandedCampaigns.value = new Set()
-  }
-  router.push(`/system/${sys.id}/library`)
 }
 
 // ── Accordion animation hooks ──────────────────────────────────────────────
@@ -538,25 +413,6 @@ const entityCounts = computed(() => {
   }
   return result
 })
-
-// ── Record counts (system) ─────────────────────────────────────────────────
-const recordCounts = ref<Record<number, Record<string, number>>>({})
-
-async function loadRecordCountsForSystems(systemIds: number[]) {
-  if (!systemIds.length) return
-  const allRecs = await Promise.all(systemIds.map(id => dbApi.records.list(id)))
-  allRecs.forEach((recs, i) => {
-    recordCounts.value[systemIds[i]] = recs.reduce<Record<string, number>>((acc, r) => {
-      acc[r.entityTypeId] = (acc[r.entityTypeId] ?? 0) + 1
-      return acc
-    }, {})
-  })
-}
-
-watch(expandedSystems, (newSet, oldSet) => {
-  const newlyExpanded = [...newSet].filter(id => !oldSet?.has(id))
-  loadRecordCountsForSystems(newlyExpanded)
-}, { immediate: true })
 
 // ── Campaign color ─────────────────────────────────────────────────────────
 const CAMPAIGN_COLORS = [

@@ -312,7 +312,7 @@ const emit = defineEmits<{
 
 const store = useEntities();
 const router = useRouter();
-const { entityLookup, extraTypes: systemExtraTypes, campaignSystemId, systemEntityTypes, campaignEncounters, campaignGameId } = useEntityRendering(() => props.campaignId);
+const { entityLookup, extraTypes: rulesExtraTypes, campaignEncounters, campaignGameId } = useEntityRendering(() => props.campaignId);
 
 const dmCtx = useDmScreenContext()
 
@@ -607,7 +607,7 @@ const mdOpts = computed(() => ({
     rich: true,
     postProcess: postProcessHtml,
     entityLookup,
-    extraTypes: systemExtraTypes.value,
+    extraTypes: rulesExtraTypes.value,
     allowTaskLists: true,
     allowLocalFileUris: true,
     entryRenderer: buildEntryHtml,
@@ -995,31 +995,6 @@ async function checkAutocomplete(
             )
             .map((g) => ({ type: "graph", name: g.name ?? "Default", id: g.id! }));
     }
-    let sysCandidates: { type: string; name: string; id: number }[] = [];
-    if (campaignSystemId.value) {
-        const matchingSysType = systemEntityTypes.value.find(
-            (t) => !partialType || t.id.toLowerCase().startsWith(partialType),
-        );
-        if (matchingSysType) {
-            const rows = await getDb()
-                .records.where("systemId")
-                .equals(campaignSystemId.value)
-                .filter(
-                    (r) =>
-                        r.entityTypeId === matchingSysType.id &&
-                        (!partialName ||
-                            r.name
-                                .toLowerCase()
-                                .includes(partialName.toLowerCase())),
-                )
-                .toArray();
-            sysCandidates = rows.map((r) => ({
-                type: matchingSysType.id,
-                name: r.name,
-                id: r.id!,
-            }));
-        }
-    }
     // Compendium entries once the typed kind is unambiguous ({{spell: fir…)
     let rulesCandidates: { type: string; name: string; id: number }[] = [];
     const rulesKinds = RULES_KINDS.filter((k) => k.startsWith(partialType));
@@ -1037,7 +1012,6 @@ async function checkAutocomplete(
         ...encounterCandidates,
         ...graphCandidates,
         ...rulesCandidates,
-        ...sysCandidates.filter((c) => !rulesCandidates.some((r) => r.type === c.type && r.name === c.name)),
     ].slice(0, 8);
     autocomplete.value = {
         show: candidates.length > 0,
@@ -1266,16 +1240,7 @@ async function onPreviewClick(e: MouseEvent) {
         router.push(rulesRoute);
         return;
     }
-    const sysType = systemEntityTypes.value.find(
-        (t) => t.id.toLowerCase() === type.toLowerCase(),
-    );
-    if (sysType && campaignSystemId.value) {
-        router.push(
-            `/system/${campaignSystemId.value}/${sysType.id}?open=${encodeURIComponent(name)}`,
-        );
-    } else {
-        emit("navigate", type, name);
-    }
+    emit("navigate", type, name);
 }
 
 async function onMixedPreviewClick(e: MouseEvent, i: number) {

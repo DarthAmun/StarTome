@@ -64,14 +64,14 @@ export function useLegacyImport() {
     }
   }
 
-  async function apply(decisions: Record<number, RecordDecision>, opts: { lore: boolean; library: boolean }) {
+  async function apply(decisions: Record<number, RecordDecision>, opts: { lore: boolean }) {
     error.value = null
     progress.value = null
     busy.value = 'apply'
     try { await navigator.storage?.persist?.() } catch {}
     try {
       // Plain objects: Vue's reactive proxies cannot cross postMessage
-      const m = await call<{ report: LegacyReport }>({ type: 'apply', decisions: JSON.parse(JSON.stringify(decisions)), lore: opts.lore, library: opts.library })
+      const m = await call<{ report: LegacyReport }>({ type: 'apply', decisions: JSON.parse(JSON.stringify(decisions)), lore: opts.lore })
       report.value = m.report
     } catch (e) {
       error.value = (e as Error).message

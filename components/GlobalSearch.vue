@@ -20,9 +20,6 @@
             <span v-if="ctx.campaign" class="gs-ctx-pill gs-ctx-pill--campaign" @click="clearCtx('campaign')" title="Click to unset campaign context">
               {{ ctx.campaign.name }} ✕
             </span>
-            <span v-if="ctx.system" class="gs-ctx-pill gs-ctx-pill--system" @click="clearCtx('system')" title="Click to unset system context">
-              {{ ctx.system.name }} ✕
-            </span>
 
             <input
               ref="inputRef"
@@ -152,11 +149,11 @@
                   </div>
                 </div>
 
-                <!-- Records -->
-                <div v-if="results.records.length" class="gs-group">
+                <!-- Compendium -->
+                <div v-if="results.rules.length" class="gs-group">
                   <div class="gs-group-label">Compendium</div>
                   <div
-                    v-for="(item, i) in results.records"
+                    v-for="(item, i) in results.rules"
                     :key="`r-${item.id}`"
                     class="gs-result"
                     :class="{ 'gs-result--active': flatIndex(2, i) === cursor }"
@@ -255,7 +252,6 @@ import { ENTITY_TYPE_CONFIG } from '~/types/entities'
 import type { EntityType } from '~/types/entities'
 import { useEntities } from '~/composables/useEntities'
 import type { Entity } from '~/composables/useEntities'
-import { useSystems } from '~/composables/useSystems'
 import { useBookmarks } from '~/composables/useBookmarks'
 import { useCommandPalette } from '~/composables/useCommandPalette'
 import type { CmdItem } from '~/composables/useCommandPalette'
@@ -280,8 +276,7 @@ const props = defineProps<{ hideTrigger?: boolean }>()
 
 const router = useRouter()
 const notesStore = useEntities()
-const systemsStore = useSystems()
-const { isBookmarked, bookmarkEntity, bookmarkRecord, bookmarkPage, removeBookmark, bookmarks } = useBookmarks()
+const { isBookmarked, bookmarkEntity, bookmarkPage, removeBookmark, bookmarks } = useBookmarks()
 const { ctx, setCtx, clearCtx, isCommandMode, getSuggestions } = useCommandPalette()
 const { update: updateSettings } = useSettings()
 
@@ -328,11 +323,9 @@ async function runCommandSuggestions(q: string) {
   cmdLoading.value = true
   const allCampaigns = await dbApi.campaigns.list()
   const campaigns = allCampaigns.map((c: any) => ({ id: c.id, name: c.name }))
-  const systems = systemsStore.systems.map((s: any) => ({ id: s.id, name: s.name }))
 
   const items = await getSuggestions(q, {
     campaigns,
-    systems,
     router,
     updateSettings,
     close,
@@ -370,28 +363,26 @@ function execPickItem(item: Extract<CmdItem, { kind: 'pick' }>) {
 // ── Normal search state ───────────────────────────────────────────────────────
 
 interface SearchResult {
-  kind: 'campaign' | 'entity' | 'record' | 'rules' | 'encounter' | 'graph'
+  kind: 'campaign' | 'entity' | 'rules' | 'encounter' | 'graph'
   id: number | string
   rulesKind?: RulesKind
   name: string
   type?: string
   campaignId?: number
-  systemId?: number
-  entityTypeId?: string
   _subtitle?: string
   entity?: Entity
 }
 
-const results = ref<{ campaigns: SearchResult[]; entities: SearchResult[]; records: SearchResult[]; encounters: SearchResult[]; graphs: SearchResult[] }>({
+const results = ref<{ campaigns: SearchResult[]; entities: SearchResult[]; rules: SearchResult[]; encounters: SearchResult[]; graphs: SearchResult[] }>({
   campaigns: [],
   entities: [],
-  records: [],
+  rules: [],
   encounters: [],
   graphs: [],
 })
 
 const totalCount = computed(() =>
-  results.value.campaigns.length + results.value.entities.length + results.value.records.length + results.value.encounters.length + results.value.graphs.length
+  results.value.campaigns.length + results.value.entities.length + results.value.rules.length + results.value.encounters.length + results.value.graphs.length
 )
 
 function flatIndex(group: 0 | 1 | 2 | 3 | 4, i: number): number {
@@ -399,8 +390,8 @@ function flatIndex(group: 0 | 1 | 2 | 3 | 4, i: number): number {
     0,
     results.value.campaigns.length,
     results.value.campaigns.length + results.value.entities.length,
-    results.value.campaigns.length + results.value.entities.length + results.value.records.length,
-    results.value.campaigns.length + results.value.entities.length + results.value.records.length + results.value.encounters.length,
+    results.value.campaigns.length + results.value.entities.length + results.value.rules.length,
+    results.value.campaigns.length + results.value.entities.length + results.value.rules.length + results.value.encounters.length,
   ]
   return offsets[group] + i
 }
@@ -408,7 +399,7 @@ function flatIndex(group: 0 | 1 | 2 | 3 | 4, i: number): number {
 const flatResults = computed((): SearchResult[] => [
   ...results.value.campaigns,
   ...results.value.entities,
-  ...results.value.records,
+  ...results.value.rules,
   ...results.value.encounters,
   ...results.value.graphs,
 ])
@@ -429,7 +420,7 @@ watch(query, (val) => {
     if (searchTimer) clearTimeout(searchTimer)
     cmdItems.value = []
     if (!val.trim()) {
-      results.value = { campaigns: [], entities: [], records: [], encounters: [], graphs: [] }
+      results.value = { campaigns: [], entities: [], rules: [], encounters: [], graphs: [] }
       return
     }
     loading.value = true
@@ -452,7 +443,7 @@ async function runSearch(q: string) {
   if (q.startsWith('#')) {
     const tag = q.slice(1).toLowerCase()
     if (!tag) {
-      results.value = { campaigns: [], entities: [], records: [], encounters: [], graphs: [] }
+      results.value = { campaigns: [], entities: [], rules: [], encounters: [], graphs: [] }
       loading.value = false
       return
     }
@@ -474,7 +465,7 @@ async function runSearch(q: string) {
         updatedAt: r.updated_at,
       },
     }))
-    results.value = { campaigns: [], entities, records: [], encounters: [], graphs: [] }
+    results.value = { campaigns: [], entities, rules: [], encounters: [], graphs: [] }
     cursor.value = 0
     loading.value = false
     return
@@ -516,22 +507,6 @@ async function runSearch(q: string) {
     _subtitle: `${RULES_KIND_CONFIG[e.kind].label}${RULES_KIND_CONFIG[e.kind].hasLevel ? ` ${e.level}` : ''}${e.game === 'both' ? '' : ` · ${GAME_CONFIG[e.game].short}`}`,
   }))
 
-  const allRecords = await dbApi.records.search(lq, 5)
-  const records: SearchResult[] = await Promise.all(
-    allRecords.map(async (r) => {
-      const sys = systemsStore.getSystem(r.systemId)
-      const et = sys?.entityTypes?.find((t: any) => t.id === r.entityTypeId)
-      return {
-        kind: 'record' as const,
-        id: r.id!,
-        name: r.name,
-        systemId: r.systemId,
-        entityTypeId: r.entityTypeId,
-        _subtitle: et ? `${sys!.name} · ${et.plural ?? et.label}` : `System ${r.systemId}`,
-      }
-    })
-  )
-
   const encounterRows = await dbApi.encounters.search(lq, 5)
   const encounters: SearchResult[] = encounterRows.map((e: any) => ({
     kind: 'encounter' as const,
@@ -550,7 +525,7 @@ async function runSearch(q: string) {
     _subtitle: `Campaign ${g.campaign_id}`,
   }))
 
-  results.value = { campaigns, entities, records: [...rulesHits, ...records], encounters, graphs }
+  results.value = { campaigns, entities, rules: rulesHits, encounters, graphs }
   cursor.value = 0
   loading.value = false
 }
@@ -568,16 +543,10 @@ function entityLabel(type: string): string {
 }
 
 function recordIcon(item: SearchResult): string {
-  if (item.kind === 'rules') return RULES_KIND_CONFIG[item.rulesKind!].icon
-  const sys = systemsStore.getSystem(item.systemId!)
-  const et = sys?.entityTypes?.find((t: any) => t.id === item.entityTypeId)
-  return et?.icon ?? 'gi-scroll-unfurled'
+  return item.rulesKind ? RULES_KIND_CONFIG[item.rulesKind].icon : 'gi-scroll-unfurled'
 }
 function recordColor(item: SearchResult): string {
-  if (item.kind === 'rules') return RULES_KIND_CONFIG[item.rulesKind!].color
-  const sys = systemsStore.getSystem(item.systemId!)
-  const et = sys?.entityTypes?.find((t: any) => t.id === item.entityTypeId)
-  return et?.color ?? 'var(--ink-ghost)'
+  return item.rulesKind ? RULES_KIND_CONFIG[item.rulesKind].color : 'var(--ink-ghost)'
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────────
@@ -596,7 +565,6 @@ function getRoute(item: SearchResult): string {
     return `/campaign/${item.campaignId}/${segment}/${item.id}`
   }
   if (item.kind === 'rules') return `/compendium/${RULES_KIND_CONFIG[item.rulesKind!].segment}?id=${item.id}`
-  if (item.kind === 'record') return `/system/${item.systemId}/${item.entityTypeId}?record=${encodeURIComponent(item.name)}`
   if (item.kind === 'encounter') return `/encounter/${item.id}`
   if (item.kind === 'graph') return `/campaign/${item.campaignId}/graphs?graph=${item.id}`
   return '/'
@@ -622,8 +590,6 @@ function toggleResultBookmark(item: SearchResult) {
     bookmarkEntity({ id: item.id as number, name: item.name, type: item.type ?? 'note', campaignId: item.campaignId ?? 0 })
   } else if (item.kind === 'rules') {
     bookmarkPage(r, item.name, recordIcon(item), recordColor(item))
-  } else if (item.kind === 'record') {
-    bookmarkRecord({ id: item.id as number, name: item.name, systemId: item.systemId ?? 0, entityTypeId: item.entityTypeId ?? '', icon: recordIcon(item), color: recordColor(item) })
   } else if (item.kind === 'campaign') {
     bookmarkPage(`/campaign/${item.id}`, item.name, 'gi-broadsword', 'var(--blood)')
   } else if (item.kind === 'encounter') {
@@ -695,7 +661,7 @@ function scrollResultIntoView() {
 function close() {
   open.value = false
   query.value = ''
-  results.value = { campaigns: [], entities: [], records: [], encounters: [], graphs: [] }
+  results.value = { campaigns: [], entities: [], rules: [], encounters: [], graphs: [] }
   cmdItems.value = []
   cursor.value = 0
   cmdCursorId.value = null

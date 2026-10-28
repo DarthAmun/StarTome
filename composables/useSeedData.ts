@@ -336,8 +336,7 @@ export async function seedIfEmpty() {
 
   // Don't overwrite a real user's data
   const campaignCount = await db.campaigns.count()
-  const systemCount = await db.systems.count()
-  if (campaignCount > 0 || systemCount > 0) {
+  if (campaignCount > 0) {
     localStorage.setItem(SEED_KEY, '1')
     return
   }

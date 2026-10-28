@@ -1,6 +1,6 @@
 export type WidgetKind =
   | 'session' | 'npc' | 'location' | 'faction' | 'quest' | 'event' | 'note'
-  | 'encounter-link' | 'conditions-grid' | 'scratchpad' | 'system-entity'
+  | 'encounter-link' | 'conditions-grid' | 'scratchpad' | 'rules-entry'
   | 'timer' | 'rules-lookup' | 'random-table' | 'rumor' | 'npc-generator'
   | 'weather'
 
@@ -8,7 +8,7 @@ export interface DmWidget {
   id: string
   kind: WidgetKind
   entityId?: number
-  recordId?: number
+  rulesId?: string             // compendium entry shown by a 'rules-entry' widget
   encounterId?: number | null
   x: number
   y: number
@@ -35,7 +35,7 @@ export const DEFAULT_SIZES: Record<WidgetKind, [number, number]> = {
   'encounter-link':  [576,  240],
   'conditions-grid': [576,  240],
   scratchpad:        [1200, 120],
-  'system-entity':   [576,  240],
+  'rules-entry':     [576,  360],
   timer:             [576,  240],
   'rules-lookup':    [768,  360],
   'random-table':    [576,  240],
@@ -49,7 +49,7 @@ export const WIDGET_LABELS: Partial<Record<WidgetKind, string>> = {
   'encounter-link':  'Encounter',
   'conditions-grid': 'Conditions',
   scratchpad:        'Notes',
-  'system-entity':   'System',
+  'rules-entry':     'Compendium',
   timer:             'Timer',
   'rules-lookup':    'Rules',
   'npc-generator':   'NPC Gen',
@@ -61,7 +61,7 @@ export const WIDGET_COLORS: Partial<Record<WidgetKind, string>> = {
   'encounter-link':  'oklch(72% 0.20 295)',
   'conditions-grid': 'oklch(72% 0.20 22)',
   scratchpad:        'oklch(76% 0.10 215)',
-  'system-entity':   'oklch(76% 0.14 85)',
+  'rules-entry':     'oklch(76% 0.14 85)',
   timer:             'oklch(72% 0.18 200)',
   'rules-lookup':    'oklch(72% 0.16 260)',
   'npc-generator':   'oklch(76% 0.18 80)',

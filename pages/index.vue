@@ -11,9 +11,7 @@
                         campaigns.length !== 1 ? "s" : ""
                     }}
                     · {{ totalEntities }} entries ·
-                    {{ systems.length }} system{{
-                        systems.length !== 1 ? "s" : ""
-                    }}
+                    {{ compendiumTotal.toLocaleString() }} compendium entries
                 </p>
             </div>
         </div>
@@ -224,70 +222,31 @@
                 </div>
             </div>
 
-            <!-- ── Systems ── -->
-            <div
-                v-if="systems.length"
-                class="home-section"
-                style="margin-top: 8px"
-            >
+            <!-- ── Compendium ── -->
+            <div class="home-section" style="margin-top: 8px">
                 <div class="home-section-head">
-                    <span class="home-section-label">Systems</span>
-                    <button class="home-new-btn" @click="showNewSystem = true">
-                        + New
-                    </button>
+                    <span class="home-section-label">Compendium</span>
                 </div>
                 <div class="home-sys-list">
                     <NuxtLink
-                        v-for="sys in systems"
-                        :key="sys.id!"
-                        :to="`/system/${sys.id}/library`"
+                        v-for="k in compendiumKinds"
+                        :key="k.kind"
+                        :to="`/compendium/${k.segment}`"
                         class="home-sys-row"
                     >
-                        <div class="home-sys-icon">
-                            {{
-                                (sys.shortId || sys.name)
-                                    .slice(0, 2)
-                                    .toUpperCase()
-                            }}
+                        <div class="home-sys-icon" :style="{ color: k.color }">
+                            <OhVueIcon :name="k.icon" scale="0.85" />
                         </div>
                         <div class="home-sys-body">
-                            <div class="home-sys-name">{{ sys.name }}</div>
-                            <div class="home-sys-meta">
-                                v{{ sys.version }} ·
-                                {{ sys.entityTypes.length }} entity types
-                            </div>
+                            <div class="home-sys-name">{{ k.plural }}</div>
+                            <div class="home-sys-meta">{{ k.count.toLocaleString() }} entries</div>
                         </div>
-                        <div class="home-sys-actions" @click.stop>
-                            <button
-                                class="home-card-act"
-                                title="Edit"
-                                @click.stop="startEditSystem(sys)"
-                            >
-                                <OhVueIcon name="md-editnote" scale="0.75" />
-                            </button>
-                            <button
-                                class="home-card-act home-card-act--del"
-                                title="Delete"
-                                @click.stop="deleteSystem(sys.id!)"
-                            >
-                                <OhVueIcon name="md-delete" scale="0.75" />
-                            </button>
-                        </div>
-                        <OhVueIcon
-                            name="md-chevronright"
-                            scale="0.85"
-                            class="home-sys-arrow"
-                        />
+                        <OhVueIcon name="md-chevronright" scale="0.85" class="home-sys-arrow" />
                     </NuxtLink>
-                    <button
-                        class="home-sys-row home-sys-row--add"
-                        @click="showNewSystem = true"
-                    >
-                        <div class="home-sys-icon home-sys-icon--add">+</div>
-                        <span style="color: var(--text2)"
-                            >Define a new system</span
-                        >
-                    </button>
+                    <NuxtLink to="/compendium/sync" class="home-sys-row home-sys-row--add">
+                        <div class="home-sys-icon home-sys-icon--add">↻</div>
+                        <span style="color: var(--text2)">{{ compendiumTotal ? 'Update from Foundry' : 'Sync the PF2e/SF2e compendium from Foundry' }}</span>
+                    </NuxtLink>
                 </div>
             </div>
         </div>
@@ -348,22 +307,6 @@
                                 <option value="milestone">Milestones</option>
                             </select>
                         </div>
-                        <div v-if="systems.length" class="dlg-field">
-                            <label class="f-label">Rules library (legacy)</label>
-                            <select
-                                class="f-input-box f-select"
-                                v-model="editCampForm.systemId"
-                            >
-                                <option :value="null">— none —</option>
-                                <option
-                                    v-for="s in systems"
-                                    :key="s.id"
-                                    :value="s.id"
-                                >
-                                    {{ s.name }}
-                                </option>
-                            </select>
-                        </div>
                     </div>
                     <div class="pv-dialog-footer">
                         <button class="ghost-btn" @click="editingCamp = null">
@@ -376,65 +319,13 @@
                 </div>
             </div>
 
-            <!-- Edit System Dialog -->
-            <div
-                v-if="editingSys"
-                class="pv-dialog-mask"
-                @click.self="editingSys = null"
-            >
-                <div class="pv-dialog">
-                    <div class="pv-dialog-header">
-                        <span class="pv-dialog-title">Edit System</span>
-                        <button
-                            class="pv-dialog-close"
-                            @click="editingSys = null"
-                        >
-                            <OhVueIcon name="md-close" scale="0.85" />
-                        </button>
-                    </div>
-                    <div class="pv-dialog-content">
-                        <div class="dlg-field">
-                            <label class="f-label">Name</label>
-                            <input
-                                class="f-input-box"
-                                v-model="editSysForm.name"
-                                @keyup.enter="saveEditSystem"
-                                autofocus
-                            />
-                        </div>
-                        <div class="dlg-field">
-                            <label class="f-label">Short ID</label>
-                            <input
-                                class="f-input-box"
-                                style="font-family: var(--fm); font-size: 12px"
-                                v-model="editSysForm.shortId"
-                            />
-                        </div>
-                        <div class="dlg-field">
-                            <label class="f-label">Description</label>
-                            <textarea
-                                class="f-input-box f-textarea"
-                                v-model="editSysForm.description"
-                                rows="3"
-                            />
-                        </div>
-                    </div>
-                    <div class="pv-dialog-footer">
-                        <button class="ghost-btn" @click="editingSys = null">
-                            Cancel
-                        </button>
-                        <button class="seal-btn" @click="saveEditSystem">
-                            Save
-                        </button>
-                    </div>
-                </div>
-            </div>
         </Teleport>
     </div>
 </template>
 
 <script setup lang="ts">
-import { useSystems } from "~/composables/useSystems";
+import { rulesCounts } from "~/composables/useRules";
+import { RULES_KIND_CONFIG, RULES_KINDS } from "~/types/rules";
 import { GAME_CONFIG, GAME_IDS, campaignGame, campaignRules, type AdvancementMode, type GameId } from "~/types/game";
 import { dbApi } from "~/composables/useDb";
 import { useFormatters } from "~/composables/useFormatters";
@@ -442,17 +333,24 @@ import { useAppDialogs } from "~/composables/useAppDialogs";
 import { ENTITY_TYPE_CONFIG } from "~/types/entities";
 import type { EntityType } from "~/types/entities";
 
-const { showNewCampaign, showNewSystem } = useAppDialogs();
+const { showNewCampaign } = useAppDialogs();
 const { formatDate } = useFormatters();
 const router = useRouter();
-const store = useSystems();
-const systems = computed(() => store.systems);
+
+// Compendium summary: the main kinds that have entries
+const counts = ref<Partial<Record<string, number>>>({});
+const compendiumTotal = computed(() => Object.values(counts.value).reduce<number>((n, c) => n + (c ?? 0), 0));
+const compendiumKinds = computed(() =>
+    RULES_KINDS
+        .map((kind) => ({ kind, ...RULES_KIND_CONFIG[kind], count: counts.value[kind] ?? 0 }))
+        .filter((k) => k.count > 0),
+);
 
 const campaigns = ref<any[]>([]);
 const entityMap = ref<Record<number, any[]>>({});
 
 onMounted(async () => {
-    await store.loadAll();
+    rulesCounts().then((c) => { counts.value = c; });
     campaigns.value = await dbApi.campaigns.list();
     // Load entities for each campaign
     const results = await Promise.all(
@@ -615,7 +513,6 @@ const editingCamp = ref<any>(null);
 const editCampForm = ref({
     name: "",
     description: "",
-    systemId: null as number | null,
     game: 'pf2e' as GameId,
     advancement: 'xp' as AdvancementMode,
 });
@@ -625,7 +522,6 @@ function startEditCampaign(c: any) {
     editCampForm.value = {
         name: c.name,
         description: c.description ?? "",
-        systemId: c.system_id ?? null,
         game: campaignGame(c),
         advancement: campaignRules(c).advancement,
     };
@@ -636,7 +532,6 @@ async function saveEditCampaign() {
     const updated = await dbApi.campaigns.update(editingCamp.value.id, {
         name: editCampForm.value.name,
         description: editCampForm.value.description,
-        system_id: editCampForm.value.systemId ?? undefined,
         game: editCampForm.value.game,
         rules: { ...campaignRules(editingCamp.value), advancement: editCampForm.value.advancement },
     });
@@ -645,29 +540,6 @@ async function saveEditCampaign() {
     editingCamp.value = null;
 }
 
-// ── Edit system ───────────────────────────────────────────────────────────────
-const editingSys = ref<any>(null);
-const editSysForm = ref({ name: "", shortId: "", description: "" });
-
-function startEditSystem(sys: any) {
-    editingSys.value = sys;
-    editSysForm.value = {
-        name: sys.name,
-        shortId: sys.shortId,
-        description: sys.description ?? "",
-    };
-}
-
-async function saveEditSystem() {
-    if (!editingSys.value || !editSysForm.value.name.trim()) return;
-    await store.updateSystem(editingSys.value.id, editSysForm.value);
-    editingSys.value = null;
-}
-
-async function deleteSystem(id: number) {
-    if (!confirm("Delete this system and all its records?")) return;
-    await store.deleteSystem(id);
-}
 </script>
 
 <style scoped>
@@ -1040,7 +912,7 @@ async function deleteSystem(id: number) {
     flex-shrink: 0;
 }
 
-/* ── Systems list ── */
+/* ── Compendium list ── */
 .home-sys-list {
     display: flex;
     flex-direction: column;
