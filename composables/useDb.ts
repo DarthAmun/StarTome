@@ -13,11 +13,10 @@
  * 2. RulesEntity (rules table, types/rules.ts) — the typed PF2e/SF2e compendium,
  *    synced from Foundry or user-made. Read and written only via useRules.ts.
  *
- * The `systems`/`records` tables are DM's Tome's generic rules library. Nothing
- * reads them at runtime any more; they are dropped with the old library code.
+ * DM's Tome's generic rules library (`systems`/`records`) was dropped in v4;
+ * a copy of its rows survives in `legacyLibrary` until the user deletes it.
  */
 import Dexie, { type Table } from 'dexie'
-import type { EntityTypeSchema } from '~/types/entities'
 import { DB_NAME, channelName, windowName } from '~/utils/appNamespace'
 import type { CampaignRules, GameId } from '~/types/game'
 import type { RulesEntity } from '~/types/rules'
@@ -66,7 +65,6 @@ export interface DbToken {
   image_type: 'file' | 'url'
   is_template: number
   is_player_character: number  // 0 | 1
-  linked_record_id: number | null   // DM's Tome record; no longer read, dropped with the old library
   linked_rules_id?: string | null   // compendium entry (types/rules.ts) the token stands for
   rules_adjustment?: Adjustment | null
   linked_entity_id?: number | null  // campaign entity (NPC) this token represents
@@ -90,7 +88,6 @@ export interface DbEncounterToken {
   ac: number | null
   initiative: number | null
   notes: string | null
-  linked_record_id: number | null
   linked_rules_id?: string | null
   rules_adjustment?: Adjustment | null  // weak/elite version of the linked creature
   linked_entity_id?: number | null
@@ -145,25 +142,12 @@ export interface DbEntitySnapshot {
   event_name: string | null
 }
 
-export interface DbSystem {
-  id?: number
-  name: string
-  shortId: string          // e.g. "pf2e" — used in type namespacing
-  description: string
-  version: string
-  entityTypes: string      // JSON: EntityTypeSchema[]
-  createdAt: string
-  updatedAt: string
-}
-
-export interface DbRecord {
-  id?: number
-  systemId: number
-  entityTypeId: string     // e.g. "spell"
-  name: string
-  data: string             // JSON: field values keyed by field.key
-  createdAt: string
-  updatedAt: string
+/** One row of the old DM's Tome rules library, saved by the v4 upgrade before its tables were dropped. */
+export interface DbLegacyLibrary {
+  key: string                    // 'systems:<id>' | 'records:<id>'
+  table: 'systems' | 'records'
+  row: Record<string, unknown>
+  savedAt: string
 }
 
 export interface DbEntityConnection {
@@ -238,8 +222,6 @@ class StarTomeDb extends Dexie {
   encounterTokens!:   Table<DbEncounterToken>
   entities!:          Table<DbEntity>
   entityLinks!:       Table<DbEntityLink>
-  systems!:           Table<DbSystem>
-  records!:           Table<DbRecord>
   encounterWalls!:    Table<DbEncounterWall>
   entitySnapshots!:   Table<DbEntitySnapshot>
   entityConnections!: Table<DbEntityConnection>
@@ -249,6 +231,7 @@ class StarTomeDb extends Dexie {
   rules!:             Table<RulesEntity, string>
   images!:            Table<DbImage, string>
   syncState!:         Table<DbSyncState, string>
+  legacyLibrary!:     Table<DbLegacyLibrary, string>
 
   constructor() {
     super(DB_NAME)
@@ -282,6 +265,35 @@ class StarTomeDb extends Dexie {
       tokens:             '++id, is_template, name, linked_record_id, linked_rules_id',
       encounterTokens:    '++id, encounter_id, token_id, linked_record_id, linked_rules_id',
     })
+    // v4: the generic rules library is gone (phase 6). Its rows are copied to
+    // `legacyLibrary` (downloadable from Settings) before the tables are
+    // dropped; the record links and system ids it left behind go too.
+    this.version(4).stores({
+      systems:            null,
+      records:            null,
+      legacyLibrary:      'key, table',
+      campaigns:          '++id, updated_at',
+      tokens:             '++id, is_template, name, linked_rules_id',
+      encounterTokens:    '++id, encounter_id, token_id, linked_rules_id',
+    }).upgrade(async (tx) => {
+      // Dropped tables stay readable here; Dexie deletes them after the upgrade.
+      // Copied in chunks, one backup row per record: a library with inline
+      // images runs to ~100 MB, too much for a single value.
+      const savedAt = new Date().toISOString()
+      for (const table of ['systems', 'records'] as const) {
+        let last = -Infinity
+        for (;;) {
+          const rows = await tx.table(table).where(':id').above(last).limit(500).toArray()
+          if (!rows.length) break
+          await tx.table('legacyLibrary').bulkPut(rows.map(row => ({ key: `${table}:${row.id}`, table, row, savedAt })))
+          last = rows[rows.length - 1].id
+        }
+      }
+      await tx.table('campaigns').toCollection().modify((c: Record<string, unknown>) => { delete c.system_id })
+      for (const t of ['tokens', 'encounterTokens']) {
+        await tx.table(t).toCollection().modify((r: Record<string, unknown>) => { delete r.linked_record_id })
+      }
+    })
   }
 }
 
@@ -305,20 +317,6 @@ export function imageTypeOf(src: string): 'file' | 'url' {
 
 // ── Timestamp helper ───────────────────────────────────────────────────────
 export function now() { return new Date().toISOString() }
-
-// ── Image-field discovery ─────────────────────────────────────────────────
-export function getImageKeysByType(systems: DbSystem[]): Map<string, string[]> {
-  const map = new Map<string, string[]>()
-  for (const sys of systems) {
-    let entityTypes: EntityTypeSchema[] = []
-    try { entityTypes = JSON.parse(sys.entityTypes) } catch {}
-    for (const et of entityTypes) {
-      const keys = et.fields.filter(f => f.component === 'image').map(f => f.key)
-      if (keys.length) map.set(et.id, keys)
-    }
-  }
-  return map
-}
 
 // ── Image helper — reads a File, resizes to ≤1920px, re-encodes as JPEG ──
 const IMAGE_MAX_PX = 1920
@@ -355,7 +353,7 @@ export function compressDataUrl(dataUrl: string, toJpeg = true): Promise<string>
   })
 }
 
-// ── API — exposed as window.dmstome by plugins/tome-api.client.ts ────────
+// ── API ──────────────────────────────────────────────────────────────────
 
 
 export const dbApi = {
@@ -600,7 +598,6 @@ export const dbApi = {
         image_type: (data.imageType ?? 'file') as any,
         is_template: 1,
         is_player_character: data.isPlayerCharacter ? 1 : 0,
-        linked_record_id: null,
         linked_rules_id: data.linkedRulesId ?? null,
         rules_adjustment: data.adjustment ?? null,
         linked_entity_id: data.linkedEntityId ?? null,
@@ -641,7 +638,6 @@ export const dbApi = {
         hp_current: data.hpCurrent ?? null, hp_max: data.hpMax ?? null,
         ac: data.ac ?? null,
         initiative: data.initiative ?? null, notes: null,
-        linked_record_id: null,
         linked_rules_id: data.linkedRulesId ?? null,
         rules_adjustment: data.adjustment ?? null,
         linked_entity_id: data.linkedEntityId ?? null,
@@ -878,66 +874,6 @@ export const dbApi = {
   },
 
   // ── Systems ───────────────────────────────────────────────────────────
-  systems: {
-    async list() {
-      return getDb().systems.orderBy('updatedAt').reverse().toArray()
-    },
-    async get(id: number) {
-      return getDb().systems.get(id)
-    },
-    async create(data: Omit<DbSystem, 'id'>) {
-      const ts = now()
-      const id = await getDb().systems.add({ ...data, createdAt: ts, updatedAt: ts })
-      return getDb().systems.get(id)
-    },
-    async update(id: number, data: Partial<DbSystem>) {
-      await getDb().systems.update(id, { ...data, updatedAt: now() })
-      return getDb().systems.get(id)
-    },
-    async delete(id: number) {
-      const db = getDb()
-      await db.records.where('systemId').equals(id).delete()
-      await db.systems.delete(id)
-    },
-  },
-
-  // ── Records ────────────────────────────────────────────────────────────
-  records: {
-    async list(systemId: number, entityTypeId?: string) {
-      const db = getDb()
-      let q = db.records.where('systemId').equals(systemId)
-      const all = await q.toArray()
-      return entityTypeId ? all.filter(r => r.entityTypeId === entityTypeId) : all
-    },
-    async search(query: string, limit = 5) {
-      const lq = query.toLowerCase()
-      return getDb().records.filter(r => r.name.toLowerCase().includes(lq)).limit(limit).toArray()
-    },
-    async get(id: number) {
-      return getDb().records.get(id)
-    },
-    async create(data: { systemId: number; entityTypeId: string; name: string; data?: string }) {
-      const ts = now()
-      const id = await getDb().records.add({
-        systemId: data.systemId,
-        entityTypeId: data.entityTypeId,
-        name: data.name,
-        data: data.data ?? '{}',
-        createdAt: ts,
-        updatedAt: ts,
-      })
-      return getDb().records.get(id)
-    },
-    async update(id: number, data: Partial<DbRecord>) {
-      await getDb().records.update(id, { ...data, updatedAt: now() })
-      return getDb().records.get(id)
-    },
-    async delete(id: number) {
-      await getDb().records.delete(id)
-    },
-  },
-
-  // ── Entity snapshots ──────────────────────────────────────────────────
   snapshots: {
     async list(entityId: number): Promise<DbEntitySnapshot[]> {
       return getDb().entitySnapshots

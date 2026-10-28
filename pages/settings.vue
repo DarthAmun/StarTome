@@ -322,6 +322,23 @@
           </div>
         </section>
 
+        <!-- Old library backup (left by the v4 upgrade) -->
+        <section v-if="legacyLibrary" class="sett-section">
+          <div class="sett-section-title">Old Rules Library</div>
+          <div class="sett-group">
+            <div class="sett-row">
+              <div class="sett-row-text">
+                <span class="sett-label">Backup from {{ legacyLibrary.savedAt.slice(0, 10) }}</span>
+                <span class="sett-desc">{{ legacyLibrary.systems }} systems and {{ legacyLibrary.records }} records from DM's Tome's rules library, saved when StarTome removed it. The compendium replaces them; download the file if you want to keep them.</span>
+              </div>
+              <div class="sett-btn-pair">
+                <button class="sett-btn" @click="downloadLegacyLibrary">↓ Download</button>
+                <button class="sett-btn sett-btn--danger" @click="deleteLegacyLibrary">Delete</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- Quest board -->
         <section class="sett-section">
           <div class="sett-section-title">Quest Board</div>
@@ -399,14 +416,12 @@
     :phase="modalPhase"
     :payload="modalPayload"
     :sections="importSections"
-    :entity-type-rows="entityTypeRows"
     :log-lines="logLines"
     :progress-done="progressDone"
     :progress-total="progressTotal"
     @close="modalOpen = false"
     @run="runImport"
     @update:sections="importSections = $event"
-    @update:entity-type-rows="entityTypeRows = $event"
   />
 </template>
 
@@ -423,7 +438,7 @@ import type { Item, RulesEntity } from '~/types/rules'
 import { THEMES, ACCENT_PRESETS } from '~/composables/useSettings'
 import { ENTITY_TYPE_CONFIG } from '~/types/entities'
 import type { EntityType } from '~/types/entities'
-import type { ImportSection, EntityTypeRow, LogLine } from '../components/ImportModal.vue'
+import type { ImportSection, LogLine } from '../components/ImportModal.vue'
 
 const { public: { version } } = useRuntimeConfig()
 const { settings, update } = useSettings()
@@ -578,7 +593,38 @@ async function loadStats() {
   stats.value = { campaigns: c, encounters: enc, encounterTokens: et, entities: ent, entityLinks: el, tokens: tok, rulesSynced: synced, rulesOwn: total - synced, images: img, graphs: gl, entityConnections: ec }
 }
 
-onMounted(() => { loadStats(); loadCampaigns() })
+// ── Old library backup ───────────────────────────────────────────────────────
+const legacyLibrary = ref<{ savedAt: string; systems: number; records: number } | null>(null)
+
+async function loadLegacyLibrary() {
+  const db = getDb()
+  const [first, systems, records] = await Promise.all([
+    db.legacyLibrary.limit(1).first(),
+    db.legacyLibrary.where('table').equals('systems').count(),
+    db.legacyLibrary.where('table').equals('records').count(),
+  ])
+  legacyLibrary.value = first ? { savedAt: first.savedAt, systems, records } : null
+}
+
+async function downloadLegacyLibrary() {
+  const db = getDb()
+  const [systems, records] = await Promise.all([
+    db.legacyLibrary.where('table').equals('systems').toArray(),
+    db.legacyLibrary.where('table').equals('records').toArray(),
+  ])
+  if (!systems.length && !records.length) return
+  const savedAt = (systems[0] ?? records[0]).savedAt
+  // Same shape as DM's Tome's "systems-full" export, so DM's Tome can import it again
+  download({ version: 1, type: 'systems-full', exportedAt: savedAt, systems: systems.map(s => s.row), records: records.map(r => r.row) }, exportFilename(`old-library-${savedAt.slice(0, 10)}.json`))
+}
+
+async function deleteLegacyLibrary() {
+  if (!confirm('Delete the backup of the old rules library? Download it first if you might need it.')) return
+  await getDb().legacyLibrary.clear()
+  legacyLibrary.value = null
+}
+
+onMounted(() => { loadStats(); loadCampaigns(); loadLegacyLibrary() })
 
 function download(data: object, filename: string) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -874,7 +920,6 @@ const modalOpen    = ref(false)
 const modalPhase   = ref<'configure' | 'running' | 'done'>('configure')
 const modalPayload = ref<any>(null)
 const importSections   = ref<ImportSection[]>([])
-const entityTypeRows   = ref<EntityTypeRow[]>([])
 const logLines         = ref<LogLine[]>([])
 const progressDone     = ref(0)
 const progressTotal    = ref(0)
@@ -901,8 +946,6 @@ function buildImportSections(payload: any) {
   addSection('graphLayouts', 'Graphs'); addSection('tokens', 'Tokens')
   addSection('rules', 'Own compendium entries'); addSection('rulesOverlays', 'Portraits, notes & edits on synced entries')
   importSections.value = sections
-  // DM's Tome's rules library is no longer imported here; its records go through the legacy import
-  entityTypeRows.value = []
 }
 
 async function runImport() {
@@ -977,8 +1020,7 @@ async function clearAll() {
   await Promise.all([
     db.campaigns.clear(), db.encounters.clear(), db.encounterTokens.clear(), db.encounterWalls.clear(),
     db.entities.clear(), db.entityLinks.clear(), db.entitySnapshots.clear(), db.entityConnections.clear(), db.graphLayouts.clear(),
-    db.tokens.clear(), db.systems.clear(), db.records.clear(),
-    db.rules.clear(), db.images.clear(), db.syncState.clear(),
+    db.tokens.clear(), db.rules.clear(), db.images.clear(), db.syncState.clear(), db.legacyLibrary.clear(),
   ])
   notifyRulesChanged()
   await loadStats()

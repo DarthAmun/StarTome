@@ -28,7 +28,7 @@
             </div>
             <div v-else class="imp-section-list">
 
-              <!-- Schema sections -->
+              <!-- Sections -->
               <label v-for="sec in sections" :key="sec.key" class="imp-check-row">
                 <input type="checkbox" :checked="sec.enabled"
                   @change="toggleSection(sec.key)" />
@@ -36,22 +36,6 @@
                 <span class="imp-badge">{{ sec.count.toLocaleString() }}</span>
               </label>
 
-              <!-- Records sub-section -->
-              <template v-if="entityTypeRows.length > 0">
-                <div class="imp-check-row imp-sub-header">
-                  <span class="imp-check-label">
-                    Records
-                    <span class="imp-sub-hint">per entity type</span>
-                  </span>
-                  <span class="imp-badge">{{ totalRecordCount.toLocaleString() }}</span>
-                </div>
-                <label v-for="et in entityTypeRows" :key="et.id" class="imp-check-row imp-check-row--sub">
-                  <input type="checkbox" :checked="et.enabled"
-                    @change="toggleEntityType(et.id)" />
-                  <span class="imp-check-label">{{ et.name }}</span>
-                  <span class="imp-badge">{{ et.count.toLocaleString() }}</span>
-                </label>
-              </template>
 
             </div>
 
@@ -123,13 +107,6 @@ export interface ImportSection {
   enabled: boolean
 }
 
-export interface EntityTypeRow {
-  id: string
-  name: string
-  count: number
-  enabled: boolean
-}
-
 export interface LogLine {
   ok: boolean
   msg: string
@@ -140,7 +117,6 @@ const props = defineProps<{
   phase: 'configure' | 'running' | 'done'
   payload: any
   sections: ImportSection[]
-  entityTypeRows: EntityTypeRow[]
   logLines: LogLine[]
   progressDone: number
   progressTotal: number
@@ -150,7 +126,6 @@ const emit = defineEmits<{
   close: []
   run: []
   'update:sections': [v: ImportSection[]]
-  'update:entityTypeRows': [v: EntityTypeRow[]]
 }>()
 
 const logEl = ref<HTMLElement | null>(null)
@@ -172,23 +147,15 @@ const exportedOn = computed(() => {
   return new Date(props.payload.exportedAt).toLocaleDateString(undefined, { dateStyle: 'medium' })
 })
 
-const totalRecordCount = computed(() =>
-  props.entityTypeRows.reduce((s, r) => s + r.count, 0)
-)
-
 const totalItems = computed(() =>
-  props.sections.reduce((s, sec) => s + sec.count, 0) + totalRecordCount.value
+  props.sections.reduce((s, sec) => s + sec.count, 0)
 )
 
-const selectedCount = computed(() => {
-  const secCount = props.sections.filter(s => s.enabled).reduce((s, sec) => s + sec.count, 0)
-  const recCount = props.entityTypeRows.filter(r => r.enabled).reduce((s, r) => s + r.count, 0)
-  return secCount + recCount
-})
-
-const nothingSelected = computed(() =>
-  props.sections.every(s => !s.enabled) && props.entityTypeRows.every(r => !r.enabled)
+const selectedCount = computed(() =>
+  props.sections.filter(s => s.enabled).reduce((s, sec) => s + sec.count, 0)
 )
+
+const nothingSelected = computed(() => props.sections.every(s => !s.enabled))
 
 const progressPct = computed(() =>
   props.progressTotal > 0 ? Math.round(props.progressDone / props.progressTotal * 100) : 0
@@ -200,12 +167,6 @@ const failCount = computed(() => props.logLines.filter(l => !l.ok).length)
 function toggleSection(key: string) {
   emit('update:sections', props.sections.map(s =>
     s.key === key ? { ...s, enabled: !s.enabled } : s
-  ))
-}
-
-function toggleEntityType(id: string) {
-  emit('update:entityTypeRows', props.entityTypeRows.map(r =>
-    r.id === id ? { ...r, enabled: !r.enabled } : r
   ))
 }
 
@@ -272,15 +233,7 @@ watch(() => props.logLines.length, async () => {
 .imp-check-row:hover { background: rgba(28,20,16,0.05); }
 .imp-check-row input[type="checkbox"] { cursor: pointer; accent-color: var(--gold); }
 
-.imp-sub-header {
-  cursor: default;
-  margin-top: 6px;
-  padding-top: 9px;
-  border-top: 1px dashed var(--parch-line);
-}
-.imp-sub-header:hover { background: transparent; }
 
-.imp-check-row--sub { padding-left: 24px; }
 
 .imp-check-label {
   font-family: var(--font-ui);
@@ -292,12 +245,6 @@ watch(() => props.logLines.length, async () => {
   gap: 6px;
 }
 
-.imp-sub-hint {
-  font-family: var(--font-ui);
-  font-size: 10px;
-  color: var(--ink-ghost);
-  font-style: italic;
-}
 
 .imp-badge {
   font-family: var(--font-head);

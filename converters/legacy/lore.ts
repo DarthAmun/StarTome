@@ -10,8 +10,9 @@
  */
 import type {
   DbCampaign, DbEncounter, DbEncounterToken, DbEncounterWall, DbEntity, DbEntityConnection, DbEntityLink,
-  DbEntitySnapshot, DbGraphLayout, DbRecord, DbSystem, DbToken,
+  DbEntitySnapshot, DbGraphLayout, DbToken,
 } from '~/composables/useDb'
+import type { LegacyRecord } from './records'
 import { isRulesKind } from '~/types/rules'
 
 export interface LoreTables {
@@ -34,8 +35,17 @@ export const LORE_TABLES = [
 
 export type LoreTable = typeof LORE_TABLES[number]
 
+/** DM's Tome rows still carry the link to a library record, which StarTome doesn't store. */
+type WithRecordLink<T> = T & { linked_record_id?: number | null }
+
+/** Lore as DM's Tome exports it. */
+export interface LegacyLoreTables extends Omit<LoreTables, 'tokens' | 'encounterTokens'> {
+  tokens: WithRecordLink<DbToken>[]
+  encounterTokens: WithRecordLink<DbEncounterToken>[]
+}
+
 /** DM's Tome's rules library: read for matching (sync/legacyImport.ts), never imported as is. */
-export interface LibraryTables { systems: DbSystem[]; records: DbRecord[] }
+export interface LibraryTables { systems: unknown[]; records: LegacyRecord[] }
 
 export interface RemapOptions {
   /** Old record id → compendium entry it was reconciled to. */
@@ -87,7 +97,7 @@ function mapStrings(v: unknown, fn: (s: string) => string): unknown {
 }
 
 export function remapLore(
-  src: LoreTables,
+  src: LegacyLoreTables,
   start: Record<LoreTable, number>,
   opts: RemapOptions,
   normalize: (s: string) => string,
@@ -173,24 +183,24 @@ export function remapLore(
   })
 
   /** Token → compendium link (from the record it pointed at) and campaign-entry link, remapped. */
-  function links<T extends { id?: number; linked_record_id: number | null; linked_entity_id?: number | null }>(table: string, t: T) {
+  function links<T extends { id?: number; linked_record_id?: number | null; linked_entity_id?: number | null }>(table: string, t: T) {
     const rec = t.linked_record_id
     const rulesId = rec !== null && rec !== undefined ? opts.rulesLinks.get(rec) ?? null : null
     if (rec !== null && rec !== undefined && rulesId === null) {
       issues.push({ table, id: t.id ?? -1, detail: `link to record ${rec} cleared — the record is gone or was dropped` })
     }
     const entityId = t.linked_entity_id !== null && t.linked_entity_id !== undefined ? ent(t.linked_entity_id) ?? null : t.linked_entity_id
-    return { linked_record_id: null, linked_rules_id: rulesId, ...(entityId !== undefined ? { linked_entity_id: entityId } : {}) }
+    return { linked_rules_id: rulesId, ...(entityId !== undefined ? { linked_entity_id: entityId } : {}) }
   }
 
-  const tokens = src.tokens.map(t => ({ ...t, id: ids.tokens.get(t.id!)!, ...links('tokens', t) }))
+  const tokens = src.tokens.map(({ linked_record_id: _rec, ...t }) => ({ ...t, id: ids.tokens.get(t.id!)!, ...links('tokens', { ...t, linked_record_id: _rec }) }))
 
-  const encounterTokens = owned('encounterTokens', src.encounterTokens, t => t.encounter_id, ids.encounters).map(t => {
+  const encounterTokens = owned('encounterTokens', src.encounterTokens, t => t.encounter_id, ids.encounters).map(({ linked_record_id: _rec, ...t }) => {
     // A library token deleted in DM's Tome renders exactly like none: name and image come from the placement
     const tokenId = t.token_id !== null && t.token_id !== undefined ? ids.tokens.get(t.token_id) ?? null : null
     return {
       ...t, id: ids.encounterTokens.get(t.id!)!, encounter_id: ids.encounters.get(t.encounter_id)!, token_id: tokenId,
-      ...links('encounterTokens', t),
+      ...links('encounterTokens', { ...t, linked_record_id: _rec }),
     }
   })
 

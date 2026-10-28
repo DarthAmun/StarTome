@@ -16,7 +16,7 @@
 import Dexie from 'dexie'
 import { getDb, type DbImage } from '~/composables/useDb'
 import { LEGACY_DB_NAME } from '~/utils/appNamespace'
-import { remapLore, LORE_TABLES, type LibraryTables, type LoreTable, type LoreTables, type RemapIssue } from '~/converters/legacy/lore'
+import { remapLore, LORE_TABLES, type LegacyLoreTables, type LibraryTables, type LoreTable, type RemapIssue } from '~/converters/legacy/lore'
 import { CompendiumNameIndex, normalizeName, type MatchTarget, type MatchVia, type RankedCandidate } from '~/converters/legacy/match'
 import {
   convertLegacyRecord, legacyKindOf, legacyLevel, recordData, recordImage, type LegacyRecord,
@@ -27,7 +27,7 @@ import { isRulesKind, type RulesEntity, type RulesKind } from '~/types/rules'
 
 // ── Reading ────────────────────────────────────────────────────────────────
 
-export interface LegacyBundle extends LoreTables, LibraryTables {
+export interface LegacyBundle extends LegacyLoreTables, LibraryTables {
   from: 'file' | 'browser'
   exportedAt?: string
 }
@@ -192,7 +192,7 @@ export async function analyseLegacy(
   const review: RecordReview[] = []
   const images = { total: 0, exact: 0, fuzzy: 0 }
 
-  for (const rec of bundle.records as unknown as LegacyRecord[]) {
+  for (const rec of bundle.records) {
     const kind = legacyKindOf(rec.entityTypeId)
     if (!kind || rec.id === undefined) continue
     const d = recordData(rec)

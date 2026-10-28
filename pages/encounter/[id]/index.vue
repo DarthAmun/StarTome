@@ -3189,22 +3189,6 @@ function getImageUrl(token: any): string {
   overflow-y: auto;
   padding: 16px 18px 24px;
 }
-.record-panel-title {
-  font-family: 'Cinzel', var(--font-deco);
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--ink);
-  padding-bottom: 10px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid var(--parch-line);
-}
-.record-panel-raw {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--ink-faded);
-  white-space: pre-wrap;
-  word-break: break-all;
-}
 .record-panel-slide-enter-active,
 .record-panel-slide-leave-active { transition: transform 0.25s ease; }
 .record-panel-slide-enter-from,

@@ -79,7 +79,8 @@ describe('legacy lore remapping', () => {
     expect(tables.entityConnections[0]).toMatchObject({ campaign_id: 5, source_entity_id: 100, target_entity_id: 101 })
     expect(JSON.parse(tables.graphLayouts[0].positions)).toEqual({ 100: { x: 1, y: 2 }, 101: { x: 3, y: 4 } })
     expect(tables.graphLayouts[0].hidden_nodes).toBe('[101]')
-    expect(tables.tokens[0]).toMatchObject({ id: 1, linked_record_id: null, linked_rules_id: 'fvtt:mino', linked_entity_id: 100 })
+    expect(tables.tokens[0]).toMatchObject({ id: 1, linked_rules_id: 'fvtt:mino', linked_entity_id: 100 })
+    expect(tables.tokens[0]).not.toHaveProperty('linked_record_id')
     expect(tables.encounterTokens.map(t => [t.id, t.token_id, t.linked_rules_id])).toEqual([[20, 1, 'fvtt:mino'], [21, null, null]])
     expect(tables.encounters[0]).toMatchObject({ campaign_id: 5, sound_playlist_id: null })
     expect(JSON.parse(tables.encounters[0].combat_log)[0].tokenId).toBe(20)
@@ -91,7 +92,7 @@ describe('legacy lore remapping', () => {
 describe('legacy import', () => {
   beforeEach(async () => {
     const db = getDb()
-    await Promise.all([db.rules.clear(), db.images.clear(), db.campaigns.clear(), db.entities.clear(), db.tokens.clear(), db.encounterTokens.clear(), db.records.clear(), db.systems.clear()])
+    await Promise.all([db.rules.clear(), db.images.clear(), db.campaigns.clear(), db.entities.clear(), db.tokens.clear(), db.encounterTokens.clear()])
     await db.rules.bulkAdd([
       foundry('fvtt:mc', 'creature', 'Minotaur', { level: 4, publication: { title: 'Pathfinder Monster Core', remaster: true } }),
       foundry('fvtt:b1', 'creature', 'Minotaur', { level: 4, publication: { title: 'Pathfinder Bestiary', remaster: false }, supersededBy: 'fvtt:mc' }),
@@ -140,11 +141,10 @@ describe('legacy import', () => {
 
     const placements = await db.encounterTokens.toArray()
     expect(placements[0].linked_rules_id).toBe('fvtt:b1')   // the Bestiary printing the record came from
-    expect(placements[0].linked_record_id).toBeNull()
-    expect(placements[1]).toMatchObject({ linked_rules_id: null, linked_record_id: null })
+    expect(placements[0]).not.toHaveProperty('linked_record_id')
+    expect(placements[1]).toMatchObject({ linked_rules_id: null })
     expect(report.placements).toEqual({ linkedToCompendium: 1, linkedToFoundry: 1, cleared: 1 })
     expect(report.written).toMatchObject({ campaigns: 1, entities: 4 })
-    expect(await db.records.count()).toBe(0)
 
     // A second analysis notices the campaign is already here
     expect((await analyseLegacy(await bundle())).analysis.alreadyImported).toEqual(['The Codex'])

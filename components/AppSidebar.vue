@@ -481,7 +481,6 @@ function campaignColor(id: number): string {
   box-shadow: 0 0 0 1px rgba(255,255,255,0.3);
 }
 
-/* Children accordion: animation driven by JS hooks (css: false on Transition) */
 
 /* Logo below the collapse button in collapsed mode */
 .sb-logo-below {
@@ -520,14 +519,6 @@ function campaignColor(id: number): string {
 .sb-icon-link.active { background: var(--accent-bg); color: var(--accent); }
 .sb-compendium-icon { margin: 2px auto; }
 
-/* Smaller system icon variant inside campaign-style header */
-.sb-system-icon--sm {
-  width: 22px;
-  height: 22px;
-  font-size: 8px;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
 
 /* Tooltip on hover (collapsed mode) */
 .sidebar.collapsed [data-tip]:hover::after {

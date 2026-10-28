@@ -36,6 +36,7 @@
 
 <script setup lang="ts">
 import { channelName } from '~/utils/appNamespace'
+import { dbApi } from '~/composables/useDb'
 import { useEncounterCanvas, type ShapeOverlay } from '../../../composables/useEncounterCanvas'
 import { useEncounterStore } from '~/stores/encounter'
 
@@ -103,11 +104,11 @@ onMounted(async () => {
   playerRoundNumber.value = store.roundNumber
 
   // Tell DM window to re-sync so active token and order are authoritative immediately
-  window.dmstome.window.sendPlayerReady()
+  dbApi.window.sendPlayerReady()
 
   let renderedShapeIds = new Set<string>()
 
-  window.dmstome.window.onEncounterSync(async (data: any) => {
+  dbApi.window.onEncounterSync(async (data: any) => {
     if (!store.current) return
 
     store.current.tokens = data.tokens
@@ -157,7 +158,7 @@ onMounted(async () => {
     canvas?.recomputeFov()
   })
 
-  window.dmstome.window.onPing(({ col, row, focus }) => {
+  dbApi.window.onPing(({ col, row, focus }) => {
     if (focus) canvas?.centerOn(col, row)
     canvas?.showPing(col, row)
   })
@@ -171,8 +172,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  window.dmstome.window.offEncounterSync()
-  window.dmstome.window.offPing()
+  dbApi.window.offEncounterSync()
+  dbApi.window.offPing()
   canvas?.destroy()
 })
 </script>

@@ -169,26 +169,3 @@ export function validateFormula(formula: string): boolean {
     return false
   }
 }
-
-/**
- * Extract all numeric values from a flat data object into a scope map.
- * Handles plain numbers and tracker/stat objects with { value, current, max }.
- * Keys are lowercased to match formula identifiers.
- */
-export function dataToScope(data: Record<string, any>): Record<string, number> {
-  const scope: Record<string, number> = {}
-  for (const [key, val] of Object.entries(data)) {
-    const k = key.toLowerCase()
-    if (typeof val === 'number') {
-      scope[k] = val
-    } else if (val && typeof val === 'object') {
-      // Tracker / stat objects
-      const n = typeof val.current === 'number' ? val.current
-              : typeof val.value === 'number'   ? val.value
-              : typeof val.max === 'number'      ? val.max
-              : null
-      if (n !== null) scope[k] = n
-    }
-  }
-  return scope
-}

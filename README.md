@@ -11,7 +11,7 @@ StarTome is unofficial and not affiliated with Paizo Inc. Pathfinder and Starfin
 | Layer | Tech |
 |-------|------|
 | App | PWA (installable, offline-capable) |
-| Database | IndexedDB via Dexie.js (database `startome`, schema v1) |
+| Database | IndexedDB via Dexie.js (database `startome`, schema v4) |
 | Frontend | Nuxt 3 (static/CSR) + Vue 3 |
 | Styling | Tailwind CSS |
 | UI Components | PrimeVue v4 (unstyled) |
@@ -97,7 +97,7 @@ Every entity supports:
 - Load a map image and configure grid size and offset
 - Token library — drag templates onto the map, snap to grid
 - Per-token: name, image, HP, AC, initiative, size, conditions, visibility, dead/alive, notes
-- Tokens can be linked directly to creature records from the rules library
+- Tokens link to compendium creatures and hazards (normal, weak or elite): HP, AC and size come from the stat block, initiative rolls Perception
 - Fog of War — paint and erase fog cells; hide all / reveal all shortcuts
 - Wall tool — draw line walls with cover types (full, ¾, ½, ¼, door) for line-of-sight blocking
 - Field-of-view compute per token (vision range in tiles)
@@ -108,14 +108,13 @@ Every entity supports:
 ### DM Screen
 - Freeform widget board — add, resize, and rearrange panels
 - Zoom and density controls; layout saved per campaign
-- Available widgets: Dice Roller, NPC Generator, Conditions Grid, Random Table, Quest, Session, Note, Faction, Location, Rumor, Scratchpad, Rules Lookup, Encounter Link, Search, System Entity, Timer
+- Available widgets: Dice Roller, NPC Generator, Conditions Grid, Random Table, Quest, Session, Note, Faction, Location, Rumor, Scratchpad, Rules Lookup, Encounter Link, Search, Compendium Entry, Timer
 
-### Rules Library (Systems)
-- Define custom game systems (e.g. D&D 5e, PF2e) with a visual schema builder
-- Create entity types (Spell, Creature, Item, …) with any combination of field types
-- Supported field types: text, number, markdown, image, tags, select, multi-select, toggle, rating, dice formula, damage formula, attack block, stat block, abilities, speed, spell slots, conditions, proficiency, scaling, action cost, entity link, trait picker, checklist, clock, tracker, currency
-- Populate a record library per entity type (spells, creatures, items, etc.)
-- Import and export system schemas as JSON
+### Compendium (PF2e / SF2e)
+- Typed entries: items, creatures, hazards, spells, feats, actions, conditions, ancestries, heritages, backgrounds, classes, deities
+- Synced from the Foundry VTT PF2e/SF2e release (`json-assets.zip` drop); re-syncs keep portraits, notes and local edits
+- Your own entries next to synced ones; `{{kind: Name}}` refs in every editor
+- DM's Tome import: campaigns come over, the old library is matched against the compendium
 
 ### Audio
 - Sound library with track management
@@ -139,7 +138,7 @@ startome/
 ├── composables/
 │   ├── useDb.ts                  # Dexie/IndexedDB layer — all tables and queries
 │   ├── useEncounterCanvas.ts     # PixiJS VTT engine
-│   ├── useSystems.ts             # Rules library (systems + records)
+│   ├── useRules.ts               # Compendium repository (the only accessor of `rules`)
 │   ├── useEntities.ts            # Campaign entities CRUD
 │   ├── useFovCompute.ts          # Field-of-view raycasting
 │   ├── useSoundPlayer.ts         # Audio playback
@@ -159,13 +158,14 @@ startome/
 │   ├── encounter/[id]/
 │   │   ├── index.vue                           # DM encounter view (PixiJS)
 │   │   └── player.vue                          # Player view (read-only, synced)
-│   └── system/[id]/
-│       ├── library.vue                         # Records library
-│       └── builder.vue                         # Schema builder
+│   └── compendium/
+│       ├── [kind].vue                          # Compendium lists + stat blocks
+│       ├── sync.vue                            # Foundry sync
+│       └── legacy.vue                          # DM's Tome import
 │
 ├── components/
 │   ├── editors/                  # Per-entity-type edit forms
-│   ├── fields/                   # ~25 reusable field components
+│   ├── rules/                    # Compendium stat blocks and editors
 │   ├── widgets/                  # DM Screen widget panels
 │   ├── graph/                    # Vue Flow graph nodes + modals
 │   ├── notes/                    # Entity list-row components
@@ -184,8 +184,8 @@ startome/
 
 All data lives in browser IndexedDB in the database `startome`. Every localStorage key starts with `startome.` and the player-view channels are `startome-player` / `startome-map` (see `utils/appNamespace.ts`), so StarTome and DM's Tome can run side by side on the same origin without sharing data.
 
-Exports from DM's Tome (`dmstome-*.json`) can be imported into StarTome.
+Exports from DM's Tome (`dmstome-*.json`) come in through Compendium › DM's Tome import.
 
-The app includes an import/export modal (JSZip) for in-app backup and restore of campaigns, encounters, entities, and system records.
+Settings › Import & Export backs up campaigns, encounters, tokens, your own compendium entries and your portraits/notes/edits on synced ones (the synced content itself is re-synced, not exported). A quest board export gives players a GM-text-free quest list.
 
 Manual export: DevTools → Application → IndexedDB → right-click → Export

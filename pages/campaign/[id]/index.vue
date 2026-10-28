@@ -378,42 +378,6 @@ const bannerStyle = computed(() => {
     transform: translateX(3px);
 }
 
-/* Settings */
-.camp-setting-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 14px 16px;
-    border-radius: var(--r2);
-    background: var(--surface);
-    border: 1px solid var(--border);
-}
-.camp-setting-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text);
-}
-.camp-setting-hint {
-    font-size: 12px;
-    color: var(--text3);
-    margin-top: 2px;
-}
-.camp-setting-select {
-    flex-shrink: 0;
-    padding: 6px 10px;
-    border-radius: var(--r1);
-    border: 1px solid var(--border-hi);
-    background: var(--bg2);
-    color: var(--text);
-    font-size: 13px;
-    font-family: var(--fu);
-    cursor: pointer;
-    outline: none;
-    transition: border-color 0.12s;
-}
-.camp-setting-select:focus {
-    border-color: var(--accent);
-}
 
 /* Active quests */
 .camp-quests { display: flex; flex-direction: column; gap: 4px; }

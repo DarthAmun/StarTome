@@ -597,8 +597,10 @@ Checked in the browser on the imported Codex data: encounter map and tokens, eli
 
 Left for phase 6: `pages/system/*`, `useSystems`, `FieldRenderer` + field components still read `systems`/`records`. Nothing links to them any more (sidebar, home, palette and search are switched), so they only run when someone types their URL.
 
-### Phase 6: Remove the generic system (medium, mostly deletion)
+### Phase 6: Remove the generic system (medium, mostly deletion) — ✅ done 2026-10-28 (v0.7.0)
 Builder, record pages, `useSystems`, `useStatBlockLinker`, `FieldRenderer` + unused fields, schema types, `system_id`, `window.dmstome`. Dexie drops `systems`/`records` after an automatic backup.
+
+Built: deleted `pages/system/*`, `useSystems`, `FieldRenderer`, `EntityLayout`, `IconPicker`, all 27 `components/fields/*`, the builder types in `types/entities.ts`, `dataToScope`, the `window.dmstome` plugin (WorldMap, the attribute editor and both player windows import `dbApi`), and the record-type rows of the import modal. Dexie v4 copies every `systems`/`records` row into `legacyLibrary` (one row per record, in chunks of 500), then drops both tables plus `campaigns.system_id` and `linked_record_id` on tokens/placements. Settings › Import & Export can download that backup (DM's Tome `systems-full` shape) or delete it. The legacy converter types DM's Tome rows on their own (`LegacyLoreTables`), so StarTome's row types no longer carry the record link. Checked in headless Chrome on a v3 database with 10,617 records (~90 MB of images): the upgrade takes about 1 s, 10,618 backup rows, link fields gone, the Settings backup row shows. Opt-in scale test: `LIB_SCALE=1 npx vitest run tests/dbMigration.scale.test.ts`.
 
 ### Phase 7: Characters, inventory, `PartyLink` + Play Buddy converters offline (medium)
 `characters`/`itemInstances`/`purses` tables. Minimal character UI. PC tokens → characters. `NoneLink`. Play Buddy `wire`/`convert` built against fixtures from the PDF draft, plus a manual JSON paste mode.

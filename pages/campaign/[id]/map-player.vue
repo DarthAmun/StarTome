@@ -16,7 +16,7 @@
 
 <script setup lang="ts">
 import { channelName } from '~/utils/appNamespace'
-// window.dmstome used for file dialog / IPC only
+import { dbApi } from '~/composables/useDb'
 import { useEntities } from '~/composables/useEntities'
 
 const route = useRoute()
@@ -30,7 +30,7 @@ const locationId = ref<number | null>(
 onMounted(async () => {
   await store.loadAll(campaignId)
 
-  window.dmstome.window.onMapSync(async (newLocationId) => {
+  dbApi.window.onMapSync(async (newLocationId) => {
     locationId.value = newLocationId
     if (newLocationId) await store.loadAll(campaignId)
   })
@@ -43,7 +43,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  window.dmstome.window.offMapSync()
+  dbApi.window.offMapSync()
 })
 </script>
 

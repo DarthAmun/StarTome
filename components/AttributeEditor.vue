@@ -399,6 +399,7 @@
 import type { EntityType, EntityAttributes } from "~/types/entities";
 import { NOTE_ICONS } from "~/types/entities";
 import { useEntities } from "~/composables/useEntities";
+import { dbApi } from "~/composables/useDb";
 
 const props = defineProps<{ type: EntityType; modelValue: EntityAttributes }>();
 const emit = defineEmits<{ "update:modelValue": [EntityAttributes] }>();
@@ -536,8 +537,7 @@ function removeTag(i: number) {
     );
 }
 async function browseImage(sourceKey: string, typeKey: string) {
-    // window.dmstome used for file dialog / IPC only
-    const dataUrl = await window.dmstome.system.openFileDialog();
+    const dataUrl = await dbApi.system.openFileDialog();
     if (dataUrl)
         emit("update:modelValue", {
             ...props.modelValue,
