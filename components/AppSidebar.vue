@@ -235,6 +235,10 @@
             <OhVueIcon name="md-autorenew" scale="0.65" style="color:#e8c44a;width:14px;flex-shrink:0" />
             <span>Foundry sync</span>
           </NuxtLink>
+          <NuxtLink to="/compendium/legacy" class="sb-child-tool" :class="{ active: route.path === '/compendium/legacy' }">
+            <OhVueIcon name="gi-scroll-unfurled" scale="0.65" style="color:#b5a07a;width:14px;flex-shrink:0" />
+            <span>DM's Tome import</span>
+          </NuxtLink>
         </div>
 
         <div class="sb-divider" />

@@ -32,3 +32,9 @@ export function windowName(name: string): string {
 export function exportFilename(rest: string): string {
   return `${APP_NS}-${rest}`
 }
+
+/**
+ * DM's Tome's own IndexedDB database. Only the legacy import reads it — opened
+ * read-only, never written — when both apps share an origin.
+ */
+export const LEGACY_DB_NAME = 'dmforge'

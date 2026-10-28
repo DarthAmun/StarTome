@@ -72,6 +72,7 @@ export interface DbToken {
   is_template: number
   is_player_character: number  // 0 | 1
   linked_record_id: number | null
+  linked_rules_id?: string | null   // compendium entry (types/rules.ts); set by the legacy import, read from phase 5 on
   linked_entity_id?: number | null  // campaign entity (NPC) this token represents
   sync_image?: number               // 0 | 1 — token image mirrors the linked entry's image
   created_at: string
@@ -94,6 +95,7 @@ export interface DbEncounterToken {
   initiative: number | null
   notes: string | null
   linked_record_id: number | null
+  linked_rules_id?: string | null
   linked_entity_id?: number | null
   vision_range: number | null // tiles, null = infinite
   is_player_token: number     // 0 | 1

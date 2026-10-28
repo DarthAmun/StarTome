@@ -573,9 +573,19 @@ Repo + upstream remote. Identity. `appNamespace.ts`. Dexie `startome` v1. Port 3
 - **Deferred, not part of Phase 3**: `ReleaseZipMirror` (GitHub Action + auto-update) and the `GitTreeDev` dev channel. Revisit after using the ZIP drop for a while.
 **Done when:** a fresh browser goes from empty to a full PF2e + SF2e compendium from the release ZIP. A second sync of the same version is a no-op. A sync of a newer version keeps portraits, notes and local edits and reports conflicts.
 
-### Phase 4: Legacy reconcile (medium)
-Worker reader for your export / the `dmforge` DB. Lore import with id remapping. Record matching (§8.2) with a review list. Portrait/link carry-over. Small legacy converter for kept unmatched records. PCs → characters.
+### Phase 4: Legacy reconcile (medium) — ✅ done 2026-10-28 (v0.5.0)
+Worker reader for your export / the `dmforge` DB. Lore import with id remapping. Record matching (§8.2) with a review list. Portrait/link carry-over. Small legacy converter for kept unmatched records. ~~PCs → characters~~ (moved to phase 7: the `characters` table doesn't exist yet; the PC NPCs and the 4 carried items come over as lore entries / `legacy` items with `legacy.carried`).
 **Done when:** your campaign works in StarTome, ≥973 creature portraits are attached, all 62 valid placement links point at Foundry creatures, and your homebrew items exist as user entries.
+
+Built: `converters/legacy/{match,records,lore}.ts` (pure), `sync/legacyImport.ts` + a long-lived worker that keeps the parsed export between analysis and apply, `composables/useLegacyImport.ts`, `pages/compendium/legacy.vue` (file drop or the same-origin `dmforge` DB, per-kind match table, review list with candidate picker / keep / leave out, report), `rules/images.ts` (portrait blobs in `images`, `img:<id>` refs, shown in the stat block). Tokens and placements get `linked_rules_id` next to the remapped `linked_record_id`; the old library can be carried over so encounters keep working until phase 5.
+
+Measured against `pf2e-8.6.1` + `sf2e-1.6.1` (all syncable packs) and your 2026-10-28 export:
+- **Portraits:** 973 of 1,108 match exactly, ~75 more through fuzzy matches (dragons, "Snake, Viper", "(BB p.57)" suffixes); the rest stay on kept `legacy` entries. ✅
+- **Placements:** 52 of 62 exact, 5 fuzzy (Manticore → Manticore (Quill Tail), Vampire Spawn Rogue → Vampire Servitor, …) = **57 → Foundry**. The other **5 (Winter Wolf ×2, Frost Troll ×3) can't**: Foundry no longer ships these creatures, so they link to kept `legacy` entries with your stats and portraits. ⚠️ criterion met as far as the data allows.
+- **Homebrew:** Sturmperle, Bluttrinker, Wundmal der Wachen, Eiserne Schneide, Ambosskette des Wächters → `legacy` item entries. ✅
+- 148 fuzzy matches go to review (57 remaster spell renames, all at the same rank); 60 unmatched records are kept by default (in use or homebrew); ~1,950 unused unmatched records are left out by default.
+- Matching runs in ~10 s on the 250 MB export in the browser, the import in ~4 s. Checked in the browser: campaign, banner, library tokens and compendium portraits. Not yet checked by eye: an imported encounter's map canvas.
+- Adventure-path creatures/hazards only match when that bestiary is synced; the page says so when the match rate is low.
 
 ### Phase 5: Switch consumers (medium)
 Tokens `linked_ref` + weak/elite. Typed stat panel. Perception initiative. Conditions modal reads synced conditions. Image import/recompress. Exports v1-compatible with the new keys + the quest-board export.

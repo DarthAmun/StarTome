@@ -254,7 +254,7 @@
             <div class="sett-row">
               <div class="sett-row-text">
                 <span class="sett-label">Everything</span>
-                <span class="sett-desc">All campaigns, systems, tokens and records</span>
+                <span class="sett-desc">All campaigns, systems, tokens and records. Coming from DM's Tome? Use the <NuxtLink to="/compendium/legacy">DM's Tome import</NuxtLink> instead — it links your library to the compendium.</span>
               </div>
               <div class="sett-btn-pair">
                 <button class="sett-btn" @click="exportAll">↓ Export</button>

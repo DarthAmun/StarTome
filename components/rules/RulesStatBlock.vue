@@ -8,6 +8,8 @@
       <span class="rsb-kind">{{ headLabel }}</span>
     </header>
 
+    <img v-if="imgUrl" class="rsb-portrait" :src="imgUrl" :alt="entity.name" />
+
     <div class="rsb-traits">
       <span v-if="entity.rarity !== 'common'" class="rsb-trait rsb-trait--rarity" :style="{ background: RARITY_COLOR[entity.rarity] }">{{ entity.rarity }}</span>
       <span v-if="sizeLabel" class="rsb-trait rsb-trait--size">{{ sizeLabel }}</span>
@@ -211,6 +213,7 @@ import { rulesFindByName } from '~/composables/useRules'
 import {
   formatActionCost, formatBulk, formatMoney, formatTrait, RARITY_COLOR, signed, SIZE_LABEL, titleCase,
 } from '~/rules/format'
+import { useRulesImage } from '~/rules/images'
 import { GAME_CONFIG, type GameId } from '~/types/game'
 import {
   isRulesKind, RULES_KIND_CONFIG, RULES_KINDS,
@@ -219,6 +222,8 @@ import {
 } from '~/types/rules'
 
 const props = defineProps<{ entity: RulesEntity; game?: GameId }>()
+
+const imgUrl = useRulesImage(computed(() => props.entity.img))
 
 const router = useRouter()
 const { renderMarkdown } = useEntityMarkdown()
@@ -365,6 +370,7 @@ async function onClick(e: MouseEvent) {
 </script>
 
 <style scoped>
+.rsb-portrait { float: right; max-width: 38%; max-height: 260px; object-fit: contain; border-radius: 6px; margin: 2px 0 8px 12px; }
 .rsb { font-family: var(--fu); font-size: 13.5px; line-height: 1.55; color: var(--text); max-width: 760px; }
 .rsb-head { display: flex; align-items: baseline; gap: 12px; border-bottom: 2px solid var(--kind-color); padding-bottom: 4px; }
 .rsb-name { flex: 1; font-family: var(--fh); font-size: 20px; font-weight: 700; margin: 0; }
