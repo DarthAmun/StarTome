@@ -1,6 +1,6 @@
 # Features Plan: party, loot, encounters, progress
 
-Status: **reviewed** (2026-10-28); §10 (P8–P12, next features) added 2026-10-29, not reviewed yet. All open questions answered (§9). No code has changed. It is based on the feature goals you gave me (party tab, identification, wealth check, encounter builder, resolution loop, character app), the code at `e0bfb79` (v0.7.0), and FORK_PLAN.md (§4.3/§4.4 model sketches, §9 Play Buddy, phases 7–8).
+Status: **reviewed** (2026-10-28); §10 (P8–P11, next features; P12 dropped) added and reviewed 2026-10-29. All open questions answered (§9). No code has changed. It is based on the feature goals you gave me (party tab, identification, wealth check, encounter builder, resolution loop, character app), the code at `e0bfb79` (v0.7.0), and FORK_PLAN.md (§4.3/§4.4 model sketches, §9 Play Buddy, phases 7–8).
 
 It replaces FORK_PLAN phases 7–8 once agreed.
 
@@ -369,7 +369,7 @@ The rule numbers in this section (DCs, income, creature-building values) come fr
 - `startOfTurn(token)` for the token whose turn starts:
   - **Dying**: a recovery-check prompt (flat check DC 10 + dying value) with the four results, which adjusts dying. Reaching dying 0 removes it, adds or raises **wounded** by 1 and leaves the token unconscious. Dying reaching 4 − doomed marks the token dead.
   - **Stunned / slowed / quickened**: a reminder of the actions lost or gained this turn. Stunned goes down by the actions it takes.
-- **HP hooks in `updateToken`:** dropping to 0 HP on a party token (PC or `treat_as_pc` companion) adds dying 1 + wounded (dying 2 + wounded on a "critical hit" checkbox in the HP dialog). Non-party tokens dropping to 0 are marked defeated, matching the usual "monsters die at 0" default. Healing above 0 ends dying and adds wounded 1.
+- **HP hooks in `updateToken`:** dropping to 0 HP on a token that uses dying rules adds dying 1 + wounded (dying 2 + wounded on a "critical hit" checkbox in the HP dialog). A per-token "uses dying rules" toggle is on for party tokens (PC or `treat_as_pc` companion) and off for the rest, which are marked defeated at 0 (§10.7 Q1). Healing above 0 ends dying and adds wounded 1.
 - **Undo:** like the timers, each turn change records its condition changes (session-only), and `prevTurn` reverts exactly those. Every automatic change is written to the combat log as "auto".
 - **Opt-out:** a campaign setting "Automate conditions" (on by default) with separate switches for tick-down, dying and persistent prompts. A prompt can always be dismissed without doing anything.
 - **Player view:** unchanged except that conditions update. The prompts are GM-only.
@@ -407,7 +407,7 @@ The rule numbers in this section (DCs, income, creature-building values) come fr
 - **UI:** an "Earn income" action on a party member (party page): task level, proficiency, days and the check result (or "roll" with the character's modifier typed in). The total goes into that character's purse in one write, as a **correction** (not an award), since downtime income isn't treasure from play. The wealth readout then shows it as owned, not as awarded. A day-by-day mode is available for mixed results.
 - **Tests:** `tests/treasureRoll.test.ts` with a seeded RNG (slot counts match the row, filters hold, nothing above the level), `tests/income.test.ts` (table edges, critical success, days × rate, credits in SF2e).
 
-### 10.5 P12: Exploration, travel and the in-game date (medium–large, optional)
+### 10.5 P12: Exploration, travel and the in-game date — ✗ dropped 2026-10-29 (§10.7 Q5), kept for reference
 
 **What exists:** sessions, events and the chronicle carry an in-world `date` as **free text**, with no calendar. Regions and locations are on the world map. Quests have status. There's no notion of travel or exploration activities.
 
@@ -426,13 +426,15 @@ The rule numbers in this section (DCs, income, creature-building values) come fr
 | P9 | Condition tick-down | S–M | Saves the most mistakes in combat. Touches only the encounter store and a new pure module. |
 | P10 | Creature builder | M | Self-contained; output is a plain `user` creature. |
 | P11 | Treasure rolls + earn income | S–M | Builds on the wealth data (P5) and `levelDc` (P8). |
-| P12 | Exploration, travel, calendar | M–L | Optional; decide after P8–P11. |
+| ~~P12~~ | ~~Exploration, travel, calendar~~ | — | Dropped (§10.7 Q5). |
 
 ### 10.7 Open questions
 
-1. **P9, monsters at 0 HP:** mark them defeated (default) or give named NPCs dying too? Proposal: a per-token "uses dying rules" toggle, on for party tokens and off for the rest.
-2. **P9, persistent damage:** roll it automatically at the end of the turn, or prompt only with the formula and let you roll? Proposal: prompt with a "Roll" button, so physical dice still work.
-3. **P11, earn income:** should it count toward the wealth check as awarded treasure? Proposal: no, a correction (§10.4), since GM Core's treasure tables already assume some downtime.
-4. **P11, treasure filters:** common only by default, or include uncommon?
-5. **P12:** does travel matter enough at your table to build it? Which calendar does The Codex use?
-6. **P8, player side:** should the player window ever show Recall Knowledge results the GM reveals (e.g. "Weakness: fire" after a success)? Proposal: later, through the existing reveal path.
+All answered 2026-10-29:
+
+1. **P9, monsters at 0 HP:** ✅ a per-token "uses dying rules" toggle, on for party tokens and off for the rest (those are marked defeated at 0 HP). Turn it on for a named NPC.
+2. **P9, persistent damage:** ✅ a prompt with the formula, a Roll button and a field for a physical roll, then the DC 15 flat check (10 if assisted).
+3. **P11, earn income:** ✅ not counted as awarded. It goes in as a correction, so it shows in what the party owns but not in the wealth %.
+4. **P11, treasure filters:** ✅ common only by default; uncommon and rare can be ticked per roll.
+5. **P12:** ✅ **dropped.** Travel doesn't matter enough at the table; in-world dates stay free text.
+6. **P8, player side:** ✅ not now. Recall Knowledge stays GM-only; a player-side reveal can come later through the existing reveal path.
