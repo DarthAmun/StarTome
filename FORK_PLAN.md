@@ -417,7 +417,9 @@ With Foundry as the source, the old records **don't need to be converted field b
 ### 8.1 Lore and campaign data
 Import 1:1 with ids remapped: 1 campaign, 154 entities, 144 links, 7 connections, 5 graphs, 1 snapshot, 19 encounters, 172 placements, 25 walls, 38 tokens. `system_id 1` → `game 'pf2e'`. The reader runs in a worker (the file is 238 MB), from the file or the same-origin `dmforge` DB opened read-only.
 
-### 8.2 Records → match against the synced compendium
+### 8.2 Records → match against the synced compendium — ⤴ removed 2026-10-29 (v0.16.0)
+> **Superseded:** DM's Tome's rules library isn't imported any more (only its campaigns, §8.5). Record matching, the review list, `legacy` entries from records and the old-library backup (`legacyLibrary`, dropped in Dexie v14) are gone. Entry images (NPC portraits, faction and location images) come with the entries; monster tokens are left out and their placements keep their name and picture. Kept below as history.
+
 Run after a Foundry sync. Matching is by kind + normalised name, with `source` and level as tie-breakers (legacy vs remaster twins). Name-only match rates measured against `v14-dev`:
 
 | Kind | Matched | Unmatched examples |
@@ -789,6 +791,8 @@ Worked through in groups by area (backup → database → compendium → VTT →
 **Second pass (2026-10-29, v0.14.0):** ARCH-01, ARCH-02, ARCH-03, ARCH-04, PERF-03, QUAL-04 done; ARCH-06/QUAL-03 further along; QUAL-06 and parts of ARCH-03/PERF-03 left on purpose (reasons above). Dexie v11 (overview index) and v12 (combat columns as values). 258 tests, typecheck and build pass; checked in the browser (upgrade on the demo data, token modal, combat log, cross-tab refresh, NPC PC toggle).
 
 **Third pass (2026-10-29, v0.15.0):** with DM's Tome → StarTome as the only direction (§8.5), the rest of ARCH-03 (Dexie v13) and the PF2e cover names are done, and files are `version: 2` with images alongside instead of inline.
+
+**Fourth pass (2026-10-29, v0.16.0):** the DM's Tome import is campaign-only (§8.2 superseded). Checked against the real 2026-10-28 export in the in-app browser: The Codex with 154 entries (33 NPC portraits, 9 faction and 13 location images), 19 encounters with their maps, 172 placements and 32 of 38 library tokens (6 monster tokens left out) in 0.8 s; 30 of the 47 token-less placements get a name from their old token or record, the other 17 pointed at tokens already deleted in DM's Tome.
 
 **Still open:** only what depends on Play Buddy (FEATURES_PLAN P6/P7), the parked party handout and Foundry ZIP mirror, and the questions in §13 that need your answer.
 

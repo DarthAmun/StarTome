@@ -26,7 +26,7 @@ const V3_STORES = {
 }
 
 describe('v4 upgrade', () => {
-  it('backs up the old library, then drops it with the record links and system ids', async () => {
+  it('drops the old library with its record links and system ids', async () => {
     const old = new Dexie(DB_NAME)
     old.version(3).stores(V3_STORES)
     await old.open()
@@ -38,12 +38,11 @@ describe('v4 upgrade', () => {
 
     const db = getDb()
     await db.open()
-    expect(db.verno).toBe(13)
+    expect(db.verno).toBe(14)
+    // DM's Tome system data isn't kept (v14 also drops the old backup table)
     expect(db.tables.map(t => t.name)).not.toContain('records')
-    expect(await db.legacyLibrary.where('table').equals('systems').count()).toBe(1)
-    const records = await db.legacyLibrary.where('table').equals('records').toArray()
-    expect(records.map(r => r.row.name)).toEqual(['Goblin', 'Rope'])
-    expect((await db.legacyLibrary.get('records:2'))?.row).toMatchObject({ name: 'Rope', entityTypeId: 'item' })
+    expect(db.tables.map(t => t.name)).not.toContain('systems')
+    expect(db.tables.map(t => t.name)).not.toContain('legacyLibrary')
     expect(await db.campaigns.toArray()).toEqual([expect.not.objectContaining({ system_id: 1 })])
     const [token] = await db.tokens.toArray()
     expect(token).not.toHaveProperty('linked_record_id')

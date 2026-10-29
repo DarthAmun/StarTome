@@ -1,19 +1,22 @@
 /**
- * Legacy DM's Tome campaign data → StarTome rows with fresh ids (FORK_PLAN.md §8.1).
+ * DM's Tome campaign data → StarTome rows with fresh ids (FORK_PLAN.md §8.1, §8.5).
  *
- * Lore shapes are the same in both apps; only ids change, because the target
- * database may already hold campaigns. Every table gets a contiguous id block
- * starting at `start[table]`, and every reference is rewritten — including the
- * ones hidden in JSON (map pins, regions, quest givers, graph positions,
- * combat-log token ids). Token links to old library records also get the
- * compendium entry they were reconciled to. Pure: no database.
+ * Only ids change, because the target database may already hold campaigns.
+ * Every table gets a contiguous id block starting at `start[table]`, and every
+ * reference is rewritten — including the ones inside JSON (map pins, regions,
+ * quest givers, graph positions, combat-log token ids). JSON text becomes
+ * values. Entry images (NPC portraits, faction and location images) are part
+ * of the entries and come along.
+ *
+ * DM's Tome's rules library isn't imported: links to its records are dropped,
+ * and library tokens that only stood for a record (monsters, not NPCs or PCs)
+ * are left out; their placements keep the token's name and image. Pure: no
+ * database.
  */
 import type {
   DbCampaign, DbEncounter, DbEncounterToken, DbEncounterWall, DbEntity, DbEntityConnection, DbEntityLink,
   DbEntitySnapshot, DbGraphLayout, DbToken,
 } from '~/composables/useDb'
-import type { LegacyRecord } from './records'
-import { isRulesKind } from '~/types/rules'
 
 export interface LoreTables {
   campaigns: DbCampaign[]
@@ -42,16 +45,19 @@ type WithRecordLink<T> = T & { linked_record_id?: number | null }
 export interface LegacyLoreTables extends Omit<LoreTables, 'tokens' | 'encounterTokens'> {
   tokens: WithRecordLink<DbToken>[]
   encounterTokens: WithRecordLink<DbEncounterToken>[]
+  /**
+   * Name and picture of the library records that placements point at: a
+   * placement made straight from DM's Tome's library showed the record's name
+   * and portrait. Only those two values are used; the records aren't imported.
+   */
+  recordLabels?: Map<number, { name: string; image: string | null }>
 }
 
-/** DM's Tome's rules library: read for matching (sync/legacyImport.ts), never imported as is. */
-export interface LibraryTables { systems: unknown[]; records: LegacyRecord[] }
-
-export interface RemapOptions {
-  /** Old record id → compendium entry it was reconciled to. */
-  rulesLinks: Map<number, string>
-  /** "kind:normalised legacy name" → compendium name, for {{kind: Name}} refs whose entry was renamed. */
-  refRenames?: Map<string, string>
+/** A DM's Tome library record's name and portrait (or image), for `recordLabels`. */
+export function recordLabel(rec: { name?: string; data?: unknown }): { name: string; image: string | null } {
+  const d = json<Record<string, any>>(rec.data, {})
+  const img = d.portrait || d.image
+  return { name: rec.name ?? '', image: typeof img === 'string' && img.startsWith('data:image/') ? img : null }
 }
 
 export interface RemapIssue { table: string; id: number; detail: string }
@@ -59,7 +65,19 @@ export interface RemapIssue { table: string; id: number; detail: string }
 export interface RemapResult {
   tables: LoreTables
   ids: Record<LoreTable, Map<number, number>>
+  /** Library tokens left out (monster tokens), see monsterTokenIds. */
+  monsterTokens: number
   issues: RemapIssue[]
+}
+
+/**
+ * Library tokens that only stood for a rules-library record: a monster or
+ * other stat block, not linked to an NPC and not a player character.
+ */
+export function monsterTokenIds(tokens: WithRecordLink<DbToken>[]): Set<number> {
+  return new Set(tokens
+    .filter(t => t.linked_record_id != null && t.linked_entity_id == null && !t.is_player_character)
+    .map(t => t.id!))
 }
 
 function json<T>(s: unknown, fallback: T): T {
@@ -75,36 +93,11 @@ function allocate(rows: { id?: number }[], start: number): Map<number, number> {
   return map
 }
 
-const REF = /\{\{(\w+):\s*([^}]+?)\s*\}\}/g
-
-/** Rewrites {{kind: Old Name}} refs to the compendium name they were reconciled to. */
-export function rewriteRulesRefs(text: string, renames: Map<string, string> | undefined, normalize: (s: string) => string): string {
-  if (!renames?.size || !text.includes('{{')) return text
-  return text.replace(REF, (m, type: string, name: string) => {
-    const kind = type.toLowerCase()
-    if (!isRulesKind(kind)) return m
-    const to = renames.get(`${kind}:${normalize(name)}`)
-    return to ? `{{${type}: ${to}}}` : m
-  })
-}
-
-/** Applies `fn` to every string inside a JSON value. */
-function mapStrings(v: unknown, fn: (s: string) => string): unknown {
-  if (typeof v === 'string') return fn(v)
-  if (Array.isArray(v)) return v.map(x => mapStrings(x, fn))
-  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, mapStrings(x, fn)]))
-  return v
-}
-
-export function remapLore(
-  src: LegacyLoreTables,
-  start: Record<LoreTable, number>,
-  opts: RemapOptions,
-  normalize: (s: string) => string,
-): RemapResult {
+export function remapLore(src: LegacyLoreTables, start: Record<LoreTable, number>): RemapResult {
   const issues: RemapIssue[] = []
-  const ids = Object.fromEntries(LORE_TABLES.map(t => [t, allocate(src[t], start[t])])) as Record<LoreTable, Map<number, number>>
-  const refs = (s: string) => rewriteRulesRefs(s, opts.refRenames, normalize)
+  const monsters = monsterTokenIds(src.tokens)
+  const keptTokens = src.tokens.filter(t => !monsters.has(t.id!))
+  const ids = Object.fromEntries(LORE_TABLES.map(t => [t, allocate(t === 'tokens' ? keptTokens : src[t], start[t])])) as Record<LoreTable, Map<number, number>>
   const ent = (id: number | null | undefined) => (id === null || id === undefined ? id : ids.entities.get(id) ?? null)
 
   /** Rows whose parent was not exported are dropped and reported. */
@@ -122,12 +115,12 @@ export function remapLore(
     const { system_id: _system, ...rest } = c as DbCampaign & { system_id?: number | null }
     return {
       ...rest, id: ids.campaigns.get(c.id!)!, game: c.game ?? 'pf2e', rules: c.rules ?? {},
-      description: refs(c.description ?? ''),
+      description: c.description ?? '',
     } as DbCampaign
   })
 
   const entities = owned('entities', src.entities, e => e.campaign_id, ids.campaigns).map(e => {
-    const attrs = mapStrings(json<Record<string, any>>(e.attributes, {}), refs) as Record<string, any>
+    const attrs = { ...json<Record<string, any>>(e.attributes, {}) }
     if (Array.isArray(attrs.mapPins)) {
       attrs.mapPins = attrs.mapPins
         .map((p: any) => ({ ...p, entityId: ent(p.entityId) }))
@@ -144,17 +137,17 @@ export function remapLore(
     }
     return {
       ...e, id: ids.entities.get(e.id!)!, campaign_id: ids.campaigns.get(e.campaign_id)!,
-      content: refs(e.content ?? ''), attributes: attrs,
+      content: e.content ?? '', attributes: attrs,
     }
   })
 
   const entityLinks = owned('entityLinks', src.entityLinks, l => l.source_id, ids.entities)
-    .map(l => ({ ...l, id: ids.entityLinks.get(l.id!)!, source_id: ids.entities.get(l.source_id)! }))
+    .map(l => ({ ...l, id: ids.entityLinks.get(l.id!)!, source_id: ids.entities.get(l.source_id)!, metadata: json<Record<string, string>>(l.metadata, {}) }))
 
   const entitySnapshots = owned('entitySnapshots', src.entitySnapshots, s => s.entity_id, ids.entities)
     .map(s => ({
       ...s, id: ids.entitySnapshots.get(s.id!)!, entity_id: ids.entities.get(s.entity_id)!,
-      event_id: ent(s.event_id) ?? null, content: refs(s.content ?? ''),
+      event_id: ent(s.event_id) ?? null, content: s.content ?? '', attributes: json<Record<string, any>>(s.attributes, {}),
     }))
 
   const entityConnections = owned('entityConnections', src.entityConnections, c => c.campaign_id, ids.campaigns)
@@ -182,25 +175,32 @@ export function remapLore(
     }
   })
 
-  /** Token → compendium link (from the record it pointed at) and campaign-entry link, remapped. */
-  function links<T extends { id?: number; linked_record_id?: number | null; linked_entity_id?: number | null }>(table: string, t: T) {
-    const rec = t.linked_record_id
-    const rulesId = rec !== null && rec !== undefined ? opts.rulesLinks.get(rec) ?? null : null
-    if (rec !== null && rec !== undefined && rulesId === null) {
-      issues.push({ table, id: t.id ?? -1, detail: `link to record ${rec} cleared — the record is gone or was dropped` })
-    }
-    const entityId = t.linked_entity_id !== null && t.linked_entity_id !== undefined ? ent(t.linked_entity_id) ?? null : t.linked_entity_id
-    return { linked_rules_id: rulesId, ...(entityId !== undefined ? { linked_entity_id: entityId } : {}) }
-  }
+  const entityLink = (id: number | null | undefined) => (id !== null && id !== undefined ? ent(id) ?? null : id)
 
-  const tokens = src.tokens.map(({ linked_record_id: _rec, ...t }) => ({ ...t, id: ids.tokens.get(t.id!)!, ...links('tokens', { ...t, linked_record_id: _rec }) }))
+  // Links to library records have no counterpart: the compendium comes from the Foundry sync
+  const tokens = keptTokens.map(({ linked_record_id: _rec, ...t }) => ({
+    ...t, id: ids.tokens.get(t.id!)!, linked_rules_id: null, linked_entity_id: entityLink(t.linked_entity_id) ?? null,
+  }))
+  if (monsters.size) issues.push({ table: 'tokens', id: -1, detail: `${monsters.size} monster token(s) left out — they stood for DM's Tome library records` })
 
+  const byOldToken = new Map(src.tokens.map(t => [t.id!, t]))
   const encounterTokens = owned('encounterTokens', src.encounterTokens, t => t.encounter_id, ids.encounters).map(({ linked_record_id: _rec, ...t }) => {
-    // A library token deleted in DM's Tome renders exactly like none: name and image come from the placement
-    const tokenId = t.token_id !== null && t.token_id !== undefined ? ids.tokens.get(t.token_id) ?? null : null
+    // A placement of a left-out (or deleted) library token keeps its name and
+    // image on the placement; one placed straight from the library takes the record's
+    const old = t.token_id != null ? byOldToken.get(t.token_id) : undefined
+    const tokenId = t.token_id != null ? ids.tokens.get(t.token_id) ?? null : null
+    const rec = _rec != null ? src.recordLabels?.get(_rec) : undefined
+    const name = old?.name || rec?.name || null
+    const image = t.image_source ?? old?.image_source ?? rec?.image ?? null
+    const own = tokenId === null ? {
+      label: t.label || name,
+      image_source: image,
+      image_type: t.image_source ? t.image_type : (old?.image_source ? old.image_type : (rec?.image ? 'file' as const : t.image_type)),
+    } : {}
     return {
-      ...t, id: ids.encounterTokens.get(t.id!)!, encounter_id: ids.encounters.get(t.encounter_id)!, token_id: tokenId,
-      ...links('encounterTokens', { ...t, linked_record_id: _rec }),
+      ...t, ...own, id: ids.encounterTokens.get(t.id!)!, encounter_id: ids.encounters.get(t.encounter_id)!, token_id: tokenId,
+      linked_rules_id: null, linked_entity_id: entityLink(t.linked_entity_id) ?? null,
+      conditions: json<unknown[]>(t.conditions, []), timers: json<unknown[]>(t.timers, []),
     }
   })
 
@@ -211,18 +211,19 @@ export function remapLore(
       : log
     return {
       ...e, id: ids.encounters.get(e.id!)!, campaign_id: ids.campaigns.get(e.campaign_id)!,
-      combat_log: combatLog,
+      combat_log: combatLog, fog_data: json<Record<string, string>>(e.fog_data, {}), viewport: json(e.viewport, { x: 0, y: 0, scale: 1 }),
       // Sound playlists are not part of DM's Tome exports
       sound_playlist_id: null,
     }
   })
 
   const encounterWalls = owned('encounterWalls', src.encounterWalls, w => w.encounter_id, ids.encounters)
-    .map(w => ({ ...w, id: ids.encounterWalls.get(w.id!)!, encounter_id: ids.encounters.get(w.encounter_id)! }))
+    .map(w => ({ ...w, id: ids.encounterWalls.get(w.id!)!, encounter_id: ids.encounters.get(w.encounter_id)!, points: json<{ x: number; y: number }[]>(w.points, []) }))
 
   return {
     tables: { campaigns, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts, tokens, encounters, encounterTokens, encounterWalls },
     ids,
+    monsterTokens: monsters.size,
     issues,
   }
 }

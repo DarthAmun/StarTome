@@ -7,10 +7,10 @@ describe('StarTome database', () => {
     const db = getDb()
     await db.open()
     expect(db.name).toBe('startome')
-    expect(db.verno).toBe(13)
+    expect(db.verno).toBe(14)
     expect(db.tables.map(t => t.name).sort()).toEqual([
       'campaigns', 'characters', 'encounterTokens', 'encounterWalls', 'encounters', 'entities', 'entityConnections',
-      'entityLinks', 'entitySnapshots', 'graphLayouts', 'images', 'inventory', 'legacyLibrary', 'levelUps', 'purses', 'rules', 'soundPlaylists',
+      'entityLinks', 'entitySnapshots', 'graphLayouts', 'images', 'inventory', 'levelUps', 'purses', 'rules', 'soundPlaylists',
       'soundTracks', 'syncState', 'tokens', 'treasureAwards', 'xpAwards',
     ])
   })

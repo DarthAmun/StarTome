@@ -263,7 +263,7 @@
             <div class="sett-row">
               <div class="sett-row-text">
                 <span class="sett-label">Everything</span>
-                <span class="sett-desc">All campaigns, tokens, your own compendium entries and your portraits, notes and edits on synced ones (the synced content itself is not included; sync it again after importing). Coming from DM's Tome? Use the <NuxtLink to="/compendium/legacy">DM's Tome import</NuxtLink> instead — it links your library to the compendium.</span>
+                <span class="sett-desc">All campaigns, tokens, your own compendium entries and your portraits, notes and edits on synced ones (the synced content itself is not included; sync it again after importing). Coming from DM's Tome? The <NuxtLink to="/compendium/legacy">DM's Tome import</NuxtLink> brings its campaigns over, from an export or straight from its database.</span>
               </div>
               <div class="sett-btn-pair">
                 <button class="sett-btn" @click="exportAll">↓ Export</button>
@@ -331,23 +331,6 @@
               </button>
             </div>
 
-          </div>
-        </section>
-
-        <!-- Old library backup (left by the v4 upgrade) -->
-        <section v-if="legacyLibrary" class="sett-section">
-          <div class="sett-section-title">Old Rules Library</div>
-          <div class="sett-group">
-            <div class="sett-row">
-              <div class="sett-row-text">
-                <span class="sett-label">Backup from {{ legacyLibrary.savedAt.slice(0, 10) }}</span>
-                <span class="sett-desc">{{ legacyLibrary.systems }} systems and {{ legacyLibrary.records }} records from DM's Tome's rules library, saved when StarTome removed it. The compendium replaces them; download the file if you want to keep them.</span>
-              </div>
-              <div class="sett-btn-pair">
-                <button class="sett-btn" @click="downloadLegacyLibrary">↓ Download</button>
-                <button class="sett-btn sett-btn--danger" @click="deleteLegacyLibrary">Delete</button>
-              </div>
-            </div>
           </div>
         </section>
 
@@ -626,38 +609,7 @@ async function loadStats() {
   stats.value = { campaigns: c, encounters: enc, encounterTokens: et, entities: ent, entityLinks: el, tokens: tok, rulesSynced: synced, rulesOwn: total - synced, images: img, graphs: gl, entityConnections: ec }
 }
 
-// ── Old library backup ───────────────────────────────────────────────────────
-const legacyLibrary = ref<{ savedAt: string; systems: number; records: number } | null>(null)
-
-async function loadLegacyLibrary() {
-  const db = getDb()
-  const [first, systems, records] = await Promise.all([
-    db.legacyLibrary.limit(1).first(),
-    db.legacyLibrary.where('table').equals('systems').count(),
-    db.legacyLibrary.where('table').equals('records').count(),
-  ])
-  legacyLibrary.value = first ? { savedAt: first.savedAt, systems, records } : null
-}
-
-async function downloadLegacyLibrary() {
-  const db = getDb()
-  const [systems, records] = await Promise.all([
-    db.legacyLibrary.where('table').equals('systems').toArray(),
-    db.legacyLibrary.where('table').equals('records').toArray(),
-  ])
-  if (!systems.length && !records.length) return
-  const savedAt = (systems[0] ?? records[0]).savedAt
-  // Same shape as DM's Tome's "systems-full" export, so DM's Tome can import it again
-  download({ version: 1, type: 'systems-full', exportedAt: savedAt, systems: systems.map(s => s.row), records: records.map(r => r.row) }, exportFilename(`old-library-${savedAt.slice(0, 10)}.json`))
-}
-
-async function deleteLegacyLibrary() {
-  if (!confirm('Delete the backup of the old rules library? Download it first if you might need it.')) return
-  await getDb().legacyLibrary.clear()
-  legacyLibrary.value = null
-}
-
-onMounted(() => { loadStats(); loadCampaigns(); loadLegacyLibrary() })
+onMounted(() => { loadStats(); loadCampaigns() })
 
 function download(data: Record<string, unknown>, filename: string) {
   downloadBlob(jsonBlob(data), filename)
@@ -961,7 +913,7 @@ async function runImport() {
     for (const sec of importSections.value) {
       if (sec.enabled) addLog(true, `${sec.label}: ${(result.counts[sec.key] ?? 0).toLocaleString()} of ${sec.count.toLocaleString()} imported`)
     }
-    if (result.skippedLegacyLibrary) addLog(false, `Skipped ${result.skippedLegacyLibrary} systems/records: DM's Tome's rules library is imported through Compendium › DM's Tome import, which links it to the synced compendium.`)
+    if (result.skippedLegacyLibrary) addLog(false, `Skipped ${result.skippedLegacyLibrary} systems/records: DM's Tome's rules library isn't imported; the compendium comes from the Foundry sync.`)
     if (result.missingOverlays) addLog(false, `${result.missingOverlays} portraits/notes belong to synced entries this browser doesn't have yet. Run the Foundry sync, then import this file again.`)
   } catch (err) {
     addLog(false, `Import failed, nothing was changed: ${(err as Error).message ?? err}`)
@@ -980,7 +932,7 @@ async function clearAll() {
   await Promise.all([
     db.campaigns.clear(), db.encounters.clear(), db.encounterTokens.clear(), db.encounterWalls.clear(),
     db.entities.clear(), db.entityLinks.clear(), db.entitySnapshots.clear(), db.entityConnections.clear(), db.graphLayouts.clear(),
-    db.tokens.clear(), db.characters.clear(), db.levelUps.clear(), db.xpAwards.clear(), db.treasureAwards.clear(), db.inventory.clear(), db.purses.clear(), db.rules.clear(), db.images.clear(), db.syncState.clear(), db.legacyLibrary.clear(),
+    db.tokens.clear(), db.characters.clear(), db.levelUps.clear(), db.xpAwards.clear(), db.treasureAwards.clear(), db.inventory.clear(), db.purses.clear(), db.rules.clear(), db.images.clear(), db.syncState.clear(),
   ])
   invalidateEntities()
   notifyRulesChanged()

@@ -1,14 +1,13 @@
 /**
- * Main-thread side of the DM's Tome legacy import: one worker per import that
- * holds the parsed export between analysis and apply (see sync/legacyImport.ts).
+ * Main-thread side of the DM's Tome import: one worker per import that holds
+ * the parsed export between the summary and the import (see sync/legacyImport.ts).
  */
 import { onScopeDispose, ref, shallowRef, toRaw } from 'vue'
-import { notifyRulesChanged } from '~/composables/useRules'
 import { invalidateEntities } from '~/composables/useEntities'
-import type { LegacyAnalysis, LegacyProgress, LegacyReport, RecordDecision } from '~/sync/legacyImport'
+import type { LegacyProgress, LegacyReport, LegacySummary } from '~/sync/legacyImport'
 
 export function useLegacyImport() {
-  const analysis = shallowRef<LegacyAnalysis | null>(null)
+  const summary = shallowRef<LegacySummary | null>(null)
   const report = shallowRef<LegacyReport | null>(null)
   const progress = shallowRef<LegacyProgress | null>(null)
   const error = ref<string | null>(null)
@@ -49,14 +48,14 @@ export function useLegacyImport() {
 
   async function open(source: { file: File } | { browserDb: true }) {
     error.value = null
-    analysis.value = null
+    summary.value = null
     report.value = null
     progress.value = null
     busy.value = 'open'
     dispose()   // a fresh worker per bundle frees the previous one's memory
     try {
-      const m = await call<{ analysis: LegacyAnalysis }>('file' in source ? { type: 'open', file: toRaw(source.file) } : { type: 'open', browserDb: true })
-      analysis.value = m.analysis
+      const m = await call<{ summary: LegacySummary }>('file' in source ? { type: 'open', file: toRaw(source.file) } : { type: 'open', browserDb: true })
+      summary.value = m.summary
     } catch (e) {
       error.value = (e as Error).message
       dispose()
@@ -65,14 +64,13 @@ export function useLegacyImport() {
     }
   }
 
-  async function apply(decisions: Record<number, RecordDecision>, opts: { lore: boolean }) {
+  async function apply() {
     error.value = null
     progress.value = null
     busy.value = 'apply'
     try { await navigator.storage?.persist?.() } catch {}
     try {
-      // Plain objects: Vue's reactive proxies cannot cross postMessage
-      const m = await call<{ report: LegacyReport }>({ type: 'apply', decisions: JSON.parse(JSON.stringify(decisions)), lore: opts.lore })
+      const m = await call<{ report: LegacyReport }>({ type: 'apply' })
       report.value = m.report
     } catch (e) {
       error.value = (e as Error).message
@@ -80,13 +78,12 @@ export function useLegacyImport() {
       busy.value = null
       dispose()
       invalidateEntities()
-      notifyRulesChanged()
     }
   }
 
   function reset() {
     dispose()
-    analysis.value = null
+    summary.value = null
     report.value = null
     progress.value = null
     error.value = null
@@ -94,5 +91,5 @@ export function useLegacyImport() {
 
   onScopeDispose(dispose)
 
-  return { analysis, report, progress, error, busy, open, apply, reset }
+  return { summary, report, progress, error, busy, open, apply, reset }
 }

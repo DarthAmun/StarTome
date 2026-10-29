@@ -16,8 +16,8 @@
  * 2. RulesEntity (rules table, types/rules.ts) — the typed PF2e/SF2e compendium,
  *    synced from Foundry or user-made. Read and written only via useRules.ts.
  *
- * DM's Tome's generic rules library (`systems`/`records`) was dropped in v4;
- * a copy of its rows survives in `legacyLibrary` until the user deletes it.
+ * DM's Tome's generic rules library (`systems`/`records`) was dropped in v4
+ * and isn't imported (only DM's Tome's campaigns come over, FORK_PLAN §8.5).
  */
 import Dexie, { type Table } from 'dexie'
 import { DB_NAME } from '~/utils/appNamespace'
@@ -241,14 +241,6 @@ export interface DbPurse {
   updated_at: string
 }
 
-/** One row of the old DM's Tome rules library, saved by the v4 upgrade before its tables were dropped. */
-export interface DbLegacyLibrary {
-  key: string                    // 'systems:<id>' | 'records:<id>'
-  table: 'systems' | 'records'
-  row: Record<string, unknown>
-  savedAt: string
-}
-
 export interface DbEntityConnection {
   id?: number
   campaign_id: number
@@ -331,7 +323,6 @@ class StarTomeDb extends Dexie {
   rules!:             Table<RulesEntity, string>
   images!:            Table<DbImage, string>
   syncState!:         Table<DbSyncState, string>
-  legacyLibrary!:     Table<DbLegacyLibrary, string>
   characters!:        Table<DbCharacter>
   levelUps!:          Table<DbLevelUp>
   inventory!:         Table<DbInventory>
@@ -371,9 +362,9 @@ class StarTomeDb extends Dexie {
       tokens:             '++id, is_template, name, linked_record_id, linked_rules_id',
       encounterTokens:    '++id, encounter_id, token_id, linked_record_id, linked_rules_id',
     })
-    // v4: the generic rules library is gone (phase 6). Its rows are copied to
-    // `legacyLibrary` (downloadable from Settings) before the tables are
-    // dropped; the record links and system ids it left behind go too.
+    // v4: the generic rules library is gone (phase 6), with the record links and
+    // system ids it left behind. (Until v14 its rows were first copied to
+    // `legacyLibrary`; DM's Tome still has them, so StarTome no longer keeps a copy.)
     this.version(4).stores({
       systems:            null,
       records:            null,
@@ -382,19 +373,6 @@ class StarTomeDb extends Dexie {
       tokens:             '++id, is_template, name, linked_rules_id',
       encounterTokens:    '++id, encounter_id, token_id, linked_rules_id',
     }).upgrade(async (tx) => {
-      // Dropped tables stay readable here; Dexie deletes them after the upgrade.
-      // Copied in chunks, one backup row per record: a library with inline
-      // images runs to ~100 MB, too much for a single value.
-      const savedAt = new Date().toISOString()
-      for (const table of ['systems', 'records'] as const) {
-        let last = -Infinity
-        for (;;) {
-          const rows = await tx.table(table).where(':id').above(last).limit(500).toArray()
-          if (!rows.length) break
-          await tx.table('legacyLibrary').bulkPut(rows.map(row => ({ key: `${table}:${row.id}`, table, row, savedAt })))
-          last = rows[rows.length - 1].id
-        }
-      }
       await tx.table('campaigns').toCollection().modify((c: Record<string, unknown>) => { delete c.system_id })
       for (const t of ['tokens', 'encounterTokens']) {
         await tx.table(t).toCollection().modify((r: Record<string, unknown>) => { delete r.linked_record_id })
@@ -458,6 +436,9 @@ class StarTomeDb extends Dexie {
         await tx.table(t).toCollection().modify((r: Record<string, unknown>) => { Object.assign(r, rowValues(t, r)) })
       }
     })
+    // v14: the backup of DM's Tome's rules library goes. Only DM's Tome's
+    // campaigns are imported, and DM's Tome itself still holds its library.
+    this.version(14).stores({ legacyLibrary: null })
   }
 }
 
