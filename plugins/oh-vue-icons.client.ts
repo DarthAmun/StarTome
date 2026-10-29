@@ -1,5 +1,6 @@
+import { defineComponent, h } from 'vue'
 import { OhVueIcon, addIcons } from 'oh-vue-icons'
-import * as GiIcons from 'oh-vue-icons/icons/gi'
+import { gameIconsReady, loadGameIcons } from '~/utils/gameIcons'
 import {
   MdArrowback, MdArrowforward,
   MdAdd, MdAddcircleoutline, MdDelete, MdDeleteOutlined, MdEdit, MdEditnote,
@@ -28,9 +29,6 @@ import {
   FaDiceD20, FaShapes,
 } from 'oh-vue-icons/icons/fa'
 
-// Add all Game Icons (gi-*) in one shot
-addIcons(...Object.values(GiIcons))
-
 // Add MD and FA icons individually
 addIcons(
   MdArrowback, MdArrowforward,
@@ -56,16 +54,23 @@ addIcons(
   FaDiceD20, FaShapes,
 )
 
-export default defineNuxtPlugin((nuxtApp) => {
-  nuxtApp.vueApp.component('OhVueIcon', OhVueIcon)
+/**
+ * OhVueIcon's registry isn't reactive, so a gi-* icon used before its chunk
+ * arrives would stay blank. This wrapper renders it once the set is there.
+ */
+const Icon = defineComponent({
+  name: 'OhVueIcon',
+  inheritAttrs: false,
+  setup(_, { attrs }) {
+    return () => {
+      const name = attrs.name as string | undefined
+      const waiting = !!name?.startsWith('gi-') && !gameIconsReady.value
+      return h(OhVueIcon, { ...attrs, name: waiting ? undefined : name })
+    }
+  },
 })
 
-// Export the full GI icon name list for the icon picker
-// Converts "GiFireworkExplosion" -> "gi-firework-explosion"
-export const GI_ICON_NAMES: string[] = Object.keys(GiIcons)
-  .filter(k => k.startsWith('Gi'))
-  .map(k => k
-    .replace(/^Gi/, 'gi-')
-    .replace(/([A-Z])/g, (m, l, i) => i === 0 ? l.toLowerCase() : '-' + l.toLowerCase())
-    .replace(/^gi--/, 'gi-')
-  )
+export default defineNuxtPlugin((nuxtApp) => {
+  nuxtApp.vueApp.component('OhVueIcon', Icon)
+  loadGameIcons()
+})

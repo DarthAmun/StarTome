@@ -1,4 +1,4 @@
-import type { Config } from 'tailwindcss'
+// tailwindcss comes in through @nuxtjs/tailwindcss and isn't a direct dependency, so no Config type here
 
 export default {
   content: [
@@ -37,4 +37,4 @@ export default {
     },
   },
   plugins: [],
-} satisfies Config
+}

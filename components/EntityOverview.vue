@@ -124,7 +124,7 @@
                     <img v-if="c.item.image" :src="c.item.image" alt="" loading="lazy" />
                     <span v-else class="eo-fb-initial">{{ c.item.initial }}</span>
                   </div>
-                  <div v-else-if="def.media === 'swatch'" class="eo-swatch" :style="{ aspectRatio: def.aspect, '--sw': c.item.swatch }">
+                  <div v-else-if="def.media === 'swatch'" class="eo-swatch" :style="{ aspectRatio: def.aspect, '--sw': c.item.swatch ?? undefined }">
                     <svg v-if="c.item.polygon" viewBox="0 0 160 90" preserveAspectRatio="xMidYMid meet">
                       <polygon :points="c.item.polygon" />
                     </svg>
@@ -227,7 +227,7 @@
     <div v-if="peekItem" class="eo-peek" :style="{ left: peek!.x + 'px', top: peek!.y + 'px' }">
       <div class="eo-peek-media" :class="{ arch: peekItem.archived, short: !peekItem.image && def.media !== 'portrait' }">
         <img v-if="peekItem.image" :src="peekItem.image" alt="" />
-        <svg v-else-if="peekItem.polygon" viewBox="0 0 160 90" :style="{ '--sw': peekItem.swatch }"><polygon :points="peekItem.polygon" /></svg>
+        <svg v-else-if="peekItem.polygon" viewBox="0 0 160 90" :style="{ '--sw': peekItem.swatch ?? undefined }"><polygon :points="peekItem.polygon" /></svg>
         <span v-else class="eo-fb-initial lg">{{ peekItem.initial }}</span>
         <div class="eo-rule" />
       </div>
@@ -299,7 +299,7 @@ const sortOptions = computed(() => {
   opts.push({ v: 'status', l: def.statusLabel })
   return opts.filter((o, i, a) => a.findIndex(x => x.v === o.v) === i)
 })
-const headCols = computed(() => [
+const headCols = computed((): { key: string; label: string; align?: 'right' }[] => [
   { key: 'name', label: 'Name' },
   ...def.cols.map(c => ({ key: c.key, label: c.label, align: c.align })),
   { key: 'status', label: def.statusLabel },

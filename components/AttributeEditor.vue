@@ -413,6 +413,7 @@ import type { EntityType, EntityAttributes } from "~/types/entities";
 import { NOTE_ICONS } from "~/types/entities";
 import { useEntities } from "~/composables/useEntities";
 import { dbApi } from "~/composables/useDb";
+import { pickImageFile } from "~/utils/image";
 
 const props = defineProps<{ type: EntityType; modelValue: EntityAttributes }>();
 const emit = defineEmits<{ "update:modelValue": [EntityAttributes] }>();
@@ -429,6 +430,17 @@ const giverSearch = ref(
         : (props.modelValue as any).questGiver || "",
 );
 const giverOpen = ref(false);
+// The dropdown is teleported to <body> (so panels can't clip it) and placed under the input
+const giverAnchorRef = ref<HTMLElement | null>(null);
+const giverDropdownStyle = ref<Record<string, string>>({});
+
+function openGiverPicker() {
+    const r = giverAnchorRef.value?.getBoundingClientRect();
+    giverDropdownStyle.value = r
+        ? { position: "fixed", top: `${r.bottom + 4}px`, left: `${r.left}px`, width: `${r.width}px`, right: "auto", zIndex: "1000" }
+        : {};
+    giverOpen.value = true;
+}
 
 watch(
     () => (props.modelValue as any).questGiverId,
@@ -550,7 +562,7 @@ function removeTag(i: number) {
     );
 }
 async function browseImage(sourceKey: string, typeKey: string) {
-    const dataUrl = await dbApi.system.openFileDialog();
+    const dataUrl = await pickImageFile();
     if (dataUrl)
         emit("update:modelValue", {
             ...props.modelValue,

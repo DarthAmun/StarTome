@@ -101,7 +101,7 @@ export function useEntityMarkdown() {
       sanitizeCfg.ADD_URI_SAFE_ATTR = ['src']
       sanitizeCfg.ALLOWED_URI_REGEXP = LOCAL_URI_RE
     }
-    return DOMPurify.sanitize(html, sanitizeCfg)
+    return String(DOMPurify.sanitize(html, sanitizeCfg))
   }
 
   function renderInline(text: string, options: Pick<RenderMarkdownOptions, 'entityLookup' | 'extraTypes'> = {}): string {

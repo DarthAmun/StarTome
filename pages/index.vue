@@ -421,7 +421,6 @@ function entityTypesFor(id: number) {
 const ENTITY_COLORS: Partial<Record<EntityType, string>> = {
     session: "#6b9fe8",
     npc: "#5db870",
-    item: "#e8b84e",
     location: "#7eaacc",
     faction: "#e86fa8",
     quest: "#e8924a",

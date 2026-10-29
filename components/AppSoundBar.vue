@@ -246,7 +246,7 @@ async function playLinkedPlaylist() {
   if (!pl) return
   const tracks = getPlaylistTracks(pl)
   await playPlaylist(pl, tracks)
-  notifDismissedId.value = pl.id
+  notifDismissedId.value = pl.id ?? null
   panelOpen.value = false
 }
 

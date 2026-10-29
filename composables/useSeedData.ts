@@ -397,6 +397,7 @@ export async function seedIfEmpty() {
     grid_offset_y: 0,
     fog_data: JSON.stringify({}),
     viewport: JSON.stringify({ x: 0, y: 0, scale: 1 }),
+    combat_log: '[]',
     created_at: ts,
     updated_at: ts,
   })

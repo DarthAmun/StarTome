@@ -6,9 +6,9 @@
     </div>
     <div class="ws-body">
       <div class="ws-meta">
-        <span v-if="entity.attributes?.sessionNumber" class="ws-tag">Session {{ entity.attributes.sessionNumber }}</span>
-        <span v-if="entity.attributes?.date" class="ws-tag">{{ entity.attributes.date }}</span>
-        <span v-if="entity.attributes?.status" :class="['ws-tag', `ws-tag--${entity.attributes.status}`]">{{ entity.attributes.status }}</span>
+        <span v-if="session.sessionNumber" class="ws-tag">Session {{ session.sessionNumber }}</span>
+        <span v-if="session.date" class="ws-tag">{{ session.date }}</span>
+        <span v-if="session.mode" :class="['ws-tag', `ws-tag--${session.mode}`]">{{ session.mode }}</span>
       </div>
       <MarkdownEditor v-if="tab === 'notes'"
         :entity-id="entity.id!" :campaign-id="entity.campaignId"
@@ -29,8 +29,11 @@
 <script setup lang="ts">
 import type { Entity } from '~/composables/useEntities'
 import { useEntities } from '~/composables/useEntities'
+import type { SessionAttributes } from '~/types/entities'
 
 const props = defineProps<{ entity: Entity }>()
+// Sessions have a mode (planning/running/finished), not a status
+const session = computed(() => (props.entity.attributes ?? {}) as SessionAttributes)
 const store = useEntities()
 const tab = ref<'notes' | 'prep'>('notes')
 
@@ -86,6 +89,7 @@ function savePrep(value: string) {
 }
 .ws-tag--planning { color: oklch(78% 0.16 75); border-color: oklch(78% 0.16 75/0.35); background: oklch(78% 0.16 75/0.08); }
 .ws-tag--finished { color: var(--success); border-color: color-mix(in oklch, var(--success) 30%, transparent); background: color-mix(in oklch, var(--success) 8%, transparent); }
-.ws-tag--active   { color: var(--accent); border-color: var(--accent-bg); background: var(--accent-bg); }
+.ws-tag--active,
+.ws-tag--running  { color: var(--accent); border-color: var(--accent-bg); background: var(--accent-bg); }
 
 </style>

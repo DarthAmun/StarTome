@@ -21,7 +21,7 @@
         <OhVueIcon name="md-autorenew" scale="1" class="wel-spin" />
       </div>
       <div v-else-if="encounters.length" class="wel-list">
-        <button v-for="e in encounters" :key="e.id!" class="wel-list-item" @click="$emit('update:encounterId', e.id)">
+        <button v-for="e in encounters" :key="e.id!" class="wel-list-item" @click="$emit('update:encounterId', e.id ?? null)">
           <span class="wel-list-icon">⚔</span>
           <span class="wel-list-name">{{ e.name }}</span>
           <span class="wel-list-status" :class="`status-${e.status ?? 'prepared'}`">{{ e.status ?? 'prepared' }}</span>

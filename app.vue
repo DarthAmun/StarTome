@@ -18,6 +18,7 @@
     <LazyAppSoundBar v-if="!isPlayerRoute" />
     <LevelUpDialog v-if="!isPlayerRoute" />
     <AwardXpDialog v-if="!isPlayerRoute" />
+    <AppNotices />
     <div id="spark-layer" class="no-print" aria-hidden="true" />
 
     <!-- New Campaign dialog -->
@@ -93,7 +94,7 @@ async function createCampaign() {
   newCamp.value = { name: '', description: '', game: 'pf2e' }
   showNewCampaign.value = false
   sidebarRef.value?.reload()
-  router.push(`/campaign/${c.id}/sessions`)
+  if (c) router.push(`/campaign/${c.id}/sessions`)
 }
 
 // ── Ink write animation ──────────────────────────────────────────

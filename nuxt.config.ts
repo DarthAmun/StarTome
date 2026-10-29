@@ -24,11 +24,9 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#8b1a1a' },
       ],
       link: [
+        { rel: 'icon', type: 'image/png', sizes: '32x32', href: asset('icons/favicon-32.png') },
         { rel: 'icon', type: 'image/x-icon', href: asset('favicon.ico') },
         { rel: 'apple-touch-icon', href: asset('icons/apple-touch-icon.png') },
-        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
-        { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Cinzel:wght@400;600;700&family=IM+Fell+English:ital@0;1&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' },
       ],
     },
   },
@@ -49,26 +47,14 @@ export default defineNuxtConfig({
       icons: [
         { src: asset('icons/icon-192.png'), sizes: '192x192', type: 'image/png' },
         { src: asset('icons/icon-512.png'), sizes: '512x512', type: 'image/png' },
-        { src: asset('icons/icon-512.png'), sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        { src: asset('icons/icon-maskable-512.png'), sizes: '512x512', type: 'image/png', purpose: 'maskable' },
       ],
     },
     workbox: {
-      maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10 MB — covers oh-vue-icons bundle
+      maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10 MB — covers the lazily loaded game-icons chunk
       navigateFallback: baseURL,
       navigateFallbackDenylist: [/^\/api\//],
       globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
-      runtimeCaching: [
-        {
-          urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-          handler: 'CacheFirst',
-          options: { cacheName: 'google-fonts-cache', expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 } },
-        },
-        {
-          urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-          handler: 'CacheFirst',
-          options: { cacheName: 'gstatic-fonts-cache', expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 } },
-        },
-      ],
     },
     devOptions: { enabled: false },
   },
@@ -85,7 +71,25 @@ export default defineNuxtConfig({
     public: { version: pkg.version },
   },
 
-  css: ['~/assets/css/main.css'],
+  // Fonts are bundled (latin subset, the weights the theme uses) so a first start offline looks right (PERF-13)
+  // Both workers are module workers; ES output lets them share chunks with the app
+  vite: { worker: { format: 'es' } },
+
+  css: [
+    '@fontsource/cinzel-decorative/latin-400.css',
+    '@fontsource/cinzel-decorative/latin-700.css',
+    '@fontsource/cinzel/latin-400.css',
+    '@fontsource/cinzel/latin-600.css',
+    '@fontsource/cinzel/latin-700.css',
+    '@fontsource/im-fell-english/latin-400.css',
+    '@fontsource/im-fell-english/latin-400-italic.css',
+    '@fontsource/dm-sans/latin-400.css',
+    '@fontsource/dm-sans/latin-500.css',
+    '@fontsource/dm-sans/latin-600.css',
+    '@fontsource/jetbrains-mono/latin-400.css',
+    '@fontsource/jetbrains-mono/latin-500.css',
+    '~/assets/css/main.css',
+  ],
   tailwindcss: { configPath: '~/tailwind.config.ts' },
   router: { options: { hashMode: true } },
   components: [{ path: '~/components', pathPrefix: false }],

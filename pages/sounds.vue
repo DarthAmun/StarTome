@@ -301,7 +301,7 @@
                 <span>📂 Choose Files…</span>
               </button>
               <div v-if="pendingFiles.length" class="snd-pending-files">
-                <div v-for="(f, i) in pendingFiles" :key="f.name + f.size" class="snd-pending-file">
+                <div v-for="(f, i) in pendingFiles" :key="`${i}:${f.name}`" class="snd-pending-file">
                   <span class="snd-pending-name">{{ f.name }}</span>
                   <button class="snd-del-pending" @click="pendingFiles.splice(i, 1)">✕</button>
                 </div>
