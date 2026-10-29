@@ -27,10 +27,14 @@
       </div>
     </header>
 
+    <BuildCreatureDialog :open="builderOpen" :game="game" :level="partyLevelUsed" @close="builderOpen = false" @saved="onBuilt" />
+
     <div class="eb-cols">
       <!-- ── Search ── -->
       <section class="eb-panel eb-search">
-        <div class="eb-panel-title">Compendium</div>
+        <div class="eb-panel-title">Compendium
+          <button class="eb-link eb-build" title="Build a homebrew creature from GM Core's tables and add it here" @click="builderOpen = true">Build creature</button>
+        </div>
         <input v-model="text" class="eb-input" placeholder="Search creatures and hazards…" />
         <div class="eb-filters">
           <label class="eb-filter">
@@ -134,7 +138,7 @@ import { campaignGame, type GameId } from '~/types/game'
 import { useWealth } from '~/composables/useWealth'
 import { formatMoney } from '~/rules/format'
 import type { TreasurePace } from '~/rules/wealth'
-import { RARITIES, type Hazard, type Rarity, type RulesEntity } from '~/types/rules'
+import { RARITIES, type Creature, type Hazard, type Rarity, type RulesEntity } from '~/types/rules'
 
 const route = useRoute()
 const router = useRouter()
@@ -209,6 +213,14 @@ function add(rulesId: string) {
   addSlot(rulesId)
 }
 
+// ── Creature builder (FEATURES_PLAN §10.3): a new homebrew creature goes straight into the encounter ──
+const builderOpen = ref(false)
+function onBuilt(c: Creature) {
+  builderOpen.value = false
+  add(c.id)
+  search()
+}
+
 // ── Selection ──
 const entries = shallowRef<Record<string, RulesEntity>>({})
 
@@ -278,6 +290,7 @@ onMounted(async () => {
 .eb-sub b { color: var(--text); }
 .eb-override { color: var(--accent) !important; }
 .eb-link { background: none; border: none; padding: 0; color: var(--text3); font-size: 12px; text-decoration: underline; cursor: pointer; }
+.eb-build { float: right; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--accent-l, var(--text2)); }
 .eb-pace { margin-top: 4px; color: var(--text3); }
 .eb-pace b { color: var(--text); }
 .eb-warn { padding: 1px 6px; border-radius: 4px; font-size: 11px; color: #c9973a; border: 1px solid #c9973a66; white-space: nowrap; }

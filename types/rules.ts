@@ -14,6 +14,8 @@ import type { GameId } from '~/types/game'
 // ── Primitives ─────────────────────────────────────────────────────────────
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'unique'
+import type { CreatureBuild } from '~/rules/creatureBuilding'
+
 export type Size = 'tiny' | 'sm' | 'med' | 'lg' | 'huge' | 'grg'
 export type Proficiency = 'untrained' | 'trained' | 'expert' | 'master' | 'legendary'
 
@@ -171,6 +173,8 @@ export interface Creature extends RulesEntityBase {
   /** Gear the creature carries; itemId links the compendium entry when Foundry provides one. */
   inventory: { itemId?: string; name: string; quantity: number }[]
   tokenImg?: string | null
+  /** Homebrew made with the creature builder: its road map and columns, for "Rebuild at level". */
+  build?: CreatureBuild
 }
 
 export interface Hazard extends RulesEntityBase {

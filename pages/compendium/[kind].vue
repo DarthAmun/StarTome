@@ -13,9 +13,12 @@
           <button :class="{ on: prefs.game === 'all' }" @click="prefs.game = 'all'">All</button>
           <button v-for="g in GAME_IDS" :key="g" :class="{ on: prefs.game === g }" @click="prefs.game = g">{{ GAME_CONFIG[g].short }}</button>
         </div>
+        <button v-if="kind === 'creature'" class="btn btn-ghost btn-sm" title="Build a homebrew creature from GM Core's creature-building tables" @click="openBuilder(null)">Build creature</button>
         <button v-if="kind" class="btn btn-accent btn-sm" @click="createEntry">+ New {{ cfg!.label }}</button>
       </div>
     </div>
+
+    <BuildCreatureDialog :open="builderOpen" :game="builderGame" :base="builderBase" @close="builderOpen = false" @saved="onBuilt" />
 
     <div v-if="!kind" class="sys-entity-empty"><span>Unknown compendium section.</span></div>
 
@@ -106,6 +109,7 @@
           <button class="btn btn-ghost btn-sm" :title="selected.isFavorite ? 'Remove from favorites' : 'Add to favorites'" @click="toggleFavorite">{{ selected.isFavorite ? '★' : '☆' }}</button>
           <button v-if="selected.origin === 'foundry' && selected.localEdits" class="btn btn-ghost btn-sm" title="Drop your edits and show the Foundry version" @click="resetEdits">Reset edits</button>
           <button class="btn btn-ghost btn-sm" title="Copy as a homebrew entry you fully own" @click="duplicate">Duplicate</button>
+          <button v-if="selected.kind === 'creature' && selected.origin === 'user' && (selected as Creature).build" class="btn btn-ghost btn-sm" title="Rebuild from its road map at another level" @click="openBuilder(selected as Creature)">Rebuild at level…</button>
           <button class="btn btn-ghost btn-sm" @click="toggleEdit">{{ editing ? 'Done' : 'Edit' }}</button>
           <button v-if="selected.origin !== 'foundry'" class="btn btn-danger btn-sm" @click="remove">Delete</button>
           <button class="btn btn-ghost btn-sm" title="Close" @click="select(null)">✕</button>
@@ -281,6 +285,23 @@ function toggleEdit() {
   editing.value = !editing.value
   // Keep the URL in step so a reload reopens the same mode
   if (selectedId.value) router.replace({ query: editing.value ? { id: selectedId.value, edit: '1' } : { id: selectedId.value } })
+}
+
+// ── Creature builder (FEATURES_PLAN §10.3) ──
+const builderOpen = ref(false)
+const builderBase = shallowRef<Creature | null>(null)
+const builderGame = computed<GameId>(() => builderBase.value?.game === 'sf2e' || (!builderBase.value && prefs.game === 'sf2e') ? 'sf2e' : 'pf2e')
+
+function openBuilder(base: Creature | null) {
+  editorRef.value?.flush()
+  builderBase.value = base
+  builderOpen.value = true
+}
+
+async function onBuilt(c: Creature, edit: boolean) {
+  builderOpen.value = false
+  selected.value = c
+  await router.replace({ query: edit ? { id: c.id, edit: '1' } : { id: c.id } })
 }
 
 async function createEntry() {

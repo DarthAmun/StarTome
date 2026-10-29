@@ -218,6 +218,17 @@ export async function rulesCreate(kind: RulesKind, init: { name: string; game: G
   return entity
 }
 
+/** Writes a whole homebrew entry (the creature builder): creates it or replaces it. */
+export async function rulesSaveUser(entity: RulesEntity): Promise<RulesEntity> {
+  if (entity.origin !== 'user') throw new Error('Only homebrew entries can be written whole.')
+  const db = getDb()
+  const before = await db.rules.get(entity.id)
+  const next = { ...JSON.parse(JSON.stringify(entity)), sortName: entity.name.toLowerCase(), updatedAt: now() } as RulesEntity
+  await db.rules.put(next)
+  touch(before ?? null, next)
+  return next
+}
+
 /** Sets one field (dotted path). Foundry entries get the change as a local edit. */
 export async function rulesUpdate(id: string, path: string, value: unknown): Promise<RulesEntity | undefined> {
   const db = getDb()
