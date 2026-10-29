@@ -15,7 +15,7 @@
  * giant string (V8 caps strings at ~512 MB).
  */
 import {
-  getDb, now, parseJsonObject,
+  encounterText, encounterValues, getDb, now, parseJsonObject, placementText, placementValues,
   type DbCampaign, type DbCharacter, type DbEncounter, type DbEncounterToken, type DbEncounterWall, type DbEntity,
   type DbEntityConnection, type DbEntityLink, type DbEntitySnapshot, type DbGraphLayout, type DbInventory, type DbLevelUp,
   type DbPurse, type DbToken, type DbTreasureAward, type DbXpAward,
@@ -106,7 +106,8 @@ export async function exportAllPayload(): Promise<BackupPayload> {
   const imageRows = await db.images.bulkGet(imageIdsOf([...rules, ...rulesOverlays] as unknown as Record<string, unknown>[]))
   const images: ExportedImage[] = []
   for (const r of imageRows) if (r) images.push({ id: r.id, mime: r.mime, data: await blobToDataUrl(r.blob) })
-  rows.encounters = await inlineMaps(rows.encounters)
+  rows.encounters = (await inlineMaps(rows.encounters)).map(encounterText)
+  rows.encounterTokens = rows.encounterTokens.map(placementText)
   return { ...header('all'), ...rows, rules, rulesOverlays, images, syncState: await db.syncState.toArray() }
 }
 
@@ -148,7 +149,8 @@ export async function collectCampaignRows(campaignIds?: number[]): Promise<Campa
 
 export async function exportCampaignsPayload(campaignIds?: number[]): Promise<BackupPayload> {
   const rows = await collectCampaignRows(campaignIds)
-  return { ...header('campaigns'), ...rows, encounters: await inlineMaps(rows.encounters) }
+  // Files keep DM's Tome's JSON text in the combat columns
+  return { ...header('campaigns'), ...rows, encounters: (await inlineMaps(rows.encounters)).map(encounterText), encounterTokens: rows.encounterTokens.map(placementText) }
 }
 
 export async function exportTokensPayload(): Promise<BackupPayload> {
@@ -370,6 +372,9 @@ export async function importPayload(payload: BackupPayload, opts: ImportOptions)
   for (const e of rows.entities ?? []) {
     if (typeof e.attributes !== 'string') e.attributes = JSON.stringify(e.attributes ?? {})
   }
+  // Combat columns arrive as JSON text; this database keeps values (v12)
+  if (rows.encounters) rows.encounters = rows.encounters.map(encounterValues)
+  if (rows.encounterTokens) rows.encounterTokens = rows.encounterTokens.map(placementValues)
   // Inline maps go to the image store; the rows keep a ref
   const mapImages: { id: string; blob: Blob; mime: string; createdAt: string }[] = []
   if (rows.encounters) {

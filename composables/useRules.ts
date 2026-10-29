@@ -7,6 +7,7 @@
  */
 import { ref, shallowRef, toRaw, watch } from 'vue'
 import { getDb, now } from '~/composables/useDb'
+import { onTablesChanged } from '~/db/changes'
 import { newRulesEntity, newRulesId } from '~/rules/factory'
 import { isOverlayPath, setPath, withLocalEdits } from '~/rules/edits'
 import { dataUrlToBlob, deleteImage, imageRefId, isImageRef, storeImage } from '~/rules/images'
@@ -378,6 +379,9 @@ export function useRulesIndex() {
 export function useRulesRevision() {
   return revision
 }
+
+// A sync or edit in another tab: lists and counts refresh (the name index reloads after our own sync/import)
+onTablesChanged(['rules'], () => { queryCache.clear(); revision.value++ })
 
 /** For writers outside this module (the sync worker, imports): tell lists, counts and the ref index to reload. */
 export function notifyRulesChanged() {

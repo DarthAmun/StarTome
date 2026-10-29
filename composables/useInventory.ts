@@ -7,6 +7,7 @@
  */
 import { computed, ref } from 'vue'
 import { getDb, now, type DbInventory, type DbPurse } from '~/composables/useDb'
+import { onTablesChanged } from '~/db/changes'
 import { rulesGetMany } from '~/composables/useRules'
 import { planMove, sameStack, splitCoins, STASH, type InventoryEntry, type OwnerKey } from '~/rules/inventory'
 import type { BulkTenths, Item, Runes } from '~/types/rules'
@@ -51,6 +52,11 @@ async function load(campaignId: number) {
 async function reloadIfLoaded(campaignId: number) {
   if (loadedCampaign.value === campaignId) await load(campaignId)
 }
+
+// Moves made in another window (resolve dialog in a second tab, a future Play Buddy sync) show up here too
+onTablesChanged(['inventory', 'purses'], () => {
+  if (loadedCampaign.value != null) void load(loadedCampaign.value)
+})
 
 /** One owner's rows in one campaign, via the [campaign_id+owner] index (the stash key repeats across campaigns). */
 function ownerRows(campaignId: number, owner: OwnerKey) {

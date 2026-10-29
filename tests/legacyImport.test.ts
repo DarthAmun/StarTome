@@ -83,7 +83,8 @@ describe('legacy lore remapping', () => {
     expect(tables.tokens[0]).not.toHaveProperty('linked_record_id')
     expect(tables.encounterTokens.map(t => [t.id, t.token_id, t.linked_rules_id])).toEqual([[20, 1, 'fvtt:mino'], [21, null, null]])
     expect(tables.encounters[0]).toMatchObject({ campaign_id: 5, sound_playlist_id: null })
-    expect(JSON.parse(tables.encounters[0].combat_log)[0].tokenId).toBe(20)
+    // The converter keeps DM's Tome's JSON text; the import turns it into a value afterwards
+    expect(JSON.parse(tables.encounters[0].combat_log as string)[0].tokenId).toBe(20)
     expect(tables.encounterWalls[0].encounter_id).toBe(1)
     expect(issues.map(i => `${i.table}:${i.id}`)).toEqual(['entities:50', 'entities:11', 'encounterTokens:10'])
   })

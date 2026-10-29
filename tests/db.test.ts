@@ -7,7 +7,7 @@ describe('StarTome database', () => {
     const db = getDb()
     await db.open()
     expect(db.name).toBe('startome')
-    expect(db.verno).toBe(10)
+    expect(db.verno).toBe(12)
     expect(db.tables.map(t => t.name).sort()).toEqual([
       'campaigns', 'characters', 'encounterTokens', 'encounterWalls', 'encounters', 'entities', 'entityConnections',
       'entityLinks', 'entitySnapshots', 'graphLayouts', 'images', 'inventory', 'legacyLibrary', 'levelUps', 'purses', 'rules', 'soundPlaylists',
@@ -74,5 +74,24 @@ describe('cascading deletes', () => {
     expect((await db.tokens.get(c.token))!.linked_entity_id).toBeNull()
     await dbApi.entities.delete(c.event)
     expect((await db.entitySnapshots.where('entity_id').equals(c.loc).first())!.event_id).toBeNull()
+  })
+})
+
+describe('campaign overview', () => {
+  it('counts entries per type and lists recent ones and active quests without loading the rest', async () => {
+    const { dbApi } = await import('~/composables/useDb')
+    const db = getDb()
+    const id = await db.campaigns.add({ name: 'O', description: '', created_at: '', updated_at: '' }) as number
+    const add = (type: string, name: string, updated: string, attrs = '{}') =>
+      db.entities.add({ campaign_id: id, type, name, content: '', attributes: attrs, created_at: '', updated_at: updated })
+    await add('npc', 'Vos', '2026-01-01')
+    await add('npc', 'Kib', '2026-01-03')
+    await add('quest', 'Find the seal', '2026-01-02', '{"status":"active"}')
+    await add('quest', 'Old errand', '2026-01-04', '{"status":"completed"}')
+    const o = await dbApi.entities.overview(id, 2)
+    expect(o.counts).toEqual({ npc: 2, quest: 2 })
+    expect(o.total).toBe(4)
+    expect(o.recent.map(e => e.name)).toEqual(['Old errand', 'Kib'])
+    expect(o.activeQuests.map(e => e.name)).toEqual(['Find the seal'])
   })
 })

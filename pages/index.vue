@@ -347,24 +347,15 @@ const compendiumKinds = computed(() =>
 );
 
 const campaigns = ref<any[]>([]);
-const entityMap = ref<Record<number, any[]>>({});
+// Per campaign: counts, recent and active quests, read without loading every entry
+type Overview = Awaited<ReturnType<typeof dbApi.entities.overview>>;
+const overviews = ref<Record<number, Overview>>({});
 
 onMounted(async () => {
     rulesCounts().then((c) => { counts.value = c; });
     campaigns.value = await dbApi.campaigns.list();
-    // Load entities for each campaign
-    const results = await Promise.all(
-        campaigns.value.map((c) =>
-            dbApi.entities
-                .list(c.id)
-                .then((ents: any[]) => ({ id: c.id, ents })),
-        ),
-    );
-    const map: Record<number, any[]> = {};
-    results.forEach((r) => {
-        map[r.id] = r.ents;
-    });
-    entityMap.value = map;
+    const results = await Promise.all(campaigns.value.map(async (c) => [c.id!, await dbApi.entities.overview(c.id!)] as const));
+    overviews.value = Object.fromEntries(results);
 });
 
 // ── Greeting ──────────────────────────────────────────────────────────────────
@@ -374,7 +365,7 @@ const greeting = computed(() => {
 });
 
 const totalEntities = computed(() =>
-    Object.values(entityMap.value).reduce((sum, ents) => sum + ents.length, 0),
+    Object.values(overviews.value).reduce((sum, o) => sum + o.total, 0),
 );
 
 // ── Campaign helpers ──────────────────────────────────────────────────────────
@@ -402,15 +393,11 @@ function campBanner(c: any): string {
 }
 
 function campEntityCount(id: number): number {
-    return entityMap.value[id]?.length ?? 0;
+    return overviews.value[id]?.total ?? 0;
 }
 
 function entityTypesFor(id: number) {
-    const ents = entityMap.value[id] ?? [];
-    const counts: Record<string, number> = {};
-    ents.forEach((e) => {
-        counts[e.type] = (counts[e.type] ?? 0) + 1;
-    });
+    const counts = overviews.value[id]?.counts ?? {};
     return ENTITY_TYPES.filter((et) => counts[et.type]).map((et) => ({
         ...et,
         count: counts[et.type],
@@ -431,7 +418,7 @@ const ENTITY_COLORS: Partial<Record<EntityType, string>> = {
 const recentActivity = computed(() =>
     campaigns.value
         .flatMap((c) =>
-            (entityMap.value[c.id] ?? []).map((e) => ({
+            (overviews.value[c.id!]?.recent ?? []).map((e) => ({
                 id: e.id,
                 name: e.name,
                 sub: ENTITY_TYPE_CONFIG[e.type as EntityType]?.label ?? e.type,
@@ -449,17 +436,7 @@ const recentActivity = computed(() =>
 const activeQuests = computed(() =>
     campaigns.value
         .flatMap((c) =>
-            (entityMap.value[c.id] ?? [])
-                .filter((e) => {
-                    if (e.type !== "quest") return false
-                    const attr = e.attributes ?? "{}"
-                    if (!attr.includes('"active"')) return false
-                    try {
-                        return JSON.parse(attr).status === "active"
-                    } catch {
-                        return false
-                    }
-                })
+            (overviews.value[c.id!]?.activeQuests ?? [])
                 .map((e) => ({ id: e.id, name: e.name, campName: c.name, campaignId: c.id }))
         )
         .slice(0, 8)
@@ -488,7 +465,7 @@ async function deleteCampaign(id: number) {
     if (!confirm("Delete this campaign and all its data?")) return;
     await dbApi.campaigns.delete(id);
     campaigns.value = campaigns.value.filter((c) => c.id !== id);
-    delete entityMap.value[id];
+    delete overviews.value[id];
 }
 
 // ── Clone campaign ────────────────────────────────────────────────────────────
@@ -501,7 +478,7 @@ async function cloneCampaign(c: any) {
         const clone = await dbApi.campaigns.clone(c.id);
         if (!clone) return;
         campaigns.value = [clone, ...campaigns.value];
-        entityMap.value[clone.id!] = await dbApi.entities.list(clone.id!);
+        overviews.value[clone.id!] = await dbApi.entities.overview(clone.id!);
     } finally {
         cloningId.value = null;
     }

@@ -90,4 +90,38 @@ describe('party repository', () => {
       useParty().dismissPrompt()
     }
   })
+
+  it('makes the party the one source of "player character" for NPCs, tokens and placements', async () => {
+    const c = await campaign('milestone')
+    const db = getDb()
+    const party = useParty()
+    await party.load(c.id)
+    const token = await db.tokens.add({ name: 'Vos', image_source: null, image_type: 'file', is_template: 1, is_player_character: 0, linked_entity_id: c.guard, created_at: '' }) as number
+    const enc = await db.encounters.add({ campaign_id: c.id, name: 'Fight', created_at: '', updated_at: '' } as any) as number
+    const placed = await db.encounterTokens.add({ encounter_id: enc, token_id: token, is_player_token: 0 } as any) as number
+
+    await party.setNpcPlayerCharacter(c.id, c.guard, true)
+    expect(party.characters.value.find(x => x.name === 'Captain Vos')?.role).toBe('pc')
+    expect(parseJsonObject((await db.entities.get(c.guard))!.attributes).isPlayerCharacter).toBe(true)
+    expect((await db.tokens.get(token))!.is_player_character).toBe(1)
+    expect((await db.encounterTokens.get(placed))!.is_player_token).toBe(1)
+
+    await party.setNpcPlayerCharacter(c.id, c.guard, false)
+    expect(party.characters.value.some(x => x.name === 'Captain Vos')).toBe(false)
+    expect(parseJsonObject((await db.entities.get(c.guard))!.attributes).isPlayerCharacter).toBe(false)
+    expect((await db.tokens.get(token))!.is_player_character).toBe(0)
+    expect((await db.encounterTokens.get(placed))!.is_player_token).toBe(0)
+    // Not adopted again on the next load
+    await party.load(c.id)
+    expect(party.characters.value.some(x => x.name === 'Captain Vos')).toBe(false)
+  })
+
+  it('tells the token library what the party says about a token', async () => {
+    const { partyPcFlag } = await import('~/composables/useParty')
+    const c = await campaign('milestone')
+    await useParty().load(c.id)
+    expect(await partyPcFlag(null, c.kib)).toBe(true)
+    expect(await partyPcFlag(null, c.guard)).toBe(false)
+    expect(await partyPcFlag(null, null)).toBeNull()
+  })
 })

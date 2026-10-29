@@ -1,3 +1,4 @@
+import { computed, ref, toRaw, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { dbApi, parseJsonObject } from '~/composables/useDb'
 import { imageTypeOf } from '~/utils/image'
@@ -14,6 +15,9 @@ import { healthState, type HealthState } from '~/composables/useConditions'
 import { lsKey } from '~/utils/appNamespace'
 import { playerWindow } from '~/utils/windowChannel'
 import { parseJson } from '~/utils/json'
+
+/** A deep plain copy: IndexedDB can't store Vue proxies, and nested values may be ones. */
+const plain = <T>(v: T): T => JSON.parse(JSON.stringify(v ?? null))
 import { reportError } from '~/composables/useNotices'
 import { ImageChannel, toPlayerToken } from '~/utils/playerPayload'
 
@@ -320,10 +324,10 @@ export const useEncounterStore = defineStore('encounter', () => {
   }
 
   let fogTimer: ReturnType<typeof setTimeout> | null = null
-  let fogPending: { id: number; data: string } | null = null
+  let fogPending: { id: number; data: Record<string, string> } | null = null
   function scheduleFogSave() {
     if (!current.value) return
-    fogPending = { id: current.value.id, data: JSON.stringify(current.value.fogData) }
+    fogPending = { id: current.value.id, data: plain(current.value.fogData) }
     if (fogTimer) clearTimeout(fogTimer)
     fogTimer = setTimeout(() => { void flushFog() }, 400)
   }
@@ -485,7 +489,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     if ('initiative' in updates) dbUpdates.initiative = updates.initiative
     if ('label' in updates) dbUpdates.label = updates.label
     if ('notes' in updates) dbUpdates.notes = updates.notes
-    if ('conditions' in updates) dbUpdates.conditions = JSON.stringify(updates.conditions)
+    if ('conditions' in updates) dbUpdates.conditions = plain(updates.conditions)
     if ('linkedRulesId' in updates) dbUpdates.linkedRulesId = updates.linkedRulesId
     if ('adjustment' in updates) dbUpdates.rulesAdjustment = updates.adjustment
     if ('linkedEntityId' in updates) dbUpdates.linkedEntityId = updates.linkedEntityId
@@ -493,7 +497,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     if ('isPlayerToken' in updates) dbUpdates.isPlayerToken = updates.isPlayerToken ? 1 : 0
     if ('isAlly' in updates) dbUpdates.isAlly = updates.isAlly ? 1 : 0
     if ('elevation' in updates) dbUpdates.elevation = updates.elevation
-    if ('timers' in updates) dbUpdates.timers = JSON.stringify(updates.timers)
+    if ('timers' in updates) dbUpdates.timers = plain(updates.timers)
     await dbApi.encounterTokens.update(dbUpdates as { id: number })
     if ('isPlayerToken' in updates && fovMode.value === 'group') {
       fovRecomputeTrigger.value++
@@ -531,7 +535,7 @@ export const useEncounterStore = defineStore('encounter', () => {
   async function persistCombatLog() {
     if (!current.value) return
     try {
-      await dbApi.encounters.update({ id: current.value.id, combat_log: JSON.stringify(current.value.combatLog) })
+      await dbApi.encounters.update({ id: current.value.id, combat_log: plain(current.value.combatLog) })
     } catch (err) {
       reportError('Saving the combat log', err)
     }
@@ -573,9 +577,16 @@ export const useEncounterStore = defineStore('encounter', () => {
     return { ...data, imageSource: own, imageType: imageTypeOf(own) }
   }
 
+  /** A token that stands for a party member is a PC exactly when the party says so (ARCH-01). */
+  async function withPartyPcFlag(id: number | null, input: LibraryTokenInput): Promise<LibraryTokenInput> {
+    const { partyPcFlag } = await import('~/composables/useParty')
+    const fromParty = await partyPcFlag(id, input.linkedEntityId)
+    return fromParty == null ? input : { ...input, isPlayerCharacter: fromParty }
+  }
+
   async function updateLibraryToken(id: number, input: LibraryTokenInput) {
     try {
-      const data = await syncLinkedImage(input)
+      const data = await syncLinkedImage(await withPartyPcFlag(id, input))
       await dbApi.tokens.update(id, data)
       const token = tokenLibrary.value.find(t => t.id === id)
       const pcChanged = !!token && token.isPlayerCharacter !== data.isPlayerCharacter
@@ -597,7 +608,7 @@ export const useEncounterStore = defineStore('encounter', () => {
 
   async function addToLibrary(input: LibraryTokenInput): Promise<Token | null> {
     try {
-      const row = await dbApi.tokens.create(await syncLinkedImage(input))
+      const row = await dbApi.tokens.create(await syncLinkedImage(await withPartyPcFlag(null, input)))
       if (!row) return null
       const token = await normalizeLibraryToken(row)
       tokenLibrary.value.push(token)
@@ -718,7 +729,7 @@ export const useEncounterStore = defineStore('encounter', () => {
         }
         return { ...t, remaining: t.remaining - 1 }
       })
-      if (ticked.length) dbApi.encounterTokens.update({ id: token.id, timers: JSON.stringify(token.timers) }).catch(err => reportError('Saving the timers', err))
+      if (ticked.length) dbApi.encounterTokens.update({ id: token.id, timers: plain(token.timers) }).catch(err => reportError('Saving the timers', err))
     }
     if (tokenId !== null) timerTickHistory.push({ tokenId, timerIds: ticked, logIds })
     if (timerTickHistory.length > 200) timerTickHistory.shift()
@@ -738,7 +749,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     if (!token || !last.timerIds.length) return
     const ids = new Set(last.timerIds)
     token.timers = token.timers.map(t => ids.has(t.id) ? { ...t, remaining: Math.min(t.duration, t.remaining + 1) } : t)
-    dbApi.encounterTokens.update({ id: token.id, timers: JSON.stringify(token.timers) }).catch(err => reportError('Saving the timers', err))
+    dbApi.encounterTokens.update({ id: token.id, timers: plain(token.timers) }).catch(err => reportError('Saving the timers', err))
   }
 
   // ── Actions — Player view ─────────────────────────────────────────────────

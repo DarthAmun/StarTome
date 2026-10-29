@@ -164,4 +164,30 @@ describe('backup and import', () => {
     await dbApi.encounters.update({ id: c.enc, map_source: 'data:image/png;base64,iVBORw0KGgo=' })
     expect((await db.encounters.get(c.enc))!.map_source).toMatch(/^img:/)
   })
+
+  it('keeps combat state as values here and as JSON text in files', async () => {
+    const db = getDb()
+    const c = await seed('Codex')
+    await db.encounters.update(c.enc, { fog_data: { '1,1': 'revealed' }, combat_log: [{ id: 1, type: 'damage' }] })
+    const file = await readBack(await exportAllPayload())
+    const enc = file.encounters!.find(e => e.name === 'Codex fight')!
+    expect(enc.fog_data).toBe('{"1,1":"revealed"}')
+    expect(typeof file.encounterTokens![0].conditions).toBe('string')
+
+    await importPayload(file, { mode: 'replace', sections: ALL })
+    const back = await db.encounters.get(c.enc)
+    expect(back!.fog_data).toEqual({ '1,1': 'revealed' })
+    expect(back!.combat_log).toEqual([{ id: 1, type: 'damage' }])
+    expect(Array.isArray((await db.encounterTokens.toArray())[0].conditions)).toBe(true)
+  })
+
+  it('turns JSON text left in combat columns into values', async () => {
+    const { structureCombatColumns } = await import('~/composables/useDb')
+    const db = getDb()
+    const c = await seed('Codex')
+    await db.encounters.update(c.enc, { fog_data: '{"2,2":"hidden"}', viewport: '{"x":1,"y":2,"scale":1}' })
+    await structureCombatColumns()
+    expect((await db.encounters.get(c.enc))!.fog_data).toEqual({ '2,2': 'hidden' })
+    expect((await db.encounters.get(c.enc))!.viewport).toEqual({ x: 1, y: 2, scale: 1 })
+  })
 })

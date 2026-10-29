@@ -321,10 +321,16 @@ function activateCommandMode() {
 
 let cmdTimer: ReturnType<typeof setTimeout> | null = null
 
+// Campaign names, read once per opening: the rows carry their banner images,
+// which a search keystroke has no use for
+let campaignList: Promise<{ id: number; name: string }[]> | null = null
+function campaignNames() {
+  return (campaignList ??= dbApi.campaigns.list().then(rows => rows.map(c => ({ id: c.id!, name: c.name }))))
+}
+
 async function runCommandSuggestions(q: string) {
   cmdLoading.value = true
-  const allCampaigns = await dbApi.campaigns.list()
-  const campaigns = allCampaigns.map((c: any) => ({ id: c.id, name: c.name }))
+  const campaigns = await campaignNames()
 
   const items = await getSuggestions(q, {
     campaigns,
@@ -473,7 +479,7 @@ async function runSearch(q: string) {
 
   // All sources at once (PERF-04)
   const [allCampaigns, entityDbRows, rulesRows, encounterRows, graphRows] = await Promise.all([
-    dbApi.campaigns.list(),
+    campaignNames(),
     dbApi.entities.search(lq, 5),
     rulesSearch(lq, 6),
     dbApi.encounters.search(lq, 5),
@@ -665,6 +671,7 @@ const route = useRoute()
 
 // Focus input on open; auto-set campaign context from current route
 watch(open, async (val) => {
+  campaignList = null
   if (!val) return
   nextTick(() => inputRef.value?.focus())
   if (ctx.value.campaign) return

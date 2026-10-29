@@ -9,6 +9,12 @@
  *
  * XP campaigns (P4): awards are logged in `xpAwards` and can be undone; a
  * level-up costs 1,000 XP, and reaching it opens the level-up prompt.
+ *
+ * "Player character" has one source, the party (FORK_PLAN §14 ARCH-01): a PC
+ * is a character with role 'pc'. The NPC's `isPlayerCharacter`, the library
+ * token's `is_player_character` and its placements' `is_player_token` are
+ * caches that only `syncPcFlags` writes; the NPC page's toggle goes through
+ * `setNpcPlayerCharacter`.
  */
 import { computed, ref } from 'vue'
 import { dbApi, getDb, now, parseJsonObject, type DbCharacter, type DbLevelUp, type DbXpAward } from '~/composables/useDb'
@@ -21,6 +27,7 @@ import type { NpcAttributes } from '~/types/entities'
 import { campaignRules } from '~/types/game'
 import { parseJson } from '~/utils/json'
 import { onDomainEvent } from '~/composables/useDomainEvents'
+import { onTablesChanged } from '~/db/changes'
 
 export interface Character extends PartyCharacter {
   campaignId: number
@@ -106,11 +113,69 @@ async function patchNpc(npcId: number | null, patch: Partial<NpcAttributes>) {
   await useEntities().updateEntity(npcId, { attributes: { ...attrs, ...patch } as NpcAttributes })
 }
 
+/**
+ * What the party says about a token: true/false when the token stands for a
+ * party member (its NPC is one, or a character places it), null when the
+ * party has no say and the token's own flag counts.
+ */
+export async function partyPcFlag(tokenId: number | null | undefined, linkedEntityId: number | null | undefined): Promise<boolean | null> {
+  const db = getDb()
+  const byNpc = linkedEntityId ? await db.characters.where('npc_entity_id').equals(linkedEntityId).toArray() : []
+  const byToken = tokenId ? await db.characters.filter(c => c.token_id === tokenId).toArray() : []
+  const all = [...byNpc, ...byToken]
+  if (!all.length) return linkedEntityId ? false : null
+  return all.some(c => c.role === 'pc')
+}
+
+/** Writes the cached PC flags of an NPC, its library tokens and their placements from the party. */
+async function syncPcFlags(npcId: number | null | undefined, tokenId?: number | null) {
+  const db = getDb()
+  const tokenIds = new Set<number>()
+  if (tokenId) tokenIds.add(tokenId)
+  if (npcId) {
+    const isPc = await db.characters.where('npc_entity_id').equals(npcId).filter(c => c.role === 'pc').count() > 0
+    const attrs = await npcAttributes(npcId)
+    if (!!attrs.isPlayerCharacter !== isPc && await db.entities.get(npcId)) {
+      await useEntities().updateEntity(npcId, { attributes: { ...attrs, isPlayerCharacter: isPc } as NpcAttributes })
+    }
+    for (const id of await db.tokens.filter(t => t.linked_entity_id === npcId).primaryKeys()) tokenIds.add(id as number)
+  }
+  for (const id of tokenIds) {
+    const tok = await db.tokens.get(id)
+    if (!tok) continue
+    const isPc = await partyPcFlag(id, tok.linked_entity_id)
+    if (isPc == null || !!tok.is_player_character === isPc) continue
+    await dbApi.tokens.update(id, { isPlayerCharacter: isPc })
+    await dbApi.encounterTokens.setPlayerFlagForLibraryToken(id, isPc)
+  }
+}
+
+/**
+ * The NPC page's "Player character" toggle: on adds the NPC to the party as a
+ * PC, off removes that character (their items and coins go to the stash).
+ */
+async function setNpcPlayerCharacter(campaignId: number, npcId: number, isPc: boolean) {
+  const db = getDb()
+  const row = await db.characters.where('npc_entity_id').equals(npcId).first()
+  if (isPc) {
+    if (!row) {
+      const npc = await db.entities.get(npcId)
+      await addCharacter({ campaignId, name: npc?.name ?? 'Player character', role: 'pc', npcEntityId: npcId })
+    } else if (row.role !== 'pc') {
+      await updateCharacter(row.id!, { role: 'pc' })
+    }
+  } else if (row?.role === 'pc') {
+    await removeCharacter(row.id!)
+  }
+  await syncPcFlags(npcId, row?.token_id)
+}
+
 /** Creates characters for PC-flagged NPCs that don't have one yet. */
 async function adoptFlaggedNpcs(campaignId: number) {
   const db = getDb()
   // Read and write in one transaction: concurrent loads (party page, encounter
   // page, resolve dialog) would otherwise adopt the same NPC twice (BUG-10)
+  let adopted: (number | null)[] = []
   await db.transaction('rw', db.entities, db.characters, async () => {
     const [npcs, existing] = await Promise.all([
       db.entities.where('[campaign_id+type]').equals([campaignId, 'npc']).toArray(),
@@ -126,7 +191,10 @@ async function adoptFlaggedNpcs(campaignId: number) {
         npc_entity_id: n.id!, created_at: ts, updated_at: ts,
       }))
     if (fresh.length) await db.characters.bulkAdd(fresh)
+    adopted = fresh.map(c => c.npc_entity_id)
   })
+  // Their tokens now count as PCs too
+  for (const npcId of adopted) await syncPcFlags(npcId)
 }
 
 /** `adopt`: create characters for newly PC-flagged NPCs; reloads after our own writes skip it. */
@@ -148,6 +216,11 @@ async function reloadIfLoaded(campaignId: number) {
   if (loadedCampaign.value === campaignId) await load(campaignId, { adopt: false })
 }
 
+// Level-ups and XP awarded in another window show up here too
+onTablesChanged(['characters', 'levelUps', 'xpAwards'], () => {
+  if (loadedCampaign.value != null) void load(loadedCampaign.value, { adopt: false })
+})
+
 async function addCharacter(input: { campaignId: number; name: string; role: CharacterRole; npcEntityId?: number | null; level?: number }) {
   const ts = now()
   const npcLevel = input.npcEntityId ? parseLevel((await npcAttributes(input.npcEntityId)).level) : null
@@ -157,9 +230,9 @@ async function addCharacter(input: { campaignId: number; name: string; role: Cha
     treat_as_pc: input.role === 'pc' ? 1 : 0, str_mod: null, npc_entity_id: input.npcEntityId ?? null,
     created_at: ts, updated_at: ts,
   })
-  // Keep the NPC's PC flag in line, so tokens and the NPC list agree with the party
-  if (input.role === 'pc') await patchNpc(input.npcEntityId ?? null, { isPlayerCharacter: true, level: String(level) })
-  else await patchNpc(input.npcEntityId ?? null, { level: String(level) })
+  await patchNpc(input.npcEntityId ?? null, { level: String(level) })
+  // The NPC, its tokens and their placements follow the party
+  await syncPcFlags(input.npcEntityId)
   await reloadIfLoaded(input.campaignId)
 }
 
@@ -174,10 +247,8 @@ async function updateCharacter(id: number, patch: Partial<Pick<Character, 'name'
   if (patch.strMod !== undefined) changes.str_mod = patch.strMod
   if (patch.xp !== undefined && Number.isFinite(patch.xp)) changes.xp = Math.max(0, Math.round(patch.xp))
   await getDb().characters.update(id, changes)
-  const npcPatch: Partial<NpcAttributes> = {}
-  if (changes.level !== undefined) npcPatch.level = String(changes.level)
-  if (patch.role !== undefined) npcPatch.isPlayerCharacter = patch.role === 'pc'
-  if (Object.keys(npcPatch).length) await patchNpc(c.npcEntityId, npcPatch)
+  if (changes.level !== undefined) await patchNpc(c.npcEntityId, { level: String(changes.level) })
+  if (patch.role !== undefined) await syncPcFlags(c.npcEntityId, c.tokenId)
   await reloadIfLoaded(c.campaignId)
 }
 
@@ -186,6 +257,7 @@ async function linkToken(id: number, tokenId: number | null) {
   const row = await getDb().characters.get(id)
   if (!row || (row.token_id ?? null) === tokenId) return
   await getDb().characters.update(id, { token_id: tokenId, updated_at: now() })
+  await syncPcFlags(row.npc_entity_id, tokenId)
   await reloadIfLoaded(row.campaign_id)
 }
 
@@ -197,8 +269,9 @@ async function removeCharacter(id: number) {
   const row = await getDb().characters.get(id)
   if (!row) return
   await useInventory().releaseOwner(row.campaign_id, characterOwner(id))
-  if (row.role === 'pc') await patchNpc(row.npc_entity_id, { isPlayerCharacter: false })
   await getDb().characters.delete(id)
+  // A removed PC stops being one everywhere, so it isn't adopted again either
+  await syncPcFlags(row.npc_entity_id, row.token_id)
   await reloadIfLoaded(row.campaign_id)
 }
 
@@ -338,7 +411,7 @@ export function useParty() {
     xpPrompt,
     party: computed(() => partyLevel(characters.value)),
     defaultSelection: computed(() => defaultLevelUpSelection(characters.value)),
-    load, addCharacter, updateCharacter, removeCharacter, linkToken, levelUp, undoLevelUp,
+    load, addCharacter, updateCharacter, removeCharacter, linkToken, levelUp, undoLevelUp, setNpcPlayerCharacter,
     requestLevelUp, dismissPrompt, requestXpAward, dismissXpPrompt,
     awardXp, undoXpAward, writeXpAward, writeXpUndo, promptReadyToLevel, reload: reloadIfLoaded,
   }

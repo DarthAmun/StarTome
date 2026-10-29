@@ -32,6 +32,7 @@
                 type="npc"
                 :model-value="draftAttributes"
                 @update:model-value="onAttributesChange"
+                @toggle-pc="onTogglePc"
             />
         </div>
 
@@ -90,6 +91,7 @@
 </template>
 
 <script setup lang="ts">
+import { useParty } from "~/composables/useParty";
 import { useAttributeDraft } from "~/composables/useAttributeDraft";
 import { useEntities } from "~/composables/useEntities";
 import type { EntitySnapshot } from "~/composables/useEntities";
@@ -192,6 +194,15 @@ function onAttributesChange(attrs: EntityAttributes) {
             store.updateEntity(props.entityId, { attributes: attrDraft.takePatch() });
         }
     });
+}
+
+/** The party owns "player character": it adds or removes the character and updates this NPC's flag. */
+async function onTogglePc(isPc: boolean) {
+    const ent = entity.value;
+    // A snapshot is history: it can't change today's party
+    if (!ent || isHistoryMode.value) return;
+    if (!isPc && !confirm(`Remove ${ent.name} from the party? Their items and coins go to the party stash.`)) return;
+    await useParty().setNpcPlayerCharacter(ent.campaignId, ent.id, isPc);
 }
 
 async function onRename(name: string) {

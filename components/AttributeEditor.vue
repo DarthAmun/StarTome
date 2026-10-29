@@ -88,9 +88,8 @@
                     <button
                         class="toggle-opt"
                         :class="{ on: attrs.isPlayerCharacter }"
-                        @click="
-                            set('isPlayerCharacter', !attrs.isPlayerCharacter)
-                        "
+                        title="Adds the NPC to the party as a player character (or removes them)"
+                        @click="emit('toggle-pc', !attrs.isPlayerCharacter)"
                     >
                         <OhVueIcon name="gi-deadly-strike" scale="0.9" /> Player
                         Character
@@ -416,7 +415,8 @@ import { dbApi } from "~/composables/useDb";
 import { pickImageFile } from "~/utils/image";
 
 const props = defineProps<{ type: EntityType; modelValue: EntityAttributes }>();
-const emit = defineEmits<{ "update:modelValue": [EntityAttributes] }>();
+// toggle-pc: "player character" belongs to the party, so the NPC editor asks it instead of setting the attribute
+const emit = defineEmits<{ "update:modelValue": [EntityAttributes]; "toggle-pc": [boolean] }>();
 
 const noteIcons = NOTE_ICONS;
 const newTag = ref("");

@@ -9,6 +9,7 @@
  */
 import { ref } from 'vue'
 import { getDb, now, type DbTreasureAward } from '~/composables/useDb'
+import { onTablesChanged } from '~/db/changes'
 import { consumablePriceMedians, useRulesRevision } from '~/composables/useRules'
 import { lastLevelUpAt, parseResolution, resolvedEncounters, useResolution } from '~/composables/useResolution'
 import { pacing } from '~/rules/advancement'
@@ -38,6 +39,12 @@ async function loadAwards(campaignId: number) {
   awards.value = rows.map(toAward).sort((a, b) => b.at.localeCompare(a.at))
   loadedCampaign.value = campaignId
 }
+
+// Awards, resolves and level-ups from another window move the readout too
+onTablesChanged(['treasureAwards', 'encounters', 'levelUps', 'campaigns'], () => {
+  revision.value++
+  if (loadedCampaign.value != null) void loadAwards(loadedCampaign.value)
+})
 
 async function reloadIfLoaded(campaignId: number) {
   revision.value++

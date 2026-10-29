@@ -697,34 +697,7 @@
 
             <!-- ── LOG tab ────────────────────────────────────────────── -->
             <template v-else-if="activeTab === 'log'">
-              <div class="log-note-bar">
-                <select v-model="logNoteTokenId" class="log-note-select">
-                  <option :value="null" disabled>Token…</option>
-                  <option v-for="t in encounterTokens" :key="t.id" :value="t.id">{{ t.label || t.name }}</option>
-                </select>
-                <input v-model="logNoteText" class="log-note-input" placeholder="Note…" @keyup.enter="submitLogNote" />
-                <button class="log-note-add" :disabled="!logNoteTokenId || !logNoteText.trim()" @click="submitLogNote">+</button>
-              </div>
-              <div class="log-entries">
-                <div v-if="!store.current?.combatLog.length" class="log-empty">No events yet this session.</div>
-                <div v-for="entry in reversedLog" :key="entry.id" class="log-row">
-                  <span class="log-round-badge">R{{ entry.round }}</span>
-                  <span class="log-token-name">{{ entry.tokenName }}</span>
-                  <span class="log-event" :class="`log-event--${entry.type}`">
-                    <template v-if="entry.type === 'damage'">took {{ entry.value }} damage</template>
-                    <template v-else-if="entry.type === 'healing'">healed {{ entry.value }} HP</template>
-                    <template v-else-if="entry.type === 'condition-added'">gained {{ entry.conditionName }}</template>
-                    <template v-else-if="entry.type === 'condition-removed'">lost {{ entry.conditionName }}</template>
-                    <template v-else-if="entry.type === 'death'">fell unconscious ☠</template>
-                    <template v-else-if="entry.type === 'revival'">revived</template>
-                    <template v-else-if="entry.type === 'note'">{{ entry.note }}</template>
-                    <template v-else-if="entry.type === 'timer-up'">⏳ {{ entry.note }} is up</template>
-                  </span>
-                </div>
-              </div>
-              <div class="log-footer">
-                <button class="log-clear-btn" @click="confirmClearLog">Clear Log</button>
-              </div>
+              <CombatLogPanel @clear="confirmClearLog" />
             </template>
 
           </template>
@@ -891,147 +864,25 @@
         @close="conditionPanelOpen = false"
       />
 
-      <!-- ── Add Token Modal ──────────────────────────────────────────────────── -->
-      <Teleport to="body">
-        <div
-          v-if="showAddToken"
-          class="modal-overlay"
-          @click.self="showAddToken = false"
-        >
-          <div class="modal-box">
-            <div class="modal-title">Add Token to Library</div>
-            <div class="space-y-3">
-              <div>
-                <label class="f-label">Name</label>
-                <InputText
-                  v-model="newToken.name"
-                  placeholder="Goblin, Wizard, etc."
-                  autofocus
-                />
-              </div>
-              <div>
-                <label class="f-label">Image</label>
-                <div class="enc-add-condition">
-                  <InputText
-                    v-model="newToken.imageSource"
-                    placeholder="URL or file path"
-                    class="flex-1"
-                  />
-                  <Button class="icon-btn-sq" @click="browseTokenImage">
-                    <OhVueIcon name="fa-folder-open" scale="0.9" />
-                  </Button>
-                </div>
-                <div v-if="newToken.imageSource" class="mt-2" style="text-align:center">
-                  <img :src="newToken.imageSource" style="max-height:80px;border-radius:6px;object-fit:contain" />
-                </div>
-              </div>
-              <TokenLinkPicker
-                label="Linked Creature" hint="auto-fills HP & AC on placement" placeholder="Search creatures and hazards…"
-                :selected="newToken.linkedRulesName" :results="rulesPickerResults"
-                v-model:search="tokenModalRulesSearch"
-                @select="selectTokenModalRules($event, 'new')" @clear="clearTokenModalRules('new')"
-              />
-              <div v-if="newToken.linkedRulesId" class="tok-adjust-row">
-                <label class="f-label">Adjustment</label>
-                <select v-model="newToken.adjustment" class="link-adjust">
-                  <option v-for="opt in ADJUSTMENT_OPTIONS" :key="opt.label" :value="opt.value">{{ opt.label }}</option>
-                </select>
-              </div>
-              <TokenLinkPicker
-                label="Linked NPC" hint="campaign character this token represents" placeholder="Search NPCs…"
-                :selected="newToken.linkedEntityName" :results="tokenModalNpcResults" accent="#7cc44e"
-                v-model:search="tokenModalNpcSearch"
-                @select="selectTokenModalNpc($event, 'new')" @clear="clearTokenModalNpc('new')"
-              />
-              <!-- Image sync -->
-              <label v-if="newToken.linkedEntityId || newToken.linkedRulesId" class="tok-pc-row">
-                <input type="checkbox" v-model="newToken.syncImage" class="tem-checkbox" @change="pullLinkedImage('new')" />
-                <span>Sync image with linked entry <span class="f-hint">{{ newToken.linkedEntityId ? 'NPC portrait' : 'creature token art' }} ↔ token — uncheck for a separate token image</span></span>
-              </label>
-              <!-- PC flag -->
-              <label class="tok-pc-row">
-                <input type="checkbox" v-model="newToken.isPlayerCharacter" class="tem-checkbox" />
-                <span>Player Character <span class="f-hint">pinned at top of token list</span></span>
-              </label>
-            </div>
-            <div class="flex justify-end gap-2 mt-4">
-              <Button severity="secondary" @click="showAddToken = false">Cancel</Button>
-              <Button @click="confirmAddToken">Add Token</Button>
-            </div>
-          </div>
-        </div>
-      </Teleport>
-
-      <!-- ── Edit Library Token Modal ─────────────────────────────────────── -->
-      <Teleport to="body">
-        <div
-          v-if="showEditLibraryToken"
-          class="modal-overlay"
-          @click.self="showEditLibraryToken = false"
-        >
-          <div class="modal-box">
-            <div class="modal-title">Edit Token</div>
-            <div class="space-y-3">
-              <div>
-                <label class="f-label">Name</label>
-                <InputText
-                  v-model="editLibraryTokenForm.name"
-                  placeholder="Goblin, Wizard, etc."
-                  autofocus
-                />
-              </div>
-              <div>
-                <label class="f-label">Image</label>
-                <div class="enc-add-condition">
-                  <InputText
-                    v-model="editLibraryTokenForm.imageSource"
-                    placeholder="URL or file path"
-                    class="flex-1"
-                  />
-                  <Button class="icon-btn-sq" @click="browseEditTokenImage">
-                    <OhVueIcon name="fa-folder-open" scale="0.9" />
-                  </Button>
-                </div>
-                <div v-if="editLibraryTokenForm.imageSource" class="mt-2" style="text-align:center">
-                  <img :src="editLibraryTokenForm.imageSource" style="max-height:80px;border-radius:6px;object-fit:contain" />
-                </div>
-              </div>
-              <TokenLinkPicker
-                label="Linked Creature" hint="auto-fills HP & AC on placement" placeholder="Search creatures and hazards…"
-                :selected="editLibraryTokenForm.linkedRulesName" :results="rulesPickerResults"
-                v-model:search="tokenModalRulesSearch"
-                @select="selectTokenModalRules($event, 'edit')" @clear="clearTokenModalRules('edit')"
-              />
-              <div v-if="editLibraryTokenForm.linkedRulesId" class="tok-adjust-row">
-                <label class="f-label">Adjustment</label>
-                <select v-model="editLibraryTokenForm.adjustment" class="link-adjust">
-                  <option v-for="opt in ADJUSTMENT_OPTIONS" :key="opt.label" :value="opt.value">{{ opt.label }}</option>
-                </select>
-              </div>
-              <TokenLinkPicker
-                label="Linked NPC" hint="campaign character this token represents" placeholder="Search NPCs…"
-                :selected="editLibraryTokenForm.linkedEntityName" :results="tokenModalNpcResults" accent="#7cc44e"
-                v-model:search="tokenModalNpcSearch"
-                @select="selectTokenModalNpc($event, 'edit')" @clear="clearTokenModalNpc('edit')"
-              />
-              <!-- Image sync -->
-              <label v-if="editLibraryTokenForm.linkedEntityId || editLibraryTokenForm.linkedRulesId" class="tok-pc-row">
-                <input type="checkbox" v-model="editLibraryTokenForm.syncImage" class="tem-checkbox" @change="pullLinkedImage('edit')" />
-                <span>Sync image with linked entry <span class="f-hint">{{ editLibraryTokenForm.linkedEntityId ? 'NPC portrait' : 'creature token art' }} ↔ token — uncheck for a separate token image</span></span>
-              </label>
-              <!-- PC flag -->
-              <label class="tok-pc-row">
-                <input type="checkbox" v-model="editLibraryTokenForm.isPlayerCharacter" class="tem-checkbox" />
-                <span>Player Character <span class="f-hint">pinned at top of token list</span></span>
-              </label>
-            </div>
-            <div class="flex justify-end gap-2 mt-4">
-              <Button severity="secondary" @click="showEditLibraryToken = false">Cancel</Button>
-              <Button @click="confirmEditLibraryToken">Save</Button>
-            </div>
-          </div>
-        </div>
-      </Teleport>
+      <!-- ── Add / edit library token ───────────────────────────────────────── -->
+      <LibraryTokenModal
+        :open="showAddToken" title="Add Token to Library" confirm-label="Add Token" :form="newToken"
+        :rules-results="rulesPickerResults" :npc-results="tokenModalNpcResults"
+        v-model:rules-search="tokenModalRulesSearch" v-model:npc-search="tokenModalNpcSearch"
+        @close="showAddToken = false" @confirm="confirmAddToken" @browse="browseTokenImage"
+        @select-rules="selectTokenModalRules($event, 'new')" @clear-rules="clearTokenModalRules('new')"
+        @select-npc="selectTokenModalNpc($event, 'new')" @clear-npc="clearTokenModalNpc('new')"
+        @pull-image="pullLinkedImage('new')"
+      />
+      <LibraryTokenModal
+        :open="showEditLibraryToken" title="Edit Token" confirm-label="Save" :form="editLibraryTokenForm"
+        :rules-results="rulesPickerResults" :npc-results="tokenModalNpcResults"
+        v-model:rules-search="tokenModalRulesSearch" v-model:npc-search="tokenModalNpcSearch"
+        @close="showEditLibraryToken = false" @confirm="confirmEditLibraryToken" @browse="browseEditTokenImage"
+        @select-rules="selectTokenModalRules($event, 'edit')" @clear-rules="clearTokenModalRules('edit')"
+        @select-npc="selectTokenModalNpc($event, 'edit')" @clear-npc="clearTokenModalNpc('edit')"
+        @pull-image="pullLinkedImage('edit')"
+      />
 
       <!-- ── Token Picker Modal (right-click → place from library) ─────────── -->
       <Teleport to="body">
@@ -1124,6 +975,7 @@
 import { lsKey } from '~/utils/appNamespace'
 import { campaignGame, type GameId } from '~/types/game'
 import { useEncounterStore } from "~/stores/encounter";
+import type { LibraryTokenForm } from "~/components/LibraryTokenModal.vue";
 import type { EncounterToken } from "~/stores/encounter";
 import { useEncounterCanvas, type ShapeType, type ShapeOverlay } from "../../../composables/useEncounterCanvas";
 import { dbApi } from "~/composables/useDb";
@@ -1638,19 +1490,7 @@ function hpBarColor(token: any): string {
 }
 
 // ── Combat log UI ─────────────────────────────────────────────────────────
-const logNoteTokenId = ref<number | null>(null);
-const logNoteText = ref('');
 const clearLogConfirm = ref(false);
-
-const reversedLog = computed(() =>
-  store.current ? [...store.current.combatLog].reverse() : []
-);
-
-function submitLogNote() {
-  if (!logNoteTokenId.value || !logNoteText.value.trim()) return;
-  store.addLogNote(logNoteTokenId.value, logNoteText.value.trim());
-  logNoteText.value = '';
-}
 
 function confirmClearLog() { clearLogConfirm.value = true; }
 
@@ -1662,18 +1502,6 @@ async function doClearLog() {
 const showAddToken = ref(false);
 const showEditLibraryToken = ref(false);
 const editLibraryTokenId = ref<number | null>(null);
-type LibraryTokenForm = {
-  name: string
-  imageSource: string
-  imageType: 'file' | 'url'
-  linkedRulesId: string | null
-  linkedRulesName: string | null
-  adjustment: Adjustment | null
-  linkedEntityId: number | null
-  linkedEntityName: string | null
-  isPlayerCharacter: boolean
-  syncImage: boolean
-}
 function emptyTokenForm(): LibraryTokenForm {
   return {
     name: '', imageSource: '', imageType: 'file',
@@ -2622,15 +2450,6 @@ function getImageUrl(token: any): string {
 }
 
 /* ── Token modal: linked record row ── */
-.tok-pc-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-body);
-  font-size: 13px;
-  color: var(--ink);
-  cursor: pointer;
-}
 .f-hint {
   font-family: var(--font-body);
   font-size: 10px;
@@ -2700,11 +2519,6 @@ function getImageUrl(token: any): string {
   font-style: italic;
 }
 
-.enc-add-condition {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
 
 .enc-hint {
   font-family: var(--font-ui);
@@ -3200,8 +3014,6 @@ function getImageUrl(token: any): string {
   color: var(--ink);
 }
 .link-record-meta { font-size: 10px; color: var(--ink-ghost); text-transform: capitalize; margin-left: 4px; }
-.tok-adjust-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
-.tok-adjust-row .f-label { margin: 0; }
 .creature-adjust { display: flex; gap: 4px; padding: 0 0 8px; }
 .creature-adjust-btn {
   flex: 1;
@@ -3326,123 +3138,8 @@ function getImageUrl(token: any): string {
 .rsb-tab--active { color: var(--blood); border-bottom-color: var(--blood); }
 
 /* ── Log tab layout ── */
-.log-note-bar {
-  display: flex;
-  gap: 4px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--parch-line);
-  flex-shrink: 0;
-}
-.log-note-select {
-  flex: 0 0 90px;
-  font-size: 11px;
-  padding: 3px 4px;
-  border: 1px solid var(--parch-line);
-  border-radius: 3px;
-  background: var(--parch);
-  color: var(--ink);
-  font-family: var(--font-ui);
-}
-.log-note-input {
-  flex: 1;
-  font-size: 11px;
-  padding: 3px 6px;
-  border: 1px solid var(--parch-line);
-  border-radius: 3px;
-  background: var(--parch);
-  color: var(--ink);
-  font-family: var(--font-ui);
-}
-.log-note-input::placeholder { color: var(--ink-ghost); }
-.log-note-add {
-  flex: 0 0 26px;
-  height: 26px;
-  border: 1px solid var(--parch-line);
-  border-radius: 3px;
-  background: var(--parch);
-  color: var(--ink-ghost);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.log-note-add:not(:disabled):hover { color: var(--ink); border-color: var(--gold); }
-.log-note-add:disabled { opacity: 0.35; cursor: not-allowed; }
 
-.log-entries {
-  flex: 1;
-  overflow-y: auto;
-  padding: 6px 0;
-}
-.log-empty {
-  padding: 24px 12px;
-  text-align: center;
-  font-size: 11px;
-  color: var(--ink-ghost);
-  font-style: italic;
-}
-.log-row {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  padding: 3px 10px;
-  font-size: 11px;
-  line-height: 1.4;
-  border-bottom: 1px solid rgba(28,20,16,0.04);
-}
-.log-row:last-child { border-bottom: none; }
-.log-round-badge {
-  flex: 0 0 auto;
-  background: var(--parch-dark, rgba(28,20,16,0.08));
-  color: var(--ink-ghost);
-  font-family: 'Cinzel', serif;
-  font-size: 8px;
-  font-weight: 600;
-  padding: 1px 4px;
-  border-radius: 2px;
-  letter-spacing: 0.04em;
-}
-.log-token-name {
-  flex: 0 0 auto;
-  max-width: 80px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--ink-faded);
-  font-style: italic;
-  font-size: 10px;
-}
-.log-event { flex: 1; }
-.log-event--damage        { color: var(--blood); }
-.log-event--healing       { color: var(--grass); }
-.log-event--condition-added  { color: var(--arcane-l, #9f7abf); }
-.log-event--condition-removed { color: var(--ink-ghost); }
-.log-event--death         { color: var(--blood); font-weight: 700; }
-.log-event--revival       { color: var(--grass); }
-.log-event--note          { color: var(--ink-faded); font-style: italic; }
 
-.log-footer {
-  padding: 8px 10px;
-  border-top: 1px solid var(--parch-line);
-  display: flex;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.log-clear-btn {
-  background: none;
-  border: 1px solid var(--parch-line);
-  border-radius: 3px;
-  padding: 3px 12px;
-  font-family: 'Cinzel', serif;
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-ghost);
-  cursor: pointer;
-}
-.log-clear-btn:hover { border-color: var(--blood); color: var(--blood); }
 
 /* ── Map thumbnail (prepare sidebar) ── */
 .map-thumb-wrap {

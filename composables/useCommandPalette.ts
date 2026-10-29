@@ -232,8 +232,8 @@ async function addSuggestions(
       async function executeAdd() {
         if (!_ctx.value.campaign) return
         if (isEnc) {
-          const id = await db.encounters.add({ campaign_id: _ctx.value.campaign.id, name, grid_size: 60, grid_offset_x: 0, grid_offset_y: 0, fog_enabled: false, fog_data: '{}', map_source: null, map_type: null, combat_log: '[]', tokens_json: '[]', created_at: now } as any)
-          router.push(`/encounter/${id}`); close()
+          const enc = await dbApi.encounters.create({ campaignId: _ctx.value.campaign.id, name })
+          router.push(`/encounter/${enc!.id}`); close()
         } else {
           const { dbApi } = await import('~/composables/useDb')
           const id = await dbApi.graphLayout.create(_ctx.value.campaign.id, name)
@@ -251,8 +251,8 @@ async function addSuggestions(
       execute: async () => {
         if (!ctx.campaign) return
         if (isEnc) {
-          const id = await db.encounters.add({ campaign_id: ctx.campaign.id, name, grid_size: 60, grid_offset_x: 0, grid_offset_y: 0, fog_enabled: false, fog_data: '{}', map_source: null, map_type: null, combat_log: '[]', tokens_json: '[]', created_at: now } as any)
-          router.push(`/encounter/${id}`); close()
+          const enc = await dbApi.encounters.create({ campaignId: ctx.campaign.id, name })
+          router.push(`/encounter/${enc!.id}`); close()
         } else {
           const { dbApi } = await import('~/composables/useDb')
           const id = await dbApi.graphLayout.create(ctx.campaign.id, name)
