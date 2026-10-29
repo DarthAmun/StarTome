@@ -190,7 +190,7 @@
 
 <script setup lang="ts">
 import { markRaw, shallowRef } from 'vue'
-import { fileToDataUrl } from '~/composables/useDb'
+import { fileToDataUrl } from '~/utils/image'
 import { rulesNameList, rulesSetImage } from '~/composables/useRules'
 import { scoreNormalized, normalize } from '~/composables/useImageMatcher'
 import { GAME_CONFIG, GAME_IDS, type GameId } from '~/types/game'

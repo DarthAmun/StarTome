@@ -15,7 +15,7 @@
 </template>
 
 <script setup lang="ts">
-import { channelName } from '~/utils/appNamespace'
+import { mapWindow } from '~/utils/windowChannel'
 import { dbApi } from '~/composables/useDb'
 import { useEntities } from '~/composables/useEntities'
 
@@ -27,23 +27,19 @@ const locationId = ref<number | null>(
   route.query.locationId ? Number(route.query.locationId) : null
 )
 
+let offMapSync: (() => void) | null = null
+
 onMounted(async () => {
   await store.loadAll(campaignId)
 
-  dbApi.window.onMapSync(async (newLocationId) => {
+  offMapSync = mapWindow.onSync(async (newLocationId) => {
     locationId.value = newLocationId
-    if (newLocationId) await store.loadAll(campaignId)
-  })
-
-  window.addEventListener('beforeunload', () => {
-    const ch = new BroadcastChannel(channelName('map'))
-    ch.postMessage({ type: 'map-player-closed' })
-    ch.close()
+    if (newLocationId) await store.loadAll(campaignId, { force: true })
   })
 })
 
 onUnmounted(() => {
-  dbApi.window.offMapSync()
+  offMapSync?.()
 })
 </script>
 

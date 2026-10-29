@@ -104,7 +104,8 @@
 </template>
 
 <script setup lang="ts">
-import { dbApi, fileToDataUrl } from "~/composables/useDb";
+import { dbApi } from "~/composables/useDb";
+import { fileToDataUrl } from "~/utils/image";
 import { useEntities } from "~/composables/useEntities";
 import { ENTITY_TYPE_LIST } from "~/types/entities";
 

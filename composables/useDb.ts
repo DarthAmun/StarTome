@@ -1,8 +1,12 @@
 /**
- * Dexie (IndexedDB) database — replaces electron/main.js + better-sqlite3
+ * Dexie (IndexedDB) database: row types, schema history and the `dbApi`
+ * repository for campaigns, encounters, tokens and lore. Party, inventory,
+ * wealth and the compendium have their own repositories (useParty,
+ * useInventory, useWealth, useRules); backups live in sync/backup.ts and the
+ * player-window messages in utils/windowChannel.ts.
  *
- * Schema mirrors the SQLite tables exactly so the store layer barely changes.
- * Images are stored as base64 data URLs instead of file paths.
+ * Several columns are still JSON strings, a leftover of DM's Tome's SQLite
+ * schema; read them with parseJson / parseJsonObject.
  */
 
 /**
@@ -17,11 +21,13 @@
  * a copy of its rows survives in `legacyLibrary` until the user deletes it.
  */
 import Dexie, { type Table } from 'dexie'
-import { DB_NAME, channelName, windowName } from '~/utils/appNamespace'
+import { DB_NAME } from '~/utils/appNamespace'
+import { imageTypeOf } from '~/utils/image'
+import { parseJson } from '~/utils/json'
 import type { CampaignRules, GameId } from '~/types/game'
 import type { RulesEntity, Runes } from '~/types/rules'
 import type { Adjustment } from '~/rules/combat'
-import { resolveImageDataUrl } from '~/rules/images'
+import { dataUrlToBlob, resolveImageDataUrl, storeInlineImage } from '~/rules/images'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export interface DbCampaign {
@@ -40,7 +46,7 @@ export interface DbEncounter {
   id?: number
   campaign_id: number
   name: string
-  map_source: string | null   // base64 data URL or http URL
+  map_source: string | null   // "img:<id>" (images table), http URL; data URLs only in old rows/files
   map_type: 'file' | 'url'
   grid_size: number
   grid_offset_x: number
@@ -113,6 +119,8 @@ export interface DbEncounterWall {
   id?: number
   encounter_id: number
   points: string              // JSON: Array<{x: number, y: number}>
+  /** Wall, PF2e cover degree or door. DM's Tome's names are kept for compatibility:
+   *  'three-quarter' = greater cover, 'half' = standard, 'quarter' = lesser. */
   coverType: 'full' | 'three-quarter' | 'half' | 'quarter' | 'door'
   isOpen: boolean
 }
@@ -412,64 +420,67 @@ class StarTomeDb extends Dexie {
     this.version(8).stores({
       treasureAwards:     '++id, campaign_id, at',
     })
+    // v9: compound indexes for the hot per-campaign queries (FORK_PLAN §14 PERF-12):
+    // the stash/purse of one campaign, entities of one type, resolved encounters.
+    this.version(9).stores({
+      inventory:          '++id, campaign_id, owner, item_id, [campaign_id+owner]',
+      purses:             '++id, campaign_id, owner, [campaign_id+owner]',
+      entities:           '++id, campaign_id, type, name, [campaign_id+type]',
+      encounters:         '++id, campaign_id, created_at, [campaign_id+status], [campaign_id+name]',
+    })
+    // v10: encounter maps move out of the rows into `images` (PERF-03): every
+    // list, search and wealth readout read all maps (several MB each) before.
+    this.version(10).stores({}).upgrade(async (tx) => {
+      const ids = await tx.table('encounters').filter((e: DbEncounter) => !!e.map_source?.startsWith('data:')).primaryKeys()
+      for (const id of ids) {
+        const row = await tx.table('encounters').get(id) as DbEncounter
+        const imageId = crypto.randomUUID()
+        const blob = dataUrlToBlob(row.map_source!)
+        await tx.table('images').put({ id: imageId, blob, mime: blob.type, createdAt: new Date().toISOString() })
+        await tx.table('encounters').update(id, { map_source: `img:${imageId}` })
+      }
+    })
   }
 }
 
 // Singleton
 let _db: StarTomeDb | null = null
 export function getDb(): StarTomeDb {
-  if (!_db) _db = new StarTomeDb()
+  if (!_db) {
+    _db = new StarTomeDb()
+    watchUpgrades(_db)
+  }
   return _db
 }
 
-export function parseRecordData(data: any): Record<string, any> {
-  if (!data) return {}
-  if (typeof data === 'object') return data
-  try { return JSON.parse(data) } catch { return {} }
+/**
+ * A newer StarTome in another tab (PWA update) wants to upgrade the schema:
+ * this tab closes its connection so the upgrade isn't blocked, and asks for a
+ * reload. If this tab is the one waiting, it says which tabs are in the way.
+ */
+function watchUpgrades(db: StarTomeDb) {
+  if (typeof window === 'undefined') return
+  db.on('versionchange', () => {
+    db.close()
+    import('~/composables/useNotices').then(({ notify }) => notify(
+      'StarTome was updated in another tab. Reload this tab to keep working; changes made here from now on are not saved.',
+      'warning', { sticky: true, action: { label: 'Reload', run: () => location.reload() } }))
+    return false
+  })
+  db.on('blocked', () => {
+    import('~/composables/useNotices').then(({ notify }) => notify(
+      'StarTome is waiting for other StarTome tabs or player windows to close before it can update its database.',
+      'warning'))
+  })
 }
 
-/** "url" for http(s) sources, "file" for data URLs / local paths. */
-export function imageTypeOf(src: string): 'file' | 'url' {
-  return src.startsWith('http') ? 'url' : 'file'
+/** A JSON-object column (attributes, metadata …) as an object; {} when missing or corrupt. */
+export function parseJsonObject(data: unknown): Record<string, any> {
+  return parseJson<Record<string, any>>(data, {})
 }
 
 // ── Timestamp helper ───────────────────────────────────────────────────────
 export function now() { return new Date().toISOString() }
-
-// ── Image helper — reads a File, resizes to ≤1920px, re-encodes as JPEG ──
-const IMAGE_MAX_PX = 1920
-const IMAGE_QUALITY = 0.8
-
-export async function fileToDataUrl(file: File, toJpeg = true): Promise<string> {
-  const raw = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload  = () => resolve(reader.result as string)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-
-  return compressDataUrl(raw, toJpeg)
-}
-
-export function compressDataUrl(dataUrl: string, toJpeg = true): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => {
-      const { naturalWidth: w, naturalHeight: h } = img
-      const scale = Math.min(1, IMAGE_MAX_PX / Math.max(w, h))
-      const canvas = document.createElement('canvas')
-      canvas.width  = Math.round(w * scale)
-      canvas.height = Math.round(h * scale)
-      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
-      const originalMime = dataUrl.match(/^data:([^;]+);/)?.[1] ?? 'image/png'
-      const mime = toJpeg ? 'image/jpeg' : originalMime
-      const quality = (mime === 'image/jpeg' || mime === 'image/webp') ? IMAGE_QUALITY : undefined
-      resolve(canvas.toDataURL(mime, quality))
-    }
-    img.onerror = reject
-    img.src = dataUrl
-  })
-}
 
 // ── API ──────────────────────────────────────────────────────────────────
 
@@ -496,180 +507,66 @@ export const dbApi = {
       await db.campaigns.update(id, { ...data, updated_at: now() })
       return db.campaigns.get(id)
     },
+    /** Deletes a campaign and everything that belongs to it, in one transaction. */
     async delete(id: number) {
       const db = getDb()
-      // Cascade: delete encounters, entities
-      const encIds = await db.encounters.where('campaign_id').equals(id).primaryKeys()
-      for (const eid of encIds) {
-        await db.encounterTokens.where('encounter_id').equals(eid).delete()
-      }
-      await db.encounters.where('campaign_id').equals(id).delete()
-      const entIds = await db.entities.where('campaign_id').equals(id).primaryKeys()
-      for (const eid of entIds) {
-        await db.entityLinks.where('source_id').equals(eid).delete()
-      }
-      await db.entities.where('campaign_id').equals(id).delete()
-      await db.entityConnections.where('campaign_id').equals(id).delete()
-      await db.characters.where('campaign_id').equals(id).delete()
-      await db.levelUps.where('campaign_id').equals(id).delete()
-      await db.xpAwards.where('campaign_id').equals(id).delete()
-      await db.treasureAwards.where('campaign_id').equals(id).delete()
-      await db.inventory.where('campaign_id').equals(id).delete()
-      await db.purses.where('campaign_id').equals(id).delete()
-      await db.campaigns.delete(id)
+      await db.transaction('rw', [db.campaigns, db.encounters, db.encounterTokens, db.encounterWalls, db.entities, db.entityLinks,
+        db.entitySnapshots, db.entityConnections, db.graphLayouts, db.characters, db.levelUps, db.xpAwards,
+        db.treasureAwards, db.inventory, db.purses, db.tokens], async () => {
+        const encIds = await db.encounters.where('campaign_id').equals(id).primaryKeys() as number[]
+        if (encIds.length) {
+          await db.encounterTokens.where('encounter_id').anyOf(encIds).delete()
+          await db.encounterWalls.where('encounter_id').anyOf(encIds).delete()
+        }
+        await db.encounters.where('campaign_id').equals(id).delete()
+        const entIds = await db.entities.where('campaign_id').equals(id).primaryKeys() as number[]
+        if (entIds.length) {
+          await db.entityLinks.where('source_id').anyOf(entIds).delete()
+          await db.entitySnapshots.where('entity_id').anyOf(entIds).delete()
+          // Library tokens are shared across campaigns: they only lose the NPC link
+          const ents = new Set(entIds)
+          await db.tokens.filter(t => t.linked_entity_id != null && ents.has(t.linked_entity_id)).modify({ linked_entity_id: null })
+        }
+        await db.entities.where('campaign_id').equals(id).delete()
+        for (const table of [db.entityConnections, db.graphLayouts, db.characters, db.levelUps, db.xpAwards, db.treasureAwards, db.inventory, db.purses]) {
+          await table.where('campaign_id').equals(id).delete()
+        }
+        await db.campaigns.delete(id)
+      })
     },
+    /** Copies a campaign; see sync/backup.ts. */
     async clone(id: number) {
-      const db = getDb()
-      const source = await db.campaigns.get(id)
-      if (!source) throw new Error(`campaigns.clone: campaign ${id} not found`)
-      const ts = now()
-      const newCampaignId = await db.campaigns.add({
-        name: `${source.name} (Copy)`,
-        description: source.description,
-        banner_source: source.banner_source ?? null,
-        banner_type: source.banner_type,
-        game: source.game,
-        rules: source.rules,
-        created_at: ts,
-        updated_at: ts,
-      } as DbCampaign) as number
-
-      // ── Entities ──────────────────────────────────────────────────────
-      const entities = await db.entities.where('campaign_id').equals(id).toArray()
-      const entityIdMap = new Map<number, number>()
-      for (const e of entities) {
-        const { id: oldId, ...rest } = e
-        const newId = await db.entities.add({ ...rest, campaign_id: newCampaignId })
-        entityIdMap.set(oldId!, newId as number)
-      }
-      const oldEntityIds = entities.map(e => e.id!)
-
-      // ── Entity links (resolved by name — only source_id needs remap) ──
-      const links = oldEntityIds.length
-        ? await db.entityLinks.where('source_id').anyOf(oldEntityIds).toArray()
-        : []
-      for (const l of links) {
-        const { id: _linkId, ...rest } = l
-        const newSourceId = entityIdMap.get(rest.source_id)
-        if (newSourceId == null) continue
-        await db.entityLinks.add({ ...rest, source_id: newSourceId })
-      }
-
-      // ── Entity snapshots ────────────────────────────────────────────────
-      for (const oldEntId of oldEntityIds) {
-        const snaps = await db.entitySnapshots.where('entity_id').equals(oldEntId).toArray()
-        for (const s of snaps) {
-          const { id: _sId, ...rest } = s
-          const newEntityId = entityIdMap.get(rest.entity_id)
-          if (newEntityId == null) continue
-          const newEventId = rest.event_id != null ? (entityIdMap.get(rest.event_id) ?? null) : null
-          await db.entitySnapshots.add({ ...rest, entity_id: newEntityId, event_id: newEventId })
-        }
-      }
-
-      // ── Entity connections ──────────────────────────────────────────────
-      const connections = await db.entityConnections.where('campaign_id').equals(id).toArray()
-      for (const c of connections) {
-        const { id: _cId, ...rest } = c
-        const newSource = entityIdMap.get(rest.source_entity_id)
-        const newTarget = entityIdMap.get(rest.target_entity_id)
-        if (newSource == null || newTarget == null) continue
-        await db.entityConnections.add({ ...rest, campaign_id: newCampaignId, source_entity_id: newSource, target_entity_id: newTarget })
-      }
-
-      // ── Graph layouts ───────────────────────────────────────────────────
-      const remapIdArray = (json: string): string => {
-        try {
-          const arr = JSON.parse(json)
-          if (!Array.isArray(arr)) return json
-          return JSON.stringify(arr.map((oldId: number) => entityIdMap.get(oldId)).filter((v: any) => v != null))
-        } catch { return json }
-      }
-      const remapPositions = (json: string): string => {
-        try {
-          const obj = JSON.parse(json)
-          const out: Record<string, any> = {}
-          for (const [key, val] of Object.entries(obj)) {
-            const newId = entityIdMap.get(Number(key))
-            if (newId != null) out[newId] = val
-          }
-          return JSON.stringify(out)
-        } catch { return json }
-      }
-      const layouts = await db.graphLayouts.where('campaign_id').equals(id).toArray()
-      for (const g of layouts) {
-        const { id: _gId, ...rest } = g
-        await db.graphLayouts.add({
-          ...rest,
-          campaign_id: newCampaignId,
-          positions: remapPositions(rest.positions),
-          hidden_nodes: remapIdArray(rest.hidden_nodes),
-          player_hidden_nodes: rest.player_hidden_nodes != null ? remapIdArray(rest.player_hidden_nodes) : rest.player_hidden_nodes,
-        })
-      }
-
-      // ── Party (level-up and XP history stay with the original) ─────────
-      const characters = await db.characters.where('campaign_id').equals(id).toArray()
-      const ownerMap = new Map<string, string>([['stash', 'stash']])
-      for (const { id: oldCId, ...c } of characters) {
-        const newCId = await db.characters.add({ ...c, campaign_id: newCampaignId, npc_entity_id: c.npc_entity_id != null ? entityIdMap.get(c.npc_entity_id) ?? null : null })
-        ownerMap.set(`character:${oldCId}`, `character:${newCId}`)
-      }
-
-      // ── Encounters (+ tokens, walls) ────────────────────────────────────
-      const encounters = await db.encounters.where('campaign_id').equals(id).toArray()
-      for (const enc of encounters) {
-        const { id: oldEncId, ...rest } = enc
-        // The resolve record points at the original's characters and XP log; the copy can't undo it
-        const newEncId = await db.encounters.add({ ...rest, campaign_id: newCampaignId, resolution: null })
-        ownerMap.set(`encounter:${oldEncId}`, `encounter:${newEncId}`)
-
-        const tokens = await db.encounterTokens.where('encounter_id').equals(oldEncId!).toArray()
-        for (const t of tokens) {
-          const { id: _tId, ...tRest } = t
-          await db.encounterTokens.add({ ...tRest, encounter_id: newEncId as number })
-        }
-
-        const walls = await db.encounterWalls.where('encounter_id').equals(oldEncId!).toArray()
-        for (const w of walls) {
-          const { id: _wId, ...wRest } = w
-          await db.encounterWalls.add({ ...wRest, encounter_id: newEncId as number })
-        }
-      }
-
-      // ── Inventory + purses (after characters and encounters, for the owner keys) ──
-      const entries = await db.inventory.where('campaign_id').equals(id).toArray()
-      const entryIdMap = new Map<number, number>()
-      for (const { id: oldIId, ...e } of entries) {
-        const owner = ownerMap.get(e.owner)
-        if (owner) entryIdMap.set(oldIId!, await db.inventory.add({ ...e, campaign_id: newCampaignId, owner }) as number)
-      }
-      // Contents point at their container's new id
-      for (const e of entries) {
-        if (e.container_id == null || !entryIdMap.has(e.id!)) continue
-        await db.inventory.update(entryIdMap.get(e.id!)!, { container_id: entryIdMap.get(e.container_id) ?? null })
-      }
-      const purses = await db.purses.where('campaign_id').equals(id).toArray()
-      for (const { id: _pId, ...p } of purses) {
-        const owner = ownerMap.get(p.owner)
-        if (owner) await db.purses.add({ ...p, campaign_id: newCampaignId, owner })
-      }
-
-      return db.campaigns.get(newCampaignId)
+      const { cloneCampaign } = await import('~/sync/backup')
+      return cloneCampaign(id)
     },
   },
 
   // ── Internal helpers ─────────────────────────────────────────────────
   async _resolveTokenDisplay(et: DbEncounterToken) {
+    return (await dbApi._resolveTokenDisplays([et]))[0]
+  },
+
+  /** Name and image of placements, from their library token or compendium entry. Batched: one read per table. */
+  async _resolveTokenDisplays(ets: DbEncounterToken[]) {
     const db = getDb()
-    const tok = et.token_id ? await db.tokens.get(et.token_id) : null
-    const entry = (!tok && et.linked_rules_id) ? await db.rules.get(et.linked_rules_id) : null
-    const synced = tok?.sync_image ? await dbApi.linkedImages.get(tok.linked_entity_id, tok.linked_rules_id) : null
-    return {
-      name: tok?.name ?? entry?.name ?? '',
-      image_source: synced?.source ?? tok?.image_source ?? et.image_source ?? null,
-      image_type: (synced?.type ?? tok?.image_type ?? et.image_type ?? 'file') as 'file' | 'url',
+    const tokenIds = [...new Set(ets.map(et => et.token_id).filter((id): id is number => !!id))]
+    const libTokens = new Map((await db.tokens.bulkGet(tokenIds)).filter((t): t is DbToken => !!t).map(t => [t.id!, t]))
+    const directIds = [...new Set(ets.filter(et => !(et.token_id && libTokens.has(et.token_id)) && et.linked_rules_id).map(et => et.linked_rules_id!))]
+    const entries = new Map((await db.rules.bulkGet(directIds)).filter((r): r is RulesEntity => !!r).map(r => [r.id, r]))
+    const synced = new Map<number, { source: string; type: 'file' | 'url' } | null>()
+    for (const t of libTokens.values()) {
+      if (t.sync_image) synced.set(t.id!, await dbApi.linkedImages.get(t.linked_entity_id, t.linked_rules_id))
     }
+    return ets.map(et => {
+      const tok = et.token_id ? libTokens.get(et.token_id) : undefined
+      const entry = !tok && et.linked_rules_id ? entries.get(et.linked_rules_id) : undefined
+      const image = tok ? synced.get(tok.id!) : null
+      return {
+        name: tok?.name ?? entry?.name ?? '',
+        image_source: image?.source ?? tok?.image_source ?? et.image_source ?? null,
+        image_type: (image?.type ?? tok?.image_type ?? et.image_type ?? 'file') as 'file' | 'url',
+      }
+    })
   },
 
   // ── Linked-entry images (token ↔ NPC portrait / compendium token art) ──
@@ -682,7 +579,7 @@ export const dbApi = {
       const db = getDb()
       if (entityId) {
         const ent = await db.entities.get(entityId)
-        const attrs = parseRecordData(ent?.attributes)
+        const attrs = parseJsonObject(ent?.attributes)
         if (attrs.portraitSource) return { source: attrs.portraitSource, type: attrs.portraitType ?? 'file' }
       }
       if (rulesId) {
@@ -706,11 +603,8 @@ export const dbApi = {
       if (!enc) return null
       // Join tokens — token_id may be null for creature-direct placements
       const etRows = await db.encounterTokens.where('encounter_id').equals(id).toArray()
-      const tokens = await Promise.all(etRows.map(async et => {
-        const display = await dbApi._resolveTokenDisplay(et)
-        return { ...et, ...display }
-      }))
-      return { ...enc, tokens }
+      const displays = await dbApi._resolveTokenDisplays(etRows)
+      return { ...enc, tokens: etRows.map((et, i) => ({ ...et, ...displays[i] })) }
     },
     async create(data: { campaignId: number; name: string }) {
       const db = getDb()
@@ -721,21 +615,32 @@ export const dbApi = {
     async update(data: { id: number; [key: string]: any }) {
       const db = getDb()
       const { id, ...rest } = data
+      // A new map arrives as a data URL; it's stored as a blob and the row keeps the ref
+      if (typeof rest.map_source === 'string') rest.map_source = await storeInlineImage(rest.map_source)
       await db.encounters.update(id, { ...rest, updated_at: now() })
       return db.encounters.get(id)
     },
+    /** Deletes an encounter with its tokens, walls and planned loot. */
     async delete(id: number) {
       const db = getDb()
-      await db.encounterTokens.where('encounter_id').equals(id).delete()
-      // Planned loot goes with the encounter
-      await db.inventory.where('owner').equals(`encounter:${id}`).delete()
-      await db.purses.where('owner').equals(`encounter:${id}`).delete()
-      await db.encounters.delete(id)
+      const owner = `encounter:${id}`
+      await db.transaction('rw', [db.encounters, db.encounterTokens, db.encounterWalls, db.inventory, db.purses], async () => {
+        await db.encounterTokens.where('encounter_id').equals(id).delete()
+        await db.encounterWalls.where('encounter_id').equals(id).delete()
+        await db.inventory.where('owner').equals(owner).delete()
+        await db.purses.where('owner').equals(owner).delete()
+        await db.encounters.delete(id)
+      })
     },
-    async search(q: string, limit: number) {
-      const db = getDb()
+    /** Name search over the index only: encounter rows (with their maps) aren't read. */
+    async search(q: string, limit: number): Promise<{ id: number; name: string; campaign_id: number }[]> {
       const lq = q.toLowerCase()
-      return db.encounters.filter(e => e.name.toLowerCase().includes(lq)).limit(limit).toArray()
+      const hits: { id: number; name: string; campaign_id: number }[] = []
+      await getDb().encounters.orderBy('[campaign_id+name]').until(() => hits.length >= limit).eachKey((key, cursor) => {
+        const [campaignId, name] = key as unknown as [number, string]
+        if (String(name).toLowerCase().includes(lq)) hits.push({ id: cursor.primaryKey as number, name, campaign_id: campaignId })
+      })
+      return hits
     },
   },
 
@@ -847,10 +752,6 @@ export const dbApi = {
     async delete(id: number): Promise<void> {
       await getDb().encounterWalls.delete(id)
     },
-    async deleteByEncounter(encounterId: number): Promise<void> {
-      await getDb().encounterWalls
-        .where('encounter_id').equals(encounterId).delete()
-    },
   },
 
   // ── Entities ──────────────────────────────────────────────────────────
@@ -860,21 +761,38 @@ export const dbApi = {
       return db.entities.where('campaign_id').equals(campaignId).toArray()
         .then(rows => rows.sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name)))
     },
-    async search(query: string, limit = 5) {
+    /**
+     * Entities whose name contains `query` (or, without a `type`, whose type
+     * matches it). Names are matched on the index; only the hits are read.
+     */
+    async search(query: string, limit = 5, opts: { type?: string } = {}) {
+      const db = getDb()
       const lq = query.toLowerCase()
-      return getDb().entities.filter(e => e.name.toLowerCase().includes(lq) || e.type.toLowerCase().includes(lq)).limit(limit).toArray()
+      const ids: number[] = []
+      await db.entities.orderBy('name').until(() => ids.length >= limit).eachKey((name, cursor) => {
+        if (String(name).toLowerCase().includes(lq)) ids.push(cursor.primaryKey as number)
+      })
+      let rows = (await db.entities.bulkGet(ids)).filter((e): e is DbEntity => !!e)
+      if (opts.type) {
+        rows = rows.filter(e => e.type === opts.type)
+        if (rows.length < limit) {
+          // Too few among the first name hits: look through that type only
+          const seen = new Set(rows.map(r => r.id))
+          rows.push(...await db.entities.where('type').equals(opts.type).filter(e => !seen.has(e.id) && e.name.toLowerCase().includes(lq)).limit(limit - rows.length).toArray())
+        }
+      } else if (rows.length < limit) {
+        const seen = new Set(rows.map(r => r.id))
+        rows.push(...await db.entities.where('type').startsWithIgnoreCase(lq).filter(e => !seen.has(e.id)).limit(limit - rows.length).toArray())
+      }
+      return rows.slice(0, limit)
     },
+    /** Entities with a tag containing `tag`; stops reading at `limit` hits. */
     async searchByTag(tag: string, limit = 20) {
       const lq = tag.toLowerCase()
-      const all = await getDb().entities.toArray()
-      return all
-        .filter(e => {
-          try {
-            const attrs = JSON.parse(e.attributes ?? '{}')
-            return Array.isArray(attrs.tags) && attrs.tags.some((t: string) => String(t).toLowerCase().includes(lq))
-          } catch { return false }
-        })
-        .slice(0, limit)
+      return getDb().entities
+        .filter(e => e.attributes.includes('"tags"')
+          && (parseJsonObject(e.attributes).tags ?? []).some((t: string) => String(t).toLowerCase().includes(lq)))
+        .limit(limit).toArray()
     },
     async get(id: number) {
       const db = getDb()
@@ -896,12 +814,35 @@ export const dbApi = {
     async setFavorite(id: number, isFavorite: boolean) {
       await getDb().entities.update(id, { is_favorite: isFavorite ? 1 : 0 })
     },
+    /**
+     * Deletes an entity with its links, snapshots and graph edges, and clears
+     * every reference to it: party member, tokens, placements, snapshot events
+     * and map pins on other entries.
+     */
     async delete(id: number) {
       const db = getDb()
-      await db.entityLinks.where('source_id').equals(id).delete()
-      await db.entityConnections.where('source_entity_id').equals(id).delete()
-      await db.entityConnections.where('target_entity_id').equals(id).delete()
-      await db.entities.delete(id)
+      await db.transaction('rw', [db.entities, db.entityLinks, db.entitySnapshots, db.entityConnections, db.characters,
+        db.tokens, db.encounterTokens], async () => {
+        const row = await db.entities.get(id)
+        await db.entityLinks.where('source_id').equals(id).delete()
+        await db.entitySnapshots.where('entity_id').equals(id).delete()
+        await db.entitySnapshots.where('event_id').equals(id).modify({ event_id: null, event_name: null })
+        await db.entityConnections.where('source_entity_id').equals(id).delete()
+        await db.entityConnections.where('target_entity_id').equals(id).delete()
+        await db.characters.where('npc_entity_id').equals(id).modify({ npc_entity_id: null })
+        await db.tokens.filter(t => t.linked_entity_id === id).modify({ linked_entity_id: null })
+        await db.encounterTokens.filter(t => t.linked_entity_id === id).modify({ linked_entity_id: null })
+        if (row) {
+          await db.entities.where('campaign_id').equals(row.campaign_id)
+            .filter(e => e.attributes.includes(`"entityId":${id}`))
+            .modify((e: DbEntity) => {
+              const attrs = parseJsonObject(e.attributes)
+              attrs.mapPins = (attrs.mapPins ?? []).filter((p: { entityId: number }) => p.entityId !== id)
+              e.attributes = JSON.stringify(attrs)
+            })
+        }
+        await db.entities.delete(id)
+      })
     },
     async listLinks(campaignId: number) {
       const db = getDb()
@@ -920,116 +861,7 @@ export const dbApi = {
     },
   },
 
-  // ── System — replaces Electron dialog + fs ───────────────────────────
-  system: {
-    /**
-     * Opens a file picker and returns a base64 data URL.
-     * Replaces: openFileDialog() + readImage()
-     */
-    openFileDialog(): Promise<string | null> {
-      return new Promise(resolve => {
-        const input = document.createElement('input')
-        input.type = 'file'
-        input.accept = 'image/*'
-        input.onchange = async () => {
-          const file = input.files?.[0]
-          if (!file) { resolve(null); return }
-          const dataUrl = await fileToDataUrl(file)
-          resolve(dataUrl)
-        }
-        input.oncancel = () => resolve(null)
-        input.click()
-      })
-    },
-    /** Already a data URL — just return it */
-    readImage(src: string): Promise<string | null> {
-      return Promise.resolve(src.startsWith('data:') ? src : null)
-    },
-  },
-
-  // ── Window — replaces Electron IPC window management ─────────────────
-  window: {
-    _channel: null as BroadcastChannel | null,
-    _handlers: new Map<string, (data: any) => void>(),
-    _ensureChannel() {
-      if (!this._channel) {
-        this._channel = new BroadcastChannel(channelName('player'))
-        this._channel.addEventListener('message', (e: MessageEvent) => {
-          this._handlers.get(e.data?.type)?.(e.data)
-        })
-      }
-      return this._channel
-    },
-    openPlayer(encounterId: number): Promise<void> {
-      // Hash mode routing: strip any existing hash from pathname, then append the player route
-      const base = location.origin + location.pathname.replace(/\/+$/, '')
-      const url = `${base}/#/encounter/${encounterId}/player`
-      window.open(url, windowName('player'), 'width=1280,height=800')
-      return Promise.resolve()
-    },
-    closePlayer(): Promise<void> {
-      this._ensureChannel().postMessage({ type: 'close' })
-      return Promise.resolve()
-    },
-    syncEncounter(data: any): void {
-      // JSON round-trip strips Vue reactive Proxies, which postMessage cannot clone
-      this._ensureChannel().postMessage({ type: 'sync', data: JSON.parse(JSON.stringify(data)) })
-    },
-    onPlayerClosed(cb: () => void): void {
-      this._ensureChannel()
-      this._handlers.set('player-closed', cb)
-    },
-    offPlayerClosed(): void { this._handlers.delete('player-closed') },
-    onEncounterSync(cb: (data: any) => void): void {
-      this._ensureChannel()
-      this._handlers.set('sync', (d) => cb(d.data))
-    },
-    offEncounterSync(): void { this._handlers.delete('sync') },
-    onPlayerReady(cb: () => void): void {
-      this._ensureChannel()
-      this._handlers.set('player-ready', cb)
-    },
-    offPlayerReady(): void { this._handlers.delete('player-ready') },
-    sendPlayerReady(): void {
-      this._ensureChannel().postMessage({ type: 'player-ready' })
-    },
-    sendPing(ping: { col: number; row: number; focus: boolean }): void {
-      this._ensureChannel().postMessage({ type: 'ping', ...ping })
-    },
-    onPing(cb: (ping: { col: number; row: number; focus: boolean }) => void): void {
-      this._ensureChannel()
-      this._handlers.set('ping', (d) => cb({ col: d.col, row: d.row, focus: !!d.focus }))
-    },
-    offPing(): void { this._handlers.delete('ping') },
-    // ── Map player ───────────────────────────────────────────────────────
-    _mapChannel: null as BroadcastChannel | null,
-    _mapHandlers: new Map<string, (data: any) => void>(),
-    _ensureMapChannel() {
-      if (!this._mapChannel) {
-        this._mapChannel = new BroadcastChannel(channelName('map'))
-        this._mapChannel.addEventListener('message', (e: MessageEvent) => {
-          this._mapHandlers.get(e.data?.type)?.(e.data)
-        })
-      }
-      return this._mapChannel
-    },
-    openMapPlayer(campaignId: number, locationId: number): Promise<void> {
-      const base = location.origin + location.pathname.replace(/\/+$/, '')
-      const url = `${base}/#/campaign/${campaignId}/map-player?locationId=${locationId}`
-      window.open(url, windowName('map-player'), 'width=1280,height=900')
-      return Promise.resolve()
-    },
-    syncMap(locationId: number | null): void {
-      this._ensureMapChannel().postMessage({ type: 'map-sync', locationId })
-    },
-    onMapSync(cb: (locationId: number | null) => void): void {
-      this._ensureMapChannel()
-      this._mapHandlers.set('map-sync', (d) => cb(d.locationId))
-    },
-    offMapSync(): void { this._mapHandlers.delete('map-sync') },
-  },
-
-  // ── Systems ───────────────────────────────────────────────────────────
+  // ── Snapshots ─────────────────────────────────────────────────────
   snapshots: {
     async list(entityId: number): Promise<DbEntitySnapshot[]> {
       return getDb().entitySnapshots
@@ -1049,11 +881,6 @@ export const dbApi = {
     async delete(id: number): Promise<void> {
       await getDb().entitySnapshots.delete(id)
     },
-
-    async deleteByEntity(entityId: number): Promise<void> {
-      await getDb().entitySnapshots
-        .where('entity_id').equals(entityId).delete()
-    },
   },
 
   // ── Entity connections (explicit graph edges) ─────────────────────────
@@ -1071,11 +898,6 @@ export const dbApi = {
     },
     async delete(id: number): Promise<void> {
       await getDb().entityConnections.delete(id)
-    },
-    async deleteByEntity(entityId: number): Promise<void> {
-      const db = getDb()
-      await db.entityConnections.where('source_entity_id').equals(entityId).delete()
-      await db.entityConnections.where('target_entity_id').equals(entityId).delete()
     },
   },
 
@@ -1118,5 +940,4 @@ export const dbApi = {
     },
   },
 
-  isElectron: false,
 }

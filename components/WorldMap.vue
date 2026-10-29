@@ -375,6 +375,8 @@
 
 <script setup lang="ts">
 import { dbApi } from '~/composables/useDb'
+import { pickImageFile } from '~/utils/image'
+import { mapWindow } from '~/utils/windowChannel'
 import { useEntities } from '~/composables/useEntities'
 import { ENTITY_TYPE_CONFIG } from '~/types/entities'
 import { extractLinks } from '~/composables/useEntityParser'
@@ -439,7 +441,7 @@ async function togglePinVisibility(entityId: number) {
   )
   await store.updateEntity(currentMap.value.id, { attributes: attrs })
   // Notify player window of the data change so it can refresh
-  if (!props.playerMode) dbApi.window.syncMap(currentLocationId.value)
+  if (!props.playerMode) mapWindow.sync(currentLocationId.value)
 }
 
 const mapImageUrl = computed(() => {
@@ -729,7 +731,7 @@ function navigateToCrumb(i: number) {
 // Load map dialog
 async function openLoadMap() {
   if (!currentMap.value) return
-  const dataUrl = await dbApi.system.openFileDialog()
+  const dataUrl = await pickImageFile()
   if (!dataUrl) return
   const attrs = { ...(currentMap.value.attributes as any), imageSource: dataUrl, imageType: 'file' }
   await store.updateEntity(currentMap.value.id, { attributes: attrs })
@@ -762,12 +764,12 @@ watch(() => props.rootLocationId, (newId) => {
   pan.value = { x: 0, y: 0 }
   zoom.value = 1
   // Keep player window in sync when DM navigates
-  if (!props.playerMode && newId) dbApi.window.syncMap(newId)
+  if (!props.playerMode && newId) mapWindow.sync(newId)
 })
 
 function openPlayerView() {
   if (!currentLocationId.value) return
-  dbApi.window.openMapPlayer(props.campaignId, currentLocationId.value)
+  mapWindow.open(props.campaignId, currentLocationId.value)
 }
 
 function onKeyDown(e: KeyboardEvent) {
