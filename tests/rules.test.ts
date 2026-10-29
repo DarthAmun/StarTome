@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { getDb } from '~/composables/useDb'
 import {
   rulesCounts, rulesCreate, rulesDelete, rulesDuplicate, rulesFindByName, rulesGet, rulesGetRaw,
-  rulesQuery, rulesResetEdits, rulesSearch, rulesUpdate,
+  notifyRulesChanged, rulesQuery, rulesResetEdits, rulesSearch, rulesSetImage, rulesUpdate,
 } from '~/composables/useRules'
 import { conflictingEdits, setPath, withLocalEdits } from '~/rules/edits'
 import { newRulesEntity } from '~/rules/factory'
@@ -133,7 +133,8 @@ describe('local edits', () => {
 })
 
 describe('rules repository', () => {
-  beforeEach(async () => { await getDb().rules.clear() })
+  // Tests write rows directly, like the sync worker: tell the repository, as the app does
+  beforeEach(async () => { await Promise.all([getDb().rules.clear(), getDb().images.clear()]); notifyRulesChanged() })
 
   async function addFoundry(e: RulesEntity) {
     await getDb().rules.add({ ...e, origin: 'foundry' })
@@ -225,5 +226,46 @@ describe('rules repository', () => {
     const counts = await rulesCounts()
     expect(counts.hazard).toBe(1)
     expect(counts.creature).toBe(0)
+  })
+
+  it('finds a renamed synced entry by its new name, and by the old one after a reset', async () => {
+    const id = await addFoundry(newRulesEntity('item', { name: 'Longsword', game: 'pf2e' }))
+    await rulesUpdate(id, 'name', 'Sturmklinge')
+    expect((await rulesGetRaw(id))?.name).toBe('Longsword')
+    expect((await rulesSearch('sturm', 8)).map(e => e.name)).toEqual(['Sturmklinge'])
+    expect((await rulesFindByName('item', 'Sturmklinge'))?.id).toBe(id)
+    await rulesResetEdits(id, 'name')
+    expect((await rulesFindByName('item', 'Longsword'))?.id).toBe(id)
+  })
+
+  it('hides entries removed upstream unless asked', async () => {
+    const e = newRulesEntity('item', { name: 'Old Wand', game: 'pf2e' })
+    await addFoundry({ ...e, upstream: { pack: 'equipment', version: '1', hash: 'x', removed: true } })
+    await addFoundry(newRulesEntity('item', { name: 'New Wand', game: 'pf2e' }))
+    notifyRulesChanged()
+    expect((await rulesQuery({ kind: 'item' })).items.map(i => i.name)).toEqual(['New Wand'])
+    expect((await rulesQuery({ kind: 'item', showRemoved: true })).total).toBe(2)
+    expect((await rulesSearch('wand', 8)).map(i => i.name)).toEqual(['New Wand'])
+  })
+
+  it('refreshes cached query results after a write', async () => {
+    await rulesCreate('item', { name: 'Rope', game: 'pf2e' })
+    expect((await rulesQuery({ kind: 'item' })).total).toBe(1)
+    await rulesCreate('item', { name: 'Torch', game: 'pf2e' })
+    expect((await rulesQuery({ kind: 'item' })).total).toBe(2)
+  })
+
+  it('deletes a replaced portrait and gives a homebrew copy its own', async () => {
+    const id = await addFoundry(newRulesEntity('creature', { name: 'Goblin', game: 'pf2e' }))
+    const png = 'data:image/png;base64,iVBORw0KGgo='
+    await rulesSetImage(id, 'img', png)
+    expect(await getDb().images.count()).toBe(1)
+    const copy = await rulesDuplicate(id)
+    expect(copy?.img).not.toBe((await rulesGetRaw(id))?.img)
+    expect(await getDb().images.count()).toBe(2)
+    await rulesSetImage(id, 'img', png)
+    expect(await getDb().images.count()).toBe(2)
+    await rulesSetImage(id, 'img', null)
+    expect(await getDb().images.count()).toBe(1)
   })
 })

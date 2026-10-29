@@ -6,10 +6,10 @@
  * entry's rules fields go to its `localEdits` overlay so a re-sync keeps them.
  */
 import { ref, shallowRef, toRaw, watch } from 'vue'
-import { getDb } from '~/composables/useDb'
+import { getDb, now } from '~/composables/useDb'
 import { newRulesEntity, newRulesId } from '~/rules/factory'
 import { isOverlayPath, setPath, withLocalEdits } from '~/rules/edits'
-import { dataUrlToBlob, storeImage } from '~/rules/images'
+import { dataUrlToBlob, deleteImage, imageRefId, isImageRef, storeImage } from '~/rules/images'
 import type { GameId } from '~/types/game'
 import { isRulesKind, RULES_KIND_CONFIG, RULES_KINDS, type Item, type Rarity, type RulesEntity, type RulesKind, type RulesOrigin } from '~/types/rules'
 
@@ -26,6 +26,8 @@ export interface RulesQuery {
   origins?: RulesOrigin[]
   /** Hide legacy entries that have a remaster version. Default true. */
   hideSuperseded?: boolean
+  /** Include entries that disappeared from their Foundry pack (kept for links). Default false. */
+  showRemoved?: boolean
   favoritesOnly?: boolean
   sort?: 'name' | 'level'
   dir?: 'asc' | 'desc'
@@ -37,9 +39,15 @@ export interface RulesPage { items: RulesEntity[]; total: number }
 
 /** Bumped on every write; components watch it to refresh lists, counts and the ref index. */
 const revision = ref(0)
-function touch() { revision.value++ }
-
-function now() { return new Date().toISOString() }
+/** Bumped when the whole compendium may have changed (sync, import): the name index reloads. */
+const bulkRevision = ref(0)
+/** A write: lists reload; the name index is patched with the entry's old and new name. */
+function touch(before?: RulesEntity | null, after?: RulesEntity | null) {
+  queryCache.clear()
+  if (before) indexRemove(before)
+  if (after) indexAdd(after)
+  revision.value++
+}
 
 function matcher(q: RulesQuery): (e: RulesEntity) => boolean {
   const text = q.text?.trim().toLowerCase() ?? ''
@@ -52,6 +60,7 @@ function matcher(q: RulesQuery): (e: RulesEntity) => boolean {
     const e = withLocalEdits(raw)
     if (games && !games.has(e.game)) return false
     if (hideSuperseded && e.supersededBy) return false
+    if (!q.showRemoved && e.upstream?.removed) return false
     if (q.favoritesOnly && !e.isFavorite) return false
     if (origins && !origins.has(e.origin)) return false
     if (rarities && !rarities.has(e.rarity)) return false
@@ -63,21 +72,40 @@ function matcher(q: RulesQuery): (e: RulesEntity) => boolean {
   }
 }
 
-export async function rulesQuery(q: RulesQuery): Promise<RulesPage> {
+// Matching ids per filter set (without paging), so paging and repeated
+// queries don't re-scan the kind. Cleared on every compendium write.
+const queryCache = new Map<string, Promise<string[]>>()
+const QUERY_CACHE_MAX = 20
+
+async function matchingIds(q: RulesQuery): Promise<string[]> {
   const db = getDb()
   const byLevel = q.sort === 'level'
   // [kind+level+sortName] sorts by level, then by name within a level
   const index = byLevel ? '[kind+level+sortName]' : '[kind+sortName]'
   const lower = byLevel ? [q.kind, -Infinity, ''] : [q.kind, '']
-  const upper = byLevel ? [q.kind, Infinity, '￿'] : [q.kind, '￿']
+  const upper = byLevel ? [q.kind, Infinity, '\uffff'] : [q.kind, '\uffff']
   let coll = db.rules.where(index).between(lower, upper, true, true)
   if (q.dir === 'desc') coll = coll.reverse()
-  coll = coll.filter(matcher(q))
-  const total = await coll.clone().count()
-  const offset = q.offset ?? 0
-  const limit = q.limit ?? 100
-  const items = (await coll.offset(offset).limit(limit).toArray()).map(withLocalEdits)
-  return { items, total }
+  const keep = matcher(q)
+  const ids: string[] = []
+  await coll.each(row => { if (keep(row)) ids.push(row.id) })
+  return ids
+}
+
+/** One page of a kind, filtered and sorted. The kind is scanned once per filter set. */
+export async function rulesQuery(q: RulesQuery): Promise<RulesPage> {
+  const { offset = 0, limit = 100, ...filters } = q
+  const key = JSON.stringify(filters)
+  let ids = queryCache.get(key)
+  if (!ids) {
+    ids = matchingIds(filters)
+    queryCache.set(key, ids)
+    if (queryCache.size > QUERY_CACHE_MAX) queryCache.delete(queryCache.keys().next().value!)
+    ids.catch(() => queryCache.delete(key))
+  }
+  const all = await ids
+  const page = await getDb().rules.bulkGet(all.slice(offset, offset + limit))
+  return { items: page.filter((r): r is RulesEntity => !!r).map(withLocalEdits), total: all.length }
 }
 
 /**
@@ -108,15 +136,30 @@ export async function rulesSearch(text: string, limit = 8, games?: GameId[]): Pr
   const q = text.trim().toLowerCase()
   if (!q) return []
   const gameSet = games?.length ? new Set<string>([...games, 'both']) : null
-  const keep = (e: RulesEntity) => !e.supersededBy && (!gameSet || gameSet.has(e.game))
+  const keep = (e: RulesEntity) => !e.supersededBy && !e.upstream?.removed && (!gameSet || gameSet.has(e.game))
   const db = getDb()
   const prefix = await db.rules.where('sortName').startsWith(q).filter(keep).limit(limit).toArray()
   if (prefix.length >= limit) return prefix.map(withLocalEdits)
   const seen = new Set(prefix.map(e => e.id))
-  const rest = await db.rules
-    .filter(e => !seen.has(e.id) && e.sortName.includes(q) && keep(e))
-    .limit(limit - prefix.length)
-    .toArray()
+  let rest: RulesEntity[]
+  if (nameIndexReady) {
+    // Contains-matches from the in-memory name index (PERF-04): only matching rows are read
+    const keys: [string, string][] = []
+    for (const key of nameCounts.keys()) {
+      const sep = key.indexOf(':')
+      const name = key.slice(sep + 1)
+      if (!name.startsWith(q) && name.includes(q)) keys.push([key.slice(0, sep), name])
+      if (keys.length >= limit * 8) break
+    }
+    rest = keys.length
+      ? await db.rules.where('[kind+sortName]').anyOf(keys).filter(e => !seen.has(e.id) && keep(e)).limit(limit - prefix.length).toArray()
+      : []
+  } else {
+    rest = await db.rules
+      .filter(e => !seen.has(e.id) && e.sortName.includes(q) && keep(e))
+      .limit(limit - prefix.length)
+      .toArray()
+  }
   return [...prefix, ...rest].map(withLocalEdits)
 }
 
@@ -131,7 +174,7 @@ export async function rulesNameList(kind: RulesKind, games?: GameId[]): Promise<
   const gameSet = games?.length ? new Set<string>([...games, 'both']) : null
   const out: { id: string; name: string }[] = []
   await getDb().rules.where('[kind+sortName]').between([kind, ''], [kind, '\uffff']).each((raw) => {
-    if (raw.supersededBy || (gameSet && !gameSet.has(raw.game))) return
+    if (raw.supersededBy || raw.upstream?.removed || (gameSet && !gameSet.has(raw.game))) return
     out.push({ id: raw.id, name: withLocalEdits(raw).name })
   })
   return out
@@ -170,7 +213,7 @@ export async function rulesRefRoute(type: string, name: string, game?: GameId): 
 export async function rulesCreate(kind: RulesKind, init: { name: string; game: GameId | 'both' }): Promise<RulesEntity> {
   const entity = newRulesEntity(kind, init)
   await getDb().rules.add(entity)
-  touch()
+  touch(null, entity)
   return entity
 }
 
@@ -184,18 +227,48 @@ export async function rulesUpdate(id: string, path: string, value: unknown): Pro
     next = { ...row, localEdits: { ...(row.localEdits ?? {}), [path]: value } }
   } else {
     next = setPath(row, path, value)
-    if (path === 'name') next.sortName = String(value).toLowerCase()
   }
+  // Search, sorting and {{kind: Name}} refs go by the name the user sees (BUG-05)
+  if (path === 'name') next.sortName = effectiveSortName(next)
   next.updatedAt = now()
   await db.rules.put(next)
-  touch()
+  touch(row, next)
   return withLocalEdits(next)
 }
 
 /** Sets a portrait or token art from a data URL (stored as a blob) or an http URL. */
 export async function rulesSetImage(id: string, field: 'img' | 'tokenImg', source: string | null): Promise<RulesEntity | undefined> {
+  const before = await getDb().rules.get(id)
+  const previous = (before as Record<string, unknown> | undefined)?.[field] as string | null | undefined
   const value = source?.startsWith('data:') ? await storeImage(dataUrlToBlob(source)) : source
-  return rulesUpdate(id, field, value)
+  const updated = await rulesUpdate(id, field, value)
+  // The replaced blob would otherwise stay in storage forever (BUG-12)
+  if (before && previous !== value) await releaseImage(before, previous)
+  return updated
+}
+
+/**
+ * Deletes an entry's image blob once nothing uses it. Only a homebrew copy
+ * made before copies got their own blobs can share one, so a user entry's
+ * image is left for "Clean up unused images" (Settings) instead.
+ */
+async function releaseImage(owner: RulesEntity, ref: string | null | undefined) {
+  if (!isImageRef(ref) || owner.origin === 'user') return
+  const db = getDb()
+  const shared = await db.rules.where('origin').equals('user')
+    .filter(r => r.img === ref || (r as { tokenImg?: string | null }).tokenImg === ref).count()
+  if (!shared) await deleteImage(ref)
+}
+
+async function copyImage(ref: string | null | undefined): Promise<string | null> {
+  if (!isImageRef(ref)) return ref ?? null
+  const row = await getDb().images.get(imageRefId(ref))
+  return row ? storeImage(row.blob) : null
+}
+
+/** The name the user sees, lower-cased: a synced entry's local name edit wins. */
+export function effectiveSortName(row: RulesEntity): string {
+  return String(row.localEdits?.name ?? row.name).toLowerCase()
 }
 
 /** Drops local edits — all of them, or only one path. */
@@ -206,8 +279,9 @@ export async function rulesResetEdits(id: string, path?: string): Promise<RulesE
   const edits = { ...row.localEdits }
   if (path) delete edits[path]
   const next = { ...row, localEdits: path && Object.keys(edits).length ? edits : undefined, updatedAt: now() }
+  next.sortName = effectiveSortName(next)
   await db.rules.put(next)
-  touch()
+  touch(row, next)
   return withLocalEdits(next)
 }
 
@@ -216,8 +290,12 @@ export async function rulesDuplicate(id: string): Promise<RulesEntity | undefine
   const src = await rulesGet(id)
   if (!src) return undefined
   const ts = now()
+  // The copy gets its own image blobs, so replacing one portrait never changes the other
+  const [img, tokenImg] = await Promise.all([copyImage(src.img), copyImage((src as { tokenImg?: string | null }).tokenImg)])
   const copy: RulesEntity = {
     ...structuredClone(toRaw(src)),
+    img,
+    ...((src as { tokenImg?: string | null }).tokenImg !== undefined ? { tokenImg } : {}),
     id: newRulesId(),
     origin: 'user',
     name: `${src.name} (Homebrew)`,
@@ -228,9 +306,9 @@ export async function rulesDuplicate(id: string): Promise<RulesEntity | undefine
     supersededBy: undefined,
     createdAt: ts,
     updatedAt: ts,
-  }
+  } as RulesEntity
   await getDb().rules.add(copy)
-  touch()
+  touch(null, copy)
   return copy
 }
 
@@ -240,7 +318,8 @@ export async function rulesDelete(id: string): Promise<void> {
   if (!row) return
   if (row.origin === 'foundry') throw new Error('Synced compendium entries cannot be deleted.')
   await getDb().rules.delete(id)
-  touch()
+  await Promise.all([releaseImage(row, row.img), releaseImage(row, (row as { tokenImg?: string | null }).tokenImg)])
+  touch(row, null)
 }
 
 export async function rulesCounts(): Promise<Record<RulesKind, number>> {
@@ -253,21 +332,42 @@ export async function rulesCounts(): Promise<Record<RulesKind, number>> {
 // Rendering is synchronous, so names are kept in memory. Only the compound
 // index keys are read — no rows are loaded.
 
-const nameIndex = shallowRef<Set<string>>(new Set())
+// Counts, not a set: legacy/remaster twins and reprints share a name.
+const nameCounts = new Map<string, number>()
+const nameIndex = shallowRef<Map<string, number>>(nameCounts)
 let nameIndexStarted = false
+/** True once the index holds every entry (and until the next sync/import). */
+let nameIndexReady = false
+const indexKey = (e: Pick<RulesEntity, 'kind' | 'sortName'>) => `${e.kind}:${e.sortName}`
+
+function indexAdd(e: RulesEntity) {
+  nameCounts.set(indexKey(e), (nameCounts.get(indexKey(e)) ?? 0) + 1)
+  nameIndex.value = new Map(nameCounts)
+}
+function indexRemove(e: RulesEntity) {
+  const n = (nameCounts.get(indexKey(e)) ?? 0) - 1
+  if (n > 0) nameCounts.set(indexKey(e), n); else nameCounts.delete(indexKey(e))
+  nameIndex.value = new Map(nameCounts)
+}
 
 async function loadNameIndex() {
   const keys = await getDb().rules.orderBy('[kind+sortName]').keys() as unknown as [string, string][]
-  nameIndex.value = new Set(keys.map(([kind, name]) => `${kind}:${name}`))
+  nameCounts.clear()
+  for (const [kind, name] of keys) {
+    const k = `${kind}:${name}`
+    nameCounts.set(k, (nameCounts.get(k) ?? 0) + 1)
+  }
+  nameIndex.value = new Map(nameCounts)
+  nameIndexReady = true
 }
 
 /** Synchronous "does this compendium entry exist?" for ref rendering. Loads once,
- *  then reloads after every compendium write. */
+ *  is patched on every single-entry write and reloads after a sync or import. */
 export function useRulesIndex() {
   if (import.meta.client && !nameIndexStarted) {
     nameIndexStarted = true
     loadNameIndex()
-    watch(revision, () => { loadNameIndex() })
+    watch(bulkRevision, () => { loadNameIndex() })
   }
   return {
     has: (kind: string, name: string) => nameIndex.value.has(`${kind}:${name.trim().toLowerCase()}`),
@@ -279,7 +379,9 @@ export function useRulesRevision() {
   return revision
 }
 
-/** For writers outside this module (the sync worker): tell lists, counts and the ref index to reload. */
+/** For writers outside this module (the sync worker, imports): tell lists, counts and the ref index to reload. */
 export function notifyRulesChanged() {
+  nameIndexReady = false
   touch()
+  bulkRevision.value++
 }

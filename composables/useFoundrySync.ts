@@ -3,7 +3,7 @@
  * ZIP, runs the sync in a Web Worker, exposes progress and the final report,
  * and checks GitHub for newer releases.
  */
-import { ref, shallowRef, toRaw } from 'vue'
+import { onScopeDispose, ref, shallowRef, toRaw } from 'vue'
 import { getDb, type DbSyncState } from '~/composables/useDb'
 import { notifyRulesChanged } from '~/composables/useRules'
 import type { ReleaseInfo, SyncProgress, SyncReport } from '~/sync/foundrySync'
@@ -29,18 +29,23 @@ export function useFoundrySync() {
   const error = ref<string | null>(null)
   const busy = ref<'inspect' | 'run' | null>(null)
 
-  function call<T>(message: object, onProgress?: (p: SyncProgress) => void): Promise<T> {
+  // One worker from "inspect" to the end of "run", so the ZIP is opened once
+  let worker: Worker | null = null
+  function release() { worker?.terminate(); worker = null }
+  onScopeDispose(release)
+
+  function call<T>(message: { type: string; [key: string]: unknown }, onProgress?: (p: SyncProgress) => void): Promise<T> {
     return new Promise((resolve, reject) => {
-      const worker = createWorker()
-      worker.onmessage = (e: MessageEvent) => {
+      const w = (worker ??= createWorker())
+      w.onmessage = (e: MessageEvent) => {
         const m = e.data
         if (m.type === 'progress') { onProgress?.(m.progress); return }
-        worker.terminate()
+        if (m.type !== 'info') release()
         if (m.type === 'error') reject(new Error(m.message))
         else resolve(m.type === 'info' ? m.info : m.report)
       }
-      worker.onerror = (e) => { worker.terminate(); reject(new Error(e.message || 'The sync worker crashed.')) }
-      worker.postMessage(message)
+      w.onerror = (e) => { release(); reject(new Error(e.message || 'The sync worker crashed.')) }
+      w.postMessage(message)
     })
   }
 

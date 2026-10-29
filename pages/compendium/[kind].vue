@@ -58,6 +58,7 @@
           <div class="cmp-frow">
             <label class="cmp-check"><input v-model="prefs.favoritesOnly" type="checkbox" /> Favorites only</label>
             <label class="cmp-check"><input v-model="prefs.showLegacy" type="checkbox" /> Show superseded legacy</label>
+            <label class="cmp-check" title="Entries that a newer Foundry release no longer ships. They're kept so links and tokens keep working."><input v-model="prefs.showRemoved" type="checkbox" /> Show removed upstream</label>
           </div>
           <button v-if="activeFilterCount" class="sys-chip-clear" @click="clearFilters">Clear filters</button>
         </div>
@@ -164,10 +165,11 @@ interface Prefs {
   origins: RulesOrigin[]
   favoritesOnly: boolean
   showLegacy: boolean
+  showRemoved?: boolean
   sort: 'name' | 'level'
   dir: 'asc' | 'desc'
 }
-const DEFAULT_PREFS: Prefs = { game: 'all', levelMin: null, levelMax: null, rarities: [], traits: '', origins: [], favoritesOnly: false, showLegacy: false, sort: 'name', dir: 'asc' }
+const DEFAULT_PREFS: Prefs = { game: 'all', levelMin: null, levelMax: null, rarities: [], traits: '', origins: [], favoritesOnly: false, showLegacy: false, showRemoved: false, sort: 'name', dir: 'asc' }
 
 function loadPrefs(): Prefs {
   try {
@@ -187,11 +189,11 @@ const showFilters = ref(false)
 const activeFilterCount = computed(() =>
   (prefs.levelMin !== null && prefs.levelMin !== '' ? 1 : 0) + (prefs.levelMax !== null && prefs.levelMax !== '' ? 1 : 0)
   + (prefs.rarities.length ? 1 : 0) + (prefs.traits.trim() ? 1 : 0) + (prefs.origins.length ? 1 : 0)
-  + (prefs.favoritesOnly ? 1 : 0) + (prefs.showLegacy ? 1 : 0),
+  + (prefs.favoritesOnly ? 1 : 0) + (prefs.showLegacy ? 1 : 0) + (prefs.showRemoved ? 1 : 0),
 )
 
 function clearFilters() {
-  Object.assign(prefs, { levelMin: null, levelMax: null, rarities: [], traits: '', origins: [], favoritesOnly: false, showLegacy: false })
+  Object.assign(prefs, { levelMin: null, levelMax: null, rarities: [], traits: '', origins: [], favoritesOnly: false, showLegacy: false, showRemoved: false })
 }
 
 function toggle<T>(list: T[], v: T) {
@@ -218,6 +220,7 @@ function queryOpts(): RulesQuery {
     origins: prefs.origins,
     favoritesOnly: prefs.favoritesOnly,
     hideSuperseded: !prefs.showLegacy,
+    showRemoved: !!prefs.showRemoved,
     sort: prefs.sort,
     dir: prefs.dir,
   }

@@ -62,7 +62,8 @@ export async function openReleaseZip(data: Blob | ArrayBuffer | Uint8Array): Pro
     const name = f.name.slice(6, -5)
     return {
       name, label: packLabel(name), group: packGroup(name), size: size(f),
-      checksum: `${(f as any)._data?.crc32 ?? ''}:${size(f)}`, defaultSelected: defaultSelected(name),
+      // JSZip's stored CRC (private field); empty when missing, then the sync hashes the pack text
+      checksum: crcOf(f) != null ? `${crcOf(f)}:${size(f)}` : '', defaultSelected: defaultSelected(name),
     }
   }).sort((a, b) => a.name.localeCompare(b.name))
 
@@ -82,6 +83,15 @@ export async function openReleaseZip(data: Blob | ArrayBuffer | Uint8Array): Pro
 function size(f: JSZip.JSZipObject): number {
   return (f as any)._data?.uncompressedSize ?? 0
 }
+
+function crcOf(f: JSZip.JSZipObject): number | null {
+  const crc = (f as any)._data?.crc32
+  return typeof crc === 'number' ? crc : null
+}
+
+/** Parsed packs kept between the index pass and the convert pass, up to a memory budget. */
+const PACK_CACHE_BUDGET = 64 * 1024 * 1024
+const PACK_CACHE_MAX_PACK = 8 * 1024 * 1024
 
 // ── Sync ───────────────────────────────────────────────────────────────────
 
@@ -134,43 +144,66 @@ export async function runFoundrySync(source: FoundrySource, opts: SyncOptions): 
   progress({ phase: 'lang', packIndex: 0, docs: 0 })
   const localize = buildLocalizer(await source.readLang())
 
-  // Pass 1: every selected document's UUID → kind + name, for links in text
+  // Pass 1: every selected document's UUID → kind + name, for links in text.
+  // Small packs stay parsed for pass 2; big ones are read again (PERF-06).
   const index = new Map<string, { kind: string; name: string }>()
+  const parsed = new Map<string, FoundryDoc[]>()
+  const checksums = new Map<string, string>()
+  let cached = 0
   for (const [i, p] of selected.entries()) {
     progress({ phase: 'index', pack: p.name, packIndex: i, docs: index.size })
-    for (const d of await source.readPack(p.name)) {
+    const docs = await source.readPack(p.name)
+    for (const d of docs) {
       const kind = kindOfFoundryType(d.type)
       if (kind) index.set(sourceOf(d, { game, pack: p.name }), { kind, name: d.name })
     }
+    // No CRC from the ZIP: fall back to a hash of the content (BUG-17)
+    checksums.set(p.name, p.checksum || `h:${hashString(JSON.stringify(docs))}`)
+    if (p.size <= PACK_CACHE_MAX_PACK && cached + p.size <= PACK_CACHE_BUDGET) {
+      parsed.set(p.name, docs)
+      cached += p.size
+    }
   }
 
+  // Only what the merge decision needs is kept for every row; full rows are
+  // read per pack, for the entries that changed.
   const previous = await db.syncState.get(game)
-  const existing = new Map<string, RulesEntity>()
-  await db.rules.where('origin').equals('foundry').each(r => { if (r.game === game) existing.set(r.id, r) })
+  const known = new Map<string, { hash?: string; pack?: string; removed?: boolean }>()
+  await db.rules.where('origin').equals('foundry').each(r => {
+    if (r.game === game) known.set(r.id, { hash: r.upstream?.hash, pack: r.upstream?.pack, removed: r.upstream?.removed })
+  })
 
   // Pass 2: convert and merge pack by pack
   const seenByPack = new Map<string, Set<string>>()
   for (const [i, p] of selected.entries()) {
+    const checksum = checksums.get(p.name)!
     const prevPack = previous?.version === version ? previous.packs[p.name] : undefined
-    const unchangedPack = !opts.force && prevPack?.hash === p.checksum && (prevPack.converter ?? 1) === CONVERTER_VERSION
+    const unchangedPack = !opts.force && prevPack?.hash === checksum && (prevPack.converter ?? 1) === CONVERTER_VERSION
     if (unchangedPack) {
       report.packs.push({ name: p.name, converted: 0, skipped: true })
+      parsed.delete(p.name)
       continue
     }
     progress({ phase: 'convert', pack: p.name, packIndex: i, docs: 0 })
     const seen = new Set<string>()
     seenByPack.set(p.name, seen)
-    const writes: RulesEntity[] = []
+    const changed: { entity: RulesEntity; hash: string }[] = []
     let converted = 0
-    for (const doc of await source.readPack(p.name)) {
+    const docs = parsed.get(p.name) ?? await source.readPack(p.name)
+    parsed.delete(p.name)
+    for (const doc of docs) {
       const { entity, issues } = convertFoundryDoc(doc, { game, version, pack: p.name, resolveUuid: u => index.get(u) ?? null, localize })
       for (const iss of issues) addIssue(iss.code, iss.detail)
       if (!entity) continue
       converted++
       seen.add(entity.id)
-      const merged = merge(entity, existing.get(entity.id), p.name, version, report)
-      if (merged) writes.push(merged)
+      const hash = contentHash(entity)
+      const k = known.get(entity.id)
+      if (k && k.hash === hash && !k.removed) { report.unchanged++; continue }
+      changed.push({ entity, hash })
     }
+    const prevRows = await db.rules.bulkGet(changed.map(c => c.entity.id))
+    const writes = changed.map(({ entity, hash }, j) => merge(entity, hash, prevRows[j], p.name, version, report))
     for (let w = 0; w < writes.length; w += WRITE_CHUNK) {
       await db.rules.bulkPut(writes.slice(w, w + WRITE_CHUNK))
       progress({ phase: 'convert', pack: p.name, packIndex: i, docs: Math.min(w + WRITE_CHUNK, writes.length) })
@@ -181,14 +214,17 @@ export async function runFoundrySync(source: FoundrySource, opts: SyncOptions): 
   progress({ phase: 'finish', packIndex: selected.length, docs: 0 })
 
   // Entries that disappeared from a pack that was synced this time
-  const removedRows: RulesEntity[] = []
-  for (const row of existing.values()) {
-    const pack = row.upstream?.pack
-    if (!pack || !seenByPack.has(pack) || seenByPack.get(pack)!.has(row.id) || row.upstream?.removed) continue
-    removedRows.push({ ...row, upstream: { ...row.upstream!, removed: true }, updatedAt: new Date().toISOString() })
+  const goneIds: string[] = []
+  for (const [id, k] of known) {
+    if (!k.pack || !seenByPack.has(k.pack) || seenByPack.get(k.pack)!.has(id) || k.removed) continue
+    goneIds.push(id)
   }
-  for (let w = 0; w < removedRows.length; w += WRITE_CHUNK) await db.rules.bulkPut(removedRows.slice(w, w + WRITE_CHUNK))
-  report.removed = removedRows.length
+  const ts = new Date().toISOString()
+  for (let w = 0; w < goneIds.length; w += WRITE_CHUNK) {
+    const rows = (await db.rules.bulkGet(goneIds.slice(w, w + WRITE_CHUNK))).filter((r): r is RulesEntity => !!r)
+    await db.rules.bulkPut(rows.map(row => ({ ...row, upstream: { ...row.upstream!, removed: true }, updatedAt: ts })))
+  }
+  report.removed = goneIds.length
 
   report.superseded = await pairLegacyWithRemaster(game)
 
@@ -199,9 +235,10 @@ export async function runFoundrySync(source: FoundrySource, opts: SyncOptions): 
       ...Object.fromEntries(selected.map(p => {
         const r = report.packs.find(x => x.name === p.name)
         const prev = previous?.packs[p.name]
+        const hash = checksums.get(p.name)!
         return [p.name, r?.skipped
-          ? { hash: p.checksum, count: prev?.count ?? 0, converter: prev?.converter ?? 1 }
-          : { hash: p.checksum, count: r?.converted ?? 0, converter: CONVERTER_VERSION }]
+          ? { hash, count: prev?.count ?? 0, converter: prev?.converter ?? 1 }
+          : { hash, count: r?.converted ?? 0, converter: CONVERTER_VERSION }]
       })),
     },
     syncedAt: new Date().toISOString(),
@@ -211,17 +248,12 @@ export async function runFoundrySync(source: FoundrySource, opts: SyncOptions): 
   return report
 }
 
-/** New upstream entity + stored row → row to write, or null if nothing changed. */
-function merge(entity: RulesEntity, prev: RulesEntity | undefined, pack: string, version: string, report: SyncReport): RulesEntity | null {
-  const hash = contentHash(entity)
+/** New upstream entity (whose hash changed or is new) + stored row → row to write. */
+function merge(entity: RulesEntity, hash: string, prev: RulesEntity | undefined, pack: string, version: string, report: SyncReport): RulesEntity {
   const now = new Date().toISOString()
   if (!prev) {
     report.created++
     return { ...entity, upstream: { pack, version, hash }, createdAt: now, updatedAt: now }
-  }
-  if (prev.upstream?.hash === hash && !prev.upstream.removed) {
-    report.unchanged++
-    return null
   }
   // Local edits whose upstream value moved since the user made them
   const conflictPaths = Object.keys(prev.localEdits ?? {}).filter(path =>
@@ -234,7 +266,7 @@ function merge(entity: RulesEntity, prev: RulesEntity | undefined, pack: string,
     if (v !== undefined) userOwned[key] = v
   }
   report.updated++
-  return {
+  const next = {
     ...entity,
     ...userOwned,
     ...(prev.supersededBy ? { supersededBy: prev.supersededBy } : {}),
@@ -242,12 +274,13 @@ function merge(entity: RulesEntity, prev: RulesEntity | undefined, pack: string,
     createdAt: prev.createdAt,
     updatedAt: now,
   } as RulesEntity
+  // A local rename keeps steering search and refs (BUG-05)
+  const localName = next.localEdits?.name
+  if (typeof localName === 'string') next.sortName = localName.toLowerCase()
+  return next
 }
 
-/** Stable hash of the converted rules content (bookkeeping and version excluded). */
-export function contentHash(entity: RulesEntity): string {
-  const { sourceRefs, upstream, createdAt, updatedAt, ...content } = entity as any
-  const s = stableStringify(content)
+function hashString(s: string): string {
   let h1 = 0x811c9dc5, h2 = 0x01000193
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i)
@@ -255,6 +288,12 @@ export function contentHash(entity: RulesEntity): string {
     h2 = Math.imul(h2 ^ c, 0x5bd1e995)
   }
   return `${(h1 >>> 0).toString(36)}${(h2 >>> 0).toString(36)}${s.length.toString(36)}`
+}
+
+/** Stable hash of the converted rules content (bookkeeping and version excluded). */
+export function contentHash(entity: RulesEntity): string {
+  const { sourceRefs, upstream, createdAt, updatedAt, ...content } = entity as any
+  return hashString(stableStringify(content))
 }
 
 function stableStringify(v: unknown): string {
@@ -274,7 +313,8 @@ export async function pairLegacyWithRemaster(game: GameId): Promise<number> {
   const groups = new Map<string, RulesEntity[]>()
   await db.rules.where('origin').equals('foundry').each(r => {
     if (r.game !== game || r.upstream?.removed) return
-    const key = `${r.kind}:${r.sortName}`
+    // By the upstream name: a local rename doesn't unpair a legacy/remaster twin
+    const key = `${r.kind}:${r.name.toLowerCase()}`
     const g = groups.get(key)
     if (g) g.push(r); else groups.set(key, [r])
   })
