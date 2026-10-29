@@ -1,12 +1,12 @@
 /**
  * Debounced compendium search for things that can stand on the map: creatures
- * and hazards of the campaign's game. Backs the encounter's Creatures tab, the
+ * and hazards of both games, so a PF2e campaign can field SF2e creatures and back. Backs the encounter's Creatures tab, the
  * "Link to Stat Block?" dialog and the token modals' creature pickers.
  */
 import { ref, shallowRef, watch, type Ref } from 'vue'
 import { rulesQuery } from '~/composables/useRules'
 import { resolveImage } from '~/rules/images'
-import type { GameId } from '~/types/game'
+import { GAME_CONFIG, type GameId } from '~/types/game'
 import type { RulesEntity } from '~/types/rules'
 
 export interface CreatureOption {
@@ -16,11 +16,17 @@ export interface CreatureOption {
   kind: 'creature' | 'hazard'
   /** Displayable URL (portraits are resolved from the image store). */
   img: string | null
+  game: RulesEntity['game']
+}
+
+/** " · SF2e" when the entry comes from the other game than the campaign's, else ''. */
+export function otherGameTag(entryGame: RulesEntity['game'], campaignGame: GameId): string {
+  return entryGame === 'both' || entryGame === campaignGame ? '' : ` · ${GAME_CONFIG[entryGame].short}`
 }
 
 export async function toCreatureOption(e: RulesEntity): Promise<CreatureOption> {
   const art = (e as { tokenImg?: string | null }).tokenImg || e.img
-  return { id: e.id, name: e.name, level: e.level, kind: e.kind as CreatureOption['kind'], img: await resolveImage(art) }
+  return { id: e.id, name: e.name, level: e.level, kind: e.kind as CreatureOption['kind'], img: await resolveImage(art), game: e.game }
 }
 
 export function useCreatureSearch(game: Ref<GameId>, opts: { limit?: number; hazards?: boolean; emptyLists?: boolean } = {}) {
@@ -39,7 +45,7 @@ export function useCreatureSearch(game: Ref<GameId>, opts: { limit?: number; haz
     try {
       const limit = opts.limit ?? 50
       const kinds = opts.hazards ? (['creature', 'hazard'] as const) : (['creature'] as const)
-      const pages = await Promise.all(kinds.map(kind => rulesQuery({ kind, games: [game.value], text, limit, sort: 'name' })))
+      const pages = await Promise.all(kinds.map(kind => rulesQuery({ kind, text, limit, sort: 'name' })))
       const items = pages.flatMap(p => p.items).sort((a, b) => a.sortName.localeCompare(b.sortName)).slice(0, limit)
       const options = await Promise.all(items.map(toCreatureOption))
       if (mine !== run) return

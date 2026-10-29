@@ -46,7 +46,7 @@
                     class="tem-dropdown-row"
                     @click="selectEntry(opt)"
                   >
-                    <span class="tem-rec-type">{{ opt.kind }} {{ opt.level }}</span>
+                    <span class="tem-rec-type">{{ opt.kind }} {{ opt.level }}{{ otherGameTag(opt.game, game) }}</span>
                     {{ opt.name }}
                   </button>
                 </div>
@@ -221,7 +221,7 @@
 <script setup lang="ts">
 import type { EncounterToken, TokenCondition, TokenTimer } from '~/stores/encounter'
 import { rulesGet } from '~/composables/useRules'
-import { useCreatureSearch, type CreatureOption } from '~/composables/useCreatureSearch'
+import { useCreatureSearch, otherGameTag, type CreatureOption } from '~/composables/useCreatureSearch'
 import { tokenStats, type Adjustment } from '~/rules/combat'
 import { SIZE_SQUARES } from '~/rules/format'
 import type { GameId } from '~/types/game'

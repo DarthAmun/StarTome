@@ -638,21 +638,21 @@ Party tab, GM-hidden item names, encounter planner + deploy (Foundry creatures c
 ## 13. Open questions for you
 
 1. ~~Name & repo~~ → **resolved: StarTome**, deployed at `darthamun.github.io/StarTome/`.
-2. **Mixed games** per campaign, or strictly one? → *built as strictly one (`campaigns.game`); the compendium can still show both games.* Confirm.
-3. **Legacy (pre-remaster) entries**: sync them but hide superseded ones by default, or skip legacy packs/entries entirely? → *built as sync + hide superseded by default ("Show superseded legacy" filter).* Confirm.
+2. ~~**Mixed games**~~ → **resolved 2026-10-29: one game per campaign** (`campaigns.game` sets rules, money, treasure and XP). Creature and hazard searches (encounter builder, VTT Creatures tab, link and token pickers) cover both games; entries from the other game are tagged "· SF2e"/"· PF2e" and use the campaign's XP table.
+3. ~~**Legacy (pre-remaster) entries**~~ → **resolved 2026-10-29:** sync them and hide superseded ones by default ("Show superseded legacy" filter).
 4. ~~**Quest board**~~ → **resolved:** dedicated `questboard` export (phase 5). Was: which file and fields, and does it read `records`/`systems`? OK to move it to a dedicated export?
 5. ~~Cleaner data source~~ → **resolved: Foundry sync.**
 6. ~~Bulk content importer~~ → **resolved: Foundry sync.**
 7. ~~**Drop the schema builder**~~ → **resolved:** removed in phase 6.
-8. **Repo visibility**: Foundry fixtures are ORC/OGL and fine in public. Fixtures from your pf2etools export should stay private or be synthetic.
-9. **Upstream future** of DM's Tome (where the namespacing commit lands).
+8. ~~**Repo visibility**~~ → **resolved 2026-10-29: public.** Fixtures are Foundry data (ORC/OGL) or synthetic; nothing from the pf2etools export is in the repo.
+9. ~~**Upstream future**~~ → **resolved 2026-10-29:** DM's Tome stays as it is, without the namespacing refactor. StarTome's own namespace already keeps the two apart; fixes are ported by hand.
 10. ~~**`window.dmstome`**~~ → **resolved:** removed in phase 6.
-11. **SF2e money**: OK to treat 1 credit = 1 sp, as Foundry stores it? Do you track UPBs? → *built as 1 credit = 10 cp; UPBs not tracked.* Confirm UPBs.
+11. ~~**SF2e money**~~ → **resolved 2026-10-29:** 1 credit = 1 sp (10 cp), as Foundry stores it. UPBs are not tracked (a plain inventory item if ever needed).
 12. ~~**First typed kinds**~~ → **resolved:** all kinds have views (phase 2/5). Was: since Foundry provides all kinds, OK to do item/creature/hazard/spell/condition views first and the reference kinds after?
-13. **The 4 `carried: "Me"` items**: a PC's inventory? → *imported as `legacy` items with `legacy.carried`; they can now be moved into a character's inventory by hand.* Confirm.
+13. ~~**The 4 `carried: "Me"` items**~~ → **resolved 2026-10-29:** left out. The import is campaign-only (v0.16.0); add them to a character by hand from the compendium.
 14. **Play Buddy hosting** (parked with P6/P7): the GM client on the same machine as your browser?
 15. ~~Sync route~~ → **resolved: ZIP drop first.** Mirror and dev channel deferred. (The mirror would republish ORC/OGL content on your Pages site, so the licensing question comes back if it's ever revived.)
-16. **Default packs**: which adventure-path bestiaries do you actually use (Abomination Vaults, given "AV2" sources in your data?), so they can be on by default?
+16. ~~**Default packs**~~ → **resolved 2026-10-29:** core rules and rulebook bestiaries are preselected, plus every pack synced before (from `syncState.packs`). Adventure bestiaries stay opt-in, but a pick sticks.
 
 ---
 

@@ -58,7 +58,7 @@
             </div>
             <div class="eb-result-info">
               <span class="eb-result-name">{{ r.name }}</span>
-              <span class="eb-result-meta">{{ r.kind === 'hazard' ? (r.complex ? 'Complex hazard' : 'Hazard') : 'Creature' }} {{ r.level }} · {{ xpOf(r) }} XP</span>
+              <span class="eb-result-meta">{{ r.kind === 'hazard' ? (r.complex ? 'Complex hazard' : 'Hazard') : 'Creature' }} {{ r.level }} · {{ xpOf(r) }} XP{{ otherGameTag(r.game, game) }}</span>
             </div>
             <button class="eb-add" title="Add" @click="add(r.id)"><OhVueIcon name="md-add" scale="0.75" /></button>
           </div>
@@ -125,7 +125,7 @@
 import { dbApi } from '~/composables/useDb'
 import { useParty } from '~/composables/useParty'
 import { rulesCounts, rulesGetMany, rulesQuery } from '~/composables/useRules'
-import { toCreatureOption, type CreatureOption } from '~/composables/useCreatureSearch'
+import { toCreatureOption, otherGameTag, type CreatureOption } from '~/composables/useCreatureSearch'
 import { createEncounterFromBuild, useBuildState, type BuildSlot } from '~/composables/useEncounterBuild'
 import { entryXp, MAX_LEVEL_ABOVE, tooStrong, xpLevel, type XpEntry } from '~/rules/encounter'
 import { MAX_LEVEL, MIN_LEVEL, clampLevel } from '~/rules/party'
@@ -182,7 +182,7 @@ async function search() {
     const kinds = kindFilter.value === 'both' ? (['creature', 'hazard'] as const) : [kindFilter.value]
     const num = (v: number | '') => (v === '' || !Number.isFinite(v) ? null : v)
     const pages = await Promise.all(kinds.map(kind => rulesQuery({
-      kind, games: [game.value], text: text.value.trim(), limit: 60, sort: 'level',
+      kind, text: text.value.trim(), limit: 60, sort: 'level',
       levelMin: num(levelMin.value), levelMax: num(levelMax.value),
       rarities: rarity.value ? [rarity.value] : undefined, traits: traits(),
     })))

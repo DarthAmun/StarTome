@@ -533,7 +533,7 @@
                   </div>
                   <div class="creature-chip-info">
                     <span class="token-lib-name">{{ rec.name }}</span>
-                    <span class="creature-chip-type">{{ rec.kind }} {{ rec.level }}</span>
+                    <span class="creature-chip-type">{{ rec.kind }} {{ rec.level }}{{ otherGameTag(rec.game, campaignGameId) }}</span>
                   </div>
                   <button class="icon-btn-sq" title="Place on map" @click.stop="store.addCreatureToEncounterAuto(rec.id, placeAdjustment)">
                     <OhVueIcon name="md-add" scale="0.75" />
@@ -743,7 +743,7 @@
                 class="link-record-row"
                 :class="{ 'link-record-row--selected': linkSelectedId === rec.id }"
                 @click="linkSelectedId = rec.id">
-                {{ rec.name }} <span class="link-record-meta">{{ rec.kind }} {{ rec.level }}</span>
+                {{ rec.name }} <span class="link-record-meta">{{ rec.kind }} {{ rec.level }}{{ otherGameTag(rec.game, campaignGameId) }}</span>
               </button>
               <div v-if="linkLoading" class="link-record-empty">Searching…</div>
               <div v-else-if="!linkResults.length" class="link-record-empty">
@@ -982,7 +982,7 @@ import { dbApi, type DbEncounterWall } from "~/composables/useDb";
 import { imageTypeOf, pickImageFile } from "~/utils/image";
 import { hexColorToNumber } from "~/composables/useConditions";
 import { useConditionPanel } from "~/composables/useConditionPanel";
-import { useCreatureSearch } from "~/composables/useCreatureSearch";
+import { useCreatureSearch, otherGameTag } from "~/composables/useCreatureSearch";
 import { rulesGet } from "~/composables/useRules";
 import { ADJUSTMENT_LABEL, applyAdjustment, type Adjustment } from "~/rules/combat";
 import type { RulesEntity } from "~/types/rules";

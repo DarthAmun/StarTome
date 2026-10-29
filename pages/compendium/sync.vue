@@ -234,7 +234,9 @@ async function useFile(f: File | undefined | null) {
   if (!f || busy.value) return
   file.value = f
   await inspect(f)
-  selected.value = info.value?.packs.filter(p => p.defaultSelected).map(p => p.name) ?? []
+  // Defaults plus every pack synced before, so an opted-in adventure bestiary stays checked
+  const synced = (info.value && states.value[info.value.game]?.packs) ?? {}
+  selected.value = info.value?.packs.filter(p => p.defaultSelected || p.name in synced).map(p => p.name) ?? []
 }
 
 function onDrop(e: DragEvent) {
