@@ -280,6 +280,13 @@ P2 and P3 don't depend on each other and could swap if the party tab matters mor
 - **Follow-ups done 2026-10-29 (v0.12.1)**:
   - **Containers** (§9.3): an entry can be stored in a container entry of the same owner (`inventory.container_id`, non-indexed). The container's `bulkReduction` comes off its contents (backpack: the first 2 Bulk; bag of holding: everything up to capacity), with an "over capacity" warning. A container moves with its contents and is never merged while it holds something; deleting it drops the contents loose; moving a stored stack to another owner takes it out. Containers don't nest. "Stored in" sits in an entry's details, and stored stacks are listed indented under their container.
   - **`PartyLink` stub** (`partylink/`): the port from FORK_PLAN §9.2 in our own vocabulary plus `NoneLink` (empty reads, refused writes). P6/P7 stay parked until the Play Buddy API is settled and its repo has been looked at.
+- **P8 done 2026-10-29 (v0.17.0)**:
+  - `rules/dcs.ts`: `levelDc` (−1…25), `simpleDc`, `adjustDc`, `rarityStep`, `recallKnowledge` and the palette parser. `GAME_RULES[game].dcByLevel` and `.identification` hold the tables, checked on Archives of Nethys 2026-10-29 (GM Core Tables 10-4/10-5/10-6 and Creature Identification Skills; SF2e's are the same plus robot → Computers/Crafting). Level −1 (DC 13) isn't in the book's table and continues its step.
+  - Lore DCs are the book's "easy or very easy" after the rarity step. Traits with no skill in the table show "GM's choice"; there are no guessed SF2e tech mappings.
+  - "Recall Knowledge" line (GM-styled) on creature and hazard stat blocks, so also in the VTT stat panel and the GM screen's compendium widgets, and under the "Link to Stat Block?" list for the picked entry (weak/elite applied). Stat blocks never reach the player payload.
+  - GM screen **DC Table** widget: level picker, the six adjustments with their rarity, the simple DCs, and a source picker listing the pinned creatures/hazards for their Recall Knowledge.
+  - Command palette: `dc 7`, `dc level 7 hard`, `dc 7 rare`, `dc trained` (without a difficulty it lists all six adjustments).
+  - `tests/dcs.test.ts`.
 
 ## 9. Open questions
 

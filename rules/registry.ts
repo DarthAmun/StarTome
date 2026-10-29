@@ -58,6 +58,10 @@ export interface GameRules {
   /** False until the treasure item counts are checked against this game's book. */
   treasureCountsVerified: boolean
   gear: GearSchedule
+  /** DC by level, index 0 = level −1 (FEATURES_PLAN §10.1). */
+  dcByLevel: number[]
+  /** Creature trait → skills for Recall Knowledge (Creature Identification Skills). */
+  identification: Record<string, string[]>
   verified: boolean
 }
 
@@ -99,6 +103,22 @@ const SF2E_GEAR: GearSchedule = {
   verified: true,
 }
 
+// DCs by Level, GM Core Table 10-5, https://2e.aonprd.com/Rules.aspx?ID=2627; SF2e's
+// https://2e.aonsrd.com/rules/702-difficulty-classes is the same (both checked 2026-10-29).
+// The book starts at level 0; level −1 (13) continues its step and is not in the table.
+const DC_BY_LEVEL = [13, 14, 15, 16, 18, 19, 20, 22, 23, 24, 26, 27, 28, 30, 31, 32, 34, 35, 36, 38, 39, 40, 42, 44, 46, 48, 50]
+
+// Creature Identification Skills, GM Core p. 54, https://2e.aonprd.com/Rules.aspx?ID=2638;
+// SF2e adds robot, https://2e.aonsrd.com/rules/713-recall-knowledge (both checked 2026-10-29)
+const PF2E_IDENTIFICATION: Record<string, string[]> = {
+  aberration: ['occultism'], animal: ['nature'], astral: ['occultism'], beast: ['arcana', 'nature'],
+  celestial: ['religion'], construct: ['arcana', 'crafting'], dragon: ['arcana'], dream: ['occultism'],
+  elemental: ['arcana', 'nature'], ethereal: ['occultism'], fey: ['nature'], fiend: ['religion'],
+  fungus: ['nature'], humanoid: ['society'], monitor: ['religion'], ooze: ['occultism'], plant: ['nature'],
+  shade: ['religion'], spirit: ['occultism'], time: ['occultism'], undead: ['religion'],
+}
+const SF2E_IDENTIFICATION: Record<string, string[]> = { ...PF2E_IDENTIFICATION, robot: ['computers', 'crafting'] }
+
 /** Item counts per row: level L gives permanent items of L+1 and L, consumables of L+1, L and L−1. */
 function treasureCounts(level: number): Pick<TreasureRow, 'permanent' | 'consumables'> {
   if (level === 20) return { permanent: { 20: 4 }, consumables: { 20: 4, 19: 2 } }
@@ -137,6 +157,8 @@ export const GAME_RULES: Record<GameId, GameRules> = {
     // GM Core Table 10-9, https://2e.aonprd.com/Rules.aspx?ID=2656 (checked 2026-10-29)
     treasureCountsVerified: true,
     gear: PF2E_GEAR,
+    dcByLevel: DC_BY_LEVEL,
+    identification: PF2E_IDENTIFICATION,
     verified: true,
   },
   sf2e: {
@@ -149,6 +171,8 @@ export const GAME_RULES: Record<GameId, GameRules> = {
     treasure: treasureTable(TREASURE_TOTAL_CR, TREASURE_CURRENCY_CR, TREASURE_EXTRA_PC_CR, 10),
     treasureCountsVerified: true,
     gear: SF2E_GEAR,
+    dcByLevel: DC_BY_LEVEL,
+    identification: SF2E_IDENTIFICATION,
     verified: false,
   },
 }

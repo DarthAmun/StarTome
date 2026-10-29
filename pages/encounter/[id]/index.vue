@@ -714,6 +714,7 @@
               <button class="link-modal-close" @click="clearLogConfirm = false">✕</button>
             </div>
             <p class="link-modal-hint">This cannot be undone.</p>
+            <RecallKnowledgeLine v-if="linkSelectedEntry" :entity="linkSelectedEntry" :game="campaignGameId" class="link-modal-recall" />
             <div class="link-modal-footer">
               <button class="link-btn link-btn--skip" @click="clearLogConfirm = false">Cancel</button>
               <button class="link-btn link-btn--link" style="background:var(--blood)" @click="doClearLog">Clear</button>
@@ -1139,6 +1140,14 @@ const linkSelectedId = ref<string | null>(null);
 const linkAdjustment = ref<Adjustment | null>(null);
 const { search: linkSearch, results: linkResults, loading: linkLoading, reset: resetLinkSearch } =
   useCreatureSearch(campaignGameId, { limit: 30, hazards: true });
+
+/** The picked entry, adjusted, for its Recall Knowledge line. */
+const linkSelectedEntry = shallowRef<RulesEntity | null>(null);
+watch([linkSelectedId, linkAdjustment], async ([id, adj]) => {
+  const entry = id ? await rulesGet(id) : null;
+  if (id !== linkSelectedId.value) return;
+  linkSelectedEntry.value = entry ? applyAdjustment(entry, adj) : null;
+});
 
 function openLinkModal(tokenId: number) {
   linkSelectedId.value = null;
@@ -2945,6 +2954,7 @@ function getImageUrl(token: any): string {
 .enc-linked-unlink:hover { color: var(--blood); }
 
 /* ── Link to Stat Block modal ── */
+.link-modal-recall { margin: 8px 0 0; }
 .link-modal {
   width: 420px;
   max-width: 94vw;

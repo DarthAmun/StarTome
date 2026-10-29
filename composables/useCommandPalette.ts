@@ -1,6 +1,7 @@
 import { dbApi, getDb, parseJsonObject, type DbEntity } from '~/composables/useDb'
 import { useEntities } from '~/composables/useEntities'
 import { rulesSearch } from '~/composables/useRules'
+import { adjustDc, DC_STEPS, parseDcQuery } from '~/rules/dcs'
 import { RULES_KIND_CONFIG, RULES_KINDS } from '~/types/rules'
 import { lsKey } from '~/utils/appNamespace'
 
@@ -96,6 +97,7 @@ const COMMAND_VERBS = [
   'unset', 'clear',
   'theme',
   'roll', 'dice',
+  'dc',
 ]
 
 // ── Singleton context ────────────────────────────────────────────────────────
@@ -763,6 +765,25 @@ function themeSuggestions(rest: string, updateSettings: (k: string, v: any) => v
   }))
 }
 
+// ── DCs ───────────────────────────────────────────────────────────────────────
+function dcSuggestions(text: string): CmdItem[] {
+  if (!text.trim()) return [{ kind: 'cmd', id: 'dc-hint', icon: '◎', label: 'dc [level] [difficulty]', hint: 'e.g. dc 7, dc level 7 hard, dc 7 rare, dc trained', canExecute: false }]
+  const q = parseDcQuery(text)
+  if (!q) return [{ kind: 'cmd', id: 'dc-invalid', icon: '◎', label: `No DC for "${text}"`, hint: 'Try dc 7, dc 7 very hard or dc expert', canExecute: false }]
+  const subject = q.kind === 'level' ? `Level ${q.level}` : q.rank[0].toUpperCase() + q.rank.slice(1)
+  const item = (id: string, dc: number, label: string): CmdItem =>
+    ({ kind: 'cmd', id, icon: '◎', label: `DC ${dc}`, hint: label, canExecute: true, keepOpen: true, execute: () => {} })
+  if (q.step) {
+    const step = DC_STEPS.find(s => s.key === q.step)!
+    return [item('dc-result', q.dc, `${subject}, ${step.label.toLowerCase()} (${q.dc - step.adjust} ${step.adjust >= 0 ? '+' : '−'} ${Math.abs(step.adjust)})`)]
+  }
+  // No difficulty given: the DC and every adjustment of it
+  return [
+    item('dc-result', q.dc, subject),
+    ...DC_STEPS.filter(s => s.key !== 'normal').map(s => item(`dc-${s.key}`, adjustDc(q.dc, s.key), `${subject}, ${s.label.toLowerCase()}`)),
+  ]
+}
+
 function defaultSuggestions(partialVerb?: string): CmdItem[] {
   const hints = [
     { icon: '→', label: 'goto [section]',              hint: 'Navigate to a section — npcs, graphs, settings…' },
@@ -776,6 +797,7 @@ function defaultSuggestions(partialVerb?: string): CmdItem[] {
     { icon: '✕', label: 'unset',                       hint: 'Clear current context' },
     { icon: '◐', label: 'theme [name]',                hint: 'Switch color theme — dark, void, forest, light, parchment' },
     { icon: '⚄', label: 'roll [expression]',           hint: 'Roll dice — 2d6+3, d20, 4d6' },
+    { icon: '◎', label: 'dc [level] [difficulty]',     hint: 'Look up a DC — dc 7, dc level 7 hard, dc trained' },
   ]
   const filtered = partialVerb
     ? hints.filter(h => h.label.startsWith(partialVerb) || h.label.includes(partialVerb))
@@ -907,6 +929,11 @@ export function useCommandPalette() {
     // Roll
     if (['roll', 'dice'].includes(verbWord)) {
       return rollSuggestions(restStr)
+    }
+
+    // DC
+    if (verbWord === 'dc') {
+      return dcSuggestions(restStr)
     }
 
     // No match — show hints filtered by what they're typing

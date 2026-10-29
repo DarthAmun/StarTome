@@ -273,6 +273,7 @@
             <WidgetScratchpad    v-else-if="w.kind === 'scratchpad'"     v-model="scratchpad" class="dms-w-fill" />
             <WidgetNpcGenerator v-else-if="w.kind === 'npc-generator'" :ref="(el: any) => { npcGenRef = el }" :campaign-id="id" :game="campaignGameId" class="dms-w-fill" />
             <WidgetRulesEntry v-else-if="w.kind === 'rules-entry' && w.rulesId" :rules-id="w.rulesId" :game="campaignGameId" class="dms-w-fill" @loaded="rulesTitles[w.rulesId] = $event" />
+            <WidgetDcTable v-else-if="w.kind === 'dc-table'" :config="w.config ?? {}" :game="campaignGameId" :pinned-rules-ids="[...pinnedRulesIds]" class="dms-w-fill" @update:config="updateWidgetConfig(w.id, $event)" />
             <WidgetWeather v-else-if="w.kind === 'weather'" :config="w.config ?? {}" class="dms-w-fill" @update:config="updateWidgetConfig(w.id, $event)" />
             <div v-else class="dms-w-missing">Entity removed or not found.</div>
 
@@ -687,6 +688,7 @@ function widgetTitle(w: DmWidget): string {
   if (w.kind === 'conditions-grid')  return 'Conditions'
   if (w.kind === 'timer')        return 'Timer'
   if (w.kind === 'rules-lookup') return 'Rules Lookup'
+  if (w.kind === 'dc-table')     return 'DC Table'
   if (w.kind === 'scratchpad')   return 'Scratchpad'
   if (w.kind === 'rules-entry' && w.rulesId) return rulesTitles[w.rulesId] ?? 'Compendium'
   const e = getEntity(w)
@@ -735,6 +737,7 @@ const QUICK_WIDGETS = [
   { kind: 'scratchpad'      as WidgetKind, label: 'Scratchpad',      icon: 'gi-scroll-unfurled' },
   { kind: 'npc-generator'   as WidgetKind, label: 'NPC Generator',   icon: 'gi-person' },
   { kind: 'weather'         as WidgetKind, label: 'Weather',         icon: 'gi-lightning-bolt' },
+  { kind: 'dc-table'        as WidgetKind, label: 'DC Table',        icon: 'gi-archery-target' },
 ]
 
 const openGroups = reactive<Record<string, boolean>>({

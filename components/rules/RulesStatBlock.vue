@@ -16,6 +16,8 @@
       <span v-for="t in entity.traits" :key="t" class="rsb-trait">{{ formatTrait(t) }}</span>
     </div>
 
+    <RecallKnowledgeLine v-if="creature || hazard" :entity="entity" :game="game" />
+
     <!-- ── Item ───────────────────────────────────────────────── -->
     <template v-if="item">
       <p class="rsb-line">

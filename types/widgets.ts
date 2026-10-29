@@ -2,7 +2,7 @@ export type WidgetKind =
   | 'session' | 'npc' | 'location' | 'faction' | 'quest' | 'event' | 'note'
   | 'encounter-link' | 'conditions-grid' | 'scratchpad' | 'rules-entry'
   | 'timer' | 'rules-lookup' | 'random-table' | 'rumor' | 'npc-generator'
-  | 'weather'
+  | 'weather' | 'dc-table'
 
 export interface DmWidget {
   id: string
@@ -19,7 +19,7 @@ export interface DmWidget {
 
 /** Widget kinds that may only appear once on the board */
 export const SINGLETONS: WidgetKind[] = [
-  'encounter-link', 'conditions-grid', 'scratchpad', 'timer', 'rules-lookup', 'npc-generator', 'weather',
+  'encounter-link', 'conditions-grid', 'scratchpad', 'timer', 'rules-lookup', 'npc-generator', 'weather', 'dc-table',
 ]
 
 /** Default pixel [width, height] for each widget kind */
@@ -41,6 +41,7 @@ export const DEFAULT_SIZES: Record<WidgetKind, [number, number]> = {
   'random-table':    [576,  240],
   rumor:             [576,  120],
   'npc-generator':   [576,  360],
+  'dc-table':        [576,  240],
 }
 
 /** Labels for non-entity widget kinds (entity kinds fall through to ENTITY_TYPE_CONFIG.label) */
@@ -53,6 +54,7 @@ export const WIDGET_LABELS: Partial<Record<WidgetKind, string>> = {
   timer:             'Timer',
   'rules-lookup':    'Rules',
   'npc-generator':   'NPC Gen',
+  'dc-table':        'DCs',
 }
 
 /** Colors for non-entity widget kinds (entity kinds fall through to ENTITY_TYPE_CONFIG.color) */
@@ -65,4 +67,5 @@ export const WIDGET_COLORS: Partial<Record<WidgetKind, string>> = {
   timer:             'oklch(72% 0.18 200)',
   'rules-lookup':    'oklch(72% 0.16 260)',
   'npc-generator':   'oklch(76% 0.18 80)',
+  'dc-table':        'oklch(74% 0.16 140)',
 }
