@@ -1,3 +1,4 @@
+import { parseJson } from "~/utils/json";
 import * as PIXI from "pixi.js";
 import { useEncounterStore } from "../stores/encounter";
 import type { EncounterToken } from "../stores/encounter";
@@ -104,16 +105,16 @@ export function useEncounterCanvas(options: CanvasOptions) {
 
   const WALL_COLORS: Record<string, number> = {
     full: 0xffffff,
-    "three-quarter": 0xb8860b,
-    half: 0xc86414,
-    quarter: 0xc83214,
+    greater: 0xb8860b,
+    standard: 0xc86414,
+    lesser: 0xc83214,
     door: 0x64c8dc,
   };
   const WALL_ALPHA: Record<string, number> = {
     full: 0.9,
-    "three-quarter": 0.85,
-    half: 0.85,
-    quarter: 0.75,
+    greater: 0.85,
+    standard: 0.85,
+    lesser: 0.75,
     door: 0.9,
   };
 
@@ -487,7 +488,7 @@ export function useEncounterCanvas(options: CanvasOptions) {
     });
 
     for (const wall of walls) {
-      const pts: Array<{ x: number; y: number }> = JSON.parse(wall.points);
+      const pts: Array<{ x: number; y: number }> = parseJson<Array<{ x: number; y: number }>>(wall.points, []);
       if (pts.length < 2) continue;
       const color = WALL_COLORS[wall.coverType] ?? 0xffffff;
       const alpha = WALL_ALPHA[wall.coverType] ?? 0.9;
@@ -615,7 +616,7 @@ export function useEncounterCanvas(options: CanvasOptions) {
     const worldY = (screenY - viewport.y) / viewport.scale;
     const worldThreshold = threshold / viewport.scale;
     for (const wall of store.walls) {
-      const pts: Array<{ x: number; y: number }> = JSON.parse(wall.points);
+      const pts: Array<{ x: number; y: number }> = parseJson<Array<{ x: number; y: number }>>(wall.points, []);
       for (let i = 0; i < pts.length - 1; i++) {
         const ax = gridOffsetX + pts[i].x * gridSize;
         const ay = gridOffsetY + pts[i].y * gridSize;

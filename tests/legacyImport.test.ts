@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { parseJson } from '~/utils/json'
 import { getDb } from '~/composables/useDb'
 import { remapLore, rewriteRulesRefs } from '~/converters/legacy/lore'
 import { normalizeName } from '~/converters/legacy/match'
@@ -71,20 +72,20 @@ describe('legacy lore remapping', () => {
     expect(tables.campaigns[0]).toMatchObject({ id: 5, game: 'pf2e' })
     expect(tables.campaigns[0]).not.toHaveProperty('system_id')
     expect(tables.entities.map(e => [e.id, e.campaign_id])).toEqual([[100, 5], [101, 5], [102, 5], [103, 5]])
-    expect(JSON.parse(tables.entities[1].attributes).mapPins).toEqual([{ entityId: 100, x: 0.1, y: 0.2 }])
-    expect(JSON.parse(tables.entities[2].attributes).locationEntityId).toBe(101)
-    expect(JSON.parse(tables.entities[3].attributes).questGiverId).toBe(100)
+    expect(parseJson<any>(tables.entities[1].attributes, {}).mapPins).toEqual([{ entityId: 100, x: 0.1, y: 0.2 }])
+    expect(parseJson<any>(tables.entities[2].attributes, {}).locationEntityId).toBe(101)
+    expect(parseJson<any>(tables.entities[3].attributes, {}).questGiverId).toBe(100)
     expect(tables.entityLinks[0].source_id).toBe(100)
     expect(tables.entitySnapshots[0]).toMatchObject({ entity_id: 100, event_id: 103 })
     expect(tables.entityConnections[0]).toMatchObject({ campaign_id: 5, source_entity_id: 100, target_entity_id: 101 })
-    expect(JSON.parse(tables.graphLayouts[0].positions)).toEqual({ 100: { x: 1, y: 2 }, 101: { x: 3, y: 4 } })
-    expect(tables.graphLayouts[0].hidden_nodes).toBe('[101]')
+    expect(parseJson<any>(tables.graphLayouts[0].positions, {})).toEqual({ 100: { x: 1, y: 2 }, 101: { x: 3, y: 4 } })
+    expect(tables.graphLayouts[0].hidden_nodes).toEqual([101])
     expect(tables.tokens[0]).toMatchObject({ id: 1, linked_rules_id: 'fvtt:mino', linked_entity_id: 100 })
     expect(tables.tokens[0]).not.toHaveProperty('linked_record_id')
     expect(tables.encounterTokens.map(t => [t.id, t.token_id, t.linked_rules_id])).toEqual([[20, 1, 'fvtt:mino'], [21, null, null]])
     expect(tables.encounters[0]).toMatchObject({ campaign_id: 5, sound_playlist_id: null })
-    // The converter keeps DM's Tome's JSON text; the import turns it into a value afterwards
-    expect(JSON.parse(tables.encounters[0].combat_log as string)[0].tokenId).toBe(20)
+    // The converter turns DM's Tome's JSON text into a value, with the placement ids remapped
+    expect((tables.encounters[0].combat_log as { tokenId: number }[])[0].tokenId).toBe(20)
     expect(tables.encounterWalls[0].encounter_id).toBe(1)
     expect(issues.map(i => `${i.table}:${i.id}`)).toEqual(['entities:50', 'entities:11', 'encounterTokens:10'])
   })

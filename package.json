@@ -1,6 +1,6 @@
 {
   "name": "startome",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "StarTome — offline-first campaign manager for Pathfinder 2e and Starfinder 2e GMs",
   "private": true,
   "type": "module",

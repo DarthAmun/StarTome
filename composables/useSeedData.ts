@@ -361,7 +361,7 @@ export async function seedIfEmpty() {
       type: e.type,
       name: e.name,
       content: e.content,
-      attributes: JSON.stringify(e.attributes),
+      attributes: e.attributes,
       created_at: ts,
       updated_at: ts,
     }) as number
@@ -381,7 +381,7 @@ export async function seedIfEmpty() {
         source_id: sourceId,
         target_type: link.type,
         target_name: link.name,
-        metadata: JSON.stringify(link.metadata ?? {}),
+        metadata: link.metadata ?? {},
       })
     }
   }

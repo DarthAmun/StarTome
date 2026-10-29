@@ -14,10 +14,9 @@ import { parseDefeated, type DefeatedEnemy } from '~/rules/advancement'
 import { healthState, type HealthState } from '~/composables/useConditions'
 import { lsKey } from '~/utils/appNamespace'
 import { playerWindow } from '~/utils/windowChannel'
-import { parseJson } from '~/utils/json'
+import { parseJson, toPlain } from '~/utils/json'
 
-/** A deep plain copy: IndexedDB can't store Vue proxies, and nested values may be ones. */
-const plain = <T>(v: T): T => JSON.parse(JSON.stringify(v ?? null))
+const plain = toPlain
 import { reportError } from '~/composables/useNotices'
 import { ImageChannel, toPlayerToken } from '~/utils/playerPayload'
 
@@ -873,7 +872,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     if (!current.value) return
     const wallData = {
       encounter_id: current.value.id,
-      points: JSON.stringify(points),
+      points: toPlain(points),
       coverType,
       isOpen: false,
     }
@@ -1024,13 +1023,13 @@ export const useEncounterStore = defineStore('encounter', () => {
     }
     if (!added.length || !current.value) return
     current.value.defeated = [...current.value.defeated, ...added]
-    await dbApi.encounters.update({ id: current.value.id, defeated: JSON.stringify(current.value.defeated) })
+    await dbApi.encounters.update({ id: current.value.id, defeated: toPlain(current.value.defeated) })
   }
 
   async function clearDefeated() {
     if (!current.value) return
     current.value.defeated = []
-    await dbApi.encounters.update({ id: current.value.id, defeated: '[]' })
+    await dbApi.encounters.update({ id: current.value.id, defeated: [] })
   }
 
   /** The encounter was resolved or re-opened elsewhere (the resolve dialog writes the database). */

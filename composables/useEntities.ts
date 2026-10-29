@@ -1,5 +1,6 @@
 // Manages DbEntity (entities table) — campaign-scoped notes and lore.
 // See the DATA MODEL NOTE in composables/useDb.ts for the full two-system explanation.
+import { toPlain } from '~/utils/json'
 import { ref, computed, reactive } from 'vue'
 import { extractLinks } from '~/composables/useEntityParser'
 import { dbApi, getDb, parseJsonObject } from '~/composables/useDb'
@@ -118,7 +119,7 @@ async function createEntity(campaignId: number, type: EntityType, name: string, 
   try {
     const raw = await dbApi.entities.create({
       campaignId, type, name, content: '',
-      attributes: initialAttributes ? JSON.stringify(initialAttributes) : '{}',
+      attributes: toPlain(initialAttributes ?? {}),
     })
     const entity = normalizeEntity(raw)
     entities.value.unshift(entity)
@@ -140,7 +141,7 @@ async function updateEntity(id: number, updates: { name?: string; content?: stri
     const payload: any = { id }
     if (updates.name !== undefined) payload.name = updates.name
     if (updates.content !== undefined) payload.content = updates.content
-    if (updates.attributes !== undefined) payload.attributes = JSON.stringify(updates.attributes)
+    if (updates.attributes !== undefined) payload.attributes = toPlain(updates.attributes)
 
     await dbApi.entities.update(payload)
 
@@ -190,7 +191,7 @@ async function syncLinks(entityId: number, content: string) {
       sourceId: entityId,
       targetType: link.type,
       targetName: link.name,
-      metadata: JSON.stringify(link.metadata),
+      metadata: toPlain(link.metadata ?? {}),
     })
     newLinks.push(normalizeLink(raw))
   }
@@ -240,7 +241,7 @@ async function createSnapshot(
       label,
       note,
       content: entity.content,
-      attributes: JSON.stringify(entity.attributes),
+      attributes: toPlain(entity.attributes),
       name: entity.name,
       created_at: new Date().toISOString(),
       event_id: eventId,
@@ -300,7 +301,7 @@ async function updateSnapshotContent(
     if (changes.content !== undefined) dbChanges.content = changes.content
     if (changes.name !== undefined) dbChanges.name = changes.name
     if (changes.attributes !== undefined)
-      dbChanges.attributes = JSON.stringify(changes.attributes)
+      dbChanges.attributes = toPlain(changes.attributes)
 
     await getDb().entitySnapshots.update(id, dbChanges)
 

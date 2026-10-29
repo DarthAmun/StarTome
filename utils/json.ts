@@ -14,3 +14,11 @@ export function parseJson<T>(raw: unknown, fallback: T): T {
     return fallback
   }
 }
+
+/**
+ * A deep plain copy for writing to IndexedDB, which can't store Vue proxies
+ * (and nested values reached through a reactive object are proxies too).
+ */
+export function toPlain<T>(value: T): T {
+  return value === undefined ? value : JSON.parse(JSON.stringify(value))
+}

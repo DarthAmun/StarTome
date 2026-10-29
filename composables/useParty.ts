@@ -25,7 +25,7 @@ import { readyToLevel, XP_PER_LEVEL } from '~/rules/advancement'
 import { clampLevel, defaultLevelUpSelection, parseLevel, partyLevel, planLevelUp, type CharacterRole, type LevelChange, type PartyCharacter } from '~/rules/party'
 import type { NpcAttributes } from '~/types/entities'
 import { campaignRules } from '~/types/game'
-import { parseJson } from '~/utils/json'
+import { parseJson, toPlain } from '~/utils/json'
 import { onDomainEvent } from '~/composables/useDomainEvents'
 import { onTablesChanged } from '~/db/changes'
 
@@ -287,7 +287,7 @@ async function levelUp(campaignId: number, selected: number[], trigger: DbLevelU
     for (const ch of changes) {
       await db.characters.update(ch.characterId, { level: ch.to, ...(ch.xpTo !== undefined ? { xp: ch.xpTo } : {}), updated_at: ts })
     }
-    return db.levelUps.add({ campaign_id: campaignId, at: ts, trigger, ref_id: refId, changes: JSON.stringify(changes), undone_at: null })
+    return db.levelUps.add({ campaign_id: campaignId, at: ts, trigger, ref_id: refId, changes: toPlain(changes), undone_at: null })
   }) as number
   for (const ch of changes) await patchNpc(rows.find(r => r.id === ch.characterId)?.npcEntityId ?? null, { level: String(ch.to) })
   await reloadIfLoaded(campaignId)
@@ -344,7 +344,7 @@ async function writeXpAward(input: AwardXpInput): Promise<number | null> {
     }
     return db.xpAwards.add({
       campaign_id: input.campaignId, at: ts, source: input.source, ref_type: input.refType ?? null, ref_id: input.refId ?? null,
-      amount, character_ids: JSON.stringify(ids), reason: input.reason ?? '', undone_at: null,
+      amount, character_ids: ids, reason: input.reason ?? '', undone_at: null,
     }) as Promise<number>
   })
 }

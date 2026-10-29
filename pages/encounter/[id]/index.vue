@@ -978,7 +978,7 @@ import { useEncounterStore } from "~/stores/encounter";
 import type { LibraryTokenForm } from "~/components/LibraryTokenModal.vue";
 import type { EncounterToken } from "~/stores/encounter";
 import { useEncounterCanvas, type ShapeType, type ShapeOverlay } from "../../../composables/useEncounterCanvas";
-import { dbApi } from "~/composables/useDb";
+import { dbApi, type DbEncounterWall } from "~/composables/useDb";
 import { imageTypeOf, pickImageFile } from "~/utils/image";
 import { hexColorToNumber } from "~/composables/useConditions";
 import { useConditionPanel } from "~/composables/useConditionPanel";
@@ -1022,17 +1022,15 @@ const TURN_RAIL_SIZES = [
   { value: 'large', label: 'L' },
 ] as const;
 
-// PF2e cover degrees. The stored values keep DM's Tome's names so old walls
-// and exports stay compatible: three-quarter = greater, half = standard,
-// quarter = lesser (see DbEncounterWall).
+// Walls and PF2e cover degrees (DM's Tome's 5e names are converted on import)
 const COVER_TYPES = [
   { value: 'full',           label: 'Wall',     title: 'Blocks sight and movement',            color: 'rgba(255,255,255,0.9)' },
-  { value: 'three-quarter',  label: 'Greater',  title: 'Greater cover: +4 circumstance to AC, Reflex and Stealth', color: 'rgba(184,134,11,0.85)' },
-  { value: 'half',           label: 'Standard', title: 'Standard cover: +2 circumstance to AC, Reflex and Stealth', color: 'rgba(200,100,20,0.85)' },
-  { value: 'quarter',        label: 'Lesser',   title: 'Lesser cover: +1 circumstance to AC',  color: 'rgba(200,50,20,0.75)'  },
+  { value: 'greater',        label: 'Greater',  title: 'Greater cover: +4 circumstance to AC, Reflex and Stealth', color: 'rgba(184,134,11,0.85)' },
+  { value: 'standard',       label: 'Standard', title: 'Standard cover: +2 circumstance to AC, Reflex and Stealth', color: 'rgba(200,100,20,0.85)' },
+  { value: 'lesser',         label: 'Lesser',   title: 'Lesser cover: +1 circumstance to AC',  color: 'rgba(200,50,20,0.75)'  },
   { value: 'door',           label: 'Door',     title: 'Opens and closes',                     color: 'rgba(100,200,220,0.9)' },
 ] as const
-const activeCoverType = ref<'full' | 'three-quarter' | 'half' | 'quarter' | 'door'>('full')
+const activeCoverType = ref<DbEncounterWall['coverType']>('full')
 
 // ── Mode ───────────────────────────────────────────────────────────────────
 const mode = ref<'prepare' | 'run'>('prepare');

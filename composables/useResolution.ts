@@ -15,7 +15,7 @@ import { pacing, parseDefeated, type DefeatedEnemy, type Pacing } from '~/rules/
 import { encounterOwner, STASH } from '~/rules/inventory'
 import { lootValue, type TreasureValue } from '~/rules/wealth'
 import type { Item, RulesEntity } from '~/types/rules'
-import { parseJson } from '~/utils/json'
+import { parseJson, toPlain } from '~/utils/json'
 
 export interface ResolutionRecord {
   loot: OwnerSnapshot
@@ -27,7 +27,7 @@ export interface ResolutionRecord {
   treasure?: TreasureValue
 }
 
-export function parseResolution(raw: string | null | undefined): ResolutionRecord | null {
+export function parseResolution(raw: unknown): ResolutionRecord | null {
   return parseJson<ResolutionRecord | null>(raw, null)
 }
 
@@ -91,7 +91,7 @@ async function resolveEncounter(input: ResolveInput) {
     const ts = now()
     await db.encounters.update(input.encounterId, {
       status: 'resolved', resolved_at: ts, xp_total: input.xpTotal, xp_awarded: input.xpAwarded,
-      party_level_at_resolve: input.partyLevel, resolution: JSON.stringify(record), updated_at: ts,
+      party_level_at_resolve: input.partyLevel, resolution: toPlain(record) as unknown as Record<string, unknown>, updated_at: ts,
     })
   })
   if (!resolved) return

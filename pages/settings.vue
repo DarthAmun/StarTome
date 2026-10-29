@@ -843,7 +843,7 @@ async function exportCampaignForClaude() {
     // attributes can arrive as a serialised JSON string from the DB
     const entities = rawEntities.map(e => {
       let attrs: any = e.attributes ?? {}
-      if (typeof attrs === 'string') { try { attrs = JSON.parse(attrs) } catch { attrs = {} } }
+      attrs = parseJsonObject(attrs)
       return { ...e, attributes: attrs }
     })
 

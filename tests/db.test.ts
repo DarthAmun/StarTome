@@ -1,13 +1,13 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
-import { getDb } from '~/composables/useDb'
+import { getDb, parseJsonObject } from '~/composables/useDb'
 
 describe('StarTome database', () => {
   it('opens its own database with the full store list', async () => {
     const db = getDb()
     await db.open()
     expect(db.name).toBe('startome')
-    expect(db.verno).toBe(12)
+    expect(db.verno).toBe(13)
     expect(db.tables.map(t => t.name).sort()).toEqual([
       'campaigns', 'characters', 'encounterTokens', 'encounterWalls', 'encounters', 'entities', 'entityConnections',
       'entityLinks', 'entitySnapshots', 'graphLayouts', 'images', 'inventory', 'legacyLibrary', 'levelUps', 'purses', 'rules', 'soundPlaylists',
@@ -69,7 +69,7 @@ describe('cascading deletes', () => {
     const db = getDb()
     const c = await campaign()
     await dbApi.entities.delete(c.npc)
-    expect(JSON.parse((await db.entities.get(c.loc))!.attributes).mapPins).toEqual([])
+    expect(parseJsonObject((await db.entities.get(c.loc))!.attributes).mapPins).toEqual([])
     expect((await db.characters.where('campaign_id').equals(c.id).first())!.npc_entity_id).toBeNull()
     expect((await db.tokens.get(c.token))!.linked_entity_id).toBeNull()
     await dbApi.entities.delete(c.event)

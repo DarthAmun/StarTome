@@ -128,6 +128,7 @@
 </template>
 
 <script setup lang="ts">
+import { parseJson, toPlain } from "~/utils/json";
 import type { Ref } from "vue";
 import {
     VueFlow,
@@ -550,9 +551,9 @@ function scheduleLayoutSave() {
 
 async function saveLayout() {
     await dbApi.graphLayout.save(props.graphId, {
-        positions: JSON.stringify(positions.value),
-        hidden_nodes: '[]',
-        player_hidden_nodes: JSON.stringify([...playerHiddenNodes.value]),
+        positions: toPlain(positions.value),
+        hidden_nodes: [],
+        player_hidden_nodes: [...playerHiddenNodes.value],
         zoom: viewportZoom,
         pan_x: viewportX,
         pan_y: viewportY,
@@ -584,8 +585,8 @@ async function loadGraph() {
     viewportZoom = 1; viewportX = 0; viewportY = 0
 
     if (layout) {
-        positions.value = JSON.parse(layout.positions);
-        playerHiddenNodes.value = new Set(JSON.parse(layout.player_hidden_nodes ?? '[]'));
+        positions.value = parseJson(layout.positions, {});
+        playerHiddenNodes.value = new Set(parseJson<number[]>(layout.player_hidden_nodes, []));
         viewportZoom = layout.zoom;
         viewportX = layout.pan_x;
         viewportY = layout.pan_y;

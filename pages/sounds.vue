@@ -402,6 +402,7 @@
 </template>
 
 <script setup lang="ts">
+import { parseJson } from '~/utils/json'
 import { APP_NAME } from '~/utils/appNamespace'
 import { useSounds } from '~/composables/useSounds'
 import { useSoundPlayer } from '~/composables/useSoundPlayer'
@@ -450,7 +451,7 @@ const sortedTracks = computed(() =>
 function isCurrentTrack(t: DbSoundTrack) { return currentTrack.value?.id === t.id }
 
 function makeVirtualPlaylist(name: string): DbSoundPlaylist {
-  return { name, trackIds: '[]', loop: 0, shuffle: 0, createdAt: '', updatedAt: '' } as DbSoundPlaylist
+  return { name, trackIds: [], loop: 0, shuffle: 0, createdAt: '', updatedAt: '' } as DbSoundPlaylist
 }
 
 function playAllTracks() {
@@ -611,7 +612,7 @@ async function submitEditTrack() {
     .filter(Boolean)
   await updateTrack(editTrackId.value, {
     name: editTrackName.value.trim(),
-    tags: JSON.stringify(tags),
+    tags: [...tags],
   })
   showEditTrack.value = false
 }
@@ -642,7 +643,7 @@ const filteredLibraryTracks = computed(() => {
 
 function isInCurrentPlaylist(trackId: number): boolean {
   if (!selectedPlaylist.value) return false
-  return (JSON.parse(selectedPlaylist.value.trackIds) as number[]).includes(trackId)
+  return parseJson<number[]>(selectedPlaylist.value.trackIds, []).includes(trackId)
 }
 
 async function submitLibraryPick() {

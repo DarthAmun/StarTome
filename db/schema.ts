@@ -3,8 +3,9 @@
  * and the connection (`getDb`). Repositories (dbApi in composables/useDb.ts,
  * useParty, useInventory, useWealth, useRules, sync/backup.ts) build on it.
  *
- * Several columns are still JSON strings, a leftover of DM's Tome's SQLite
- * schema; read them with parseJson / parseJsonObject.
+ * Structured columns hold values (Dexie v12/v13). Their types still allow
+ * JSON text: DM's Tome files and older rows bring text until they're
+ * converted, so read them with parseJson / parseJsonObject.
  */
 
 /**
@@ -61,12 +62,12 @@ export interface DbEncounter {
   initiative_formula?: string | null
   party_level?: number | null // overrides the party tab's level for this encounter's meter
   // Resolution (FEATURES_PLAN.md P4); status 'resolved'. Non-indexed, no version bump.
-  defeated?: string            // JSON DefeatedEnemy[]: enemies removed in Run mode, XP kept
+  defeated?: unknown[] | string  // DefeatedEnemy[]: enemies removed in Run mode, XP kept
   resolved_at?: string | null
   xp_total?: number | null     // XP of the enemies counted, against party_level_at_resolve
   xp_awarded?: number | null   // per participant, as for four PCs, incl. accomplishment XP
   party_level_at_resolve?: number | null
-  resolution?: string | null   // JSON ResolutionRecord, for the undo
+  resolution?: Record<string, unknown> | string | null   // ResolutionRecord, for the undo
   created_at: string
   updated_at: string
 }
@@ -117,10 +118,10 @@ export interface DbEncounterToken {
 export interface DbEncounterWall {
   id?: number
   encounter_id: number
-  points: string              // JSON: Array<{x: number, y: number}>
-  /** Wall, PF2e cover degree or door. DM's Tome's names are kept for compatibility:
-   *  'three-quarter' = greater cover, 'half' = standard, 'quarter' = lesser. */
-  coverType: 'full' | 'three-quarter' | 'half' | 'quarter' | 'door'
+  points: { x: number; y: number }[] | string
+  /** Wall ('full'), PF2e cover degree or door. DM's Tome's 5e names (three-quarter,
+   *  half, quarter) become greater, standard, lesser on upgrade and import. */
+  coverType: 'full' | 'greater' | 'standard' | 'lesser' | 'door'
   isOpen: boolean
 }
 
@@ -130,7 +131,7 @@ export interface DbEntity {
   type: string
   name: string
   content: string
-  attributes: string          // JSON
+  attributes: Record<string, any> | string   // EntityAttributes
   is_favorite?: number        // 0 | 1 — starred in the entity overview
   created_at: string
   updated_at: string
@@ -141,7 +142,7 @@ export interface DbEntityLink {
   source_id: number
   target_type: string
   target_name: string
-  metadata: string            // JSON
+  metadata: Record<string, string> | string
 }
 
 export interface DbEntitySnapshot {
@@ -150,7 +151,7 @@ export interface DbEntitySnapshot {
   label: string            // GM-typed label: "Before Ascension", "Session 12"
   note: string             // optional short note about why this snapshot was taken
   content: string          // full markdown content at time of snapshot
-  attributes: string       // JSON string of all attributes at time of snapshot
+  attributes: Record<string, any> | string   // all attributes at the time of the snapshot
   name: string             // name of the entity at time of snapshot
   created_at: string       // ISO timestamp
   // linked event (optional)
@@ -181,7 +182,7 @@ export interface DbLevelUp {
   at: string
   trigger: 'manual' | 'quest' | 'encounter'
   ref_id: number | null            // quest entity / encounter id
-  changes: string                  // JSON LevelChange[]
+  changes: unknown[] | string      // LevelChange[]
   undone_at?: string | null
 }
 
@@ -194,7 +195,7 @@ export interface DbXpAward {
   ref_type: 'encounter' | 'quest' | null
   ref_id: number | null
   amount: number                   // per character
-  character_ids: string            // JSON number[]
+  character_ids: number[] | string
   reason: string
   undone_at?: string | null
 }
@@ -263,9 +264,9 @@ export interface DbGraphLayout {
   id?: number
   campaign_id: number
   name: string              // user-visible graph name
-  positions: string         // JSON: Record<entityId, {x, y}>
-  hidden_nodes: string      // JSON: number[] (legacy, no longer used for GM)
-  player_hidden_nodes?: string // JSON: number[] — hidden from player view
+  positions: Record<string, { x: number; y: number }> | string   // by entity id
+  hidden_nodes: number[] | string        // legacy, no longer used for GM
+  player_hidden_nodes?: number[] | string // hidden from the player view
   zoom: number
   pan_x: number
   pan_y: number
@@ -278,7 +279,7 @@ export interface DbSoundTrack {
   src: string           // URL for 'url'/'spotify'; empty for 'file'
   fileHandle?: any      // FileSystemFileHandle, stored as IDB structured clone
   duration?: number     // seconds, for display
-  tags?: string         // JSON: string[]
+  tags?: string[] | string
   createdAt: string
   updatedAt: string
 }
@@ -288,7 +289,7 @@ export interface DbSoundPlaylist {
   name: string
   description?: string
   color?: string        // theme color hex
-  trackIds: string      // JSON: number[]
+  trackIds: number[] | string
   loop: number          // 0 | 1
   shuffle: number       // 0 | 1
   createdAt: string
@@ -446,8 +447,16 @@ class StarTomeDb extends Dexie {
     })
     // v12: the combat state columns hold values instead of JSON text (ARCH-03)
     this.version(12).stores({}).upgrade(async (tx) => {
-      await tx.table('encounters').toCollection().modify((e: DbEncounter) => { Object.assign(e, encounterValues(e)) })
-      await tx.table('encounterTokens').toCollection().modify((t: DbEncounterToken) => { Object.assign(t, placementValues(t)) })
+      for (const t of ['encounters', 'encounterTokens']) {
+        await tx.table(t).toCollection().modify((r: Record<string, unknown>) => { Object.assign(r, rowValues(t, r)) })
+      }
+    })
+    // v13: every other structured column holds values too. Files no longer have
+    // to be readable by DM's Tome (only its campaigns come in, converted on import)
+    this.version(13).stores({}).upgrade(async (tx) => {
+      for (const t of Object.keys(VALUE_COLUMNS)) {
+        await tx.table(t).toCollection().modify((r: Record<string, unknown>) => { Object.assign(r, rowValues(t, r)) })
+      }
     })
   }
 }
@@ -484,42 +493,49 @@ function watchUpgrades(db: StarTomeDb) {
 }
 
 /**
- * The encounter columns that are values since v12 (FORK_PLAN §14 ARCH-03): the
- * combat state written on nearly every action. Rows from files, the DM's Tome
- * import and older databases still have JSON text; these helpers convert both
- * ways (files keep the text, so they stay readable by DM's Tome).
+ * Columns that hold structured values (FORK_PLAN §14 ARCH-03): the combat
+ * state since v12, everything else since v13, with the value an empty or
+ * corrupt one becomes. DM's Tome files and older StarTome rows still carry
+ * JSON text; `rowValues` converts a row, `structureColumns` a whole database.
  */
-export function encounterValues<T extends Partial<DbEncounter>>(row: T): T {
-  return {
-    ...row,
-    ...('fog_data' in row ? { fog_data: parseJson(row.fog_data, {}) } : {}),
-    ...('viewport' in row ? { viewport: parseJson(row.viewport, { x: 0, y: 0, scale: 1 }) } : {}),
-    ...('combat_log' in row ? { combat_log: parseJson(row.combat_log, []) } : {}),
-  }
-}
-export function placementValues<T extends Partial<DbEncounterToken>>(row: T): T {
-  return {
-    ...row,
-    ...('conditions' in row ? { conditions: parseJson(row.conditions, []) } : {}),
-    ...('timers' in row ? { timers: parseJson(row.timers, []) } : {}),
-  }
-}
-const asText = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v ?? null))
-export function encounterText<T extends Partial<DbEncounter>>(row: T): T {
-  return { ...row, fog_data: asText(row.fog_data ?? {}), viewport: asText(row.viewport ?? { x: 0, y: 0, scale: 1 }), combat_log: asText(row.combat_log ?? []) }
-}
-export function placementText<T extends Partial<DbEncounterToken>>(row: T): T {
-  return { ...row, conditions: asText(row.conditions ?? []), timers: asText(row.timers ?? []) }
+export const VALUE_COLUMNS: Record<string, Record<string, unknown>> = {
+  encounters: { fog_data: {}, viewport: { x: 0, y: 0, scale: 1 }, combat_log: [], defeated: [], resolution: null },
+  encounterTokens: { conditions: [], timers: [] },
+  encounterWalls: { points: [] },
+  entities: { attributes: {} },
+  entitySnapshots: { attributes: {} },
+  entityLinks: { metadata: {} },
+  graphLayouts: { positions: {}, hidden_nodes: [], player_hidden_nodes: [] },
+  levelUps: { changes: [] },
+  xpAwards: { character_ids: [] },
+  soundTracks: { tags: [] },
+  soundPlaylists: { trackIds: [] },
 }
 
-/** Turns JSON text left in the combat columns into values, e.g. after the DM's Tome import. */
-export async function structureCombatColumns(): Promise<void> {
+/** The row with every structured column of `table` as a value (only the columns it has). */
+/** DM's Tome's 5e wall cover names → PF2e cover degrees. */
+const COVER_FROM_5E: Record<string, string> = { 'three-quarter': 'greater', half: 'standard', quarter: 'lesser' }
+
+export function rowValues<T extends object>(table: string, row: T): T {
+  const cols = VALUE_COLUMNS[table]
+  if (!cols) return row
+  const out = { ...row } as Record<string, unknown>
+  if (table === 'encounterWalls' && typeof out.coverType === 'string' && COVER_FROM_5E[out.coverType]) out.coverType = COVER_FROM_5E[out.coverType]
+  for (const [col, fallback] of Object.entries(cols)) {
+    if (col in out && typeof out[col] === 'string') out[col] = parseJson(out[col], structuredClone(fallback))
+  }
+  return out as unknown as T
+}
+
+/** Turns JSON text left in structured columns into values, e.g. after the DM's Tome import. */
+export async function structureColumns(): Promise<void> {
   const db = getDb()
-  const text = (v: unknown) => typeof v === 'string'
-  await db.encounters.filter(e => text(e.fog_data) || text(e.viewport) || text(e.combat_log))
-    .modify((e: DbEncounter) => { Object.assign(e, encounterValues(e)) })
-  await db.encounterTokens.filter(t => text(t.conditions) || text(t.timers))
-    .modify((t: DbEncounterToken) => { Object.assign(t, placementValues(t)) })
+  for (const [table, cols] of Object.entries(VALUE_COLUMNS)) {
+    const names = Object.keys(cols)
+    await db.table(table).filter((r: Record<string, unknown>) => names.some(c => typeof r[c] === 'string')
+      || (table === 'encounterWalls' && typeof r.coverType === 'string' && r.coverType in COVER_FROM_5E))
+      .modify((r: Record<string, unknown>) => { Object.assign(r, rowValues(table, r)) })
+  }
 }
 
 /** A JSON-object column (attributes, metadata …) as an object; {} when missing or corrupt. */

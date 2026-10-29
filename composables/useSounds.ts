@@ -1,3 +1,4 @@
+import { parseJson } from '~/utils/json'
 import { getDb } from '~/composables/useDb'
 import type { DbSoundTrack, DbSoundPlaylist } from '~/composables/useDb'
 
@@ -8,9 +9,8 @@ let   loadPromise: Promise<void> | null = null
 
 function ts() { return new Date().toISOString() }
 
-export function parseTags(raw?: string): string[] {
-  if (!raw) return []
-  try { return JSON.parse(raw) } catch { return [] }
+export function parseTags(raw?: string[] | string): string[] {
+  return parseJson<string[]>(raw, [])
 }
 
 function load(): Promise<void> {
@@ -28,7 +28,7 @@ function load(): Promise<void> {
 
 async function createPlaylist(name: string, color?: string) {
   const now = ts()
-  const pl = { name, color, trackIds: '[]', loop: 0, shuffle: 0, createdAt: now, updatedAt: now } as DbSoundPlaylist
+  const pl = { name, color, trackIds: [], loop: 0, shuffle: 0, createdAt: now, updatedAt: now } as DbSoundPlaylist
   pl.id = await getDb().soundPlaylists.add(pl)
   playlists.value.push(pl)
   return pl
@@ -64,14 +64,14 @@ async function deleteTrack(id: number) {
   await getDb().soundTracks.delete(id)
   tracks.value = tracks.value.filter(t => t.id !== id)
   for (const pl of playlists.value) {
-    const ids: number[] = JSON.parse(pl.trackIds)
+    const ids: number[] = parseJson<number[]>(pl.trackIds, [])
     if (ids.includes(id))
-      await updatePlaylist(pl.id!, { trackIds: JSON.stringify(ids.filter(i => i !== id)) })
+      await updatePlaylist(pl.id!, { trackIds: ids.filter(i => i !== id) })
   }
 }
 
 function trackCount(pl: DbSoundPlaylist): number {
-  return (JSON.parse(pl.trackIds) as number[]).length
+  return (parseJson<number[]>(pl.trackIds, []) as number[]).length
 }
 
 function getPlaylistById(id: number): DbSoundPlaylist | null {
@@ -79,27 +79,27 @@ function getPlaylistById(id: number): DbSoundPlaylist | null {
 }
 
 function getPlaylistTracks(pl: DbSoundPlaylist): DbSoundTrack[] {
-  const ids: number[] = JSON.parse(pl.trackIds)
+  const ids: number[] = parseJson<number[]>(pl.trackIds, [])
   return ids.map(id => tracks.value.find(t => t.id === id)).filter(Boolean) as DbSoundTrack[]
 }
 
 async function addTrackToPlaylist(playlistId: number, trackId: number) {
   const pl = playlists.value.find(p => p.id === playlistId)
   if (!pl) return
-  const ids: number[] = JSON.parse(pl.trackIds)
+  const ids: number[] = parseJson<number[]>(pl.trackIds, [])
   if (!ids.includes(trackId))
-    await updatePlaylist(playlistId, { trackIds: JSON.stringify([...ids, trackId]) })
+    await updatePlaylist(playlistId, { trackIds: [...ids, trackId] })
 }
 
 async function removeTrackFromPlaylist(playlistId: number, trackId: number) {
   const pl = playlists.value.find(p => p.id === playlistId)
   if (!pl) return
-  const ids: number[] = JSON.parse(pl.trackIds)
-  await updatePlaylist(playlistId, { trackIds: JSON.stringify(ids.filter(i => i !== trackId)) })
+  const ids: number[] = parseJson<number[]>(pl.trackIds, [])
+  await updatePlaylist(playlistId, { trackIds: ids.filter(i => i !== trackId) })
 }
 
 async function reorderPlaylistTracks(playlistId: number, newIds: number[]) {
-  await updatePlaylist(playlistId, { trackIds: JSON.stringify(newIds) })
+  await updatePlaylist(playlistId, { trackIds: [...newIds] })
 }
 
 const allTags = computed<string[]>(() => {

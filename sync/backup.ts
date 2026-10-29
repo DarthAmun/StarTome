@@ -1,8 +1,13 @@
 /**
  * Backups, campaign export/import and campaign clone (FORK_PLAN.md §14 BUG-01–03).
  *
- * Files keep DM's Tome's `version: 1` shape (raw rows per table, compendium
- * data under `rules`/`rulesOverlays`/`images`, see converters/export.ts).
+ * StarTome writes `version: 2` files: rows per table as this database keeps
+ * them (structured columns as values, maps as `img:` refs), plus `images`
+ * for every stored image they point at and the compendium keys of
+ * converters/export.ts. Files only have to round-trip within StarTome.
+ * DM's Tome files (`version: 1`) come in through the same import: only their
+ * campaign tables are read, JSON text becomes values, inline maps become
+ * images (its rules library goes through Compendium › DM's Tome import).
  *
  * Import has two modes:
  * - **merge** (default): every row gets a new id and every reference is
@@ -15,13 +20,13 @@
  * giant string (V8 caps strings at ~512 MB).
  */
 import {
-  encounterText, encounterValues, getDb, now, parseJsonObject, placementText, placementValues,
+  getDb, now, parseJsonObject, rowValues,
   type DbCampaign, type DbCharacter, type DbEncounter, type DbEncounterToken, type DbEncounterWall, type DbEntity,
   type DbEntityConnection, type DbEntityLink, type DbEntitySnapshot, type DbGraphLayout, type DbInventory, type DbLevelUp,
   type DbPurse, type DbToken, type DbTreasureAward, type DbXpAward,
 } from '~/composables/useDb'
 import { imageIdsOf, planRulesImport, rulesForExport, type ExportedImage, type RulesOverlay } from '~/converters/export'
-import { blobToDataUrl, dataUrlToBlob, isImageRef, resolveImageDataUrl } from '~/rules/images'
+import { blobToDataUrl, dataUrlToBlob, imageRefId, isImageRef } from '~/rules/images'
 import type { RulesEntity } from '~/types/rules'
 import { APP_NS } from '~/utils/appNamespace'
 import { parseJson } from '~/utils/json'
@@ -62,7 +67,8 @@ export const TABLE_LABELS: Record<CampaignTable | 'rules' | 'rulesOverlays', str
 }
 
 export interface BackupPayload extends Partial<CampaignRows> {
-  version: 1
+  /** 2: StarTome (values, images alongside); 1: DM's Tome and StarTome before v0.15 */
+  version: 1 | 2
   app: string
   type: 'all' | 'campaigns' | 'tokens' | string
   exportedAt: string
@@ -95,7 +101,7 @@ export function jsonBlob(payload: Record<string, unknown>): Blob {
 }
 
 function header(type: BackupPayload['type']) {
-  return { version: 1 as const, app: APP_NS, type, exportedAt: now() }
+  return { version: 2 as const, app: APP_NS, type, exportedAt: now() }
 }
 
 /** Everything: all campaign tables, own compendium entries, overlays and their images. */
@@ -103,20 +109,19 @@ export async function exportAllPayload(): Promise<BackupPayload> {
   const db = getDb()
   const rows = Object.fromEntries(await Promise.all(CAMPAIGN_TABLES.map(async t => [t, await db.table(t).toArray()] as const))) as unknown as CampaignRows
   const { entries: rules, overlays: rulesOverlays } = rulesForExport(await db.rules.toArray())
-  const imageRows = await db.images.bulkGet(imageIdsOf([...rules, ...rulesOverlays] as unknown as Record<string, unknown>[]))
-  const images: ExportedImage[] = []
-  for (const r of imageRows) if (r) images.push({ id: r.id, mime: r.mime, data: await blobToDataUrl(r.blob) })
-  rows.encounters = (await inlineMaps(rows.encounters)).map(encounterText)
-  rows.encounterTokens = rows.encounterTokens.map(placementText)
+  const images = await exportImages([...imageIdsOf([...rules, ...rulesOverlays] as unknown as Record<string, unknown>[]), ...mapImageIds(rows.encounters)])
   return { ...header('all'), ...rows, rules, rulesOverlays, images, syncState: await db.syncState.toArray() }
 }
 
-/**
- * Files carry maps inline, as DM's Tome and older StarTome files do; in this
- * browser they live in the image store (PERF-03).
- */
-async function inlineMaps(encounters: DbEncounter[]): Promise<DbEncounter[]> {
-  return Promise.all(encounters.map(async e => (isImageRef(e.map_source) ? { ...e, map_source: await resolveImageDataUrl(e.map_source) } : e)))
+/** Image-store ids of encounter maps. */
+function mapImageIds(encounters: DbEncounter[]): string[] {
+  return encounters.map(e => e.map_source).filter(isImageRef).map(imageRefId)
+}
+
+async function exportImages(ids: string[]): Promise<ExportedImage[]> {
+  const images: ExportedImage[] = []
+  for (const r of await getDb().images.bulkGet([...new Set(ids)])) if (r) images.push({ id: r.id, mime: r.mime, data: await blobToDataUrl(r.blob) })
+  return images
 }
 
 /** The rows of some campaigns (all when `campaignIds` is omitted), plus the library tokens they place. */
@@ -149,8 +154,7 @@ export async function collectCampaignRows(campaignIds?: number[]): Promise<Campa
 
 export async function exportCampaignsPayload(campaignIds?: number[]): Promise<BackupPayload> {
   const rows = await collectCampaignRows(campaignIds)
-  // Files keep DM's Tome's JSON text in the combat columns
-  return { ...header('campaigns'), ...rows, encounters: (await inlineMaps(rows.encounters)).map(encounterText), encounterTokens: rows.encounterTokens.map(placementText) }
+  return { ...header('campaigns'), ...rows, images: await exportImages(mapImageIds(rows.encounters)) }
 }
 
 export async function exportTokensPayload(): Promise<BackupPayload> {
@@ -182,8 +186,8 @@ const remapIds = (ids: unknown, map: IdMap): number[] =>
   (Array.isArray(ids) ? ids : []).map(id => map.get(Number(id))).filter((v): v is number => v != null)
 
 /** Entity ids inside lore attributes: map pins, quest giver, a region's location. */
-function remapAttributes(raw: unknown, entities: IdMap): string {
-  const a = typeof raw === 'string' ? parseJsonObject(raw) : { ...((raw as Record<string, unknown>) ?? {}) }
+function remapAttributes(raw: unknown, entities: IdMap): Record<string, any> {
+  const a = { ...parseJsonObject(raw) }
   if (Array.isArray(a.mapPins)) {
     a.mapPins = a.mapPins
       .filter((p: { entityId: number }) => entities.has(p.entityId))
@@ -192,16 +196,16 @@ function remapAttributes(raw: unknown, entities: IdMap): string {
   for (const key of ['questGiverId', 'locationEntityId']) {
     if (typeof a[key] === 'number') a[key] = entities.get(a[key]) ?? null
   }
-  return JSON.stringify(a)
+  return a
 }
 
-function remapPositions(json: string, entities: IdMap): string {
-  const out: Record<string, unknown> = {}
-  for (const [key, val] of Object.entries(parseJson<Record<string, unknown>>(json, {}))) {
+function remapPositions(json: unknown, entities: IdMap): Record<string, { x: number; y: number }> {
+  const out: Record<string, { x: number; y: number }> = {}
+  for (const [key, val] of Object.entries(parseJson<Record<string, { x: number; y: number }>>(json, {}))) {
     const id = entities.get(Number(key))
     if (id != null) out[id] = val
   }
-  return JSON.stringify(out)
+  return out
 }
 
 /**
@@ -267,8 +271,8 @@ async function writeMerged(rows: Partial<CampaignRows>, opts: MergeOptions, coun
     await add('graphLayouts', {
       ...withoutId(g), campaign_id: camp.get(g.campaign_id)!,
       positions: remapPositions(g.positions, ent),
-      hidden_nodes: JSON.stringify(remapIds(parseJson(g.hidden_nodes, []), ent)),
-      player_hidden_nodes: g.player_hidden_nodes != null ? JSON.stringify(remapIds(parseJson(g.player_hidden_nodes, []), ent)) : g.player_hidden_nodes,
+      hidden_nodes: remapIds(parseJson(g.hidden_nodes, []), ent),
+      player_hidden_nodes: g.player_hidden_nodes != null ? remapIds(parseJson(g.player_hidden_nodes, []), ent) : g.player_hidden_nodes,
     })
   }
   for (const c of (rows.characters ?? []).filter(c => camp.has(c.campaign_id))) {
@@ -285,12 +289,12 @@ async function writeMerged(rows: Partial<CampaignRows>, opts: MergeOptions, coun
     for (const u of (rows.levelUps ?? []).filter(u => camp.has(u.campaign_id))) {
       const changes = parseJson<{ characterId: number }[]>(u.changes, [])
         .filter(ch => chr.has(ch.characterId)).map(ch => ({ ...ch, characterId: chr.get(ch.characterId)! }))
-      await add('levelUps', { ...withoutId(u), campaign_id: camp.get(u.campaign_id)!, ref_id: refOf(u.trigger, u.ref_id), changes: JSON.stringify(changes) })
+      await add('levelUps', { ...withoutId(u), campaign_id: camp.get(u.campaign_id)!, ref_id: refOf(u.trigger, u.ref_id), changes })
     }
     for (const a of (rows.xpAwards ?? []).filter(a => camp.has(a.campaign_id))) {
       xp.set(a.id!, await add('xpAwards', {
         ...withoutId(a), campaign_id: camp.get(a.campaign_id)!, ref_id: refOf(a.ref_type, a.ref_id),
-        character_ids: JSON.stringify(remapIds(parseJson(a.character_ids, []), chr)),
+        character_ids: remapIds(parseJson(a.character_ids, []), chr),
       }))
     }
     for (const a of (rows.treasureAwards ?? []).filter(a => camp.has(a.campaign_id))) {
@@ -326,7 +330,7 @@ async function writeMerged(rows: Partial<CampaignRows>, opts: MergeOptions, coun
           })),
         },
       }
-      await db.encounters.update(id, { resolution: JSON.stringify(next) })
+      await db.encounters.update(id, { resolution: next })
     }
   }
   return camp
@@ -369,13 +373,12 @@ export async function importPayload(payload: BackupPayload, opts: ImportOptions)
   for (const t of CAMPAIGN_TABLES) {
     if (opts.sections.has(t) && Array.isArray(payload[t])) (rows as Record<string, unknown[]>)[t] = payload[t] as unknown[]
   }
-  for (const e of rows.entities ?? []) {
-    if (typeof e.attributes !== 'string') e.attributes = JSON.stringify(e.attributes ?? {})
+  // DM's Tome files and v1 StarTome files bring JSON text; this database keeps values
+  for (const t of CAMPAIGN_TABLES) {
+    const list = rows[t] as object[] | undefined
+    if (list) (rows as Record<string, object[]>)[t] = list.map(r => rowValues(t, r))
   }
-  // Combat columns arrive as JSON text; this database keeps values (v12)
-  if (rows.encounters) rows.encounters = rows.encounters.map(encounterValues)
-  if (rows.encounterTokens) rows.encounterTokens = rows.encounterTokens.map(placementValues)
-  // Inline maps go to the image store; the rows keep a ref
+  // Inline maps (DM's Tome, v1 files) go to the image store; the rows keep a ref
   const mapImages: { id: string; blob: Blob; mime: string; createdAt: string }[] = []
   if (rows.encounters) {
     rows.encounters = rows.encounters.map(e => {
@@ -390,7 +393,7 @@ export async function importPayload(payload: BackupPayload, opts: ImportOptions)
   // Compendium: entries by their string id, overlays onto synced rows
   const rulesEntries: RulesEntity[] = opts.sections.has('rules') ? payload.rules ?? [] : []
   const rulesOverlays: RulesOverlay[] = opts.sections.has('rulesOverlays') ? payload.rulesOverlays ?? [] : []
-  const wanted = new Set(imageIdsOf([...rulesEntries, ...rulesOverlays] as unknown as Record<string, unknown>[]))
+  const wanted = new Set([...imageIdsOf([...rulesEntries, ...rulesOverlays] as unknown as Record<string, unknown>[]), ...mapImageIds(rows.encounters ?? [])])
   const images = (payload.images ?? []).filter(img => wanted.has(img.id)).map(img => {
     const blob = dataUrlToBlob(img.data)
     return { id: img.id, blob, mime: img.mime || blob.type, createdAt: now() }

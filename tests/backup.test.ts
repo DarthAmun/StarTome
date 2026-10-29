@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { parseJson } from '~/utils/json'
 import { dbApi, getDb } from '~/composables/useDb'
 import { CAMPAIGN_TABLES, exportAllPayload, exportCampaignsPayload, importPayload, jsonBlob, type BackupPayload } from '~/sync/backup'
 
@@ -65,7 +66,7 @@ describe('backup and import', () => {
     const ents = await db.entities.where('campaign_id').equals(imported.id!).toArray()
     const npc = ents.find(e => e.type === 'npc')!
     const loc = ents.find(e => e.type === 'location')!
-    expect(JSON.parse(loc.attributes).mapPins[0].entityId).toBe(npc.id)
+    expect(parseJson<any>(loc.attributes, {}).mapPins[0].entityId).toBe(npc.id)
     expect((await db.entityLinks.where('source_id').equals(loc.id!).toArray())).toHaveLength(1)
     expect((await db.entityConnections.where('campaign_id').equals(imported.id!).first())).toMatchObject({ source_entity_id: loc.id, target_entity_id: npc.id })
 
@@ -79,8 +80,8 @@ describe('backup and import', () => {
     const chr = await db.characters.where('campaign_id').equals(imported.id!).first()
     expect(chr).toMatchObject({ npc_entity_id: npc.id, token_id: token!.id })
     const award = await db.xpAwards.where('campaign_id').equals(imported.id!).first()
-    expect(award).toMatchObject({ ref_id: enc!.id, character_ids: JSON.stringify([chr!.id]) })
-    expect(JSON.parse(enc!.resolution!)).toMatchObject({ participants: [chr!.id], xpAwardId: award!.id })
+    expect(award).toMatchObject({ ref_id: enc!.id, character_ids: [chr!.id] })
+    expect(parseJson<any>(enc!.resolution!, {})).toMatchObject({ participants: [chr!.id], xpAwardId: award!.id })
 
     const items = await db.inventory.where('campaign_id').equals(imported.id!).toArray()
     const bag = items.find(i => i.name_override === 'Bag')!
@@ -130,21 +131,39 @@ describe('backup and import', () => {
     expect(await db.xpAwards.where('campaign_id').equals(copy!.id!).count()).toBe(0)
   })
 
-  it('stores imported maps as images and puts them back inline on export', async () => {
+  it('imports a DM\'s Tome file: JSON text becomes values, inline maps become images', async () => {
     const db = getDb()
     const map = 'data:image/png;base64,iVBORw0KGgo='
     const file = {
       version: 1, app: 'dmstome', type: 'campaigns', exportedAt: '',
       campaigns: [{ id: 7, name: 'Old', description: '', created_at: '', updated_at: '' }],
-      encounters: [{ id: 3, campaign_id: 7, name: 'Cave', map_source: map, map_type: 'file', created_at: '', updated_at: '' }],
+      entities: [{ id: 1, campaign_id: 7, type: 'npc', name: 'Vos', content: '', attributes: '{"role":"guard"}', created_at: '', updated_at: '' }],
+      encounters: [{ id: 3, campaign_id: 7, name: 'Cave', map_source: map, map_type: 'file', fog_data: '{"1,1":"revealed"}', combat_log: '[]', created_at: '', updated_at: '' }],
+      encounterWalls: [{ id: 5, encounter_id: 3, points: '[{"x":0,"y":0},{"x":1,"y":0}]', coverType: 'half', isOpen: false }],
     } as unknown as BackupPayload
     await importPayload(file, { mode: 'merge', sections: ALL })
     const enc = (await db.encounters.toArray())[0]
     expect(enc.map_source).toMatch(/^img:/)
+    expect(enc.fog_data).toEqual({ '1,1': 'revealed' })
     expect(await db.images.get(enc.map_source!.slice(4))).toBeDefined()
-    const out = await exportCampaignsPayload([enc.campaign_id])
-    expect(out.encounters![0].map_source).toBe(map)
-    expect((await db.encounters.get(enc.id!))!.map_source).toMatch(/^img:/)
+    expect((await db.entities.toArray())[0].attributes).toEqual({ role: 'guard' })
+    // 5e half cover is PF2e standard cover
+    expect((await db.encounterWalls.toArray())[0]).toMatchObject({ coverType: 'standard', points: [{ x: 0, y: 0 }, { x: 1, y: 0 }] })
+  })
+
+  it('round-trips a StarTome file with its map images alongside', async () => {
+    const db = getDb()
+    const c = await seed('Codex')
+    const ref = await dbApi.encounters.update({ id: c.enc, map_source: 'data:image/png;base64,iVBORw0KGgo=' }).then(e => e!.map_source!)
+    const file = await readBack(await exportCampaignsPayload([c.id]))
+    expect(file.version).toBe(2)
+    expect(file.encounters![0].map_source).toBe(ref)
+    expect(file.images!.map(i => i.id)).toEqual([ref.slice(4)])
+
+    await Promise.all([...CAMPAIGN_TABLES.map(t => db.table(t).clear()), db.images.clear()])
+    await importPayload(file, { mode: 'replace', sections: ALL })
+    expect((await db.encounters.get(c.enc))!.map_source).toBe(ref)
+    expect(await db.images.get(ref.slice(4))).toBeDefined()
   })
 
   it('keeps encounter maps when cleaning up unused images', async () => {
@@ -165,28 +184,29 @@ describe('backup and import', () => {
     expect((await db.encounters.get(c.enc))!.map_source).toMatch(/^img:/)
   })
 
-  it('keeps combat state as values here and as JSON text in files', async () => {
+  it('keeps structured columns as values, in files too', async () => {
     const db = getDb()
     const c = await seed('Codex')
     await db.encounters.update(c.enc, { fog_data: { '1,1': 'revealed' }, combat_log: [{ id: 1, type: 'damage' }] })
     const file = await readBack(await exportAllPayload())
     const enc = file.encounters!.find(e => e.name === 'Codex fight')!
-    expect(enc.fog_data).toBe('{"1,1":"revealed"}')
-    expect(typeof file.encounterTokens![0].conditions).toBe('string')
+    expect(enc.fog_data).toEqual({ '1,1': 'revealed' })
+    await db.entities.update(c.loc, { attributes: { mapPins: [{ entityId: c.npc, x: 0.5, y: 0.5 }] } })
+    const again = await readBack(await exportAllPayload())
+    expect(again.entities!.find(e => e.type === 'location')!.attributes).toEqual({ mapPins: [{ entityId: c.npc, x: 0.5, y: 0.5 }] })
 
     await importPayload(file, { mode: 'replace', sections: ALL })
-    const back = await db.encounters.get(c.enc)
-    expect(back!.fog_data).toEqual({ '1,1': 'revealed' })
-    expect(back!.combat_log).toEqual([{ id: 1, type: 'damage' }])
-    expect(Array.isArray((await db.encounterTokens.toArray())[0].conditions)).toBe(true)
+    expect((await db.encounters.get(c.enc))!.combat_log).toEqual([{ id: 1, type: 'damage' }])
   })
 
-  it('turns JSON text left in combat columns into values', async () => {
-    const { structureCombatColumns } = await import('~/composables/useDb')
+  it('turns JSON text left in structured columns into values', async () => {
+    const { structureColumns } = await import('~/composables/useDb')
     const db = getDb()
     const c = await seed('Codex')
     await db.encounters.update(c.enc, { fog_data: '{"2,2":"hidden"}', viewport: '{"x":1,"y":2,"scale":1}' })
-    await structureCombatColumns()
+    await db.entities.update(c.npc, { attributes: '{"role":"spy"}' })
+    await structureColumns()
+    expect((await db.entities.get(c.npc))!.attributes).toEqual({ role: 'spy' })
     expect((await db.encounters.get(c.enc))!.fog_data).toEqual({ '2,2': 'hidden' })
     expect((await db.encounters.get(c.enc))!.viewport).toEqual({ x: 1, y: 2, scale: 1 })
   })

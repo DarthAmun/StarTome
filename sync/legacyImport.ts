@@ -14,7 +14,7 @@
  * Runs in a Web Worker in the app (the export is ~250 MB) and directly in tests.
  */
 import Dexie from 'dexie'
-import { getDb, structureCombatColumns, type DbImage } from '~/composables/useDb'
+import { getDb, structureColumns, type DbImage } from '~/composables/useDb'
 import { LEGACY_DB_NAME } from '~/utils/appNamespace'
 import { remapLore, LORE_TABLES, type LegacyLoreTables, type LibraryTables, type LoreTable, type RemapIssue } from '~/converters/legacy/lore'
 import { CompendiumNameIndex, normalizeName, type MatchTarget, type MatchVia, type RankedCandidate } from '~/converters/legacy/match'
@@ -400,7 +400,8 @@ export async function applyLegacy(bundle: LegacyBundle, analysed: AnalyseResult,
 
   // DM's Tome keeps maps inside the encounter rows; StarTome stores them as images (PERF-03)
   await moveInlineMaps()
-  await structureCombatColumns()
+  // Anything the converters still left as JSON text becomes a value
+  await structureColumns()
 
   report.durationMs = Date.now() - t0
   return report

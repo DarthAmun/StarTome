@@ -1,3 +1,4 @@
+import { parseJson } from '~/utils/json'
 import type { DbEncounterWall } from './useDb'
 
 export interface WallSegment {
@@ -129,7 +130,7 @@ export function useFovCompute() {
   function wallsToSegments(walls: DbEncounterWall[]): WallSegment[] {
     const segments: WallSegment[] = []
     for (const wall of walls) {
-      const points: Point[] = JSON.parse(wall.points)
+      const points: Point[] = parseJson<Point[]>(wall.points, [])
       const isOpen = wall.coverType === 'door' && wall.isOpen
       for (let i = 0; i < points.length - 1; i++) {
         segments.push({

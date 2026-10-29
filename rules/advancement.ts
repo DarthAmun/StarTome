@@ -47,7 +47,7 @@ export interface DefeatedEnemy {
   adjustment: Adjustment | null
 }
 
-export function parseDefeated(raw: string | null | undefined): DefeatedEnemy[] {
+export function parseDefeated(raw: unknown): DefeatedEnemy[] {
   const list = parseJson<unknown>(raw, [])
   return Array.isArray(list) ? list.filter(d => d && typeof d.rulesId === 'string' && typeof d.level === 'number') : []
 }

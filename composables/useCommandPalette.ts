@@ -1,4 +1,4 @@
-import { dbApi, getDb, type DbEntity } from '~/composables/useDb'
+import { dbApi, getDb, parseJsonObject, type DbEntity } from '~/composables/useDb'
 import { useEntities } from '~/composables/useEntities'
 import { rulesSearch } from '~/composables/useRules'
 import { RULES_KIND_CONFIG, RULES_KINDS } from '~/types/rules'
@@ -478,7 +478,7 @@ async function editSuggestions(
   const entityRow = preferredRows.find((r: any) => r.name.toLowerCase() === namePart.toLowerCase())
     ?? preferredRows[0] ?? null
   const entityAttrs: Record<string, any> = entityRow
-    ? (typeof entityRow.attributes === 'string' ? JSON.parse(entityRow.attributes || '{}') : (entityRow.attributes ?? {}))
+    ? parseJsonObject(entityRow.attributes)
     : {}
   const entityCampaignHint = entityRow?.campaign_id
     ? (campaigns.find(c => c.id === entityRow.campaign_id)?.name ?? `Campaign ${entityRow.campaign_id}`)

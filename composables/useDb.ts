@@ -324,18 +324,20 @@ export const dbApi = {
     async searchByTag(tag: string, limit = 20) {
       const lq = tag.toLowerCase()
       return getDb().entities
-        .filter(e => e.attributes.includes('"tags"')
-          && (parseJsonObject(e.attributes).tags ?? []).some((t: string) => String(t).toLowerCase().includes(lq)))
+        .filter(e => {
+          const tags = parseJsonObject(e.attributes).tags
+          return Array.isArray(tags) && tags.some((t: string) => String(t).toLowerCase().includes(lq))
+        })
         .limit(limit).toArray()
     },
     async get(id: number) {
       const db = getDb()
       return db.entities.get(id)
     },
-    async create(data: { campaignId: number; type: string; name: string; content?: string; attributes?: string }) {
+    async create(data: { campaignId: number; type: string; name: string; content?: string; attributes?: Record<string, any> }) {
       const db = getDb()
       const ts = now()
-      const id = await db.entities.add({ campaign_id: data.campaignId, type: data.type, name: data.name, content: data.content ?? '', attributes: data.attributes ?? '{}', created_at: ts, updated_at: ts })
+      const id = await db.entities.add({ campaign_id: data.campaignId, type: data.type, name: data.name, content: data.content ?? '', attributes: data.attributes ?? {}, created_at: ts, updated_at: ts })
       return db.entities.get(id)
     },
     async update(data: { id: number; [key: string]: any }) {
@@ -391,11 +393,11 @@ export const dbApi = {
         await db.encounterTokens.filter(t => t.linked_entity_id === id).modify({ linked_entity_id: null })
         if (row) {
           await db.entities.where('campaign_id').equals(row.campaign_id)
-            .filter(e => e.attributes.includes(`"entityId":${id}`))
+            .filter(e => (parseJsonObject(e.attributes).mapPins ?? []).some((p: { entityId: number }) => p.entityId === id))
             .modify((e: DbEntity) => {
               const attrs = parseJsonObject(e.attributes)
               attrs.mapPins = (attrs.mapPins ?? []).filter((p: { entityId: number }) => p.entityId !== id)
-              e.attributes = JSON.stringify(attrs)
+              e.attributes = attrs
             })
         }
         await db.entities.delete(id)
@@ -407,9 +409,9 @@ export const dbApi = {
       if (!entityIds.length) return []
       return db.entityLinks.where('source_id').anyOf(entityIds).toArray()
     },
-    async createLink(data: { sourceId: number; targetType: string; targetName: string; metadata?: string }) {
+    async createLink(data: { sourceId: number; targetType: string; targetName: string; metadata?: Record<string, string> }) {
       const db = getDb()
-      const id = await db.entityLinks.add({ source_id: data.sourceId, target_type: data.targetType, target_name: data.targetName, metadata: data.metadata ?? '{}' })
+      const id = await db.entityLinks.add({ source_id: data.sourceId, target_type: data.targetType, target_name: data.targetName, metadata: data.metadata ?? {} })
       return db.entityLinks.get(id)
     },
     async deleteLinks(sourceId: number) {
@@ -471,8 +473,8 @@ export const dbApi = {
       return getDb().graphLayouts.add({
         campaign_id: campaignId,
         name,
-        positions: '{}',
-        hidden_nodes: '[]',
+        positions: {},
+        hidden_nodes: [],
         zoom: 1,
         pan_x: 0,
         pan_y: 0,

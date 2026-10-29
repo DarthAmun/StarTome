@@ -144,7 +144,7 @@ export function remapLore(
     }
     return {
       ...e, id: ids.entities.get(e.id!)!, campaign_id: ids.campaigns.get(e.campaign_id)!,
-      content: refs(e.content ?? ''), attributes: JSON.stringify(attrs),
+      content: refs(e.content ?? ''), attributes: attrs,
     }
   })
 
@@ -168,16 +168,16 @@ export function remapLore(
       source_entity_id: ids.entities.get(c.source_entity_id)!, target_entity_id: ids.entities.get(c.target_entity_id)!,
     }))
 
-  const nodeIds = (s: string | undefined) => JSON.stringify(json<number[]>(s, []).map(n => ent(n)).filter(n => n !== null))
+  const nodeIds = (s: unknown) => json<number[]>(s, []).map(n => ent(n)).filter((n): n is number => n !== null && n !== undefined)
   const graphLayouts = owned('graphLayouts', src.graphLayouts, g => g.campaign_id, ids.campaigns).map(g => {
-    const positions: Record<string, unknown> = {}
+    const positions: Record<string, { x: number; y: number }> = {}
     for (const [k, v] of Object.entries(json<Record<string, unknown>>(g.positions, {}))) {
       const n = ent(Number(k))
-      if (n !== null && n !== undefined) positions[String(n)] = v
+      if (n !== null && n !== undefined) positions[String(n)] = v as { x: number; y: number }
     }
     return {
       ...g, id: ids.graphLayouts.get(g.id!)!, campaign_id: ids.campaigns.get(g.campaign_id)!,
-      positions: JSON.stringify(positions), hidden_nodes: nodeIds(g.hidden_nodes),
+      positions, hidden_nodes: nodeIds(g.hidden_nodes),
       ...(g.player_hidden_nodes !== undefined ? { player_hidden_nodes: nodeIds(g.player_hidden_nodes) } : {}),
     }
   })
@@ -211,7 +211,7 @@ export function remapLore(
       : log
     return {
       ...e, id: ids.encounters.get(e.id!)!, campaign_id: ids.campaigns.get(e.campaign_id)!,
-      combat_log: JSON.stringify(combatLog),
+      combat_log: combatLog,
       // Sound playlists are not part of DM's Tome exports
       sound_playlist_id: null,
     }
