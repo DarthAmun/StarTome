@@ -252,6 +252,14 @@ P2 and P3 don't depend on each other and could swap if the party tab matters mor
   - The encounter page shows the meter in Prepare mode (left sidebar), computed from the tokens, with its own party-level override (`encounters.party_level`).
   - Token menu: "Mark as Ally" (`encounterTokens.is_ally`) leaves a token out of XP. All new fields are non-indexed, so no Dexie version bump.
   - Not in P2: the `defeated` list for enemies removed in Run mode moves to P4, where the resolve dialog uses it.
+- **P3 done 2026-10-29 (v0.10.0)**:
+  - `inventory` + `purses` tables (Dexie v6). The owner is one indexed string: `stash`, `character:<id>` or `encounter:<id>`.
+  - `rules/inventory.ts`: effective values (linked entries inherit name, price, Bulk, level, rarity and traits unless overridden; ammunition prices and weighs per batch), `planMove` (whole stack or split), `splitCoins`, Bulk with coins at 1 per 1,000 (PF2e only; credits weigh nothing), the encumbrance warning, `partyTotals` for the GM and player views (encounter loot is left out of the party sum), and `toPlayerView`, whose tests assert that no true name, price, level, rarity, traits or GM text leaks for unidentified entries.
+  - `useInventory` is the only writer: add (an identical stack grows), edit, delete at quantity 0, identify / un-identify, move with split and merge, coins (add, remove, give, split evenly with the remainder left in the stash). A character removed from the party hands their items and coins to the stash. Encounter loot is deleted with its encounter, and a cloned campaign gets a copy with the owners remapped.
+  - Party page **Inventory** section: an owner per tab (stash + every character) with totals and the Bulk/encumbrance warning, a GM/Player view toggle, compendium or free-text add (optionally unidentified), per-entry details (name, price, Bulk overrides, GM notes, player name and description, PF2e potency/striking/resilient or SF2e grade), typed money such as `12 gp 5 sp` or `250 cr`.
+  - **Set treasure baseline** stores the GM total, the party level and the date in `CampaignRules` (§9.6).
+  - Inventory and purses are in the full backup, the campaign export and the import.
+  - Not in P3: Play Buddy-linked moves (offers, P6), containers, and the "award or correction?" question when adding after the baseline (P5, where the wealth % reads it).
 
 ## 9. Open questions
 

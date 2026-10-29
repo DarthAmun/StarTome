@@ -38,7 +38,7 @@ describe('v4 upgrade', () => {
 
     const db = getDb()
     await db.open()
-    expect(db.verno).toBe(5)
+    expect(db.verno).toBe(6)
     expect(db.tables.map(t => t.name)).not.toContain('records')
     expect(await db.legacyLibrary.where('table').equals('systems').count()).toBe(1)
     const records = await db.legacyLibrary.where('table').equals('records').toArray()

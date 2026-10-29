@@ -10,6 +10,8 @@
 import { computed, ref } from 'vue'
 import { getDb, now, parseRecordData, type DbCharacter, type DbLevelUp } from '~/composables/useDb'
 import { useEntities } from '~/composables/useEntities'
+import { useInventory } from '~/composables/useInventory'
+import { characterOwner } from '~/rules/inventory'
 import { clampLevel, defaultLevelUpSelection, parseLevel, partyLevel, planLevelUp, type CharacterRole, type LevelChange, type PartyCharacter } from '~/rules/party'
 import type { NpcAttributes } from '~/types/entities'
 
@@ -141,10 +143,14 @@ async function linkToken(id: number, tokenId: number | null) {
   await reloadIfLoaded(row.campaign_id)
 }
 
-/** Removes the character from the party. The NPC entry stays; a PC loses its PC flag so it isn't re-adopted. */
+/**
+ * Removes the character from the party. The NPC entry stays; a PC loses its PC
+ * flag so it isn't re-adopted. Their items and coins go to the party stash.
+ */
 async function removeCharacter(id: number) {
   const row = await getDb().characters.get(id)
   if (!row) return
+  await useInventory().releaseOwner(row.campaign_id, characterOwner(id))
   if (row.role === 'pc') await patchNpc(row.npc_entity_id, { isPlayerCharacter: false })
   await getDb().characters.delete(id)
   await reloadIfLoaded(row.campaign_id)

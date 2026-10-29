@@ -29,6 +29,25 @@ export function coinsToCp(coins: Partial<Record<'pp' | 'gp' | 'sp' | 'cp' | 'cre
   )
 }
 
+/**
+ * Parses typed money: '12 gp 5 sp', '3,500 cr', '2pp', or a bare number, read
+ * as gp in PF2e and credits in SF2e. Returns cp, or null if unparsable.
+ */
+export function parseMoney(text: string, game: GameId = 'pf2e'): number | null {
+  const t = text.trim().toLowerCase().replace(/,/g, '')
+  if (!t) return null
+  if (/^-?\d+(\.\d+)?$/.test(t)) return Math.round(Number(t) * (game === 'sf2e' ? 10 : 100))
+  const unit: Record<string, number> = { pp: 1000, gp: 100, sp: 10, cp: 1, cr: 10, credit: 10, credits: 10 }
+  let cp = 0
+  let rest = t
+  for (const m of t.matchAll(/(-?\d+(?:\.\d+)?)\s*(credits|credit|pp|gp|sp|cp|cr)(?![a-z])/g)) {
+    cp += Number(m[1]) * unit[m[2]]
+    rest = rest.replace(m[0], '')
+  }
+  if (rest.trim()) return null
+  return Math.round(cp)
+}
+
 /** '—' for 0, 'L' for light, '2' or '2 L'-style for mixed; null = varies. */
 export function formatBulk(bulk: BulkTenths | undefined, note?: string): string {
   if (bulk === null || bulk === undefined) return note || 'varies'

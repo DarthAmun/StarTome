@@ -19,7 +19,7 @@
 import Dexie, { type Table } from 'dexie'
 import { DB_NAME, channelName, windowName } from '~/utils/appNamespace'
 import type { CampaignRules, GameId } from '~/types/game'
-import type { RulesEntity } from '~/types/rules'
+import type { RulesEntity, Runes } from '~/types/rules'
 import type { Adjustment } from '~/rules/combat'
 import { resolveImageDataUrl } from '~/rules/images'
 
@@ -171,6 +171,35 @@ export interface DbLevelUp {
   undone_at?: string | null
 }
 
+/** One inventory entry (FEATURES_PLAN.md P3): an item stack held by a character, the stash or an encounter. */
+export interface DbInventory {
+  id?: number
+  campaign_id: number
+  owner: string                    // 'stash' | 'character:<id>' | 'encounter:<id>'
+  item_id: string | null           // compendium item; null = free text
+  quantity: number
+  name_override: string | null
+  price_override: number | null    // cp per item (per batch for ammunition)
+  bulk_override: number | null     // tenths
+  notes: string
+  identified: number               // 0 | 1
+  player_name: string | null
+  player_description: string | null
+  runes: Runes | null
+  grade: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Coins of one owner, in cp for both games (1 credit = 10 cp). */
+export interface DbPurse {
+  id?: number
+  campaign_id: number
+  owner: string
+  cp: number
+  updated_at: string
+}
+
 /** One row of the old DM's Tome rules library, saved by the v4 upgrade before its tables were dropped. */
 export interface DbLegacyLibrary {
   key: string                    // 'systems:<id>' | 'records:<id>'
@@ -264,6 +293,8 @@ class StarTomeDb extends Dexie {
   legacyLibrary!:     Table<DbLegacyLibrary, string>
   characters!:        Table<DbCharacter>
   levelUps!:          Table<DbLevelUp>
+  inventory!:         Table<DbInventory>
+  purses!:            Table<DbPurse>
 
   constructor() {
     super(DB_NAME)
@@ -331,6 +362,11 @@ class StarTomeDb extends Dexie {
     this.version(5).stores({
       characters:         '++id, campaign_id, npc_entity_id',
       levelUps:           '++id, campaign_id, at',
+    })
+    // v6: inventory and purses (FEATURES_PLAN.md P3). One list for every owner.
+    this.version(6).stores({
+      inventory:          '++id, campaign_id, owner, item_id',
+      purses:             '++id, campaign_id, owner',
     })
   }
 }
@@ -432,6 +468,8 @@ export const dbApi = {
       await db.entityConnections.where('campaign_id').equals(id).delete()
       await db.characters.where('campaign_id').equals(id).delete()
       await db.levelUps.where('campaign_id').equals(id).delete()
+      await db.inventory.where('campaign_id').equals(id).delete()
+      await db.purses.where('campaign_id').equals(id).delete()
       await db.campaigns.delete(id)
     },
     async clone(id: number) {
@@ -526,8 +564,10 @@ export const dbApi = {
 
       // ── Party (level-up history stays with the original) ───────────────
       const characters = await db.characters.where('campaign_id').equals(id).toArray()
-      for (const { id: _cId, ...c } of characters) {
-        await db.characters.add({ ...c, campaign_id: newCampaignId, npc_entity_id: c.npc_entity_id != null ? entityIdMap.get(c.npc_entity_id) ?? null : null })
+      const ownerMap = new Map<string, string>([['stash', 'stash']])
+      for (const { id: oldCId, ...c } of characters) {
+        const newCId = await db.characters.add({ ...c, campaign_id: newCampaignId, npc_entity_id: c.npc_entity_id != null ? entityIdMap.get(c.npc_entity_id) ?? null : null })
+        ownerMap.set(`character:${oldCId}`, `character:${newCId}`)
       }
 
       // ── Encounters (+ tokens, walls) ────────────────────────────────────
@@ -535,6 +575,7 @@ export const dbApi = {
       for (const enc of encounters) {
         const { id: oldEncId, ...rest } = enc
         const newEncId = await db.encounters.add({ ...rest, campaign_id: newCampaignId })
+        ownerMap.set(`encounter:${oldEncId}`, `encounter:${newEncId}`)
 
         const tokens = await db.encounterTokens.where('encounter_id').equals(oldEncId!).toArray()
         for (const t of tokens) {
@@ -547,6 +588,18 @@ export const dbApi = {
           const { id: _wId, ...wRest } = w
           await db.encounterWalls.add({ ...wRest, encounter_id: newEncId as number })
         }
+      }
+
+      // ── Inventory + purses (after characters and encounters, for the owner keys) ──
+      const entries = await db.inventory.where('campaign_id').equals(id).toArray()
+      for (const { id: _iId, ...e } of entries) {
+        const owner = ownerMap.get(e.owner)
+        if (owner) await db.inventory.add({ ...e, campaign_id: newCampaignId, owner })
+      }
+      const purses = await db.purses.where('campaign_id').equals(id).toArray()
+      for (const { id: _pId, ...p } of purses) {
+        const owner = ownerMap.get(p.owner)
+        if (owner) await db.purses.add({ ...p, campaign_id: newCampaignId, owner })
       }
 
       return db.campaigns.get(newCampaignId)
@@ -621,6 +674,9 @@ export const dbApi = {
     async delete(id: number) {
       const db = getDb()
       await db.encounterTokens.where('encounter_id').equals(id).delete()
+      // Planned loot goes with the encounter
+      await db.inventory.where('owner').equals(`encounter:${id}`).delete()
+      await db.purses.where('owner').equals(`encounter:${id}`).delete()
       await db.encounters.delete(id)
     },
     async search(q: string, limit: number) {

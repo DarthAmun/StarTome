@@ -92,6 +92,8 @@
       </div>
     </section>
 
+    <PartyInventory :campaign-id="campaignId" :game="game" :characters="characters" :party-level="party.level" />
+
     <!-- ── Level-up history ── -->
     <section v-if="levelUps.length" class="party-section">
       <div class="party-section-title">Level-ups</div>
@@ -111,7 +113,7 @@ import { dbApi } from '~/composables/useDb'
 import { useEntities } from '~/composables/useEntities'
 import { useParty, type Character, type LevelUpEntry } from '~/composables/useParty'
 import { useFormatters } from '~/composables/useFormatters'
-import { campaignRules, type AdvancementMode } from '~/types/game'
+import { campaignGame, campaignRules, type AdvancementMode, type GameId } from '~/types/game'
 import { MAX_LEVEL, MIN_LEVEL, isPartyMember, type CharacterRole } from '~/rules/party'
 
 const route = useRoute()
@@ -121,6 +123,7 @@ const { characters, levelUps, party, load, addCharacter, updateCharacter, remove
 const { formatDate } = useFormatters()
 
 const advancement = ref<AdvancementMode>('xp')
+const game = ref<GameId>('pf2e')
 const modeHint = computed(() => advancement.value === 'milestone'
   ? 'Level up with the button, or by completing a quest marked as milestone. Change the mode in the campaign settings on the home page.'
   : 'XP awards arrive with encounter resolution. Change the mode in the campaign settings on the home page.')
@@ -128,6 +131,7 @@ const modeHint = computed(() => advancement.value === 'milestone'
 onMounted(async () => {
   const campaign = await dbApi.campaigns.get(campaignId)
   advancement.value = campaignRules(campaign).advancement
+  game.value = campaignGame(campaign)
   if (!entitiesStore.entities.some(e => e.campaignId === campaignId)) await entitiesStore.loadAll(campaignId)
   await load(campaignId)
 })
@@ -151,7 +155,7 @@ function setStr(c: Character, raw: string) {
 }
 
 async function remove(c: Character) {
-  if (!confirm(`Remove ${c.name} from the party? The NPC entry stays.`)) return
+  if (!confirm(`Remove ${c.name} from the party? The NPC entry stays; their items and coins go to the party stash.`)) return
   await removeCharacter(c.id)
 }
 
