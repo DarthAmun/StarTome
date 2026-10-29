@@ -142,6 +142,32 @@ export interface DbEntitySnapshot {
   event_name: string | null
 }
 
+/** A party member: player character or companion (FEATURES_PLAN.md §1). */
+export interface DbCharacter {
+  id?: number
+  campaign_id: number
+  name: string
+  role: 'pc' | 'companion'
+  level: number
+  xp: number
+  treat_as_pc: number              // 0 | 1 — companions only; PCs always count
+  str_mod: number | null           // manual, for the encumbrance warning
+  npc_entity_id: number | null     // the campaign NPC entry (portrait, lore page, token)
+  created_at: string
+  updated_at: string
+}
+
+/** One "level up" action: which characters went from which level to which. */
+export interface DbLevelUp {
+  id?: number
+  campaign_id: number
+  at: string
+  trigger: 'manual' | 'quest' | 'encounter'
+  ref_id: number | null            // quest entity / encounter id
+  changes: string                  // JSON LevelChange[]
+  undone_at?: string | null
+}
+
 /** One row of the old DM's Tome rules library, saved by the v4 upgrade before its tables were dropped. */
 export interface DbLegacyLibrary {
   key: string                    // 'systems:<id>' | 'records:<id>'
@@ -210,7 +236,8 @@ export interface DbSyncState {
   game: GameId
   channel: string
   version: string
-  packs: Record<string, { hash: string; count: number }>
+  /** `converter`: CONVERTER_VERSION the pack was converted with (missing = 1). */
+  packs: Record<string, { hash: string; count: number; converter?: number }>
   syncedAt: string
 }
 
@@ -232,6 +259,8 @@ class StarTomeDb extends Dexie {
   images!:            Table<DbImage, string>
   syncState!:         Table<DbSyncState, string>
   legacyLibrary!:     Table<DbLegacyLibrary, string>
+  characters!:        Table<DbCharacter>
+  levelUps!:          Table<DbLevelUp>
 
   constructor() {
     super(DB_NAME)
@@ -293,6 +322,12 @@ class StarTomeDb extends Dexie {
       for (const t of ['tokens', 'encounterTokens']) {
         await tx.table(t).toCollection().modify((r: Record<string, unknown>) => { delete r.linked_record_id })
       }
+    })
+    // v5: party (FEATURES_PLAN.md P1). Characters are created from PC-flagged NPCs
+    // by useParty on first load, not here, so the NPC lore stays the source until then.
+    this.version(5).stores({
+      characters:         '++id, campaign_id, npc_entity_id',
+      levelUps:           '++id, campaign_id, at',
     })
   }
 }
@@ -392,6 +427,8 @@ export const dbApi = {
       }
       await db.entities.where('campaign_id').equals(id).delete()
       await db.entityConnections.where('campaign_id').equals(id).delete()
+      await db.characters.where('campaign_id').equals(id).delete()
+      await db.levelUps.where('campaign_id').equals(id).delete()
       await db.campaigns.delete(id)
     },
     async clone(id: number) {
@@ -482,6 +519,12 @@ export const dbApi = {
           hidden_nodes: remapIdArray(rest.hidden_nodes),
           player_hidden_nodes: rest.player_hidden_nodes != null ? remapIdArray(rest.player_hidden_nodes) : rest.player_hidden_nodes,
         })
+      }
+
+      // ── Party (level-up history stays with the original) ───────────────
+      const characters = await db.characters.where('campaign_id').equals(id).toArray()
+      for (const { id: _cId, ...c } of characters) {
+        await db.characters.add({ ...c, campaign_id: newCampaignId, npc_entity_id: c.npc_entity_id != null ? entityIdMap.get(c.npc_entity_id) ?? null : null })
       }
 
       // ── Encounters (+ tokens, walls) ────────────────────────────────────

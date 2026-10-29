@@ -1,5 +1,5 @@
 /** Foundry physical items (weapon, armor, shield, equipment, consumable, treasure, backpack, ammo, kit) → Item. */
-import type { Item, ItemCategory } from '~/types/rules'
+import type { Item, ItemCategory, Runes } from '~/types/rules'
 import { parseActionCost } from '~/rules/format'
 import { baseFields, bulkOf, handsOf, moneyOf, text, usageOf, type ConvertContext, type FoundryDoc } from './common'
 
@@ -19,6 +19,16 @@ function activationsOf(markdown: string): Item['activation'] {
     out.push({ cost, ...(traits?.length ? { traits } : {}) })
   }
   return out.length ? out : undefined
+}
+
+/** Foundry `system.runes` → Runes; undefined when the item carries none (base items). */
+function runesOf(raw: any, fundamental: 'striking' | 'resilient'): Runes | undefined {
+  if (!raw) return undefined
+  const potency = Number(raw.potency) || 0
+  const second = Number(raw[fundamental]) || 0
+  const property = Array.isArray(raw.property) ? raw.property.filter((p: unknown): p is string => typeof p === 'string' && !!p) : []
+  if (!potency && !second && !property.length) return undefined
+  return { potency, ...(second ? { [fundamental]: second } : {}), property }
 }
 
 export function convertItem(doc: FoundryDoc, ctx: ConvertContext): Item {
@@ -59,6 +69,8 @@ export function convertItem(doc: FoundryDoc, ctx: ConvertContext): Item {
       ...(s.grade ? { grade: s.grade } : {}),
       ...(s.splashDamage?.value ? { splash: Number(s.splashDamage.value) } : {}),
     }
+    const runes = runesOf(s.runes, 'striking')
+    if (runes) item.weapon.runes = runes
   }
   if (doc.type === 'armor') {
     item.armor = {
@@ -71,6 +83,8 @@ export function convertItem(doc: FoundryDoc, ctx: ConvertContext): Item {
       strength: s.strength === null || s.strength === undefined ? null : Number(s.strength),
       ...(s.grade ? { grade: s.grade } : {}),
     }
+    const runes = runesOf(s.runes, 'resilient')
+    if (runes) item.armor.runes = runes
   }
   if (doc.type === 'shield') {
     const hp = Number(s.hp?.max) || 0

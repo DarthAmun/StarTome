@@ -12,7 +12,7 @@
  */
 import JSZip from 'jszip'
 import { getDb, type DbSyncState } from '~/composables/useDb'
-import { convertFoundryDoc, kindOfFoundryType, sourceOf, type FoundryDoc } from '~/converters/foundry'
+import { CONVERTER_VERSION, convertFoundryDoc, kindOfFoundryType, sourceOf, type FoundryDoc } from '~/converters/foundry'
 import { defaultSelected, packGroup, packLabel, type PackGroup } from '~/converters/foundry/packs'
 import { getPath, USER_OWNED_FIELDS } from '~/rules/edits'
 import type { GameId } from '~/types/game'
@@ -151,7 +151,8 @@ export async function runFoundrySync(source: FoundrySource, opts: SyncOptions): 
   // Pass 2: convert and merge pack by pack
   const seenByPack = new Map<string, Set<string>>()
   for (const [i, p] of selected.entries()) {
-    const unchangedPack = !opts.force && previous?.version === version && previous.packs[p.name]?.hash === p.checksum
+    const prevPack = previous?.version === version ? previous.packs[p.name] : undefined
+    const unchangedPack = !opts.force && prevPack?.hash === p.checksum && (prevPack.converter ?? 1) === CONVERTER_VERSION
     if (unchangedPack) {
       report.packs.push({ name: p.name, converted: 0, skipped: true })
       continue
@@ -195,7 +196,13 @@ export async function runFoundrySync(source: FoundrySource, opts: SyncOptions): 
     game, channel: 'release', version,
     packs: {
       ...(previous?.version === version ? previous.packs : {}),
-      ...Object.fromEntries(selected.map(p => [p.name, { hash: p.checksum, count: report.packs.find(r => r.name === p.name)?.converted ?? previous?.packs[p.name]?.count ?? 0 }])),
+      ...Object.fromEntries(selected.map(p => {
+        const r = report.packs.find(x => x.name === p.name)
+        const prev = previous?.packs[p.name]
+        return [p.name, r?.skipped
+          ? { hash: p.checksum, count: prev?.count ?? 0, converter: prev?.converter ?? 1 }
+          : { hash: p.checksum, count: r?.converted ?? 0, converter: CONVERTER_VERSION }]
+      })),
     },
     syncedAt: new Date().toISOString(),
   }

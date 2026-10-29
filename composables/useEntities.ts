@@ -5,6 +5,8 @@ import { extractLinks } from '~/composables/useEntityParser'
 import { dbApi, getDb, parseRecordData } from '~/composables/useDb'
 import type { DbEntitySnapshot } from '~/composables/useDb'
 import type { EntityType, EntityAttributes } from '~/types/entities'
+import { campaignRules } from '~/types/game'
+import { useParty } from '~/composables/useParty'
 
 export interface Entity {
   id: number
@@ -109,6 +111,8 @@ async function createEntity(campaignId: number, type: EntityType, name: string, 
 async function updateEntity(id: number, updates: { name?: string; content?: string; attributes?: EntityAttributes }) {
   try {
     const entity = entities.value.find(e => e.id === id)
+    const before = entity ?? (currentEntity.value?.id === id ? currentEntity.value : null)
+    const wasCompleted = (before?.attributes as { status?: string } | undefined)?.status === 'completed'
     if (entity) Object.assign(entity, updates)
     if (currentEntity.value?.id === id) Object.assign(currentEntity.value, updates)
 
@@ -120,10 +124,22 @@ async function updateEntity(id: number, updates: { name?: string; content?: stri
     await dbApi.entities.update(payload)
 
     if (updates.content !== undefined) await syncLinks(id, updates.content)
+
+    const after = updates.attributes as { status?: string; milestone?: boolean } | undefined
+    if (before?.type === 'quest' && !wasCompleted && after?.status === 'completed' && after.milestone) {
+      await promptMilestone(before.campaignId, id, updates.name ?? before.name)
+    }
   } catch (err) {
     console.error('[NotesStore] updateEntity:', err)
     throw err
   }
+}
+
+/** A milestone quest was completed: in a milestone campaign, ask to level up the party. */
+async function promptMilestone(campaignId: number, questId: number, questName: string) {
+  const campaign = await dbApi.campaigns.get(campaignId)
+  if (campaignRules(campaign).advancement !== 'milestone') return
+  useParty().requestLevelUp({ campaignId, trigger: 'quest', refId: questId, reason: `Milestone reached: ${questName}` })
 }
 
 async function setFavorite(id: number, isFavorite: boolean) {

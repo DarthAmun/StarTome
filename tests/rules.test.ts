@@ -8,7 +8,7 @@ import {
 import { conflictingEdits, setPath, withLocalEdits } from '~/rules/edits'
 import { newRulesEntity } from '~/rules/factory'
 import { coinsToCp, formatActionCost, formatBulk, formatMoney, formatTrait, parseActionCost, parseBulk, signed } from '~/rules/format'
-import { creatureXp, encounterBudget, simpleHazardXp } from '~/rules/registry'
+import { creatureXp, encounterBudget, expectedTreasure, GAME_RULES, levelTreasure, simpleHazardXp } from '~/rules/registry'
 import type { Creature, Item, RulesEntity } from '~/types/rules'
 
 describe('format', () => {
@@ -54,6 +54,34 @@ describe('format', () => {
     expect(formatTrait('mindless')).toBe('mindless')
     expect(signed(5)).toBe('+5')
     expect(signed(-2)).toBe('−2')
+  })
+})
+
+describe('treasure registry', () => {
+  it('holds Party Treasure by Level for both games in cp', () => {
+    expect(GAME_RULES.pf2e.treasure).toHaveLength(20)
+    expect(GAME_RULES.pf2e.treasure[0]).toMatchObject({ total: 17_500, currency: 4_000, perExtraPc: 1_000 })
+    expect(GAME_RULES.pf2e.treasure[19].total).toBe(49_000_000)
+    // SF2e credits × 10 cp equal PF2e gp × 100 cp
+    expect(GAME_RULES.sf2e.treasure.map(r => r.total)).toEqual(GAME_RULES.pf2e.treasure.map(r => r.total))
+    expect(GAME_RULES.sf2e.treasure[4]).toMatchObject({ currency: 32_000, perExtraPc: 8_000 })
+  })
+
+  it('lists item counts per level', () => {
+    const [l1, l5] = [GAME_RULES.sf2e.treasure[0], GAME_RULES.sf2e.treasure[4]]
+    expect(l1.permanent).toEqual({ 2: 2, 1: 2 })
+    expect(l1.consumables).toEqual({ 2: 2, 1: 3 })
+    expect(l5.consumables).toEqual({ 6: 2, 5: 2, 4: 2 })
+    expect(GAME_RULES.sf2e.treasure[19]).toMatchObject({ permanent: { 20: 4 }, consumables: { 20: 4, 19: 2 } })
+  })
+
+  it('adjusts for party size and sums a running total (Wealth_by_Level sheet)', () => {
+    expect(levelTreasure('pf2e', 1, 5)).toBe(18_500)
+    expect(levelTreasure('pf2e', 1, 3)).toBe(16_500)
+    // Sheet, 5 PCs: level 2 adjusted total 503 gp = 185 + 318 (300 + 18)
+    expect(expectedTreasure('pf2e', { fromLevel: 1, level: 3, partySize: 5 })).toBe(50_300)
+    expect(expectedTreasure('pf2e', { fromLevel: 1, level: 2, progress: 0.5, partySize: 4 })).toBe(17_500 + 15_000)
+    expect(expectedTreasure('pf2e', { fromLevel: 5, level: 5, partySize: 4 })).toBe(0)
   })
 })
 

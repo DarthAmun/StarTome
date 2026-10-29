@@ -41,7 +41,7 @@ describe('campaign game', () => {
     expect(campaignGame({})).toBe('pf2e')
     expect(campaignGame({ game: 'sf2e' })).toBe('sf2e')
     expect(campaignGame({ game: 'dnd5e' })).toBe('pf2e')
-    expect(campaignRules({})).toEqual({ advancement: 'xp' })
+    expect(campaignRules({})).toMatchObject({ advancement: 'xp', abp: false, startingLevel: 1, countConsumables: true })
     expect(campaignRules({ rules: { advancement: 'milestone' } }).advancement).toBe('milestone')
   })
 })

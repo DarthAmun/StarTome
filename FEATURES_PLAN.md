@@ -237,6 +237,15 @@ P2 and P3 don't depend on each other and could swap if the party tab matters mor
 
 ---
 
+### Progress
+- **P1 done 2026-10-29 (v0.8.0)**:
+  - `characters` + `levelUps` tables (Dexie v5). PC-flagged NPCs are adopted on first load, and a character's level is mirrored to its NPC entry.
+  - Party page (`/campaign/:id/party`): roster, "treat as player character" toggle, Str modifier, party level with the mixed warning, add from NPCs or by name.
+  - Milestones: the "Level up party" dialog with per-member opt-out, undo, and the level-up history. Quests have a "Level-up milestone" toggle, and completing one in a milestone campaign opens the dialog.
+  - Treasure tables for both games plus `levelTreasure` / `expectedTreasure`, and the new `CampaignRules` fields (no UI yet).
+  - The converter keeps weapon/armor runes. `CONVERTER_VERSION` makes the next sync re-convert packs converted by an older converter, so **drop the release ZIP once more** to get runes on existing entries.
+  - Party tables are in the full backup, the campaign export and the import.
+
 ## 9. Open questions
 
 From your list, with proposals:

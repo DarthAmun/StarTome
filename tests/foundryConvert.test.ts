@@ -25,7 +25,25 @@ function convert(name: string) {
 }
 const as = <T extends RulesEntity>(e: RulesEntity) => e as T
 
+function convertWith(name: string, patch: (doc: any) => void) {
+  const f = fixtures.find(x => x.doc.name === name)!
+  const doc = structuredClone(f.doc)
+  patch(doc)
+  return convertFoundryDoc(doc, {
+    game: f.game, version: '8.6.1', pack: f.pack,
+    resolveUuid: u => context.index[u] ?? null, localize: k => context.lang[k] ?? null,
+  }).entity as Item
+}
+
 describe('Foundry converter — items', () => {
+  it('keeps fundamental and property runes (specific magic items, iconic gear)', () => {
+    const blade = convertWith('Longsword', d => { d.system.runes = { potency: 2, striking: 1, property: ['ghostTouch'] } })
+    expect(blade.weapon!.runes).toEqual({ potency: 2, striking: 1, property: ['ghostTouch'] })
+    expect(convertWith('Longsword', d => { d.system.runes = { potency: 0, striking: 0, property: [] } }).weapon).not.toHaveProperty('runes')
+    const plate = convertWith('Full Plate', d => { d.system.runes = { potency: 1, resilient: 2, property: [] } })
+    expect(plate.armor!.runes).toEqual({ potency: 1, resilient: 2, property: [] })
+  })
+
   it('Longsword', () => {
     const e = as<Item>(convert('Longsword'))
     expect(e.id).toBe('fvtt:pf2e:equipment-srd:LJdbVTOZog39EEbi')

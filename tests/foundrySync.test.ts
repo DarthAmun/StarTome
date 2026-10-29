@@ -5,7 +5,7 @@ import JSZip from 'jszip'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getDb } from '~/composables/useDb'
 import { rulesGet, rulesUpdate } from '~/composables/useRules'
-import type { FoundryDoc } from '~/converters/foundry'
+import { CONVERTER_VERSION, type FoundryDoc } from '~/converters/foundry'
 import { openReleaseZip, runFoundrySync } from '~/sync/foundrySync'
 import type { Creature, Item } from '~/types/rules'
 
@@ -76,6 +76,17 @@ describe('Foundry release sync', () => {
     const forced = await runFoundrySync(await releaseZip(), { packs: ALL, force: true })
     expect(forced.unchanged).toBe(expected)
     expect(forced.updated).toBe(0)
+  })
+
+  it('re-converts packs synced by an older converter, even at the same version and checksum', async () => {
+    await runFoundrySync(await releaseZip(), { packs: ALL })
+    const state = (await getDb().syncState.get('pf2e'))!
+    expect(Object.values(state.packs).every(p => p.converter === CONVERTER_VERSION)).toBe(true)
+    // A sync from before converter versions existed
+    await getDb().syncState.put({ ...state, packs: Object.fromEntries(Object.entries(state.packs).map(([k, v]) => [k, { hash: v.hash, count: v.count }])) })
+    const again = await runFoundrySync(await releaseZip(), { packs: ALL })
+    expect(again.packs.some(p => p.skipped)).toBe(false)
+    expect(again.created).toBe(0)
   })
 
   it('keeps user-owned fields and local edits, and reports conflicts', async () => {

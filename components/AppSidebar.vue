@@ -58,6 +58,14 @@
               <OhVueIcon :name="et.icon" scale="0.75" :style="{ color: et.color }" />
             </NuxtLink>
             <NuxtLink
+              :to="`/campaign/${c.id}/party`"
+              class="sb-icon-link"
+              :class="{ active: route.path === `/campaign/${c.id}/party` }"
+              data-tip="Party"
+            >
+              <OhVueIcon name="gi-three-friends" scale="0.75" style="color: #e8c44a" />
+            </NuxtLink>
+            <NuxtLink
               :to="`/campaign/${c.id}/encounters`"
               class="sb-icon-link"
               :class="{ active: route.path === `/campaign/${c.id}/encounters` || (route.path.startsWith('/encounter') && activeCampaignId === c.id) }"
@@ -153,6 +161,14 @@
 
               <div class="sb-child-sep" />
 
+              <NuxtLink
+                :to="`/campaign/${c.id}/party`"
+                class="sb-child-tool"
+                :class="{ active: route.path === `/campaign/${c.id}/party` }"
+              >
+                <OhVueIcon name="gi-three-friends" scale="0.65" style="color:#e8c44a;width:14px;flex-shrink:0" />
+                <span>Party</span>
+              </NuxtLink>
               <NuxtLink
                 :to="`/campaign/${c.id}/encounters`"
                 class="sb-child-tool"

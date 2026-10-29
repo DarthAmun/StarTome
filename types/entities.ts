@@ -48,6 +48,8 @@ export interface QuestAttributes {
   questGiverId?: number
   questGiverType?: 'npc' | 'faction'
   reward?: string
+  /** Completing the quest offers to level up the party (milestone campaigns). */
+  milestone?: boolean
 }
 
 // Shape reference — used via EntityAttributes union

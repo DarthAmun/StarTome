@@ -77,6 +77,14 @@ export type ItemCategory =
   | 'weapon' | 'armor' | 'shield' | 'equipment' | 'consumable' | 'treasure'
   | 'container' | 'ammunition' | 'kit'
 
+/** Fundamental and property runes (PF2e). Potency +1…+3; striking/resilient 1 = base, 2 = greater, 3 = major. */
+export interface Runes {
+  potency: number
+  striking?: number
+  resilient?: number
+  property: string[]
+}
+
 export interface Item extends RulesEntityBase {
   kind: 'item'
   category: ItemCategory
@@ -97,8 +105,9 @@ export interface Item extends RulesEntityBase {
     damage: { dice: number; die: string; type: string }
     range?: number; reload?: string
     ammo?: { type?: string; capacity?: number }; expend?: number; grade?: string; splash?: number
+    runes?: Runes
   }
-  armor?: { category: string; group?: string; acBonus: number; dexCap: number | null; checkPenalty: number; speedPenalty: number; strength: number | null; grade?: string }
+  armor?: { category: string; group?: string; acBonus: number; dexCap: number | null; checkPenalty: number; speedPenalty: number; strength: number | null; grade?: string; runes?: Runes }
   shield?: { acBonus: number; hardness: number; hp: number; bt: number }
   container?: { capacity: BulkTenths; bulkReduction: BulkTenths }
   material?: { type: string; grade: string } | null

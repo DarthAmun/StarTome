@@ -274,6 +274,19 @@
                     @update:model-value="(v) => set('status', v)"
                 />
             </div>
+            <div class="field">
+                <label class="f-label">Milestone</label>
+                <div class="toggle-row">
+                    <button
+                        class="toggle-opt"
+                        :class="{ on: attrs.milestone }"
+                        title="In milestone campaigns, completing this quest offers to level up the party"
+                        @click="set('milestone', !attrs.milestone)"
+                    >
+                        <OhVueIcon name="gi-upgrade" scale="0.9" /> Level-up milestone
+                    </button>
+                </div>
+            </div>
             <div class="field-row">
                 <div class="field">
                     <label class="f-label">Quest Giver</label>
