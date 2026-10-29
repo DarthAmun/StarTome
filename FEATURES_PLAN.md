@@ -245,6 +245,13 @@ P2 and P3 don't depend on each other and could swap if the party tab matters mor
   - Treasure tables for both games plus `levelTreasure` / `expectedTreasure`, and the new `CampaignRules` fields (no UI yet).
   - The converter keeps weapon/armor runes. `CONVERTER_VERSION` makes the next sync re-convert packs converted by an older converter, so **drop the release ZIP once more** to get runes on existing entries.
   - Party tables are in the full backup, the campaign export and the import.
+- **P2 done 2026-10-29 (v0.9.0)**:
+  - `rules/encounter.ts`: XP per entry with weak/elite as plain level ±1 (tested across level 0), simple hazards at ⅕, threat rating against the party-size budgets (`beyond` above extreme), the +4-over-lowest-member warning, and `tokenSides` (party, allies, enemies, enemies without a stat block).
+  - Builder page (`/campaign/:id/encounter-builder`, linked from the party page and the encounters list): compendium search with level (defaults to party level −4…+4), kind, rarity and trait filters; slots with count and Weak/Normal/Elite; live meter; party-level override. The selection is kept per campaign in localStorage.
+  - "Create encounter" makes a new `prepared` VTT encounter with the party's tokens on the left and the enemies on the right (numbered labels, sizes respected, no overlap) and opens it. A party member without a token gets one from name and portrait, saved to the library and remembered as `characters.token_id`.
+  - The encounter page shows the meter in Prepare mode (left sidebar), computed from the tokens, with its own party-level override (`encounters.party_level`).
+  - Token menu: "Mark as Ally" (`encounterTokens.is_ally`) leaves a token out of XP. All new fields are non-indexed, so no Dexie version bump.
+  - Not in P2: the `defeated` list for enemies removed in Run mode moves to P4, where the resolve dialog uses it.
 
 ## 9. Open questions
 

@@ -128,6 +128,15 @@
           <OhVueIcon name="gi-crowned-heart" scale="0.85" class="ctx-icon" />
           {{ targetToken.isPlayerToken ? 'Unmark Player Character' : 'Mark as Player Character' }}
         </button>
+        <button
+          v-if="!targetToken.isPlayerToken"
+          class="ctx-item"
+          title="Allies fight with the party and add no XP to the difficulty meter"
+          @click="emit('toggle-ally', targetToken.id); emit('close')"
+        >
+          <OhVueIcon name="gi-shaking-hands" scale="0.85" class="ctx-icon" />
+          {{ targetToken.isAlly ? 'Unmark Ally' : 'Mark as Ally' }}
+        </button>
         <button class="ctx-item" @click="emit('toggle-dead', targetToken.id); emit('close')">
           <OhVueIcon name="fa-skull-crossbones" scale="0.85" class="ctx-icon" />
           {{ targetToken.isDead ? 'Mark Alive' : 'Mark Dead' }}
@@ -170,6 +179,7 @@ const emit = defineEmits<{
   'toggle-visibility': [tokenId: number]
   'toggle-dead': [tokenId: number]
   'toggle-player-token': [tokenId: number]
+  'toggle-ally': [tokenId: number]
   'toggle-acts-while-hidden': [tokenId: number]
   'add-timer': [tokenId: number, name: string, turns: number]
   'remove-token': [tokenId: number]

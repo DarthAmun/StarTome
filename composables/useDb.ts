@@ -54,6 +54,7 @@ export interface DbEncounter {
   fov_enabled?: boolean
   sound_playlist_id?: number | null
   initiative_formula?: string | null
+  party_level?: number | null // overrides the party tab's level for this encounter's meter
   created_at: string
   updated_at: string
 }
@@ -98,6 +99,7 @@ export interface DbEncounterToken {
   elevation: number | null
   timers?: string             // JSON TokenTimer[] — non-indexed, added without a version bump
   acts_while_hidden?: number  // 0 | 1 — hidden token still takes its turn
+  is_ally?: number            // 0 | 1 — fights with the party; left out of the XP meter
 }
 
 export interface DbEncounterWall {
@@ -153,6 +155,7 @@ export interface DbCharacter {
   treat_as_pc: number              // 0 | 1 — companions only; PCs always count
   str_mod: number | null           // manual, for the encumbrance warning
   npc_entity_id: number | null     // the campaign NPC entry (portrait, lore page, token)
+  token_id?: number | null         // library token placed by the encounter builder
   created_at: string
   updated_at: string
 }
@@ -691,6 +694,7 @@ export const dbApi = {
         elevation: data.elevation ?? null,
         timers: '[]',
         acts_while_hidden: 0,
+        is_ally: data.isAlly ? 1 : 0,
       })
       const et = await db.encounterTokens.get(id)
       if (!et) throw new Error(`encounterTokens.add: row ${id} not found after insert`)

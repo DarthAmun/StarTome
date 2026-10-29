@@ -126,6 +126,14 @@
       <div class="encounter-layout">
         <!-- Left sidebar: Prepare mode only — map & grid -->
         <aside v-if="mode === 'prepare'" class="encounter-sidebar left-sidebar">
+          <!-- Difficulty -->
+          <div class="sidebar-section">
+            <div class="sidebar-header">
+              <span class="f-label">Difficulty</span>
+            </div>
+            <EncounterDifficulty :game="campaignGameId" />
+          </div>
+
           <!-- Battle Map -->
           <div class="sidebar-section">
             <div class="sidebar-header">
@@ -830,6 +838,7 @@
         @toggle-visibility="onCtxToggleVisibility"
         @toggle-dead="onCtxToggleDead"
         @toggle-player-token="onCtxTogglePlayerToken"
+        @toggle-ally="onCtxToggleAlly"
         @toggle-acts-while-hidden="onCtxToggleActsWhileHidden"
         @add-timer="onCtxAddTimer"
         @remove-token="onCtxRemoveToken"
@@ -1438,6 +1447,11 @@ function onCtxToggleActsWhileHidden(tokenId: number) {
 function onCtxTogglePlayerToken(tokenId: number) {
   const token = store.getToken(tokenId)
   if (token) store.updateToken(tokenId, { isPlayerToken: !token.isPlayerToken })
+}
+
+function onCtxToggleAlly(tokenId: number) {
+  const token = store.getToken(tokenId)
+  if (token) store.updateToken(tokenId, { isAlly: !token.isAlly })
 }
 
 function onCtxAddTimer(tokenId: number, name: string, turns: number) {

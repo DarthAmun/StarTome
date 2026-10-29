@@ -5,6 +5,7 @@
     <div class="elist">
       <div class="elist-head">
         <div class="elist-head-title" style="color: #4ab8e8">Encounters</div>
+        <NuxtLink class="btn-accent-sm elist-build" :to="`/campaign/${campaignId}/encounter-builder`" title="Build an encounter for the party">Build</NuxtLink>
         <button class="btn-accent-sm" @click="createEncounter">+ New</button>
       </div>
 
@@ -202,6 +203,7 @@ async function cloneEncounter(id: number) {
     grid_size: source.grid_size,
     grid_offset_x: source.grid_offset_x,
     grid_offset_y: source.grid_offset_y,
+    party_level: source.party_level ?? null,
   })
   const walls = await dbApi.walls.list(id)
   await Promise.all([
@@ -222,6 +224,7 @@ async function cloneEncounter(id: number) {
       imageType: token.image_type,
       isPlayerToken: token.is_player_token,
       visionRange: token.vision_range,
+      isAlly: token.is_ally,
     })),
     ...walls.map(wall => dbApi.walls.add({
       encounter_id: copy.id,
@@ -252,6 +255,7 @@ function statusStyle(status: string) {
 </script>
 
 <style scoped>
+.elist-build { text-decoration: none; }
 .enc-actions {
   display: none;
   gap: 3px;

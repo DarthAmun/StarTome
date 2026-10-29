@@ -18,6 +18,8 @@ export interface Character extends PartyCharacter {
   xp: number
   strMod: number | null
   npcEntityId: number | null
+  /** Library token the encounter builder places for this character. */
+  tokenId: number | null
 }
 
 export interface LevelUpEntry {
@@ -33,7 +35,7 @@ function toCharacter(r: DbCharacter): Character {
   return {
     id: r.id!, campaignId: r.campaign_id, name: r.name, role: r.role,
     level: r.level, xp: r.xp ?? 0, treatAsPc: r.role === 'pc' || !!r.treat_as_pc,
-    strMod: r.str_mod ?? null, npcEntityId: r.npc_entity_id ?? null,
+    strMod: r.str_mod ?? null, npcEntityId: r.npc_entity_id ?? null, tokenId: r.token_id ?? null,
   }
 }
 
@@ -131,6 +133,14 @@ async function updateCharacter(id: number, patch: Partial<Pick<Character, 'name'
   await reloadIfLoaded(c.campaignId)
 }
 
+/** Remembers the library token that stands for the character on the map. */
+async function linkToken(id: number, tokenId: number | null) {
+  const row = await getDb().characters.get(id)
+  if (!row || (row.token_id ?? null) === tokenId) return
+  await getDb().characters.update(id, { token_id: tokenId, updated_at: now() })
+  await reloadIfLoaded(row.campaign_id)
+}
+
 /** Removes the character from the party. The NPC entry stays; a PC loses its PC flag so it isn't re-adopted. */
 async function removeCharacter(id: number) {
   const row = await getDb().characters.get(id)
@@ -189,7 +199,7 @@ export function useParty() {
     prompt,
     party: computed(() => partyLevel(characters.value)),
     defaultSelection: computed(() => defaultLevelUpSelection(characters.value)),
-    load, addCharacter, updateCharacter, removeCharacter, levelUp, undoLevelUp,
+    load, addCharacter, updateCharacter, removeCharacter, linkToken, levelUp, undoLevelUp,
     requestLevelUp, dismissPrompt,
   }
 }

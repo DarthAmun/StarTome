@@ -68,7 +68,7 @@
             <NuxtLink
               :to="`/campaign/${c.id}/encounters`"
               class="sb-icon-link"
-              :class="{ active: route.path === `/campaign/${c.id}/encounters` || (route.path.startsWith('/encounter') && activeCampaignId === c.id) }"
+              :class="{ active: route.path === `/campaign/${c.id}/encounters` || route.path === `/campaign/${c.id}/encounter-builder` || (route.path.startsWith('/encounter') && activeCampaignId === c.id) }"
               data-tip="Encounters"
             >
               <OhVueIcon name="gi-crossed-swords" scale="0.75" style="color: #e05555" />
@@ -172,7 +172,7 @@
               <NuxtLink
                 :to="`/campaign/${c.id}/encounters`"
                 class="sb-child-tool"
-                :class="{ active: route.path === `/campaign/${c.id}/encounters` || (route.path.startsWith('/encounter') && activeCampaignId === c.id) }"
+                :class="{ active: route.path === `/campaign/${c.id}/encounters` || route.path === `/campaign/${c.id}/encounter-builder` || (route.path.startsWith('/encounter') && activeCampaignId === c.id) }"
               >
                 <OhVueIcon name="gi-crossed-swords" scale="0.65" style="color:#e05555;width:14px;flex-shrink:0" />
                 <span>Encounters</span>

@@ -129,6 +129,7 @@ export interface EncounterToken {
   linkedEntityId: number | null
   visionRange: number | null  // tiles, null = infinite
   isPlayerToken: boolean      // default false
+  isAlly: boolean             // fights with the party; no XP
   elevation: number | null
   timers: TokenTimer[]
   playerHealthState?: HealthState  // set only in player-sync payload; undefined in DM view
@@ -150,6 +151,7 @@ export interface Encounter {
   fovEnabled: boolean
   soundPlaylistId?: number
   initiativeFormula: string | null
+  partyLevel: number | null   // override of the party tab's level for the meter
 }
 
 export const useEncounterStore = defineStore('encounter', () => {
@@ -224,6 +226,7 @@ export const useEncounterStore = defineStore('encounter', () => {
         fovEnabled: data.fov_enabled ?? false,
         soundPlaylistId: data.sound_playlist_id ?? undefined,
         initiativeFormula: data.initiative_formula ?? null,
+        partyLevel: data.party_level ?? null,
         tokens: ((data as any).tokens || []).map(normalizeToken),
       }
       roundNumber.value = data.round_number ?? 1
@@ -448,6 +451,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     if ('linkedEntityId' in updates) dbUpdates.linkedEntityId = updates.linkedEntityId
     if ('visionRange' in updates) dbUpdates.visionRange = updates.visionRange
     if ('isPlayerToken' in updates) dbUpdates.isPlayerToken = updates.isPlayerToken ? 1 : 0
+    if ('isAlly' in updates) dbUpdates.isAlly = updates.isAlly ? 1 : 0
     if ('elevation' in updates) dbUpdates.elevation = updates.elevation
     if ('timers' in updates) dbUpdates.timers = JSON.stringify(updates.timers)
     await dbApi.encounterTokens.update(dbUpdates)
@@ -887,6 +891,7 @@ export const useEncounterStore = defineStore('encounter', () => {
       linkedEntityId: raw.linked_entity_id ?? null,
       visionRange: raw.vision_range ?? null,
       isPlayerToken: Boolean(raw.is_player_token),
+      isAlly: Boolean(raw.is_ally),
       elevation: raw.elevation ?? null,
       timers: tryParseJson<TokenTimer[]>(raw.timers, []),
     }
@@ -900,6 +905,12 @@ export const useEncounterStore = defineStore('encounter', () => {
     const token = getToken(tokenId)
     if (!token || token.hpCurrent === null) return
     updateToken(tokenId, { hpCurrent: Math.max(0, token.hpCurrent - amount) })
+  }
+
+  async function setPartyLevel(level: number | null) {
+    if (!current.value) return
+    current.value.partyLevel = level
+    await dbApi.encounters.update({ id: current.value.id, party_level: level })
   }
 
   async function setInitiativeFormula(formula: string | null) {
@@ -983,7 +994,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     addTokenToEncounter, addCreatureToEncounter, addCreatureToEncounterAuto, setTokenRulesLink, moveToken, updateToken, removeToken, addToLibrary, updateLibraryToken,
     openPlayerWindow, closePlayerWindow, setShapeOverlays,
     nextTurn, prevTurn,
-    getToken, applyDamage, rollAllInitiative, setInitiativeFormula, bulkRemoveTokens, bulkSetTokenVisibility, toggleCondition,
+    getToken, applyDamage, rollAllInitiative, setInitiativeFormula, setPartyLevel, bulkRemoveTokens, bulkSetTokenVisibility, toggleCondition,
     addLogNote, clearCombatLog,
     addTimer, resetTimer, removeTimer, setTimers,
     setPlayerViewPrefs, sendPing, playerTurnOrder,

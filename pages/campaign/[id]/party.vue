@@ -15,9 +15,14 @@
           · <span class="party-mode" :title="modeHint">{{ advancement === 'milestone' ? 'Milestone levelling' : 'XP levelling' }}</span>
         </div>
       </div>
-      <button class="seal-btn" :disabled="!characters.length" @click="openLevelUp">
-        <OhVueIcon name="gi-upgrade" scale="0.85" /> Level up party
-      </button>
+      <div class="party-head-actions">
+        <NuxtLink class="ghost-btn" :to="`/campaign/${campaignId}/encounter-builder`">
+          <OhVueIcon name="gi-crossed-swords" scale="0.8" /> Build encounter
+        </NuxtLink>
+        <button class="seal-btn" :disabled="!characters.length" @click="openLevelUp">
+          <OhVueIcon name="gi-upgrade" scale="0.85" /> Level up party
+        </button>
+      </div>
     </header>
 
     <!-- ── Roster ── -->
@@ -198,6 +203,8 @@ function triggerLabel(l: LevelUpEntry) {
 .party { flex: 1; overflow-y: auto; padding: 28px 32px 48px; max-width: 980px; }
 .party-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
 .party-title { margin: 0 0 4px; }
+.party-head-actions { display: flex; gap: 8px; align-items: center; }
+.party-head-actions a { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
 .party-sub { font-size: 13px; color: var(--text2); }
 .party-sub b { color: var(--text); }
 .party-warn { margin-left: 4px; padding: 1px 6px; border-radius: 4px; font-size: 11px; color: #c9973a; border: 1px solid #c9973a66; }
