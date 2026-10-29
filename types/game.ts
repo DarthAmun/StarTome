@@ -18,13 +18,14 @@ export interface CampaignRules {
   /** Treasure tracking starts here: the party level and the GM total when the baseline was set. */
   startingLevel: number
   startingTreasure: number   // cp
+  startingConsumables: number // cp of startingTreasure in consumables
   baselineAt: string | null
   /** Count awarded consumables toward the wealth %. */
   countConsumables: boolean
 }
 
 export const DEFAULT_CAMPAIGN_RULES: CampaignRules = {
-  advancement: 'xp', abp: false, startingLevel: 1, startingTreasure: 0, baselineAt: null, countConsumables: true,
+  advancement: 'xp', abp: false, startingLevel: 1, startingTreasure: 0, startingConsumables: 0, baselineAt: null, countConsumables: true,
 }
 
 /** Campaigns imported from DM's Tome carry no game; they were PF2e campaigns. */

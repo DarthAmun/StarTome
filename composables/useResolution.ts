@@ -8,12 +8,13 @@
  * is written by the encounter store during play.
  */
 import { getDb, now, type DbEncounter, type DbEncounterToken } from '~/composables/useDb'
-import { useInventory, type OwnerSnapshot, type RestoreShortfall } from '~/composables/useInventory'
+import { toEntry, useInventory, type OwnerSnapshot, type RestoreShortfall } from '~/composables/useInventory'
 import { useParty } from '~/composables/useParty'
 import { rulesGetMany } from '~/composables/useRules'
 import { pacing, parseDefeated, type DefeatedEnemy, type Pacing } from '~/rules/advancement'
 import { encounterOwner, STASH } from '~/rules/inventory'
-import type { RulesEntity } from '~/types/rules'
+import { lootValue, type TreasureValue } from '~/rules/wealth'
+import type { Item, RulesEntity } from '~/types/rules'
 
 export interface ResolutionRecord {
   loot: OwnerSnapshot
@@ -21,6 +22,8 @@ export interface ResolutionRecord {
   /** XP log entry of the award; null in milestone campaigns. */
   xpAwardId: number | null
   accomplishment: number
+  /** GM value of the loot and coins at resolve time (P5); missing on records from before. */
+  treasure?: TreasureValue
 }
 
 export function parseResolution(raw: string | null | undefined): ResolutionRecord | null {
@@ -42,6 +45,24 @@ export interface ResolveInput {
   awardXp: boolean
 }
 
+async function itemsOf(ids: (string | null)[]): Promise<Map<string, Item>> {
+  const unique = [...new Set(ids.filter((id): id is string => !!id))]
+  const found = unique.length ? await rulesGetMany(unique) : []
+  return new Map(found.filter((e): e is Item => e.kind === 'item').map(e => [e.id, e]))
+}
+
+/** GM value of what an encounter's resolve moved to the stash. */
+export function snapshotValue(loot: OwnerSnapshot, items: Map<string, Item>): TreasureValue {
+  return lootValue(loot.entries.map((r, i) => toEntry({ ...r, id: -1 - i })), items, loot.cp)
+}
+
+/** A record's treasure value; records from before P5 are valued with today's prices. */
+async function resolvedTreasure(record: ResolutionRecord | null): Promise<TreasureValue> {
+  if (!record) return { value: 0, consumables: 0 }
+  if (record.treasure) return record.treasure
+  return snapshotValue(record.loot, await itemsOf(record.loot.entries.map(e => e.item_id)))
+}
+
 async function resolveEncounter(input: ResolveInput) {
   const db = getDb()
   const inv = useInventory()
@@ -49,6 +70,7 @@ async function resolveEncounter(input: ResolveInput) {
   const enc = await db.encounters.get(input.encounterId)
   if (!enc || enc.status === 'resolved') return
   const campaignId = enc.campaign_id
+  const lootItems = await itemsOf((await db.inventory.where('owner').equals(encounterOwner(input.encounterId)).toArray()).map(r => r.item_id))
   let awardId: number | null = null
   await db.transaction('rw', [db.encounters, db.inventory, db.purses, db.characters, db.xpAwards], async () => {
     const loot = await inv.transferAll(campaignId, encounterOwner(input.encounterId), STASH)
@@ -58,7 +80,10 @@ async function resolveEncounter(input: ResolveInput) {
         source: 'encounter', refType: 'encounter', refId: input.encounterId, reason: enc.name,
       })
     }
-    const record: ResolutionRecord = { loot, participants: input.participants, xpAwardId: awardId, accomplishment: input.accomplishment }
+    const record: ResolutionRecord = {
+      loot, participants: input.participants, xpAwardId: awardId, accomplishment: input.accomplishment,
+      treasure: snapshotValue(loot, lootItems),
+    }
     const ts = now()
     await db.encounters.update(input.encounterId, {
       status: 'resolved', resolved_at: ts, xp_total: input.xpTotal, xp_awarded: input.xpAwarded,
@@ -128,5 +153,5 @@ async function loadResolveContext(encounterId: number): Promise<ResolveContext |
 }
 
 export function useResolution() {
-  return { resolveEncounter, reopenEncounter, loadPacing, loadResolveContext }
+  return { resolveEncounter, reopenEncounter, loadPacing, loadResolveContext, resolvedTreasure }
 }

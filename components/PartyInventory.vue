@@ -43,6 +43,9 @@
         <span class="inv-purse-amount">{{ money(purses[selected] ?? 0) }}</span>
         <input v-model="coinInput" class="inv-input inv-coin-input" :placeholder="game === 'sf2e' ? 'e.g. 250 cr' : 'e.g. 12 gp 5 sp'" @keydown.enter="changeCoins(1)" />
         <button class="ghost-btn inv-small" :disabled="coinCp == null" @click="changeCoins(1)">Add</button>
+        <label v-if="!lockOwner" class="inv-check" :title="AWARD_HINT">
+          <input v-model="coinAward" type="checkbox" /> as treasure
+        </label>
         <button class="ghost-btn inv-small" :disabled="coinCp == null" @click="changeCoins(-1)">Remove</button>
         <select v-model="coinTarget" class="inv-input inv-select" :disabled="coinCp == null">
           <option value="">Give to…</option>
@@ -182,6 +185,9 @@
           <label class="inv-check" title="Players don't know what it is yet">
             <input v-model="addUnidentified" type="checkbox" /> unidentified
           </label>
+          <label v-if="!lockOwner" class="inv-check" :title="AWARD_HINT">
+            <input v-model="addAward" type="checkbox" /> as treasure
+          </label>
         </div>
         <div v-if="addQuery.trim()" class="party-add-results">
           <div v-for="r in addResults" :key="r.id" class="party-add-row">
@@ -204,7 +210,10 @@ import { useInventory } from '~/composables/useInventory'
 import { rulesQuery } from '~/composables/useRules'
 import { useFormatters } from '~/composables/useFormatters'
 import type { Character } from '~/composables/useParty'
-import { characterOwner, effective, encumbrance, entryBulk, partyTotals, STASH, toPlayerView, unidentifiedName, type Encumbrance, type InventoryEntry, type OwnerKey } from '~/rules/inventory'
+import { useWealth } from '~/composables/useWealth'
+import { lootValue } from '~/rules/wealth'
+import { SF2E_GRADES } from '~/rules/registry'
+import { characterOwner, effective, encumbrance, entryBulk, parseOwner, partyTotals, STASH, toPlayerView, unidentifiedName, type Encumbrance, type InventoryEntry, type OwnerKey } from '~/rules/inventory'
 import { formatBulk, formatMoney, parseBulk, parseMoney } from '~/rules/format'
 import { isPartyMember } from '~/rules/party'
 import { campaignRules, type CampaignRules, type GameId } from '~/types/game'
@@ -220,7 +229,7 @@ const props = defineProps<{
   lockOwner?: OwnerKey
 }>()
 
-const SF2E_GRADES = ['commercial', 'tactical', 'advanced', 'superior', 'elite', 'ultimate', 'paragon']
+const AWARD_HINT = 'Treasure the party was given: counts toward the wealth readout. Leave it off for corrections, such as a forgotten item from before.'
 
 const inv = useInventory()
 const { entries, purses, items, purseList, load, addEntry, updateEntry, removeEntry, setIdentified, move, adjustPurse, transferCoins, splitPurse } = inv
@@ -345,9 +354,13 @@ const coinCp = computed(() => {
   const cp = parseMoney(coinInput.value, props.game)
   return cp != null && cp > 0 ? cp : null
 })
+const coinAward = ref(false)
 async function changeCoins(sign: 1 | -1) {
   if (coinCp.value == null) return
   await adjustPurse(props.campaignId, selected.value, sign * coinCp.value)
+  if (sign > 0 && coinAward.value && !props.lockOwner) {
+    await wealth.awardTreasure({ campaignId: props.campaignId, value: { value: coinCp.value, consumables: 0 }, label: `Coins: ${money(coinCp.value)}` })
+  }
   coinInput.value = ''
 }
 watch(coinTarget, async to => {
@@ -364,19 +377,34 @@ async function splitStash() {
 }
 
 // ── Baseline ──
+const wealth = useWealth()
 async function setBaseline() {
   if (props.partyLevel == null) return
-  const gmTotal = partyTotals(entries.value, items.value, purseList.value, 'gm').total
-  if (rules.value.baselineAt && !confirm(`Replace the baseline of ${money(rules.value.startingTreasure)} with ${money(gmTotal)}?`)) return
-  const next = { ...rules.value, startingTreasure: gmTotal, startingLevel: props.partyLevel, baselineAt: new Date().toISOString() }
-  await dbApi.campaigns.update(props.campaignId, { rules: next })
-  rules.value = next
+  const owned = entries.value.filter(e => parseOwner(e.owner).kind !== 'encounter')
+  const coins = purseList.value.filter(p => parseOwner(p.owner).kind !== 'encounter').reduce((n, p) => n + p.cp, 0)
+  const { value, consumables } = lootValue(owned, items.value, coins)
+  if (rules.value.baselineAt && !confirm(`Replace the baseline of ${money(rules.value.startingTreasure)} with ${money(value)}? Awards up to now are then part of the baseline.`)) return
+  rules.value = await wealth.updateRules(props.campaignId, {
+    startingTreasure: value, startingConsumables: consumables, startingLevel: props.partyLevel, baselineAt: new Date().toISOString(),
+  })
 }
 
 // ── Add ──
 const addQuery = ref('')
 const addQty = ref(1)
 const addUnidentified = ref(false)
+const addAward = ref(false)
+
+/** "Award or correction?" (§9.6): only ticked adds count as treasure. */
+async function recordAward(itemId: string | null, name: string, quantity: number) {
+  if (!addAward.value || props.lockOwner) return
+  const probe = { id: -1, owner: selected.value, itemId, quantity, nameOverride: itemId ? null : name, priceOverride: null, bulkOverride: null,
+    notes: '', identified: true, playerName: null, playerDescription: null, runes: null, grade: null }
+  const value = lootValue([probe], items.value)
+  const label = `${quantity > 1 ? `${quantity}× ` : ''}${name}`
+  if (value.value > 0) await wealth.awardTreasure({ campaignId: props.campaignId, value, label })
+  else lastSplit.value = `${label} has no price, so it wasn't counted as treasure. Record its value under Wealth › Record award.`
+}
 const addResults = ref<Item[]>([])
 let searchSeq = 0
 watch(addQuery, async q => {
@@ -387,12 +415,14 @@ watch(addQuery, async q => {
 })
 async function addLinked(r: Item) {
   await addEntry({ campaignId: props.campaignId, owner: selected.value, itemId: r.id, quantity: addQty.value || 1, identified: !addUnidentified.value })
+  await recordAward(r.id, r.name, addQty.value || 1)
   addQuery.value = ''
 }
 async function addFree() {
   const name = addQuery.value.trim()
   if (!name) return
   await addEntry({ campaignId: props.campaignId, owner: selected.value, name, quantity: addQty.value || 1, identified: !addUnidentified.value })
+  await recordAward(null, name, addQty.value || 1)
   addQuery.value = ''
 }
 function addTyped() {

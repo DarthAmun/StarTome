@@ -20,6 +20,10 @@
             <NuxtLink :to="`/campaign/${campaignId}/party`">Set up the party</NuxtLink>
           </template>
         </div>
+        <div v-if="pace" class="eb-sub eb-pace" title="Treasure awarded since the last level-up against this level's row of Party Treasure by Level. Add loot on the encounter's Loot dialog.">
+          Treasure this level: <b>{{ money(pace.awarded) }}</b> of {{ money(pace.expected) }}
+          · {{ pace.remaining >= 0 ? `${money(pace.remaining)} left to give` : `${money(-pace.remaining)} ahead` }}
+        </div>
       </div>
     </header>
 
@@ -127,6 +131,9 @@ import { entryXp, MAX_LEVEL_ABOVE, tooStrong, xpLevel, type XpEntry } from '~/ru
 import { MAX_LEVEL, MIN_LEVEL, clampLevel } from '~/rules/party'
 import type { Adjustment } from '~/rules/combat'
 import { campaignGame, type GameId } from '~/types/game'
+import { useWealth } from '~/composables/useWealth'
+import { formatMoney } from '~/rules/format'
+import type { TreasurePace } from '~/rules/wealth'
 import { RARITIES, type Hazard, type Rarity, type RulesEntity } from '~/types/rules'
 
 const route = useRoute()
@@ -136,6 +143,8 @@ const { characters, party, load } = useParty()
 const { state: build, add: addSlot, remove, clear: clearBuild } = useBuildState(campaignId)
 
 const game = ref<GameId>('pf2e')
+const pace = ref<TreasurePace | null>(null)
+const money = (cp: number) => formatMoney({ cp }, game.value)
 const partyLevelUsed = computed(() => build.value.partyLevel ?? party.value.level ?? 1)
 
 function setPartyLevel(level: number) {
@@ -249,6 +258,7 @@ onMounted(async () => {
   const campaign = await dbApi.campaigns.get(campaignId)
   game.value = campaignGame(campaign)
   await load(campaignId)
+  pace.value = await useWealth().loadTreasurePace(campaignId, party.value.level, party.value.size)
   // Start the level filter around the party, as GM Core's −4…+4 range
   if (levelMin.value === '' && levelMax.value === '') {
     levelMin.value = Math.max(-1, partyLevelUsed.value - 4)
@@ -268,6 +278,8 @@ onMounted(async () => {
 .eb-sub b { color: var(--text); }
 .eb-override { color: var(--accent) !important; }
 .eb-link { background: none; border: none; padding: 0; color: var(--text3); font-size: 12px; text-decoration: underline; cursor: pointer; }
+.eb-pace { margin-top: 4px; color: var(--text3); }
+.eb-pace b { color: var(--text); }
 .eb-warn { padding: 1px 6px; border-radius: 4px; font-size: 11px; color: #c9973a; border: 1px solid #c9973a66; white-space: nowrap; }
 .eb-warn--dim { color: var(--text3); border-color: var(--border); }
 

@@ -9,6 +9,12 @@
           </button>
         </div>
         <div class="pv-dialog-content eld-body">
+          <div v-if="pace" class="eld-pace" title="Treasure awarded since the last level-up against this level's row of Party Treasure by Level">
+            This level so far <b>{{ money(pace.awarded) }}</b> of {{ money(pace.expected) }}.
+            This loot <b>{{ money(loot.value) }}</b>
+            → {{ Math.round(((pace.awarded + loot.value) / Math.max(1, pace.expected)) * 100) }}% after resolving
+            <span v-if="pace.awarded + loot.value > pace.expected" class="eld-dim">({{ money(pace.awarded + loot.value - pace.expected) }} over the level's treasure)</span>
+          </div>
           <PartyInventory :campaign-id="campaignId" :game="game" :characters="characters" :party-level="party.level" :lock-owner="owner" />
 
           <!-- Enemies' gear -->
@@ -35,6 +41,9 @@ import { useResolution } from '~/composables/useResolution'
 import { tokenSides } from '~/rules/encounter'
 import { encounterOwner } from '~/rules/inventory'
 import { partyMembers } from '~/rules/party'
+import { useWealth } from '~/composables/useWealth'
+import { formatMoney } from '~/rules/format'
+import { lootValue, type TreasurePace } from '~/rules/wealth'
 import type { GameId } from '~/types/game'
 import type { Creature } from '~/types/rules'
 
@@ -42,14 +51,20 @@ const props = defineProps<{ encounterId: number; campaignId: number; game: GameI
 const emit = defineEmits<{ close: [] }>()
 
 const { characters, party, load, loadedCampaign } = useParty()
-const { addEntry } = useInventory()
+const inv = useInventory()
+const { addEntry } = inv
 const owner = computed(() => encounterOwner(props.encounterId))
+
+const pace = ref<TreasurePace | null>(null)
+const money = (cp: number) => formatMoney({ cp }, props.game)
+const loot = computed(() => lootValue(inv.entries.value.filter(e => e.owner === owner.value), inv.items.value, inv.purses.value[owner.value] ?? 0))
 
 interface GearRow { key: string; itemId: string | null; name: string; quantity: number; from: string[] }
 const gear = ref<GearRow[]>([])
 
 onMounted(async () => {
   if (loadedCampaign.value !== props.campaignId) await load(props.campaignId)
+  pace.value = await useWealth().loadTreasurePace(props.campaignId, party.value.level, party.value.size)
   const ctx = await useResolution().loadResolveContext(props.encounterId)
   if (!ctx) return
   const partyNpcIds = new Set(partyMembers(characters.value).map(c => c.npcEntityId).filter((id): id is number => id !== null))
@@ -80,6 +95,8 @@ async function addGear(g: GearRow) {
 <style scoped>
 .eld { width: min(860px, 94vw); max-height: 90vh; display: flex; flex-direction: column; }
 .eld-body { overflow-y: auto; }
+.eld-pace { font-size: 13px; color: var(--text2); padding: 8px 10px; margin-bottom: 12px; border-left: 2px solid var(--border-hi); }
+.eld-pace b { color: var(--text); }
 .eld-gear { border-top: 1px solid var(--border); padding-top: 12px; }
 .eld-title { font-family: var(--fh, serif); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); margin-bottom: 6px; }
 .eld-row { display: flex; align-items: center; gap: 10px; padding: 4px 6px; border-radius: 6px; }

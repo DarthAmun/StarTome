@@ -11,7 +11,7 @@ import { newRulesEntity, newRulesId } from '~/rules/factory'
 import { isOverlayPath, setPath, withLocalEdits } from '~/rules/edits'
 import { dataUrlToBlob, storeImage } from '~/rules/images'
 import type { GameId } from '~/types/game'
-import { isRulesKind, RULES_KIND_CONFIG, RULES_KINDS, type Rarity, type RulesEntity, type RulesKind, type RulesOrigin } from '~/types/rules'
+import { isRulesKind, RULES_KIND_CONFIG, RULES_KINDS, type Item, type Rarity, type RulesEntity, type RulesKind, type RulesOrigin } from '~/types/rules'
 
 export interface RulesQuery {
   kind: RulesKind
@@ -78,6 +78,26 @@ export async function rulesQuery(q: RulesQuery): Promise<RulesPage> {
   const limit = q.limit ?? 100
   const items = (await coll.offset(offset).limit(limit).toArray()).map(withLocalEdits)
   return { items, total }
+}
+
+/**
+ * Median price (cp) of a consumable per item level, for the wealth estimate
+ * with "count consumables" off (FEATURES_PLAN.md §9.1).
+ */
+export async function consumablePriceMedians(game: GameId): Promise<Record<number, number>> {
+  const keep = matcher({ kind: 'item', games: [game] })
+  const byLevel: Record<number, number[]> = {}
+  await getDb().rules.where('kind').equals('item').each(raw => {
+    if (!keep(raw)) return
+    const e = withLocalEdits(raw) as Item
+    if (e.category !== 'consumable' || !e.price?.cp) return
+    ;(byLevel[e.level] ??= []).push(Math.round(e.price.cp / Math.max(1, e.priceFor ?? 1)))
+  })
+  return Object.fromEntries(Object.entries(byLevel).map(([l, prices]) => {
+    const sorted = prices.sort((a, b) => a - b)
+    const mid = sorted.length >> 1
+    return [Number(l), sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2)]
+  }))
 }
 
 /**

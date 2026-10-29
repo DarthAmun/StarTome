@@ -11,7 +11,7 @@ import { rulesGetMany } from '~/composables/useRules'
 import { planMove, sameStack, splitCoins, STASH, type InventoryEntry, type OwnerKey } from '~/rules/inventory'
 import type { BulkTenths, Item, Runes } from '~/types/rules'
 
-function toEntry(r: DbInventory): InventoryEntry {
+export function toEntry(r: DbInventory): InventoryEntry {
   return {
     id: r.id!, owner: r.owner, itemId: r.item_id ?? null, quantity: r.quantity,
     nameOverride: r.name_override ?? null, priceOverride: r.price_override ?? null, bulkOverride: r.bulk_override ?? null,

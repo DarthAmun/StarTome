@@ -269,6 +269,14 @@ P2 and P3 don't depend on each other and could swap if the party tab matters mor
   - XP campaigns: XP per character on the roster, **Award XP** (party page; also offered when a quest is completed), the XP log with undo for accomplishments, and a level-up prompt for whoever reaches 1,000. A level-up there costs 1,000 XP, and its undo gives it back.
   - Milestone campaigns: resolving records the XP without awarding it; the party page shows "since the last level-up: N encounters, X / 1,000 XP".
   - Not in P4: the treasure-pace hint on the loot tab (P5, with the wealth readout), and "award or correction?" when adding after the baseline (P5).
+- **P5 done 2026-10-29 (v0.12.0)**:
+  - `rules/wealth.ts`: loot value (consumables split off), expected treasure per level adjusted for party size, the running total from level 1, "matches level X, Y% through", the wealth readout, the treasure pace and the per-game gear check. `GAME_RULES[game].gear` holds the schedule: PF2e fundamental runes (potency 2/10/16, striking 4/12/19, armor potency 5/11/18, resilient 8/14/20), SF2e grades at the same levels (`verified: false`).
+  - Treasure awarded = the baseline + resolved encounter loot + manual awards after it. Each resolve stores the loot's GM value in its resolution record (`treasure`); records from P4 are valued at today's prices. New `treasureAwards` log (Dexie v8) for awards outside encounters, in the backup, campaign export and import. The baseline also stores its consumable share (`CampaignRules.startingConsumables`).
+  - "Award or correction?" is an **as treasure** checkbox (default off = correction) when adding items or coins outside an encounter, plus **Record award** for a value without an item (e.g. an unpriced free-text item).
+  - Party page **Wealth** section: the % of the expected running total (progress through the level from XP, or the milestone pacing), the matched level, the baseline/encounters/awards breakdown, what the party owns now, this level's pace, **Count consumables** and **ABP** toggles, the gear check per party member, the award log with undo.
+  - "Count consumables" off leaves consumables out of what was awarded and subtracts the rows' consumable counts priced at the compendium's median consumable price per level, labelled as an estimate.
+  - Pace hint ("treasure this level: X of Y") in the encounter builder header and the loot dialog, which also shows where this loot takes the level.
+  - Still open: GM Core's ABP-reduced treasure values (ABP only skips the rune check for now; the readout says so), the PF2e consumable counts and the SF2e grade levels need checking against the books.
 
 ## 9. Open questions
 

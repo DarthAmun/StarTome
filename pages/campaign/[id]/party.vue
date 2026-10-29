@@ -107,6 +107,8 @@
 
     <PartyInventory :campaign-id="campaignId" :game="game" :characters="characters" :party-level="party.level" />
 
+    <PartyWealth :campaign-id="campaignId" :game="game" :characters="characters" :party="party" />
+
     <!-- ── XP awards ── -->
     <section v-if="xpAwards.length" class="party-section">
       <div class="party-section-title">XP awards</div>

@@ -192,6 +192,17 @@ export interface DbXpAward {
   undone_at?: string | null
 }
 
+/** A treasure award outside an encounter (FEATURES_PLAN.md P5): an item or coins given as treasure, not a correction. */
+export interface DbTreasureAward {
+  id?: number
+  campaign_id: number
+  at: string
+  value: number                    // cp, GM value at award time
+  consumables: number              // cp of that value in consumables
+  label: string
+  undone_at?: string | null
+}
+
 /** One inventory entry (FEATURES_PLAN.md P3): an item stack held by a character, the stash or an encounter. */
 export interface DbInventory {
   id?: number
@@ -317,6 +328,7 @@ class StarTomeDb extends Dexie {
   inventory!:         Table<DbInventory>
   purses!:            Table<DbPurse>
   xpAwards!:          Table<DbXpAward>
+  treasureAwards!:    Table<DbTreasureAward>
 
   constructor() {
     super(DB_NAME)
@@ -393,6 +405,11 @@ class StarTomeDb extends Dexie {
     // v7: XP awards (FEATURES_PLAN.md P4). Encounter resolution lives on `encounters`.
     this.version(7).stores({
       xpAwards:           '++id, campaign_id, at',
+    })
+    // v8: treasure awards outside encounters (FEATURES_PLAN.md P5). Encounter loot
+    // is valued in each encounter's resolution record.
+    this.version(8).stores({
+      treasureAwards:     '++id, campaign_id, at',
     })
   }
 }
@@ -495,6 +512,7 @@ export const dbApi = {
       await db.characters.where('campaign_id').equals(id).delete()
       await db.levelUps.where('campaign_id').equals(id).delete()
       await db.xpAwards.where('campaign_id').equals(id).delete()
+      await db.treasureAwards.where('campaign_id').equals(id).delete()
       await db.inventory.where('campaign_id').equals(id).delete()
       await db.purses.where('campaign_id').equals(id).delete()
       await db.campaigns.delete(id)

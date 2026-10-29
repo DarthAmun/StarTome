@@ -29,6 +29,22 @@ export interface TreasureRow {
   consumables: Record<number, number>
 }
 
+/**
+ * Gear expected by level (FEATURES_PLAN.md §3.3). Each list holds the level at
+ * which the n-th step is expected (index 0 = step 1).
+ * PF2e: fundamental runes (potency +1…+3; striking/resilient base, greater, major).
+ * SF2e: weapon and armor grades after commercial (tactical … paragon).
+ */
+export interface GearSchedule {
+  kind: 'runes' | 'grades'
+  weapon: { potency: number[]; fundamental: number[] }
+  armor: { potency: number[]; fundamental: number[] }
+  grades: { weapon: number[]; armor: number[] }
+  verified: boolean
+}
+
+export const SF2E_GRADES = ['commercial', 'tactical', 'advanced', 'superior', 'elite', 'ultimate', 'paragon'] as const
+
 export interface GameRules {
   currency: { denominations: Denomination[]; display: 'coins' | 'credits' }
   encounter: EncounterBudget
@@ -41,6 +57,7 @@ export interface GameRules {
   treasure: TreasureRow[]
   /** False until the treasure item counts are checked against this game's book. */
   treasureCountsVerified: boolean
+  gear: GearSchedule
   verified: boolean
 }
 
@@ -62,6 +79,24 @@ const TREASURE_EXTRA_PC_GP = [10, 18, 30, 50, 80, 125, 180, 250, 350, 500, 700, 
 const TREASURE_TOTAL_CR = [1750, 3000, 5000, 8500, 13500, 20000, 29000, 40000, 57000, 80000, 115000, 165000, 250000, 365000, 545000, 825000, 1280000, 2080000, 3550000, 4900000]
 const TREASURE_CURRENCY_CR = [400, 700, 1200, 2000, 3200, 5000, 7200, 10000, 14000, 20000, 28000, 40000, 60000, 90000, 130000, 200000, 300000, 480000, 800000, 1400000]
 const TREASURE_EXTRA_PC_CR = [100, 180, 300, 500, 800, 1250, 1800, 2500, 3500, 5000, 7000, 10000, 15000, 22500, 32500, 50000, 75000, 120000, 200000, 350000]
+
+// PF2e: the fundamental-rune levels of GM Core's item tables, which ABP mirrors
+// (attack potency 2/10/16, devastating attacks 4/12/19, defense 5/11/18, saves 8/14/20).
+const PF2E_GEAR: GearSchedule = {
+  kind: 'runes',
+  weapon: { potency: [2, 10, 16], fundamental: [4, 12, 19] },
+  armor: { potency: [5, 11, 18], fundamental: [8, 14, 20] },
+  grades: { weapon: [], armor: [] },
+  verified: true,
+}
+// SF2e grades follow the same levels (tactical = +1, advanced = +1 striking, …); not yet checked in the book
+const SF2E_GEAR: GearSchedule = {
+  kind: 'grades',
+  weapon: { potency: [], fundamental: [] },
+  armor: { potency: [], fundamental: [] },
+  grades: { weapon: [2, 4, 10, 12, 16, 19], armor: [5, 8, 11, 14, 18, 20] },
+  verified: false,
+}
 
 /** Item counts per row: level L gives permanent items of L+1 and L, consumables of L+1, L and L−1. */
 function treasureCounts(level: number): Pick<TreasureRow, 'permanent' | 'consumables'> {
@@ -100,6 +135,7 @@ export const GAME_RULES: Record<GameId, GameRules> = {
     treasure: treasureTable(TREASURE_TOTAL_GP, TREASURE_CURRENCY_GP, TREASURE_EXTRA_PC_GP, 100),
     // Item counts were taken from the SF2e table; same layout, not yet checked in PF2e GM Core
     treasureCountsVerified: false,
+    gear: PF2E_GEAR,
     verified: true,
   },
   sf2e: {
@@ -111,6 +147,7 @@ export const GAME_RULES: Record<GameId, GameRules> = {
     xpPerLevel: 1000,
     treasure: treasureTable(TREASURE_TOTAL_CR, TREASURE_CURRENCY_CR, TREASURE_EXTRA_PC_CR, 10),
     treasureCountsVerified: true,
+    gear: SF2E_GEAR,
     verified: false,
   },
 }
