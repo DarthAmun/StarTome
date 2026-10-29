@@ -101,4 +101,40 @@ describe('encounter resolution', () => {
     expect(await useResolution().loadPacing(id)).toMatchObject({ xp: 0, encounters: 0 })
     expect(party.characters.value.every(c => c.xp === 0)).toBe(true)
   })
+
+  it('awards XP once when resolve is triggered twice at the same time', async () => {
+    const { id, kib, encId } = await setup('xp')
+    await Promise.all([
+      useResolution().resolveEncounter(resolveInput(encId, [kib], true)),
+      useResolution().resolveEncounter(resolveInput(encId, [kib], true)),
+    ])
+    expect(await getDb().xpAwards.where('campaign_id').equals(id).count()).toBe(1)
+    expect((await getDb().characters.get(kib))!.xp).toBe(110)
+  })
+
+  it('re-opens loot with a filled container, contents still inside it', async () => {
+    const { id, kib, encId, inv } = await setup('milestone')
+    const db = getDb()
+    await db.rules.put({
+      id: 'local:backpack', kind: 'item', game: 'pf2e', origin: 'local', name: 'Backpack', sortName: 'backpack', level: 0,
+      rarity: 'common', traits: [], description: '', category: 'container', bulk: 1, price: { cp: 10 },
+      container: { capacity: 40, bulkReduction: 20 }, updatedAt: '',
+    } as any)
+    const pack = await inv.addEntry({ campaignId: id, owner: encounterOwner(encId), itemId: 'local:backpack' })
+    const rope = await inv.addEntry({ campaignId: id, owner: encounterOwner(encId), name: 'Rope', quantity: 2 })
+    await inv.store(rope, pack)
+
+    await useResolution().resolveEncounter(resolveInput(encId, [kib], false))
+    expect((await db.inventory.get(rope))!.container_id).toBe(pack)
+    const short = await useResolution().reopenEncounter(encId)
+    expect(short.names).toEqual([])
+
+    const back = await db.inventory.where('owner').equals(encounterOwner(encId)).toArray()
+    const packRow = back.find(r => r.item_id === 'local:backpack')!
+    const ropeRow = back.find(r => r.name_override === 'Rope')!
+    expect(ropeRow.container_id).toBe(packRow.id)
+    expect(ropeRow.quantity).toBe(2)
+    // The stash keeps only what was there before
+    expect((await db.inventory.where('owner').equals(STASH).toArray()).map(r => [r.name_override, r.quantity])).toEqual([['Healing potion', 1]])
+  })
 })

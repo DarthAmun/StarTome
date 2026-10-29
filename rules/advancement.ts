@@ -8,6 +8,7 @@ import { rateEncounter, threatBudgets, DEFAULT_PARTY_SIZE } from '~/rules/encoun
 import { isPartyMember, MAX_LEVEL, type PartyCharacter } from '~/rules/party'
 import type { Adjustment } from '~/rules/combat'
 import type { GameId } from '~/types/game'
+import { parseJson } from '~/utils/json'
 
 export const XP_PER_LEVEL = 1000
 
@@ -47,13 +48,8 @@ export interface DefeatedEnemy {
 }
 
 export function parseDefeated(raw: string | null | undefined): DefeatedEnemy[] {
-  if (!raw) return []
-  try {
-    const list = JSON.parse(raw)
-    return Array.isArray(list) ? list.filter(d => d && typeof d.rulesId === 'string' && typeof d.level === 'number') : []
-  } catch {
-    return []
-  }
+  const list = parseJson<unknown>(raw, [])
+  return Array.isArray(list) ? list.filter(d => d && typeof d.rulesId === 'string' && typeof d.level === 'number') : []
 }
 
 // ── Participants ──────────────────────────────────────────────────────────

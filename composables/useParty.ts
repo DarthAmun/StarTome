@@ -11,7 +11,7 @@
  * level-up costs 1,000 XP, and reaching it opens the level-up prompt.
  */
 import { computed, ref } from 'vue'
-import { dbApi, getDb, now, parseRecordData, type DbCharacter, type DbLevelUp, type DbXpAward } from '~/composables/useDb'
+import { dbApi, getDb, now, parseJsonObject, type DbCharacter, type DbLevelUp, type DbXpAward } from '~/composables/useDb'
 import { useEntities } from '~/composables/useEntities'
 import { useInventory } from '~/composables/useInventory'
 import { characterOwner } from '~/rules/inventory'
@@ -19,6 +19,8 @@ import { readyToLevel, XP_PER_LEVEL } from '~/rules/advancement'
 import { clampLevel, defaultLevelUpSelection, parseLevel, partyLevel, planLevelUp, type CharacterRole, type LevelChange, type PartyCharacter } from '~/rules/party'
 import type { NpcAttributes } from '~/types/entities'
 import { campaignRules } from '~/types/game'
+import { parseJson } from '~/utils/json'
+import { onDomainEvent } from '~/composables/useDomainEvents'
 
 export interface Character extends PartyCharacter {
   campaignId: number
@@ -59,8 +61,7 @@ export interface XpAwardEntry {
 }
 
 function toXpAward(r: DbXpAward): XpAwardEntry {
-  let characterIds: number[] = []
-  try { characterIds = JSON.parse(r.character_ids) } catch {}
+  const characterIds = parseJson<number[]>(r.character_ids, [])
   return {
     id: r.id!, at: r.at, source: r.source, refType: r.ref_type ?? null, refId: r.ref_id ?? null,
     amount: r.amount, characterIds, reason: r.reason ?? '', undoneAt: r.undone_at ?? null,
@@ -68,8 +69,7 @@ function toXpAward(r: DbXpAward): XpAwardEntry {
 }
 
 function toLevelUp(r: DbLevelUp): LevelUpEntry {
-  let changes: LevelChange[] = []
-  try { changes = JSON.parse(r.changes) } catch {}
+  const changes = parseJson<LevelChange[]>(r.changes, [])
   return { id: r.id!, at: r.at, trigger: r.trigger, refId: r.ref_id ?? null, changes, undoneAt: r.undone_at ?? null }
 }
 
@@ -96,7 +96,7 @@ const xpPrompt = ref<XpPrompt | null>(null)
 async function npcAttributes(npcId: number): Promise<Record<string, any>> {
   const cached = useEntities().entities.find(e => e.id === npcId)
   if (cached) return { ...(cached.attributes as Record<string, any>) }
-  return parseRecordData((await getDb().entities.get(npcId))?.attributes)
+  return parseJsonObject((await getDb().entities.get(npcId))?.attributes)
 }
 
 async function patchNpc(npcId: number | null, patch: Partial<NpcAttributes>) {
@@ -109,24 +109,29 @@ async function patchNpc(npcId: number | null, patch: Partial<NpcAttributes>) {
 /** Creates characters for PC-flagged NPCs that don't have one yet. */
 async function adoptFlaggedNpcs(campaignId: number) {
   const db = getDb()
-  const [npcs, existing] = await Promise.all([
-    db.entities.where('campaign_id').equals(campaignId).filter(e => e.type === 'npc').toArray(),
-    db.characters.where('campaign_id').equals(campaignId).toArray(),
-  ])
-  const linked = new Set(existing.map(c => c.npc_entity_id).filter((id): id is number => id != null))
-  const ts = now()
-  const fresh = npcs
-    .filter(n => !linked.has(n.id!) && parseRecordData(n.attributes).isPlayerCharacter)
-    .map((n): DbCharacter => ({
-      campaign_id: campaignId, name: n.name, role: 'pc',
-      level: parseLevel(parseRecordData(n.attributes).level) ?? 1, xp: 0, treat_as_pc: 1, str_mod: null,
-      npc_entity_id: n.id!, created_at: ts, updated_at: ts,
-    }))
-  if (fresh.length) await db.characters.bulkAdd(fresh)
+  // Read and write in one transaction: concurrent loads (party page, encounter
+  // page, resolve dialog) would otherwise adopt the same NPC twice (BUG-10)
+  await db.transaction('rw', db.entities, db.characters, async () => {
+    const [npcs, existing] = await Promise.all([
+      db.entities.where('[campaign_id+type]').equals([campaignId, 'npc']).toArray(),
+      db.characters.where('campaign_id').equals(campaignId).toArray(),
+    ])
+    const linked = new Set(existing.map(c => c.npc_entity_id).filter((id): id is number => id != null))
+    const ts = now()
+    const fresh = npcs
+      .filter(n => !linked.has(n.id!) && parseJsonObject(n.attributes).isPlayerCharacter)
+      .map((n): DbCharacter => ({
+        campaign_id: campaignId, name: n.name, role: 'pc',
+        level: parseLevel(parseJsonObject(n.attributes).level) ?? 1, xp: 0, treat_as_pc: 1, str_mod: null,
+        npc_entity_id: n.id!, created_at: ts, updated_at: ts,
+      }))
+    if (fresh.length) await db.characters.bulkAdd(fresh)
+  })
 }
 
-async function load(campaignId: number) {
-  await adoptFlaggedNpcs(campaignId)
+/** `adopt`: create characters for newly PC-flagged NPCs; reloads after our own writes skip it. */
+async function load(campaignId: number, { adopt = true }: { adopt?: boolean } = {}) {
+  if (adopt) await adoptFlaggedNpcs(campaignId)
   const db = getDb()
   const [rows, ups, awards] = await Promise.all([
     db.characters.where('campaign_id').equals(campaignId).toArray(),
@@ -140,7 +145,7 @@ async function load(campaignId: number) {
 }
 
 async function reloadIfLoaded(campaignId: number) {
-  if (loadedCampaign.value === campaignId) await load(campaignId)
+  if (loadedCampaign.value === campaignId) await load(campaignId, { adopt: false })
 }
 
 async function addCharacter(input: { campaignId: number; name: string; role: CharacterRole; npcEntityId?: number | null; level?: number }) {
@@ -310,6 +315,13 @@ async function undoXpAward(awardId: number) {
   await writeXpUndo(awardId)
   await reloadIfLoaded(row.campaign_id)
 }
+
+// A completed quest: a milestone campaign may level up, an XP campaign may award quest XP
+onDomainEvent('questCompleted', async ({ campaignId, questId, name, milestone }) => {
+  const advancement = campaignRules(await dbApi.campaigns.get(campaignId)).advancement
+  if (advancement === 'milestone' && milestone) requestLevelUp({ campaignId, trigger: 'quest', refId: questId, reason: `Milestone reached: ${name}` })
+  if (advancement === 'xp') requestXpAward({ campaignId, refType: 'quest', refId: questId, reason: `Quest: ${name}` })
+})
 
 function requestLevelUp(p: LevelUpPrompt) { prompt.value = p }
 function dismissPrompt() { prompt.value = null }

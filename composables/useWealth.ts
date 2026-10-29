@@ -9,8 +9,8 @@
  */
 import { ref } from 'vue'
 import { getDb, now, type DbTreasureAward } from '~/composables/useDb'
-import { consumablePriceMedians } from '~/composables/useRules'
-import { parseResolution, useResolution } from '~/composables/useResolution'
+import { consumablePriceMedians, useRulesRevision } from '~/composables/useRules'
+import { lastLevelUpAt, parseResolution, resolvedEncounters, useResolution } from '~/composables/useResolution'
 import { pacing } from '~/rules/advancement'
 import { treasurePace, wealthReadout, xpProgress, type ConsumablePrices, type TreasurePace, type TreasureValue, type WealthReadout } from '~/rules/wealth'
 import { campaignGame, campaignRules, type CampaignRules, type GameId } from '~/types/game'
@@ -71,7 +71,7 @@ async function awardHistory(campaignId: number): Promise<DatedValue[]> {
   const db = getDb()
   const { resolvedTreasure } = useResolution()
   const [encounters, manual] = await Promise.all([
-    db.encounters.where('campaign_id').equals(campaignId).filter(e => e.status === 'resolved' && !!e.resolved_at).toArray(),
+    resolvedEncounters(campaignId),
     db.treasureAwards.where('campaign_id').equals(campaignId).filter(a => !a.undone_at).toArray(),
   ])
   const fromEncounters = await Promise.all(encounters.map(async e => ({
@@ -80,17 +80,16 @@ async function awardHistory(campaignId: number): Promise<DatedValue[]> {
   return [...fromEncounters, ...manual.map(a => ({ at: a.at, source: 'manual' as const, value: a.value, consumables: a.consumables }))]
 }
 
-async function lastLevelUp(campaignId: number): Promise<string | null> {
-  const ups = await getDb().levelUps.where('campaign_id').equals(campaignId).filter(l => !l.undone_at).toArray()
-  return ups.reduce<string | null>((max, l) => (!max || l.at > max ? l.at : max), null)
-}
-
 const sumValue = (list: TreasureValue[]) => list.reduce((n, a) => n + a.value, 0)
 
 // ── Readouts ──────────────────────────────────────────────────────────────
 
+// Recomputed after any compendium change (a sync can change prices, BUG-19)
 const priceCache = new Map<GameId, ConsumablePrices>()
+let priceRevision = -1
 async function prices(game: GameId): Promise<ConsumablePrices> {
+  const rev = useRulesRevision().value
+  if (rev !== priceRevision) { priceCache.clear(); priceRevision = rev }
   if (!priceCache.has(game)) priceCache.set(game, await consumablePriceMedians(game))
   return priceCache.get(game)!
 }
@@ -116,7 +115,7 @@ export interface WealthState {
 /** Treasure since the last level-up against the current level's row. */
 async function loadTreasurePace(campaignId: number, level: number | null, size: number): Promise<TreasurePace | null> {
   if (level == null) return null
-  const since = await lastLevelUp(campaignId)
+  const since = await lastLevelUpAt(campaignId)
   const counted = (await awardHistory(campaignId)).filter(a => !since || a.at > since)
   const campaign = await getDb().campaigns.get(campaignId)
   return treasurePace(campaignGame(campaign), level, size, sumValue(counted))
@@ -127,7 +126,7 @@ async function loadWealth(campaignId: number, party: PartyShape): Promise<Wealth
   const campaign = await db.campaigns.get(campaignId)
   const game = campaignGame(campaign)
   const rules = campaignRules(campaign)
-  const [history, since] = await Promise.all([awardHistory(campaignId), lastLevelUp(campaignId)])
+  const [history, since] = await Promise.all([awardHistory(campaignId), lastLevelUpAt(campaignId)])
   const afterBaseline = history.filter(a => !rules.baselineAt || a.at > rules.baselineAt)
   const sinceBaseline = {
     encounters: sumValue(afterBaseline.filter(a => a.source === 'encounter')),
@@ -139,7 +138,7 @@ async function loadWealth(campaignId: number, party: PartyShape): Promise<Wealth
   let progress: number
   if (rules.advancement === 'xp') progress = xpProgress(party.xps)
   else {
-    const resolved = await db.encounters.where('campaign_id').equals(campaignId).filter(e => e.status === 'resolved' && !!e.resolved_at).toArray()
+    const resolved = await resolvedEncounters(campaignId)
     progress = Math.min(0.99, pacing(resolved.map(e => ({ resolvedAt: e.resolved_at!, xpAwarded: e.xp_awarded ?? 0 })), since).fraction)
   }
   const readout = wealthReadout({

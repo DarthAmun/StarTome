@@ -15,6 +15,7 @@ import { pacing, parseDefeated, type DefeatedEnemy, type Pacing } from '~/rules/
 import { encounterOwner, STASH } from '~/rules/inventory'
 import { lootValue, type TreasureValue } from '~/rules/wealth'
 import type { Item, RulesEntity } from '~/types/rules'
+import { parseJson } from '~/utils/json'
 
 export interface ResolutionRecord {
   loot: OwnerSnapshot
@@ -27,8 +28,7 @@ export interface ResolutionRecord {
 }
 
 export function parseResolution(raw: string | null | undefined): ResolutionRecord | null {
-  if (!raw) return null
-  try { return JSON.parse(raw) as ResolutionRecord } catch { return null }
+  return parseJson<ResolutionRecord | null>(raw, null)
 }
 
 export interface ResolveInput {
@@ -72,7 +72,11 @@ async function resolveEncounter(input: ResolveInput) {
   const campaignId = enc.campaign_id
   const lootItems = await itemsOf((await db.inventory.where('owner').equals(encounterOwner(input.encounterId)).toArray()).map(r => r.item_id))
   let awardId: number | null = null
+  let resolved = false
   await db.transaction('rw', [db.encounters, db.inventory, db.purses, db.characters, db.xpAwards], async () => {
+    // Checked again inside the transaction: a second trigger mustn't award the XP twice (BUG-13)
+    if ((await db.encounters.get(input.encounterId))?.status === 'resolved') return
+    resolved = true
     const loot = await inv.transferAll(campaignId, encounterOwner(input.encounterId), STASH)
     if (input.awardXp) {
       awardId = await party.writeXpAward({
@@ -90,6 +94,7 @@ async function resolveEncounter(input: ResolveInput) {
       party_level_at_resolve: input.partyLevel, resolution: JSON.stringify(record), updated_at: ts,
     })
   })
+  if (!resolved) return
   await Promise.all([inv.reload(campaignId), party.reload(campaignId)])
   if (awardId != null) await party.promptReadyToLevel(campaignId, 'encounter', input.encounterId)
 }
@@ -108,6 +113,7 @@ async function reopenEncounter(encounterId: number): Promise<RestoreShortfall> {
   if (!enc || enc.status !== 'resolved') return short
   const record = parseResolution(enc.resolution)
   await db.transaction('rw', [db.encounters, db.inventory, db.purses, db.characters, db.xpAwards], async () => {
+    if ((await db.encounters.get(encounterId))?.status !== 'resolved') return
     if (record) {
       Object.assign(short, await inv.restoreSnapshot(enc.campaign_id, record.loot, encounterOwner(encounterId), STASH))
       if (record.xpAwardId != null) await party.writeXpUndo(record.xpAwardId)
@@ -121,14 +127,20 @@ async function reopenEncounter(encounterId: number): Promise<RestoreShortfall> {
   return short
 }
 
+/** Resolved encounters of a campaign, via the [campaign_id+status] index. */
+export function resolvedEncounters(campaignId: number): Promise<DbEncounter[]> {
+  return getDb().encounters.where('[campaign_id+status]').equals([campaignId, 'resolved']).filter(e => !!e.resolved_at).toArray()
+}
+
+/** When the party last levelled up (ignoring undone level-ups), or null. */
+export async function lastLevelUpAt(campaignId: number): Promise<string | null> {
+  const ups = await getDb().levelUps.where('campaign_id').equals(campaignId).filter(l => !l.undone_at).toArray()
+  return ups.reduce<string | null>((max, l) => (!max || l.at > max ? l.at : max), null)
+}
+
 /** Milestone pacing: XP of the encounters resolved since the last level-up that wasn't undone. */
 async function loadPacing(campaignId: number): Promise<Pacing> {
-  const db = getDb()
-  const [encounters, ups] = await Promise.all([
-    db.encounters.where('campaign_id').equals(campaignId).filter(e => e.status === 'resolved' && !!e.resolved_at).toArray(),
-    db.levelUps.where('campaign_id').equals(campaignId).filter(l => !l.undone_at).toArray(),
-  ])
-  const since = ups.reduce<string | null>((max, l) => (!max || l.at > max ? l.at : max), null)
+  const [encounters, since] = await Promise.all([resolvedEncounters(campaignId), lastLevelUpAt(campaignId)])
   return pacing(encounters.map(e => ({ resolvedAt: e.resolved_at!, xpAwarded: e.xp_awarded ?? 0 })), since)
 }
 

@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { getDb, parseRecordData } from '~/composables/useDb'
+import { getDb, parseJsonObject } from '~/composables/useDb'
 import { useEntities } from '~/composables/useEntities'
 import { useParty } from '~/composables/useParty'
 
@@ -32,6 +32,13 @@ describe('party repository', () => {
     expect(party.party.value).toMatchObject({ level: 5, size: 2, mixed: false })
   })
 
+  it('adopts each PC NPC once even when loads overlap', async () => {
+    const c = await campaign('milestone')
+    const party = useParty()
+    await Promise.all([party.load(c.id), party.load(c.id), party.load(c.id)])
+    expect(await getDb().characters.count()).toBe(2)
+  })
+
   it('adds a companion who counts only when treated as PC', async () => {
     const c = await campaign('milestone')
     const party = useParty()
@@ -51,7 +58,7 @@ describe('party repository', () => {
     const [kib, lira] = party.characters.value
     const logId = await party.levelUp(c.id, [kib.id], 'manual')
     expect(party.characters.value.map(x => x.level)).toEqual([6, 5])
-    expect(parseRecordData((await getDb().entities.get(c.kib))!.attributes).level).toBe('6')
+    expect(parseJsonObject((await getDb().entities.get(c.kib))!.attributes).level).toBe('6')
     expect(party.levelUps.value[0].changes).toEqual([{ characterId: kib.id, from: 5, to: 6 }])
 
     await party.undoLevelUp(logId!)
