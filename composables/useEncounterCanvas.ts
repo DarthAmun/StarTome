@@ -5,7 +5,6 @@ import type { DbEncounterWall } from "./useDb";
 import { useFovCompute, type Point } from "./useFovCompute";
 import { AlphaFilter, Container } from "pixi.js";
 import { visibleConditions, getConditionColorHex, hpColorHex, hexColorToNumber, healthState } from "./useConditions";
-import { channelName } from "../utils/appNamespace";
 
 export type ShapeType = "circle" | "square" | "cone";
 
@@ -713,16 +712,6 @@ export function useEncounterCanvas(options: CanvasOptions) {
     }
   }
 
-  function broadcastFov(polygons: Point[][], outlinePolygons: Point[][] = []) {
-    try {
-      const ch = new BroadcastChannel(channelName("player"));
-      ch.postMessage({ type: "fov-update", polygons, outlinePolygons });
-      ch.close();
-    } catch {
-      /* BroadcastChannel unavailable */
-    }
-  }
-
   function getMapSize(): { w: number; h: number } | undefined {
     const enc = store.current;
     if (!enc || !mapSprite?.texture) return undefined;
@@ -739,7 +728,6 @@ export function useEncounterCanvas(options: CanvasOptions) {
     if (!enc.fovEnabled) {
       renderFovOverlay([], options.isDmMode);
       renderFovOutlines([]);
-      if (options.isDmMode) broadcastFov([]);
       return;
     }
 
@@ -767,14 +755,6 @@ export function useEncounterCanvas(options: CanvasOptions) {
       renderFovOverlay([], options.isDmMode);
       if (options.isDmMode) {
         renderFovOutlines(activeOutline());
-        const playerTokens = enc.tokens
-          .filter((t: EncounterToken) => t.isPlayerToken)
-          .map(toFovInput);
-        const groupPolygons = playerTokens.length
-          ? computeGroupFov(playerTokens, segments, mapSize)
-          : [];
-        const playerOutline = activeToken?.isPlayerToken ? activeOutline() : [];
-        broadcastFov(groupPolygons, playerOutline);
       } else {
         renderFovOutlines([]);
       }
@@ -795,7 +775,6 @@ export function useEncounterCanvas(options: CanvasOptions) {
     if (!tokensForFov.length) {
       renderFovOverlay([], options.isDmMode);
       renderFovOutlines([]);
-      if (options.isDmMode) broadcastFov([]);
       return;
     }
 
@@ -807,7 +786,6 @@ export function useEncounterCanvas(options: CanvasOptions) {
         ? activeOutline()
         : [];
     renderFovOutlines(groupOutline);
-    if (options.isDmMode) broadcastFov(polygons, groupOutline);
   }
 
   // ── Init ───────────────────────────────────────────────────────────────────
@@ -876,13 +854,33 @@ export function useEncounterCanvas(options: CanvasOptions) {
   }
 
   // ── Map ────────────────────────────────────────────────────────────────────
+  // Textures loaded through PIXI.Assets stay cached (keyed by their multi-MB
+  // data URL) until unloaded, even after app.destroy() (PERF-08).
+  const loadedAssets = new Set<string>();
+  let currentMapUrl: string | null = null;
+  let mapGeneration = 0;
+
+  async function loadTexture(url: string) {
+    loadedAssets.add(url);
+    return PIXI.Assets.load(url);
+  }
+
+  function unloadAsset(url: string) {
+    if (!loadedAssets.delete(url)) return;
+    PIXI.Assets.unload(url).catch(() => { /* already gone */ });
+  }
+
   async function loadMap(source: string, _type: "file" | "url") {
     if (!app || !worldContainer || !mapSprite) return;
 
-    let url = source;
-
-    const texture = await PIXI.Assets.load(url);
+    // Two quick map changes can finish out of order; only the latest wins (BUG-16)
+    const generation = ++mapGeneration;
+    const texture = await loadTexture(source);
+    if (generation !== mapGeneration || !app || !mapSprite) return;
+    const previous = currentMapUrl;
+    currentMapUrl = source;
     mapSprite.texture = texture;
+    if (previous && previous !== source) unloadAsset(previous);
     mapSprite.x = 0;
     mapSprite.y = 0;
 
@@ -1049,7 +1047,7 @@ export function useEncounterCanvas(options: CanvasOptions) {
     // ── Portrait / fallback initial ──────────────────────────────────────────
     if (token.imageSource) {
       try {
-        const texture = await PIXI.Assets.load(token.imageSource);
+        const texture = await loadTexture(token.imageSource);
         const sprite = new PIXI.Sprite(texture);
         const scale = (pixelSize - 4) / Math.min(texture.width, texture.height);
         sprite.scale.set(scale);
@@ -1653,8 +1651,11 @@ export function useEncounterCanvas(options: CanvasOptions) {
     cancelLongPress();
     if (wallKeydownHandler)
       document.removeEventListener("keydown", wallKeydownHandler);
+    mapGeneration++;
     app?.destroy(true);
     app = null;
+    for (const url of [...loadedAssets]) unloadAsset(url);
+    currentMapUrl = null;
   }
 
   function getViewport() {

@@ -35,7 +35,8 @@
 </template>
 
 <script setup lang="ts">
-import { channelName } from '~/utils/appNamespace'
+import { playerWindow } from '~/utils/windowChannel'
+import { ImageCache } from '~/utils/playerPayload'
 import { dbApi } from '~/composables/useDb'
 import { useEncounterCanvas, type ShapeOverlay } from '../../../composables/useEncounterCanvas'
 import { useEncounterStore } from '~/stores/encounter'
@@ -63,9 +64,13 @@ function sortInitiative(tokens: any[]): any[] {
   })
 }
 
+const unsubscribe: Array<() => void> = []
+const images = new ImageCache()
+const notifyClosed = () => playerWindow.sendClosed()
+
 onMounted(async () => {
   const id = Number(route.params.id)
-  await store.loadEncounter(id)
+  await store.loadEncounter(id, { asPlayer: true })
 
   // Player window always stays in group mode regardless of DM's current mode
   store.fovMode = 'group'
@@ -104,13 +109,19 @@ onMounted(async () => {
   playerRoundNumber.value = store.roundNumber
 
   // Tell DM window to re-sync so active token and order are authoritative immediately
-  dbApi.window.sendPlayerReady()
+  playerWindow.sendReady()
 
   let renderedShapeIds = new Set<string>()
 
-  dbApi.window.onEncounterSync(async (data: any) => {
+  unsubscribe.push(playerWindow.onHello(() => playerWindow.sendReady()))
+
+  unsubscribe.push(playerWindow.onSync(async (data: any) => {
     if (!store.current) return
 
+    // Images come once per connection; tokens and the turn rail refer to them by key
+    images.add(data.images)
+    for (const t of data.tokens ?? []) t.imageSource = images.resolve(t.imageSource)
+    for (const e of data.turnOrder ?? []) e.imageSource = images.resolve(e.imageSource)
     store.current.tokens = data.tokens
     store.current.fogData = data.fogData
     store.current.gridSize = data.gridSize
@@ -156,24 +167,22 @@ onMounted(async () => {
 
     // Recompute FOV with the fully updated state
     canvas?.recomputeFov()
-  })
+  }))
 
-  dbApi.window.onPing(({ col, row, focus }) => {
+  unsubscribe.push(playerWindow.onPing(({ col, row, focus }) => {
     if (focus) canvas?.centerOn(col, row)
     canvas?.showPing(col, row)
-  })
+  }))
+  // The GM's "close player view" button
+  unsubscribe.push(playerWindow.onClose(() => window.close()))
 
   // Notify DM window when this tab closes
-  window.addEventListener('beforeunload', () => {
-    const ch = new BroadcastChannel(channelName('player'))
-    ch.postMessage({ type: 'player-closed' })
-    ch.close()
-  })
+  window.addEventListener('beforeunload', notifyClosed)
 })
 
 onUnmounted(() => {
-  dbApi.window.offEncounterSync()
-  dbApi.window.offPing()
+  for (const off of unsubscribe) off()
+  window.removeEventListener('beforeunload', notifyClosed)
   canvas?.destroy()
 })
 </script>

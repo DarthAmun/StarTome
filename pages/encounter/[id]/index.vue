@@ -303,7 +303,7 @@
               class="map-tool-btn wall-type-btn"
               :class="{ active: activeCoverType === ct.value }"
               :style="{ '--wt-color': ct.color }"
-              :title="ct.label"
+              :title="ct.title"
               @click="activeCoverType = ct.value; canvas?.setActiveCoverType(ct.value)"
             >
               <span class="wall-type-swatch" />
@@ -1126,7 +1126,8 @@ import { campaignGame, type GameId } from '~/types/game'
 import { useEncounterStore } from "~/stores/encounter";
 import type { EncounterToken } from "~/stores/encounter";
 import { useEncounterCanvas, type ShapeType, type ShapeOverlay } from "../../../composables/useEncounterCanvas";
-import { dbApi, imageTypeOf } from "~/composables/useDb";
+import { dbApi } from "~/composables/useDb";
+import { imageTypeOf, pickImageFile } from "~/utils/image";
 import { hexColorToNumber } from "~/composables/useConditions";
 import { useConditionPanel } from "~/composables/useConditionPanel";
 import { useCreatureSearch } from "~/composables/useCreatureSearch";
@@ -1169,12 +1170,15 @@ const TURN_RAIL_SIZES = [
   { value: 'large', label: 'L' },
 ] as const;
 
+// PF2e cover degrees. The stored values keep DM's Tome's names so old walls
+// and exports stay compatible: three-quarter = greater, half = standard,
+// quarter = lesser (see DbEncounterWall).
 const COVER_TYPES = [
-  { value: 'full',           label: 'Full',  color: 'rgba(255,255,255,0.9)' },
-  { value: 'three-quarter',  label: '¾',     color: 'rgba(184,134,11,0.85)' },
-  { value: 'half',           label: '½',     color: 'rgba(200,100,20,0.85)' },
-  { value: 'quarter',        label: '¼',     color: 'rgba(200,50,20,0.75)'  },
-  { value: 'door',           label: 'Door',  color: 'rgba(100,200,220,0.9)' },
+  { value: 'full',           label: 'Wall',     title: 'Blocks sight and movement',            color: 'rgba(255,255,255,0.9)' },
+  { value: 'three-quarter',  label: 'Greater',  title: 'Greater cover: +4 circumstance to AC, Reflex and Stealth', color: 'rgba(184,134,11,0.85)' },
+  { value: 'half',           label: 'Standard', title: 'Standard cover: +2 circumstance to AC, Reflex and Stealth', color: 'rgba(200,100,20,0.85)' },
+  { value: 'quarter',        label: 'Lesser',   title: 'Lesser cover: +1 circumstance to AC',  color: 'rgba(200,50,20,0.75)'  },
+  { value: 'door',           label: 'Door',     title: 'Opens and closes',                     color: 'rgba(100,200,220,0.9)' },
 ] as const
 const activeCoverType = ref<'full' | 'three-quarter' | 'half' | 'quarter' | 'door'>('full')
 
@@ -1920,10 +1924,6 @@ onMounted(async () => {
   canvas.redrawWalls();
   canvas.recomputeFov();
 
-  // Listen for player window close
-  dbApi.window.onPlayerClosed(() => {
-    store.playerWindowOpen = false;
-  });
 
   document.addEventListener('keydown', handleWallUndo)
   document.addEventListener('dragend', handleDragEnd)
@@ -1982,6 +1982,7 @@ watch(
 const handleDragEnd = () => { draggingPayload = null }
 
 onUnmounted(() => {
+  store.flushPendingSaves();
   document.removeEventListener('keydown', handleWallUndo);
   document.removeEventListener('dragend', handleDragEnd);
   canvas?.destroy();
@@ -1989,7 +1990,7 @@ onUnmounted(() => {
 
 // ── Handlers ───────────────────────────────────────────────────────────────
 async function onSetMap() {
-  const dataUrl = await dbApi.system.openFileDialog();
+  const dataUrl = await pickImageFile();
   if (dataUrl) await store.setMap(dataUrl, "file");
 }
 
@@ -2056,7 +2057,7 @@ function selectToken(token: any) {
 }
 
 async function browseTokenImage() {
-  const dataUrl = await dbApi.system.openFileDialog();
+  const dataUrl = await pickImageFile();
   if (dataUrl) {
     newToken.value.imageSource = dataUrl;
     newToken.value.imageType = "file";
@@ -2084,7 +2085,7 @@ async function openEditLibraryToken(token: any) {
 }
 
 async function browseEditTokenImage() {
-  const dataUrl = await dbApi.system.openFileDialog();
+  const dataUrl = await pickImageFile();
   if (dataUrl) {
     editLibraryTokenForm.value.imageSource = dataUrl;
     editLibraryTokenForm.value.imageType = 'file';

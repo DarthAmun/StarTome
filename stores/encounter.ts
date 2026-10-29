@@ -1,20 +1,21 @@
 import { defineStore } from 'pinia'
-import { dbApi, parseRecordData, imageTypeOf } from '~/composables/useDb'
+import { dbApi, parseJsonObject } from '~/composables/useDb'
+import { imageTypeOf } from '~/utils/image'
 import { useEntities } from '~/composables/useEntities'
 import type { DbEncounterWall, DbToken } from '~/composables/useDb'
 import type { ShapeOverlay } from '~/composables/useEncounterCanvas'
 import { rulesGet, rulesGetMany, rulesSetImage } from '~/composables/useRules'
+import { resolveImageDataUrl, storeInlineImage } from '~/rules/images'
 import { evaluateFormula } from '~/composables/useFormulaEvaluator'
 import { rollInitiative, rulesScope, tokenStats, type Adjustment } from '~/rules/combat'
 import type { Hazard, RulesEntity } from '~/types/rules'
 import { parseDefeated, type DefeatedEnemy } from '~/rules/advancement'
 import { healthState, type HealthState } from '~/composables/useConditions'
 import { lsKey } from '~/utils/appNamespace'
-
-function tryParseJson<T>(s: unknown, fallback: T): T {
-  if (typeof s !== 'string') return fallback
-  try { return JSON.parse(s) } catch { return fallback }
-}
+import { playerWindow } from '~/utils/windowChannel'
+import { parseJson } from '~/utils/json'
+import { reportError } from '~/composables/useNotices'
+import { ImageChannel, toPlayerToken } from '~/utils/playerPayload'
 
 function buildTokenScope(token: EncounterToken, entry?: RulesEntity): Record<string, number> {
   return {
@@ -140,7 +141,10 @@ export interface Encounter {
   id: number
   campaignId: number
   name: string
+  /** What the canvas loads: a data URL or http URL, resolved from `mapRef`. */
   mapSource: string | null
+  /** What the row stores: an "img:<id>" ref or http URL. */
+  mapRef: string | null
   mapType: 'file' | 'url'
   gridSize: number
   gridOffsetX: number
@@ -172,6 +176,7 @@ export const useEncounterStore = defineStore('encounter', () => {
   const fovRecomputeTrigger = ref(0)
   const playerViewPrefs = ref<PlayerViewPrefs>(loadPlayerViewPrefs())
   // Timers ticked by nextTurn, so prevTurn can undo exactly those ticks (session-only)
+  let offPlayerReady: (() => void) | null = null
   const timerTickHistory: Array<{ tokenId: number; timerIds: string[]; logIds: number[] }> = []
 
   // ── Computed ───────────────────────────────────────────────────────────────
@@ -210,20 +215,24 @@ export const useEncounterStore = defineStore('encounter', () => {
   }, { flush: 'sync' })
 
   // ── Actions — Loading ──────────────────────────────────────────────────────
-  async function loadEncounter(id: number) {
+  /** `asPlayer`: the player view loads the same encounter, but never talks to player views itself. */
+  async function loadEncounter(id: number, { asPlayer = false }: { asPlayer?: boolean } = {}) {
+    await flushPendingSaves()
     isLoading.value = true
     try {
       const data = await dbApi.encounters.get(id)
       if (!data) return
       current.value = {
         ...data,
-        fogData: tryParseJson(data.fog_data, {} as Record<string, 'hidden' | 'revealed' | 'partial'>),
-        viewport: tryParseJson(data.viewport, { x: 0, y: 0, scale: 1 }),
-        combatLog: tryParseJson(data.combat_log || '[]', [] as CombatLogEntry[]),
+        id: data.id!,
+        fogData: parseJson(data.fog_data, {} as Record<string, 'hidden' | 'revealed' | 'partial'>),
+        viewport: parseJson(data.viewport, { x: 0, y: 0, scale: 1 }),
+        combatLog: parseJson(data.combat_log || '[]', [] as CombatLogEntry[]),
         gridSize: data.grid_size,
         gridOffsetX: data.grid_offset_x,
         gridOffsetY: data.grid_offset_y,
-        mapSource: data.map_source,
+        mapSource: await resolveImageDataUrl(data.map_source),
+        mapRef: data.map_source,
         mapType: data.map_type,
         campaignId: data.campaign_id,
         fovEnabled: data.fov_enabled ?? false,
@@ -239,9 +248,15 @@ export const useEncounterStore = defineStore('encounter', () => {
       _activeTurnTokenId.value = initiativeOrder.value[storedIndex]?.id ?? null
       walls.value = await dbApi.walls.list(id)
       wallUndoStack.value = []
-      dbApi.window.onPlayerReady(syncToPlayer)
+      // One listener for the store's lifetime, whichever encounter is loaded.
+      // A player view left open from before (GM reloaded) answers the hello.
+      if (!asPlayer && !offPlayerReady) {
+        offPlayerReady = playerWindow.onReady(() => resyncPlayer())
+        playerWindow.onClosed(() => { playerWindowOpen.value = false })
+      }
+      if (!asPlayer) playerWindow.sendHello()
     } catch (err) {
-      console.error('[EncounterStore] loadEncounter:', err)
+      reportError('Loading the encounter', err)
     } finally {
       isLoading.value = false
     }
@@ -252,7 +267,7 @@ export const useEncounterStore = defineStore('encounter', () => {
       const items = await dbApi.tokens.list()
       tokenLibrary.value = await Promise.all(items.map(normalizeLibraryToken))
     } catch (err) {
-      console.error('[EncounterStore] loadTokenLibrary:', err)
+      reportError('Loading the token library', err)
     }
   }
 
@@ -260,6 +275,7 @@ export const useEncounterStore = defineStore('encounter', () => {
   async function setMap(source: string, type: 'file' | 'url') {
     if (!current.value) return
     current.value.mapSource = source
+    current.value.mapRef = await storeInlineImage(source)
     current.value.mapType = type
     await persistEncounter()
     syncToPlayer()
@@ -276,9 +292,8 @@ export const useEncounterStore = defineStore('encounter', () => {
 
   async function updateViewport(viewport: { x: number; y: number; scale: number }) {
     if (!current.value) return
+    // Kept for this session only; the player view has its own viewport
     current.value.viewport = viewport
-    // Debounced — don't hit DB on every pan frame
-    syncToPlayer()
   }
 
   // ── Actions — Fog of War ───────────────────────────────────────────────────
@@ -286,7 +301,8 @@ export const useEncounterStore = defineStore('encounter', () => {
     if (!current.value) return
     current.value.fogData[key] = state
     syncToPlayer()
-    await persistFog()
+    // Painting fog touches many cells in a row: write the whole map once it pauses (PERF-10)
+    scheduleFogSave()
   }
 
   async function hideAllFog() {
@@ -303,13 +319,32 @@ export const useEncounterStore = defineStore('encounter', () => {
     await persistFog()
   }
 
-  async function persistFog() {
+  let fogTimer: ReturnType<typeof setTimeout> | null = null
+  let fogPending: { id: number; data: string } | null = null
+  function scheduleFogSave() {
     if (!current.value) return
+    fogPending = { id: current.value.id, data: JSON.stringify(current.value.fogData) }
+    if (fogTimer) clearTimeout(fogTimer)
+    fogTimer = setTimeout(() => { void flushFog() }, 400)
+  }
+  async function flushFog() {
+    if (fogTimer) { clearTimeout(fogTimer); fogTimer = null }
+    const pending = fogPending
+    fogPending = null
+    if (!pending) return
     try {
-      await dbApi.encounters.update({ id: current.value.id, fog_data: JSON.stringify(current.value.fogData) })
+      await dbApi.encounters.update({ id: pending.id, fog_data: pending.data })
     } catch (err) {
-      console.error('[EncounterStore] persistFog:', err)
+      reportError('Saving the fog of war', err)
     }
+  }
+  async function persistFog() {
+    scheduleFogSave()
+    await flushFog()
+  }
+  /** Writes anything still waiting (leaving the page, switching encounters). Never drops a save. */
+  async function flushPendingSaves() {
+    await flushFog()
   }
 
   // ── Actions — Tokens ──────────────────────────────────────────────────────
@@ -349,7 +384,7 @@ export const useEncounterStore = defineStore('encounter', () => {
       // Return the reactive instance from the array, not the raw object
       return { token: current.value.tokens[current.value.tokens.length - 1], needsLinkPrompt }
     } catch (err) {
-      console.error('[EncounterStore] addTokenToEncounter:', err)
+      reportError('Placing the token', err)
       return { token: null, needsLinkPrompt: false }
     }
   }
@@ -380,7 +415,7 @@ export const useEncounterStore = defineStore('encounter', () => {
       current.value.tokens.push(normalizeToken(result))
       syncToPlayer()
     } catch (err) {
-      console.error('[EncounterStore] addCreatureToEncounter:', err)
+      reportError('Placing the creature', err)
     }
   }
 
@@ -459,7 +494,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     if ('isAlly' in updates) dbUpdates.isAlly = updates.isAlly ? 1 : 0
     if ('elevation' in updates) dbUpdates.elevation = updates.elevation
     if ('timers' in updates) dbUpdates.timers = JSON.stringify(updates.timers)
-    await dbApi.encounterTokens.update(dbUpdates)
+    await dbApi.encounterTokens.update(dbUpdates as { id: number })
     if ('isPlayerToken' in updates && fovMode.value === 'group') {
       fovRecomputeTrigger.value++
     }
@@ -498,7 +533,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     try {
       await dbApi.encounters.update({ id: current.value.id, combat_log: JSON.stringify(current.value.combatLog) })
     } catch (err) {
-      console.error('[EncounterStore] persistCombatLog:', err)
+      reportError('Saving the combat log', err)
     }
   }
 
@@ -509,7 +544,7 @@ export const useEncounterStore = defineStore('encounter', () => {
       await dbApi.encounterTokens.remove(instanceId)
       syncToPlayer()
     } catch (err) {
-      console.error('[EncounterStore] removeToken:', err)
+      reportError('Removing the token', err)
     }
   }
 
@@ -527,7 +562,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     if (data.linkedEntityId) {
       const entities = useEntities()
       const ent = entities.entities.find(e => e.id === data.linkedEntityId)
-      const attrs = (ent?.attributes ?? parseRecordData((await dbApi.entities.get(data.linkedEntityId))?.attributes)) as Record<string, any>
+      const attrs = (ent?.attributes ?? parseJsonObject((await dbApi.entities.get(data.linkedEntityId))?.attributes)) as Record<string, any>
       if (attrs.portraitSource !== own) {
         await entities.updateEntity(data.linkedEntityId, { attributes: { ...attrs, portraitSource: own, portraitType: imageTypeOf(own) } as any })
       }
@@ -556,7 +591,7 @@ export const useEncounterStore = defineStore('encounter', () => {
       if (pcChanged) fovRecomputeTrigger.value++
       syncToPlayer()
     } catch (err) {
-      console.error('[EncounterStore] updateLibraryToken:', err)
+      reportError('Saving the library token', err)
     }
   }
 
@@ -568,7 +603,7 @@ export const useEncounterStore = defineStore('encounter', () => {
       tokenLibrary.value.push(token)
       return tokenLibrary.value[tokenLibrary.value.length - 1]
     } catch (err) {
-      console.error('[EncounterStore] addToLibrary:', err)
+      reportError('Adding the token to the library', err)
       return null
     }
   }
@@ -595,13 +630,12 @@ export const useEncounterStore = defineStore('encounter', () => {
   // ── Actions — Windows ─────────────────────────────────────────────────────
   async function openPlayerWindow() {
     if (!current.value) return
-    await dbApi.window.openPlayer(current.value.id)
-    playerWindowOpen.value = true
-    syncToPlayer()
+    playerWindow.open(current.value.id)
+    // The new window says "ready" once loaded; that triggers the first full sync
   }
 
   async function closePlayerWindow() {
-    await dbApi.window.closePlayer()
+    playerWindow.close()
     playerWindowOpen.value = false
   }
 
@@ -684,7 +718,7 @@ export const useEncounterStore = defineStore('encounter', () => {
         }
         return { ...t, remaining: t.remaining - 1 }
       })
-      if (ticked.length) dbApi.encounterTokens.update({ id: token.id, timers: JSON.stringify(token.timers) })
+      if (ticked.length) dbApi.encounterTokens.update({ id: token.id, timers: JSON.stringify(token.timers) }).catch(err => reportError('Saving the timers', err))
     }
     if (tokenId !== null) timerTickHistory.push({ tokenId, timerIds: ticked, logIds })
     if (timerTickHistory.length > 200) timerTickHistory.shift()
@@ -704,7 +738,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     if (!token || !last.timerIds.length) return
     const ids = new Set(last.timerIds)
     token.timers = token.timers.map(t => ids.has(t.id) ? { ...t, remaining: Math.min(t.duration, t.remaining + 1) } : t)
-    dbApi.encounterTokens.update({ id: token.id, timers: JSON.stringify(token.timers) })
+    dbApi.encounterTokens.update({ id: token.id, timers: JSON.stringify(token.timers) }).catch(err => reportError('Saving the timers', err))
   }
 
   // ── Actions — Player view ─────────────────────────────────────────────────
@@ -724,7 +758,7 @@ export const useEncounterStore = defineStore('encounter', () => {
 
   /** Pings a grid position on the player view; `focus` also pans the player view there. */
   function sendPing(col: number, row: number, focus = false) {
-    dbApi.window.sendPing({ col, row, focus })
+    playerWindow.sendPing({ col, row, focus })
   }
 
   async function persistTurnState() {
@@ -736,7 +770,7 @@ export const useEncounterStore = defineStore('encounter', () => {
         round_number: roundNumber.value,
       })
     } catch (err) {
-      console.error('[EncounterStore] persistTurnState:', err)
+      reportError('Saving the turn order', err)
     }
   }
 
@@ -755,35 +789,49 @@ export const useEncounterStore = defineStore('encounter', () => {
     return entries
   }
 
+  // ── Player view sync ───────────────────────────────────────────────────────
+  // At most one message per frame; images and the map go once per player
+  // connection (utils/playerPayload.ts). Nothing is sent without a player view.
+  const playerImages = new ImageChannel()
+  let sentMap: string | null = null
+  let syncQueued = false
+
   function syncToPlayer() {
-    if (!current.value) return
-    dbApi.window.syncEncounter({
-      tokens: current.value.tokens
-        .filter(t => t.isVisible)
-        .map(t => {
-          const raw = { ...toRaw(t) }
-          // Strip hidden conditions and DM-only timers from player view
-          raw.conditions = raw.conditions.filter(c => !c.hidden)
-          raw.timers = raw.timers.filter(t => t.visibleToPlayers)
-          // Replace exact HP with health state for non-PC tokens
-          if (!raw.isPlayerToken) {
-            raw.playerHealthState = healthState(raw)
-            raw.hpCurrent = null
-            raw.hpMax = null
-          }
-          return raw
-        }),
-      fogData: { ...toRaw(current.value.fogData) },
-      mapSource: current.value.mapSource,
-      mapType: current.value.mapType,
-      gridSize: current.value.gridSize,
-      gridOffsetX: current.value.gridOffsetX,
-      gridOffsetY: current.value.gridOffsetY,
-      shapes: shapeOverlays.value.map(s => ({ ...toRaw(s) })),
+    if (!current.value || !playerWindowOpen.value || syncQueued) return
+    syncQueued = true
+    const run = () => { syncQueued = false; sendToPlayer() }
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run)
+    else setTimeout(run, 0)
+  }
+
+  /** A (re)connected player view: start over with the map and every image. */
+  function resyncPlayer() {
+    playerWindowOpen.value = true
+    playerImages.reset()
+    sentMap = null
+    sendToPlayer()
+  }
+
+  function sendToPlayer() {
+    const enc = current.value
+    if (!enc) return
+    const mapChanged = enc.mapSource !== sentMap
+    sentMap = enc.mapSource
+    const tokens = enc.tokens.filter(t => t.isVisible).map(t => toPlayerToken(t, playerImages))
+    const turnOrder = playerTurnOrder().map(e => ({ ...e, imageSource: playerImages.ref(e.imageSource) }))
+    playerWindow.sync({
+      tokens,
+      images: playerImages.take(),
+      fogData: { ...toRaw(enc.fogData) },
+      ...(mapChanged ? { mapSource: enc.mapSource, mapType: enc.mapType } : {}),
+      gridSize: enc.gridSize,
+      gridOffsetX: enc.gridOffsetX,
+      gridOffsetY: enc.gridOffsetY,
+      shapes: shapeOverlays.value.map(s => structuredClone(toRaw(s))),
       currentTurnIndex: currentTurnIndex.value,
       activeTurnTokenId: _activeTurnTokenId.value,
       roundNumber: roundNumber.value,
-      turnOrder: playerTurnOrder(),
+      turnOrder,
       wallDoorStates: walls.value.map(w => ({ id: w.id, isOpen: w.isOpen })),
       playerViewPrefs: { ...playerViewPrefs.value },
     })
@@ -795,14 +843,14 @@ export const useEncounterStore = defineStore('encounter', () => {
     try {
       await dbApi.encounters.update({
         id: current.value.id,
-        map_source: current.value.mapSource,
+        map_source: current.value.mapRef,
         map_type: current.value.mapType,
         grid_size: current.value.gridSize,
         grid_offset_x: current.value.gridOffsetX,
         grid_offset_y: current.value.gridOffsetY,
       })
     } catch (err) {
-      console.error('[EncounterStore] persistEncounter:', err)
+      reportError('Saving the encounter', err)
     }
   }
 
@@ -885,7 +933,7 @@ export const useEncounterStore = defineStore('encounter', () => {
       actsWhileHidden: Boolean(raw.acts_while_hidden),
       isDead: Boolean(raw.is_dead),
       label: raw.label,
-      conditions: tryParseJson<TokenCondition[]>(raw.conditions, []),
+      conditions: parseJson<TokenCondition[]>(raw.conditions, []),
       hpCurrent: raw.hp_current,
       hpMax: raw.hp_max,
       ac: raw.ac ?? null,
@@ -898,7 +946,7 @@ export const useEncounterStore = defineStore('encounter', () => {
       isPlayerToken: Boolean(raw.is_player_token),
       isAlly: Boolean(raw.is_ally),
       elevation: raw.elevation ?? null,
-      timers: tryParseJson<TokenTimer[]>(raw.timers, []),
+      timers: parseJson<TokenTimer[]>(raw.timers, []),
     }
   }
 
@@ -1017,7 +1065,7 @@ export const useEncounterStore = defineStore('encounter', () => {
   }
 
   return {
-    current, tokenLibrary, isLoading, playerWindowOpen,
+    current, tokenLibrary, isLoading, playerWindowOpen, flushPendingSaves,
     currentTurnIndex, roundNumber, initiativeOrder,
     allTokens,
     walls, fovMode, wallUndoStack, fovRecomputeTrigger, playerViewPrefs,
