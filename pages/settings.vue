@@ -245,6 +245,14 @@
               <button class="sett-btn" :disabled="recompressing" @click="recompressImages">{{ recompressLabel }}</button>
             </div>
 
+            <div class="sett-row">
+              <div class="sett-row-text">
+                <span class="sett-label">Clean up unused images</span>
+                <span class="sett-desc">Deletes stored portraits and token art that no compendium entry uses any more (left behind by replaced images).</span>
+              </div>
+              <button class="sett-btn" :disabled="cleaningImages" @click="cleanUpImages">{{ cleanupLabel }}</button>
+            </div>
+
           </div>
         </section>
 
@@ -275,7 +283,11 @@
             <div class="sett-row">
               <div class="sett-row-text">
                 <span class="sett-label">Campaigns</span>
-                <span class="sett-desc">Campaigns with encounters, notes and links</span>
+                <span class="sett-desc">Campaigns with encounters, notes, links, party and the library tokens they use. Importing adds them alongside what's here.</span>
+                <select v-if="campaigns.length" v-model="exportCampaignId" class="sett-md-select">
+                  <option :value="null">All campaigns</option>
+                  <option v-for="c in campaigns" :key="c.id" :value="c.id">{{ c.name }}</option>
+                </select>
               </div>
               <div class="sett-btn-pair">
                 <button class="sett-btn" @click="exportCampaigns">↓ Export</button>
@@ -416,12 +428,14 @@
     :phase="modalPhase"
     :payload="modalPayload"
     :sections="importSections"
+    :mode="importMode"
     :log-lines="logLines"
     :progress-done="progressDone"
     :progress-total="progressTotal"
     @close="modalOpen = false"
     @run="runImport"
     @update:sections="importSections = $event"
+    @update:mode="importMode = $event"
   />
 </template>
 
@@ -429,10 +443,13 @@
 import { APP_NS, APP_NAME, exportFilename } from '~/utils/appNamespace'
 import { stripGmOnly } from '~/utils/gmContent'
 import JSZip from 'jszip'
-import { getDb, dbApi, compressDataUrl, now, parseRecordData } from '~/composables/useDb'
+import { getDb, dbApi, now, parseJsonObject } from '~/composables/useDb'
+import { compressDataUrl } from '~/utils/image'
 import { notifyRulesChanged, rulesFindByName } from '~/composables/useRules'
-import { dataUrlToBlob, resolveImageDataUrl } from '~/rules/images'
-import { buildQuestBoard, imageIdsOf, itemRefNames, planRulesImport, rulesForExport, type ExportedImage, type RulesOverlay } from '~/converters/export'
+import { invalidateEntities } from '~/composables/useEntities'
+import { cleanUpUnusedImages, dataUrlToBlob, imageRefId, isImageRef, resolveImageDataUrl } from '~/rules/images'
+import { buildQuestBoard, itemRefNames } from '~/converters/export'
+import { CAMPAIGN_TABLES, TABLE_LABELS, exportAllPayload, exportCampaignsPayload, exportTokensPayload, importPayload, jsonBlob, type BackupPayload, type ImportMode } from '~/sync/backup'
 import { campaignGame } from '~/types/game'
 import type { Item, RulesEntity } from '~/types/rules'
 import { THEMES, ACCENT_PRESETS } from '~/composables/useSettings'
@@ -506,6 +523,7 @@ const claudeExportCampaignId = ref<number | null>(null)
 const claudeExporting = ref(false)
 const claudeIncludeGmOnly = ref(true)
 const questBoardCampaignId = ref<number | null>(null)
+const exportCampaignId = ref<number | null>(null)
 
 const imgFolderOpen    = ref(false)
 const recompressing  = ref(false)
@@ -520,6 +538,19 @@ const recompressLabel  = computed(() => {
   if (recompressTotal.value > 0 && recompressDone.value === recompressTotal.value) return `Done — ${recompressDone.value} images`
   return '↻ Compress'
 })
+
+const cleaningImages = ref(false)
+const cleanupLabel = ref('Clean up')
+async function cleanUpImages() {
+  cleaningImages.value = true
+  try {
+    const n = await cleanUpUnusedImages()
+    cleanupLabel.value = n ? `Deleted ${n.toLocaleString()}` : 'Nothing to delete'
+    await loadStats()
+  } finally {
+    cleaningImages.value = false
+  }
+}
 
 async function recompressImages() {
   if (recompressing.value) return
@@ -543,6 +574,8 @@ async function recompressImages() {
 
     type Task = { table: any; id: number; field: string; value: string; toJpeg: boolean }
 
+    // Maps are blobs in the image store now; a data URL here is an old row
+    const mapImageIds = new Set(enc.map(e => e.map_source).filter(isImageRef).map(imageRefId))
     const tableDefs = [
       { table: db.campaigns,       rows: c,    field: 'banner_source', toJpeg: jpegBanners },
       { table: db.encounters,      rows: enc,  field: 'map_source',    toJpeg: jpegMaps    },
@@ -564,11 +597,11 @@ async function recompressImages() {
       await task.table.update(task.id, { [task.field]: compressed })
       recompressDone.value++
     }
-    // Compendium portraits live as blobs in the image store
+    // Compendium portraits and encounter maps live as blobs in the image store
     for (const id of imageIds) {
       const dataUrl = await resolveImageDataUrl(`img:${id}`)
       if (dataUrl) {
-        const blob = dataUrlToBlob(await compressDataUrl(dataUrl, jpegRecords))
+        const blob = dataUrlToBlob(await compressDataUrl(dataUrl, mapImageIds.has(id) ? jpegMaps : jpegRecords))
         await db.images.update(id, { blob, mime: blob.type })
       }
       recompressDone.value++
@@ -626,12 +659,8 @@ async function deleteLegacyLibrary() {
 
 onMounted(() => { loadStats(); loadCampaigns(); loadLegacyLibrary() })
 
-function download(data: object, filename: string) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url; a.download = filename; a.click()
-  URL.revokeObjectURL(url)
+function download(data: Record<string, unknown>, filename: string) {
+  downloadBlob(jsonBlob(data), filename)
 }
 
 function slug() { return now().slice(0, 10) }
@@ -640,7 +669,8 @@ function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url; a.download = filename; a.click()
-  URL.revokeObjectURL(url)
+  // Revoking right away can cut off a large download
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
 async function readJson(e: Event): Promise<any | null> {
@@ -651,50 +681,14 @@ async function readJson(e: Event): Promise<any | null> {
   finally { (e.target as HTMLInputElement).value = '' }
 }
 
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(blob)
-  })
-}
-
 async function exportAll() {
-  const db = getDb()
-  const [campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts, tokens, characters, levelUps, xpAwards, treasureAwards, inventory, purses, rulesRows, syncState] =
-    await Promise.all([
-      db.campaigns.toArray(), db.encounters.toArray(), db.encounterTokens.toArray(), db.encounterWalls.toArray(),
-      db.entities.toArray(), db.entityLinks.toArray(), db.entitySnapshots.toArray(), db.entityConnections.toArray(), db.graphLayouts.toArray(),
-      db.tokens.toArray(), db.characters.toArray(), db.levelUps.toArray(), db.xpAwards.toArray(), db.treasureAwards.toArray(), db.inventory.toArray(), db.purses.toArray(), db.rules.toArray(), db.syncState.toArray(),
-    ])
-  const { entries: rules, overlays: rulesOverlays } = rulesForExport(rulesRows)
-  const imageRows = await db.images.bulkGet(imageIdsOf([...rules, ...rulesOverlays] as unknown as Record<string, unknown>[]))
-  const images: ExportedImage[] = await Promise.all(imageRows.filter(r => !!r).map(async r => ({ id: r!.id, mime: r!.mime, data: await blobToDataUrl(r!.blob) })))
-  download({ version: 1, app: APP_NS, type: 'all', exportedAt: now(), campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts, tokens, characters, levelUps, xpAwards, treasureAwards, inventory, purses, rules, rulesOverlays, images, syncState }, exportFilename(`all-${slug()}.json`))
+  downloadBlob(jsonBlob(await exportAllPayload()), exportFilename(`all-${slug()}.json`))
 }
 
 async function exportCampaigns() {
-  const db = getDb()
-  const campaigns = await db.campaigns.toArray()
-  const campIds = campaigns.map(c => c.id as number)
-  const encounters = await db.encounters.toArray()
-  const encIds = encounters.map(e => e.id as number)
-  const encounterTokens = encIds.length ? await db.encounterTokens.where('encounter_id').anyOf(encIds).toArray() : []
-  const encounterWalls = encIds.length ? await db.encounterWalls.where('encounter_id').anyOf(encIds).toArray() : []
-  const entities = await db.entities.toArray()
-  const entIds = entities.map(e => e.id as number)
-  const entityLinks = entIds.length ? await db.entityLinks.where('source_id').anyOf(entIds).toArray() : []
-  const entitySnapshots = entIds.length ? await db.entitySnapshots.where('entity_id').anyOf(entIds).toArray() : []
-  const entityConnections = campIds.length ? await db.entityConnections.where('campaign_id').anyOf(campIds).toArray() : []
-  const graphLayouts = campIds.length ? await db.graphLayouts.where('campaign_id').anyOf(campIds).toArray() : []
-  const characters = campIds.length ? await db.characters.where('campaign_id').anyOf(campIds).toArray() : []
-  const levelUps = campIds.length ? await db.levelUps.where('campaign_id').anyOf(campIds).toArray() : []
-  const xpAwards = campIds.length ? await db.xpAwards.where('campaign_id').anyOf(campIds).toArray() : []
-  const inventory = campIds.length ? await db.inventory.where('campaign_id').anyOf(campIds).toArray() : []
-  const purses = campIds.length ? await db.purses.where('campaign_id').anyOf(campIds).toArray() : []
-  const treasureAwards = campIds.length ? await db.treasureAwards.where('campaign_id').anyOf(campIds).toArray() : []
-  download({ version: 1, app: APP_NS, type: 'campaigns', exportedAt: now(), campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts, characters, levelUps, xpAwards, treasureAwards, inventory, purses }, exportFilename(`campaigns-${slug()}.json`))
+  const ids = exportCampaignId.value != null ? [exportCampaignId.value] : undefined
+  const name = ids ? safeFilename(campaigns.value.find(c => c.id === ids[0])?.name ?? 'campaign') : 'campaigns'
+  downloadBlob(jsonBlob(await exportCampaignsPayload(ids)), exportFilename(`${name}-${slug()}.json`))
 }
 
 /** Player-facing quest list for the quest board (FORK_PLAN §8.5). */
@@ -706,19 +700,17 @@ async function exportQuestBoard() {
   if (!campaign) return
   const game = campaignGame(campaign)
   const rows = await db.entities.where('campaign_id').equals(id).filter(e => e.type === 'quest').toArray()
-  const quests = rows.map(r => ({ id: r.id!, name: r.name, content: r.content ?? '', attributes: parseRecordData(r.attributes) }))
+  const quests = rows.map(r => ({ id: r.id!, name: r.name, content: r.content ?? '', attributes: parseJsonObject(r.attributes) }))
   // Resolve every referenced item once, then build synchronously
   const items = new Map<string, Item | undefined>()
   const refs = new Set(quests.flatMap(q => [...itemRefNames(q.attributes.reward ?? ''), ...itemRefNames(q.content)]))
   for (const name of refs) items.set(name.toLowerCase(), (await rulesFindByName('item', name, game)) as Item | undefined)
   const board = buildQuestBoard(APP_NS, { name: campaign.name, game }, quests, name => items.get(name.toLowerCase()), now())
-  download(board, exportFilename(`questboard-${safeFilename(campaign.name)}-${slug()}.json`))
+  download(board as unknown as Record<string, unknown>, exportFilename(`questboard-${safeFilename(campaign.name)}-${slug()}.json`))
 }
 
 async function exportTokens() {
-  const db = getDb()
-  const tokens = await db.tokens.toArray()
-  download({ version: 1, app: APP_NS, type: 'tokens', exportedAt: now(), tokens }, exportFilename(`tokens-${slug()}.json`))
+  downloadBlob(jsonBlob(await exportTokensPayload()), exportFilename(`tokens-${slug()}.json`))
 }
 
 function wikilinkify(text: string): string {
@@ -819,17 +811,16 @@ function entityMeta(type: string, attrs: any): string {
   return fields ? buildMeta(attrs, fields) : ''
 }
 
-function renderLinks(linksByEntity: Map<number, any[]>, entityId: number, entityIndex: Map<number, string>): string {
+function renderLinks(linksByEntity: Map<number, { source: number; target: number }[]>, entityId: number, entityIndex: Map<number, string>): string {
   const entityLinks = linksByEntity.get(entityId)
   if (!entityLinks?.length) return ''
-  const names: string[] = []
+  const names = new Set<string>()
   for (const l of entityLinks) {
-    const otherId = l.source_id === entityId ? l.target_id : l.source_id
-    const name = entityIndex.get(otherId)
-    if (name) names.push(name)
+    const name = entityIndex.get(l.source === entityId ? l.target : l.source)
+    if (name) names.add(name)
   }
-  if (!names.length) return ''
-  return `\n**Related:** ${names.map(n => `[[${n}]]`).join(', ')}`
+  if (!names.size) return ''
+  return `\n**Related:** ${[...names].map(n => `[[${n}]]`).join(', ')}`
 }
 
 async function exportCampaignForClaude() {
@@ -856,11 +847,16 @@ async function exportCampaignForClaude() {
       return { ...e, attributes: attrs }
     })
 
-    const linksByEntity = new Map<number, any[]>()
+    // A link names its target by type and name; both ends list the other
+    const byTypeName = new Map<string, number>(rawEntities.map(e => [`${e.type}:${String(e.name).toLowerCase()}`, e.id as number]))
+    const linksByEntity = new Map<number, { source: number; target: number }[]>()
     for (const l of rawLinks) {
-      for (const id of [l.source_id, l.target_id]) {
+      const target = byTypeName.get(`${l.target_type}:${l.target_name.toLowerCase()}`)
+      if (target == null || target === l.source_id) continue
+      const pair = { source: l.source_id, target }
+      for (const id of [pair.source, pair.target]) {
         if (!linksByEntity.has(id)) linksByEntity.set(id, [])
-        linksByEntity.get(id)!.push(l)
+        linksByEntity.get(id)!.push(pair)
       }
     }
 
@@ -926,6 +922,7 @@ const modalOpen    = ref(false)
 const modalPhase   = ref<'configure' | 'running' | 'done'>('configure')
 const modalPayload = ref<any>(null)
 const importSections   = ref<ImportSection[]>([])
+const importMode       = ref<ImportMode>('merge')
 const logLines         = ref<LogLine[]>([])
 const progressDone     = ref(0)
 const progressTotal    = ref(0)
@@ -941,85 +938,38 @@ async function openImport(e: Event, _expectedType: string) {
 
 function buildImportSections(payload: any) {
   const sections: ImportSection[] = []
-  function addSection(key: string, label: string) {
-    const arr: any[] | undefined = payload[key]
-    if (arr && arr.length > 0) sections.push({ key, label, count: arr.length, enabled: true })
+  for (const key of [...CAMPAIGN_TABLES, 'rules', 'rulesOverlays'] as const) {
+    const arr: unknown[] | undefined = payload[key]
+    if (arr?.length) sections.push({ key, label: TABLE_LABELS[key], count: arr.length, enabled: true })
   }
-  addSection('campaigns', 'Campaigns'); addSection('encounters', 'Encounters')
-  addSection('encounterTokens', 'Encounter Tokens'); addSection('encounterWalls', 'Encounter Walls')
-  addSection('entities', 'Notes & Entities'); addSection('entityLinks', 'Entity Links')
-  addSection('entitySnapshots', 'Entity Snapshots'); addSection('entityConnections', 'Entity Connections')
-  addSection('graphLayouts', 'Graphs'); addSection('tokens', 'Tokens')
-  addSection('characters', 'Party members'); addSection('levelUps', 'Level-ups'); addSection('xpAwards', 'XP awards'); addSection('treasureAwards', 'Treasure awards')
-  addSection('inventory', 'Inventory'); addSection('purses', 'Purses')
-  addSection('rules', 'Own compendium entries'); addSection('rulesOverlays', 'Portraits, notes & edits on synced entries')
   importSections.value = sections
+  // A full backup defaults to restoring it; anything else is added alongside
+  importMode.value = payload.type === 'all' ? 'replace' : 'merge'
 }
 
 async function runImport() {
   if (!modalPayload.value) return
-  const payload = modalPayload.value
-  const db = getDb()
+  const payload = modalPayload.value as BackupPayload
+  if (importMode.value === 'replace' && !confirm('Replace all campaign data? Every campaign, note, encounter, token and party record in this browser is deleted and replaced by this file. Your synced compendium stays.')) return
   modalPhase.value = 'running'; logLines.value = []; progressDone.value = 0
+  const sections = new Set(importSections.value.filter(s => s.enabled).map(s => s.key))
+  progressTotal.value = importSections.value.filter(s => s.enabled).reduce((n, s) => n + s.count, 0)
   const addLog = (ok: boolean, msg: string) => { logLines.value = [...logLines.value, { ok, msg }] }
-  if (payload.systems?.length || payload.records?.length) {
-    addLog(false, `Skipped ${payload.systems?.length ?? 0} systems and ${payload.records?.length ?? 0} records: DM's Tome's rules library is imported through Compendium › DM's Tome import, which links it to the synced compendium.`)
-  }
-  type WorkItem = { table: any; row: any }
-  const work: WorkItem[] = []
-  function queueSection(key: string, table: any) {
-    const sec = importSections.value.find(s => s.key === key)
-    if (!sec?.enabled) return
-    for (const row of (payload[key] ?? [])) {
-      if (key === 'entities' && typeof row.attributes !== 'string') {
-        row.attributes = JSON.stringify(row.attributes ?? {})
-      }
-      work.push({ table, row })
+  if (!progressTotal.value) { addLog(false, 'Nothing was selected to import.'); modalPhase.value = 'done'; return }
+  try {
+    const result = await importPayload(payload, { mode: importMode.value, sections })
+    for (const sec of importSections.value) {
+      if (sec.enabled) addLog(true, `${sec.label}: ${(result.counts[sec.key] ?? 0).toLocaleString()} of ${sec.count.toLocaleString()} imported`)
     }
+    if (result.skippedLegacyLibrary) addLog(false, `Skipped ${result.skippedLegacyLibrary} systems/records: DM's Tome's rules library is imported through Compendium › DM's Tome import, which links it to the synced compendium.`)
+    if (result.missingOverlays) addLog(false, `${result.missingOverlays} portraits/notes belong to synced entries this browser doesn't have yet. Run the Foundry sync, then import this file again.`)
+  } catch (err) {
+    addLog(false, `Import failed, nothing was changed: ${(err as Error).message ?? err}`)
   }
-  queueSection('campaigns', db.campaigns); queueSection('encounters', db.encounters)
-  queueSection('encounterTokens', db.encounterTokens); queueSection('encounterWalls', db.encounterWalls)
-  queueSection('entities', db.entities); queueSection('entityLinks', db.entityLinks)
-  queueSection('entitySnapshots', db.entitySnapshots); queueSection('entityConnections', db.entityConnections)
-  queueSection('graphLayouts', db.graphLayouts); queueSection('tokens', db.tokens)
-  queueSection('characters', db.characters); queueSection('levelUps', db.levelUps); queueSection('xpAwards', db.xpAwards); queueSection('treasureAwards', db.treasureAwards)
-  queueSection('inventory', db.inventory); queueSection('purses', db.purses)
-  // Compendium: images first (entries point at them), then entries and overlays
-  const rulesSec = importSections.value.find(s => s.key === 'rules')
-  const overlaySec = importSections.value.find(s => s.key === 'rulesOverlays')
-  const rulesEntries: RulesEntity[] = rulesSec?.enabled ? (payload.rules ?? []) : []
-  const rulesOverlays: RulesOverlay[] = overlaySec?.enabled ? (payload.rulesOverlays ?? []) : []
-  if (rulesEntries.length || rulesOverlays.length) {
-    const wanted = new Set(imageIdsOf([...rulesEntries, ...rulesOverlays] as unknown as Record<string, unknown>[]))
-    for (const img of (payload.images ?? []) as ExportedImage[]) {
-      if (!wanted.has(img.id)) continue
-      const blob = dataUrlToBlob(img.data)
-      work.push({ table: db.images, row: { id: img.id, blob, mime: img.mime || blob.type, createdAt: now() } })
-    }
-    const existing = new Map((await db.rules.bulkGet(rulesOverlays.map(o => o.id))).filter((r): r is RulesEntity => !!r).map(r => [r.id, r]))
-    const plan = planRulesImport(existing, rulesEntries, rulesOverlays, now())
-    for (const row of plan.put) work.push({ table: db.rules, row })
-    if (plan.missing.length) addLog(false, `${plan.missing.length} portraits/notes belong to synced entries this browser doesn't have yet. Run the Foundry sync, then import this file again.`)
-  }
-  progressTotal.value = work.length
-  if (progressTotal.value === 0) { addLog(false, 'Nothing was selected to import.'); modalPhase.value = 'done'; return }
-  const BATCH = 50
-  for (let i = 0; i < work.length; i += BATCH) {
-    const batch = work.slice(i, i + BATCH)
-    const results = await Promise.allSettled(batch.map(item => item.table.put(item.row)))
-    let batchOk = 0
-    const newLines: LogLine[] = []
-    for (let j = 0; j < batch.length; j++) {
-      if (results[j].status === 'fulfilled') batchOk++
-      else newLines.push({ ok: false, msg: `Failed: ${(results[j] as PromiseRejectedResult).reason}` })
-      progressDone.value++
-    }
-    if (batchOk > 0) newLines.unshift({ ok: true, msg: `Imported ${batchOk} items (batch ${Math.floor(i / BATCH) + 1})` })
-    logLines.value = [...logLines.value, ...newLines]
-    await new Promise(resolve => setTimeout(resolve, 0))
-  }
+  progressDone.value = progressTotal.value
+  invalidateEntities()
   notifyRulesChanged()
-  await loadStats()
+  await Promise.all([loadStats(), loadCampaigns()])
   modalPhase.value = 'done'
 }
 
@@ -1032,6 +982,7 @@ async function clearAll() {
     db.entities.clear(), db.entityLinks.clear(), db.entitySnapshots.clear(), db.entityConnections.clear(), db.graphLayouts.clear(),
     db.tokens.clear(), db.characters.clear(), db.levelUps.clear(), db.xpAwards.clear(), db.treasureAwards.clear(), db.inventory.clear(), db.purses.clear(), db.rules.clear(), db.images.clear(), db.syncState.clear(), db.legacyLibrary.clear(),
   ])
+  invalidateEntities()
   notifyRulesChanged()
   await loadStats()
   alert('All data has been wiped.')

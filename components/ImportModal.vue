@@ -39,8 +39,18 @@
 
             </div>
 
+            <div v-if="totalItems > 0 && mode" class="imp-section-list">
+              <label class="imp-check-row">
+                <input type="radio" value="merge" :checked="mode === 'merge'" @change="emit('update:mode', 'merge')" />
+                <span class="imp-check-label">Add alongside what's here (new ids, nothing is overwritten)</span>
+              </label>
+              <label class="imp-check-row">
+                <input type="radio" value="replace" :checked="mode === 'replace'" @change="emit('update:mode', 'replace')" />
+                <span class="imp-check-label">Replace: delete all campaigns, tokens and party data here, then restore this file</span>
+              </label>
+            </div>
             <p v-if="totalItems > 0" class="imp-notice">
-              Items with the same ID will be overwritten.
+              The import runs in one step: if anything fails, nothing is changed.
             </p>
           </template>
 
@@ -117,6 +127,7 @@ const props = defineProps<{
   phase: 'configure' | 'running' | 'done'
   payload: any
   sections: ImportSection[]
+  mode?: 'merge' | 'replace'
   logLines: LogLine[]
   progressDone: number
   progressTotal: number
@@ -126,6 +137,7 @@ const emit = defineEmits<{
   close: []
   run: []
   'update:sections': [v: ImportSection[]]
+  'update:mode': [v: 'merge' | 'replace']
 }>()
 
 const logEl = ref<HTMLElement | null>(null)
