@@ -133,6 +133,7 @@
 </template>
 
 <script setup lang="ts">
+import { resolveImage } from '~/rules/images'
 import { dbApi, getDb } from '~/composables/useDb'
 import { useFormatters } from '~/composables/useFormatters'
 import { useResolution } from '~/composables/useResolution'
@@ -185,7 +186,7 @@ async function loadEncounters() {
       name: r.name,
       status: r.status,
       updatedAt: r.updated_at,
-      mapSource: r.map_source ?? null,
+      mapSource: await resolveImage(r.map_source),
       roundNumber: r.round_number ?? 0,
       fovEnabled: !!r.fov_enabled,
       tokenCount,
@@ -214,6 +215,7 @@ async function cloneEncounter(id: number) {
   if (!source) return
   const copy = await dbApi.encounters.create({ campaignId, name: `${source.name} (Copy)` })
   if (!copy?.id) return
+  const copyId = copy.id
   await dbApi.encounters.update({
     id: copy.id,
     map_source: source.map_source,
@@ -245,7 +247,7 @@ async function cloneEncounter(id: number) {
       isAlly: token.is_ally,
     })),
     ...walls.map(wall => dbApi.walls.add({
-      encounter_id: copy.id,
+      encounter_id: copyId,
       points: wall.points,
       coverType: wall.coverType,
       isOpen: wall.isOpen,

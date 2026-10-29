@@ -1,11 +1,8 @@
-# PWA Icons
+# App icons
 
-Replace these placeholder icons with proper PNG files:
-- `icon-192.png` — 192×192px
-- `icon-512.png` — 512×512px
+Made from two 1024 px source images on a magenta background (keyed out to transparency):
 
-You can generate them from `icon.svg` using any image editor or:
-```
-npx sharp-cli -i icon.svg -o icon-192.png --resize 192
-npx sharp-cli -i icon.svg -o icon-512.png --resize 512
-```
+- **Detailed book** → `logo.png` (full size), `icon-512.png`, `icon-192.png` (sidebar, spine seal, PWA),
+  `icon-maskable-512.png` (PWA maskable: art inside the safe zone on the app background `#100808`),
+  `apple-touch-icon.png` (180 px, opaque).
+- **Pixel-art book** → `../favicon.ico` (16/32/48/64 px) and `favicon-32.png`; it stays readable at tab size.

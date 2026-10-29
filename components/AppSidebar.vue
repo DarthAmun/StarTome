@@ -5,7 +5,7 @@
     <div class="sb-top">
       <img
         v-if="!collapsed"
-        src="/icons/icon-192.png"
+        :src="logoSrc"
         alt=""
         width="22"
         height="22"
@@ -28,7 +28,7 @@
 
     <!-- Logo below the toggle button, only in collapsed mode -->
     <NuxtLink v-if="collapsed" to="/" class="sb-logo-below" title="StarTome">
-      <img src="/icons/icon-192.png" alt="" width="24" height="24" class="sb-logo-img"
+      <img :src="logoSrc" alt="" width="24" height="24" class="sb-logo-img"
         @error="(e: Event) => (e.target as HTMLImageElement).style.display = 'none'" />
     </NuxtLink>
 
@@ -251,6 +251,8 @@
 </template>
 
 <script setup lang="ts">
+// public/ files need the app base URL (/StarTome/ on GitHub Pages)
+const logoSrc = `${useRuntimeConfig().app.baseURL}icons/icon-192.png`
 import { lsKey } from '~/utils/appNamespace'
 import { rulesCounts, useRulesRevision } from '~/composables/useRules'
 import { RULES_KIND_CONFIG, RULES_KINDS, type RulesKind } from '~/types/rules'

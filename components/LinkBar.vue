@@ -185,6 +185,7 @@
 </template>
 
 <script setup lang="ts">
+import { resolveImage } from "~/rules/images";
 import { useEntities } from "~/composables/useEntities";
 import { isRulesKind, RULES_KIND_CONFIG } from "~/types/rules";
 import { extractLinks } from "~/composables/useEntityParser";
@@ -224,11 +225,12 @@ watch(
             .equals(id)
             .toArray()
             .then((rows) =>
-                rows.map((r) => ({
+                Promise.all(rows.map(async (r) => ({
                     id: r.id!,
                     name: r.name,
-                    mapSource: r.map_source ?? undefined,
-                })),
+                    // Maps are stored as image refs; thumbnails use object URLs
+                    mapSource: (await resolveImage(r.map_source)) ?? undefined,
+                }))),
             );
     },
     { immediate: true },

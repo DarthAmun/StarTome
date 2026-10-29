@@ -22,7 +22,7 @@ import {
   convertLegacyRecord, legacyKindOf, legacyLevel, recordData, recordImage, type LegacyRecord,
 } from '~/converters/legacy/records'
 import { newRulesId } from '~/rules/factory'
-import { dataUrlToBlob, isImageRef } from '~/rules/images'
+import { dataUrlToBlob, isImageRef, moveInlineMaps } from '~/rules/images'
 import { isRulesKind, type RulesEntity, type RulesKind } from '~/types/rules'
 
 // ── Reading ────────────────────────────────────────────────────────────────
@@ -397,6 +397,9 @@ export async function applyLegacy(bundle: LegacyBundle, analysed: AnalyseResult,
       cleared: res.issues.filter(i => i.table === 'encounterTokens' && i.detail.startsWith('link to record')).length,
     }
   }
+
+  // DM's Tome keeps maps inside the encounter rows; StarTome stores them as images (PERF-03)
+  await moveInlineMaps()
 
   report.durationMs = Date.now() - t0
   return report

@@ -37,6 +37,53 @@ export async function storeImage(blob: Blob): Promise<string> {
   return PREFIX + id
 }
 
+/** A data URL becomes a stored blob ("img:<id>"); anything else (http URL, ref, null) is returned as is. */
+export async function storeInlineImage(src: string | null | undefined): Promise<string | null> {
+  if (!src) return null
+  return src.startsWith('data:') ? storeImage(dataUrlToBlob(src)) : src
+}
+
+/**
+ * Moves inline map images of encounter rows into the image store
+ * (FORK_PLAN §14 PERF-03). For imports and the legacy import, which bring
+ * DM's Tome-style rows with the map inside. Returns how many moved.
+ */
+export async function moveInlineMaps(): Promise<number> {
+  const db = getDb()
+  const ids = await db.encounters.filter(e => !!e.map_source?.startsWith('data:')).primaryKeys()
+  for (const id of ids) {
+    const row = await db.encounters.get(id)
+    if (row?.map_source?.startsWith('data:')) await db.encounters.update(id, { map_source: await storeImage(dataUrlToBlob(row.map_source)) })
+  }
+  return ids.length
+}
+
+/** Deletes a stored image and forgets its cached URLs. */
+export async function deleteImage(ref: string): Promise<void> {
+  if (!isImageRef(ref)) return
+  const id = imageRefId(ref)
+  await getDb().images.delete(id)
+  const url = await urls.get(id)?.catch(() => null)
+  if (url) URL.revokeObjectURL(url)
+  urls.delete(id)
+  dataUrls.delete(id)
+}
+
+/** Deletes every stored image that no compendium entry or encounter map points at. Returns how many. */
+export async function cleanUpUnusedImages(): Promise<number> {
+  const db = getDb()
+  const used = new Set<string>()
+  await db.rules.each(r => {
+    for (const v of [r.img, (r as { tokenImg?: string | null }).tokenImg]) if (isImageRef(v)) used.add(imageRefId(v))
+  })
+  // Encounter maps live in the store too (and clones share them)
+  await db.encounters.each(e => { if (isImageRef(e.map_source)) used.add(imageRefId(e.map_source)) })
+  const unused = (await db.images.toCollection().primaryKeys()).filter(id => !used.has(id))
+  await db.images.bulkDelete(unused)
+  for (const id of unused) { urls.delete(id); dataUrls.delete(id) }
+  return unused.length
+}
+
 // Object URLs are shared and kept for the session: the same portrait shows in
 // lists, stat blocks and the palette, and blobs are immutable.
 const urls = new Map<string, Promise<string | null>>()
@@ -53,13 +100,12 @@ export function resolveImage(src: string | null | undefined): Promise<string | n
   return p
 }
 
-function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(blob)
-  })
+/** Blob → data URL. No FileReader, so it works in the app, workers and Node (tests). */
+export async function blobToDataUrl(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  let bin = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return `data:${blob.type || 'application/octet-stream'};base64,${btoa(bin)}`
 }
 
 const dataUrls = new Map<string, Promise<string | null>>()

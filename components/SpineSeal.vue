@@ -1,11 +1,13 @@
 <template>
   <div class="spine-seal">
-    <img src="/icons/icon-512.png" class="spine-seal-logo" alt="StarTome" />
+    <img :src="logoSrc" class="spine-seal-logo" alt="StarTome" />
     <span class="spine-seal-version">v{{ version }}</span>
   </div>
 </template>
 
 <script setup lang="ts">
+// public/ files need the app base URL (/StarTome/ on GitHub Pages)
+const logoSrc = `${useRuntimeConfig().app.baseURL}icons/icon-512.png`
 const { public: { version } } = useRuntimeConfig()
 </script>
 
