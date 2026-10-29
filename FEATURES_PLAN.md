@@ -1,6 +1,6 @@
 # Features Plan: party, loot, encounters, progress
 
-Status: **reviewed** (2026-10-28). All open questions answered (§9). No code has changed. It is based on the feature goals you gave me (party tab, identification, wealth check, encounter builder, resolution loop, character app), the code at `e0bfb79` (v0.7.0), and FORK_PLAN.md (§4.3/§4.4 model sketches, §9 Play Buddy, phases 7–8).
+Status: **reviewed** (2026-10-28); §10 (P8–P12, next features) added 2026-10-29, not reviewed yet. All open questions answered (§9). No code has changed. It is based on the feature goals you gave me (party tab, identification, wealth check, encounter builder, resolution loop, character app), the code at `e0bfb79` (v0.7.0), and FORK_PLAN.md (§4.3/§4.4 model sketches, §9 Play Buddy, phases 7–8).
 
 It replaces FORK_PLAN phases 7–8 once agreed.
 
@@ -330,3 +330,109 @@ New:
    - The builder is a creation tool, and the VTT encounter carries loot, XP and status (§4).
    - The app keeps calling VTT maps "Encounters"; no rename.
 9. **For Carl?** ✅ **Decided 2026-10-28:** no questions needed. You can extend Play Buddy's GM API yourself (§6 lists the additions). Decided: keep "players own their characters", with offers and events only and no direct GM writes. Still to do: check §6 against his repo once it's on this machine.
+
+---
+
+## 10. Next features (proposed 2026-10-29, not reviewed)
+
+Five GM tools that StarTome doesn't have yet. Each one builds on typed data that is already stored (creature level, rarity, traits, conditions, turn timers, treasure rows, purses), so none needs a new data source. They continue the step numbering after the parked Play Buddy steps (P6/P7). Each step ends with a working app and its own version, as before.
+
+The rule numbers in this section (DCs, income, creature-building values) come from GM Core / Player Core (PF2e) and the SF2e books. **Every table is entered from Archives of Nethys and marked `verified` only after it was checked there**, as was done for the treasure rows (§9.2). The values quoted below are for orientation, not a source.
+
+### 10.1 P8: DC table and Recall Knowledge helper (small)
+
+**What exists:** the compendium knows each creature's and hazard's `level`, `rarity` and `traits`. The stat block (`components/rules/RulesStatBlock.vue`) shows them. The GM screen has a `rules-entry` widget and a dice widget, but no DC tables.
+
+**Plan:**
+- `rules/dcs.ts` (pure, per game in the registry like `creatureXp`):
+  - `levelDc(level)`: DC by level, levels −1…25 (e.g. level 1 → 15, 10 → 27, 20 → 40).
+  - `simpleDc(rank)`: untrained 10, trained 15, expert 20, master 30, legendary 40.
+  - `adjustDc(dc, step)`: incredibly easy −10, very easy −5, easy −2, hard +2, very hard +5, incredibly hard +10.
+  - `rarityStep(rarity)`: common none, uncommon hard, rare very hard, unique incredibly hard.
+  - `recallKnowledge(entry)`: `{ dc, skills, loreDcs }`. The DC is the level DC adjusted for rarity. The skills come from a trait → skill map (aberration → Occultism, animal → Nature, construct → Arcana/Crafting, undead → Religion, …). Specific Lore is easy and very specific Lore very easy (shown as two lower DCs).
+  - SF2e gets its own trait map in the registry (tech-related traits, aeon, …), checked against the SF2e books. Traits that aren't mapped show "GM's choice" instead of guessing.
+- **Stat block:** a "Recall Knowledge" line on creatures and hazards (DC, skills, Lore DCs). It's GM-only and so never reaches the player payload (`utils/playerPayload.ts`).
+- **VTT:** the same line in the token's stat panel, and in the "Link to Stat Block?" preview.
+- **GM screen:** a new `dc-table` widget showing a level picker → level DC with the six adjustments, the simple DCs, and a "for this creature" mode when a `rules-entry` widget is pinned next to it.
+- **Command palette:** "DC 7" or "DC level 7 hard" answers inline.
+- **Tests:** `tests/dcs.test.ts` for the table edges (−1, 25), rarity steps, the trait map (multi-trait creatures list each skill once), and unknown traits.
+
+### 10.2 P9: Automatic condition tick-down in combat (small–medium)
+
+**What exists:** tokens carry `conditions: TokenCondition[]` (`name`, `value`, `hidden`), `hpCurrent/hpMax` and `timers`. `stores/encounter.ts` `nextTurn()` ticks turn-start timers, `prevTurn()` unticks exactly those ticks, and `updateToken` writes condition changes to the combat log. Nothing changes a condition by itself.
+
+**Plan:** one pure module, `rules/turnEffects.ts`, which `nextTurn`/`prevTurn` call:
+- `endOfTurn(token)` for the token whose turn ends:
+  - **Frightened** goes down by 1 (and is removed at 0).
+  - **Persistent damage** (a valued condition per damage type, e.g. "Persistent fire 2d6") raises a prompt: roll the damage (via `useDiceRoll`), apply it to HP, then the DC 15 flat check with an "assisted" toggle (DC 10) that removes it on success.
+  - Other end-of-turn conditions from a small per-game table (e.g. sickened is **not** on it: it only ends by retching).
+- `startOfTurn(token)` for the token whose turn starts:
+  - **Dying**: a recovery-check prompt (flat check DC 10 + dying value) with the four results, which adjusts dying. Reaching dying 0 removes it, adds or raises **wounded** by 1 and leaves the token unconscious. Dying reaching 4 − doomed marks the token dead.
+  - **Stunned / slowed / quickened**: a reminder of the actions lost or gained this turn. Stunned goes down by the actions it takes.
+- **HP hooks in `updateToken`:** dropping to 0 HP on a party token (PC or `treat_as_pc` companion) adds dying 1 + wounded (dying 2 + wounded on a "critical hit" checkbox in the HP dialog). Non-party tokens dropping to 0 are marked defeated, matching the usual "monsters die at 0" default. Healing above 0 ends dying and adds wounded 1.
+- **Undo:** like the timers, each turn change records its condition changes (session-only), and `prevTurn` reverts exactly those. Every automatic change is written to the combat log as "auto".
+- **Opt-out:** a campaign setting "Automate conditions" (on by default) with separate switches for tick-down, dying and persistent prompts. A prompt can always be dismissed without doing anything.
+- **Player view:** unchanged except that conditions update. The prompts are GM-only.
+- **Tests:** `tests/turnEffects.test.ts` (frightened, dying ladder with wounded/doomed, the persistent-damage flat check, critical drop to 0, healing) and an encounter-store test that next → prev leaves the conditions exactly as they were.
+
+### 10.3 P10: Creature builder (medium)
+
+**What exists:** `rules/factory.ts` `newRulesEntity(kind, { name, game, origin })` and the compendium editor (`components/rules/RulesEditor.vue`) can already make a `user`-origin creature by hand. Weak/elite adjustments live in `rules/combat.ts`. The `Creature` type has every stat field the builder needs.
+
+**Plan:**
+- `rules/creatureBuilding.ts` (data per game in the registry): GM Core's "Building Creatures" tables by level −1…24: ability modifiers, Perception, skills, AC, saves, HP, strike attack bonus, strike damage, spell DC and spell attack, each with its extreme/high/moderate/low (or terrible) column. HP is a range, and the midpoint is used.
+- **Roadmaps:** brute, skirmisher, sniper, soldier, spellcaster, skill paragon, magical striker. Each roadmap is a preset of which column every stat uses. A custom roadmap starts from "all moderate".
+- **UI:** a "Build creature" dialog from the compendium's creature list and from the encounter builder:
+  1. Level, size, traits, rarity and a roadmap.
+  2. A grid of every stat with its column (extreme…low), showing the resulting number. Clicking a column changes it, and the number can still be typed over (then marked "custom").
+  3. Strikes: name, traits, the attack column and the damage column, with damage written as dice (e.g. 2d8+9 from the table).
+  4. Abilities: free text, plus "copy from" a compendium creature's actions.
+- **Saving** makes a normal `user` creature (`origin: 'user'`), so it shows up in the compendium, the encounter builder, the VTT and the XP math with no special case. An "Open in editor" button continues in the existing `RulesEditor`.
+- **Level shift:** "Rebuild at level N" on a `user` creature rebuilt from its roadmap. It keeps the chosen columns and recomputes the numbers. Edits that were typed over are kept and listed.
+- **Tests:** a known GM Core example creature rebuilt from its roadmap within ±1 of the book; level shift; the user creature appears in `rulesQuery` with the right level.
+
+### 10.4 P11: Treasure rolls and earn income (small–medium)
+
+**What exists:** `TreasureRow` in `rules/registry.ts` holds the per-level counts of permanent items and consumables (`permanent`, `consumables` keyed by item level) and the currency. Encounter loot is the inventory owner `encounter:<id>`, edited through `EncounterLootDialog` / `useInventory`. Purses exist per character and for the stash. The wealth check counts awarded treasure (§9.1).
+
+**Treasure rolls:**
+- `rules/treasureRoll.ts` (pure, with an injectable random source): given a level, the party size and how much of the level's treasure to hand out (a share or "the rest of this level"), it picks the item slots from the level's counts and fills each slot with a random compendium item of that level and kind.
+- Filters: common only (default), uncommon allowed, item kinds (weapons/armor/worn/consumables), game. Items that a party member already owns can be skipped.
+- **Remaining budget:** a level's treasure is shared across that level's encounters. The roll shows what is still unawarded at this level from the wealth data (`useWealth`) and suggests the share for this encounter.
+- **UI:** a "Roll treasure" button in the encounter loot dialog. It shows the rolled list where you can re-roll, swap or remove single slots, then "Add to loot" adds them as encounter-owned entries, like the "From the enemies' gear" suggestions. Currency goes in as one coin entry. Nothing is awarded until the encounter is resolved, so the wealth % stays honest.
+- SF2e uses the same slot counts with grade-based gear. Credits come from the SF2e row.
+
+**Earn income:**
+- `rules/income.ts`: the Earn Income table by task level 0…20 with the failure / trained / expert / master / legendary per-day amounts (critical success uses task level + 1). The task DC comes from `levelDc` (P8).
+- **UI:** an "Earn income" action on a party member (party page): task level, proficiency, days and the check result (or "roll" with the character's modifier typed in). The total goes into that character's purse in one write, as a **correction** (not an award), since downtime income isn't treasure from play. The wealth readout then shows it as owned, not as awarded. A day-by-day mode is available for mixed results.
+- **Tests:** `tests/treasureRoll.test.ts` with a seeded RNG (slot counts match the row, filters hold, nothing above the level), `tests/income.test.ts` (table edges, critical success, days × rate, credits in SF2e).
+
+### 10.5 P12: Exploration, travel and the in-game date (medium–large, optional)
+
+**What exists:** sessions, events and the chronicle carry an in-world `date` as **free text**, with no calendar. Regions and locations are on the world map. Quests have status. There's no notion of travel or exploration activities.
+
+**Plan (only worth it if travel matters at your table):**
+- **Calendar:** `rules/calendar.ts`, a campaign-level calendar with a current date and "advance by hours/days". It has a Golarion preset (Absalom Reckoning months and weekdays) and a plain "Day N" preset. The SF2e preset is checked against the SF2e books before it's offered. The old free-text dates stay as they are, and new sessions/events can pick a date from the calendar instead.
+- **Travel:** a travel calculator from the party's slowest Speed (travel speed table, e.g. Speed 25 → 20 miles per 8-hour day), terrain (difficult ×½, greater difficult ×⅓) and the distance. It optionally takes the distance from a path drawn on the world map (using the map scale). "Travel" advances the calendar by the result and writes an event entry.
+- **Exploration activities:** a GM-screen widget listing each PC's current activity (Avoid Notice, Defend, Detect Magic, Follow the Expert, Investigate, Scout, Search, Hustle, …) with its rule summary from the synced `action` entries. Their effect on initiative (e.g. Avoid Notice → Stealth for initiative) is shown when an encounter starts.
+- **Out of scope:** hex-crawl maps, random encounter tables per terrain (the existing random tables can do that) and weather simulation (a weather widget exists).
+- **Tests:** calendar arithmetic (month and year rollover in each preset), the travel table and terrain multipliers.
+
+### 10.6 Proposed order
+
+| Step | What | Size | Why here |
+|---|---|---|---|
+| P8 | DC table + Recall Knowledge | S | Used every session; P9 and P11 reuse `levelDc`. |
+| P9 | Condition tick-down | S–M | Saves the most mistakes in combat. Touches only the encounter store and a new pure module. |
+| P10 | Creature builder | M | Self-contained; output is a plain `user` creature. |
+| P11 | Treasure rolls + earn income | S–M | Builds on the wealth data (P5) and `levelDc` (P8). |
+| P12 | Exploration, travel, calendar | M–L | Optional; decide after P8–P11. |
+
+### 10.7 Open questions
+
+1. **P9, monsters at 0 HP:** mark them defeated (default) or give named NPCs dying too? Proposal: a per-token "uses dying rules" toggle, on for party tokens and off for the rest.
+2. **P9, persistent damage:** roll it automatically at the end of the turn, or prompt only with the formula and let you roll? Proposal: prompt with a "Roll" button, so physical dice still work.
+3. **P11, earn income:** should it count toward the wealth check as awarded treasure? Proposal: no, a correction (§10.4), since GM Core's treasure tables already assume some downtime.
+4. **P11, treasure filters:** common only by default, or include uncommon?
+5. **P12:** does travel matter enough at your table to build it? Which calendar does The Codex use?
+6. **P8, player side:** should the player window ever show Recall Knowledge results the GM reveals (e.g. "Weakness: fire" after a success)? Proposal: later, through the existing reveal path.
