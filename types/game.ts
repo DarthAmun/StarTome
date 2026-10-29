@@ -10,6 +10,18 @@ export const GAME_CONFIG: Record<GameId, { label: string; short: string; color: 
 
 export type AdvancementMode = 'xp' | 'milestone'
 
+/** What the encounter changes by itself (FEATURES_PLAN.md §10.2). */
+export interface AutomationSettings {
+  /** Frightened and stunned go down by themselves; action reminders at turn start. */
+  tickDown: boolean
+  /** Dying, wounded and recovery checks for tokens that use dying rules; the rest are defeated at 0 HP. */
+  dying: boolean
+  /** Persistent damage prompt at the end of the token's turn. */
+  persistent: boolean
+}
+
+export const DEFAULT_AUTOMATION: AutomationSettings = { tickDown: true, dying: true, persistent: true }
+
 /** Per-campaign rules options (FEATURES_PLAN.md §7). */
 export interface CampaignRules {
   advancement: AdvancementMode
@@ -22,10 +34,13 @@ export interface CampaignRules {
   baselineAt: string | null
   /** Count awarded consumables toward the wealth %. */
   countConsumables: boolean
+  /** Automate conditions in combat. */
+  automation: AutomationSettings
 }
 
 export const DEFAULT_CAMPAIGN_RULES: CampaignRules = {
   advancement: 'xp', abp: false, startingLevel: 1, startingTreasure: 0, startingConsumables: 0, baselineAt: null, countConsumables: true,
+  automation: DEFAULT_AUTOMATION,
 }
 
 /** Campaigns imported from DM's Tome carry no game; they were PF2e campaigns. */
@@ -40,5 +55,6 @@ export function campaignGame(c: { game?: unknown } | null | undefined): GameId {
 }
 
 export function campaignRules(c: { rules?: Partial<CampaignRules> | null } | null | undefined): CampaignRules {
-  return { ...DEFAULT_CAMPAIGN_RULES, ...(c?.rules ?? {}) }
+  const rules = { ...DEFAULT_CAMPAIGN_RULES, ...(c?.rules ?? {}) }
+  return { ...rules, automation: { ...DEFAULT_AUTOMATION, ...(c?.rules?.automation ?? {}) } }
 }

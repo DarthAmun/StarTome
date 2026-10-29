@@ -80,6 +80,14 @@
                   <button class="tem-dmg-btn tem-dmg-btn--dmg" @click="applyDamage">− Dmg</button>
                   <button class="tem-dmg-btn tem-dmg-btn--heal" @click="applyHealing">+ Heal</button>
                 </div>
+                <label class="tem-sync-row" style="margin-top:6px" title="Dying 2 instead of 1 when this drops the token to 0 HP">
+                  <input v-model="localCritical" type="checkbox" class="tem-checkbox" />
+                  <span>Critical hit</span>
+                </label>
+                <label class="tem-sync-row" title="Party tokens use the dying rules at 0 HP; others are defeated. Turn it on for a named NPC.">
+                  <input v-model="localUsesDying" type="checkbox" class="tem-checkbox" />
+                  <span>Uses dying rules <span class="tem-hint-inline">{{ localUsesDying === localIsPlayerToken ? 'default' : 'set here' }}</span></span>
+                </label>
               </div>
 
               <!-- Right -->
@@ -219,7 +227,7 @@
 </template>
 
 <script setup lang="ts">
-import type { EncounterToken, TokenCondition, TokenTimer } from '~/stores/encounter'
+import type { EncounterToken, HpChangeOptions, TokenCondition, TokenTimer } from '~/stores/encounter'
 import { rulesGet } from '~/composables/useRules'
 import { useCreatureSearch, otherGameTag, type CreatureOption } from '~/composables/useCreatureSearch'
 import { tokenStats, type Adjustment } from '~/rules/combat'
@@ -234,7 +242,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
-  update: [tokenId: number, changes: Partial<EncounterToken>]
+  update: [tokenId: number, changes: Partial<EncounterToken>, hpOpts?: HpChangeOptions]
   'open-conditions': []
 }>()
 
@@ -253,6 +261,10 @@ const localIsPlayerToken = ref(false)
 const localVisionRange = ref<number | null>(null)
 const localElevation = ref<number | null>(null)
 const localTimers = ref<TokenTimer[]>([])
+const localCritical = ref(false)
+const localUsesDying = ref(false)
+/** Hits taken in this dialog while the token was already at 0 HP (each raises dying). */
+const hitsAtZero = ref(0)
 
 const TIMER_PRESETS = [
   { name: 'Breath Weapon', turns: 2 },
@@ -296,6 +308,9 @@ watch(() => props.token, (tok) => {
   localVisionRange.value = tok.visionRange ?? null
   localElevation.value = tok.elevation ?? null
   localTimers.value = (tok.timers ?? []).map(t => ({ ...t }))
+  localCritical.value = false
+  localUsesDying.value = tok.usesDying ?? tok.isPlayerToken ?? false
+  hitsAtZero.value = 0
   linkedName.value = null
   changingLink.value = false
   resetLinkSearch()
@@ -340,6 +355,7 @@ const damageAmt = ref<number | null>(null)
 function applyDamage() {
   if (!damageAmt.value) return
   const current = localHpCurrent.value ?? 0
+  if (current <= 0 && damageAmt.value > 0) hitsAtZero.value++
   localHpCurrent.value = Math.max(0, current - damageAmt.value)
   damageAmt.value = null
 }
@@ -378,6 +394,11 @@ async function save() {
   if (localIsPlayerToken.value !== (props.token.isPlayerToken ?? false)) changes.isPlayerToken = localIsPlayerToken.value
   if (localVisionRange.value !== props.token.visionRange) changes.visionRange = localVisionRange.value || null
   if (localElevation.value !== props.token.elevation) changes.elevation = localElevation.value ?? null
+  // Stored only when it differs from the default, so the PC flag keeps steering it
+  const usesDying = localUsesDying.value === localIsPlayerToken.value ? null : localUsesDying.value
+  if (usesDying !== (props.token.usesDying ?? null)) changes.usesDying = usesDying
+  // Damage at 0 HP raises dying even though HP stays at 0
+  if (hitsAtZero.value && !('hpCurrent' in changes)) changes.hpCurrent = localHpCurrent.value
   const timers = cleanTimers(localTimers.value)
   if (JSON.stringify(timers) !== JSON.stringify(props.token.timers ?? [])) changes.timers = timers
 
@@ -394,7 +415,7 @@ async function save() {
     changes.size = stats.size
   }
 
-  if (Object.keys(changes).length) emit('update', props.token.id, changes)
+  if (Object.keys(changes).length) emit('update', props.token.id, changes, { critical: localCritical.value, hitsAtZero: hitsAtZero.value })
   emit('close')
 }
 </script>

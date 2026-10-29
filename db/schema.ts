@@ -113,6 +113,7 @@ export interface DbEncounterToken {
   timers?: unknown[] | string // TokenTimer[]; a value since v12 — non-indexed
   acts_while_hidden?: number  // 0 | 1 — hidden token still takes its turn
   is_ally?: number            // 0 | 1 — fights with the party; left out of the XP meter
+  uses_dying?: boolean | null // dying rules at 0 HP; null = party tokens yes, others no — non-indexed
 }
 
 export interface DbEncounterWall {

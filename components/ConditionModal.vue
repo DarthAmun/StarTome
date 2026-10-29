@@ -17,7 +17,7 @@
             ref="searchEl"
             v-model="search"
             class="cm-search-input"
-            placeholder="Search conditions…"
+            placeholder="Search conditions… (or Persistent fire 2d6)"
             autocomplete="off"
           />
           <button v-if="search" class="cm-search-clear" @click="search = ''">✕</button>
@@ -52,6 +52,10 @@
                     @click="toggleHidden(idx)"
                   >{{ cond.hidden ? '◌' : '👁' }}</button>
                   <button class="condition-remove" @click="removeCondition(idx)">✕</button>
+                </div>
+                <div v-if="isPersistent(cond)" class="cm-persistent-row">
+                  <span class="cm-persistent-label">Damage per turn</span>
+                  <input :value="cond.formula ?? ''" class="cm-persistent-input" placeholder="2d6" @change="setFormula(idx, ($event.target as HTMLInputElement).value)" />
                 </div>
               </div>
             </div>
@@ -160,6 +164,7 @@ import type { EncounterToken, TokenCondition } from '~/stores/encounter'
 import { conditionInfo, getConditionColor } from '~/composables/useConditions'
 import { loadAvailableConditions, saveConditionStyle as storeConditionStyle, type AvailableCondition } from '~/composables/useConditionCatalog'
 import type { GameId } from '~/types/game'
+import { isPersistent, parsePersistent } from '~/rules/turnEffects'
 
 const props = defineProps<{
   token: EncounterToken | null
@@ -237,14 +242,19 @@ function emit_update() {
 }
 
 function addCustomCondition() {
-  const name = customConditionEntry.value
-  if (!name || isActive(name)) return
+  const typed = customConditionEntry.value
+  if (!typed) return
+  // "Persistent fire 2d6" → a persistent damage condition with its formula
+  const persistent = parsePersistent(typed)
+  const name = persistent?.name ?? typed
+  if (isActive(name)) return
   const cat = conditionInfo(name)
   localConditions.value.push({
     name,
     value: null,
     color: cat?.color ?? getConditionColor(name),
     icon: cat?.icon,
+    ...(persistent ? { formula: persistent.formula } : {}),
   })
   emit_update()
   search.value = ''
@@ -262,6 +272,11 @@ function toggleCondition(cond: AvailCondition) {
       icon: cond.icon,
     })
   }
+  emit_update()
+}
+
+function setFormula(idx: number, formula: string) {
+  localConditions.value[idx] = { ...localConditions.value[idx], formula: formula.trim() || undefined }
   emit_update()
 }
 
@@ -444,6 +459,9 @@ watch(() => props.token, (tok) => {
   transition: background 0.1s;
 }
 .cm-active-row:hover { background: rgba(159,122,191,0.06); }
+.cm-persistent-row { display: flex; align-items: center; gap: 8px; padding: 0 10px 6px; }
+.cm-persistent-label { font-size: 11px; color: var(--text3); }
+.cm-persistent-input { width: 90px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); background: transparent; color: var(--text); font-size: 12px; }
 .cm-active-name {
   flex: 1;
   min-width: 0;

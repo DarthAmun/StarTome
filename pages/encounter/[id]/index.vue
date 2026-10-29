@@ -287,6 +287,9 @@
             :grid-offset-y="encounter.gridOffsetY"
           />
 
+          <!-- Condition automation: recovery checks, persistent damage, action reminders -->
+          <TurnPrompts v-if="mode === 'run'" />
+
           <!-- Drop hint when no map -->
           <div v-if="!encounter?.mapSource" class="canvas-empty-state">
             <OhVueIcon name="md-map" scale="4" class="enc-empty-icon" />
@@ -977,7 +980,7 @@ import { lsKey } from '~/utils/appNamespace'
 import { campaignGame, type GameId } from '~/types/game'
 import { useEncounterStore } from "~/stores/encounter";
 import type { LibraryTokenForm } from "~/components/LibraryTokenModal.vue";
-import type { EncounterToken } from "~/stores/encounter";
+import type { EncounterToken, HpChangeOptions } from "~/stores/encounter";
 import { useEncounterCanvas, type ShapeType, type ShapeOverlay } from "../../../composables/useEncounterCanvas";
 import { dbApi, type DbEncounterWall } from "~/composables/useDb";
 import { imageTypeOf, pickImageFile } from "~/utils/image";
@@ -1445,8 +1448,8 @@ async function onWallCtxDelete() {
   wallCtxMenu.open = false
 }
 
-async function onTokenEdit(tokenId: number, changes: Partial<EncounterToken>) {
-  await store.updateToken(tokenId, changes)
+async function onTokenEdit(tokenId: number, changes: Partial<EncounterToken>, hpOpts?: HpChangeOptions) {
+  await store.updateToken(tokenId, changes, hpOpts)
   editingToken.value = null
   selectedToken.value = null
 }

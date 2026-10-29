@@ -86,6 +86,8 @@ export function conditionInfo(name: string): ConditionCatalogEntry | undefined {
   const canonical = CONDITION_ALIASES[name] ?? name
   return CONDITION_CATALOG[canonical]
     ?? Object.entries(CONDITION_CATALOG).find(([n]) => n.toLowerCase() === canonical.toLowerCase())?.[1]
+    // "Persistent fire" and the like
+    ?? (/^persistent\b/i.test(canonical) ? CONDITION_CATALOG['Persistent Damage'] : undefined)
 }
 
 /** Built-in conditions available in a game, sorted by name. */

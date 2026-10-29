@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { getDb } from '~/composables/useDb'
 import { useEncounterStore } from '~/stores/encounter'
 
-async function encounter(tokens: { label: string; initiative: number | null; visible?: boolean; actsWhileHidden?: boolean; dead?: boolean; timers?: unknown[] }[]) {
+async function encounter(tokens: { label: string; initiative: number | null; visible?: boolean; actsWhileHidden?: boolean; dead?: boolean; timers?: unknown[]; conditions?: unknown[]; pc?: boolean; hp?: number }[]) {
   const db = getDb()
   const campaignId = await db.campaigns.add({ name: 'C', description: '', created_at: '', updated_at: '' }) as number
   const id = await db.encounters.add({
@@ -14,8 +14,8 @@ async function encounter(tokens: { label: string; initiative: number | null; vis
   for (const t of tokens) {
     await db.encounterTokens.add({
       encounter_id: id, token_id: null, grid_x: 0, grid_y: 0, size: 1, is_visible: t.visible === false ? 0 : 1, is_dead: t.dead ? 1 : 0,
-      label: t.label, conditions: '[]', hp_current: 10, hp_max: 10, ac: 15, initiative: t.initiative, notes: null,
-      vision_range: null, is_player_token: 0, image_source: null, image_type: 'file', elevation: null,
+      label: t.label, conditions: JSON.stringify(t.conditions ?? []), hp_current: t.hp ?? 10, hp_max: 10, ac: 15, initiative: t.initiative, notes: null,
+      vision_range: null, is_player_token: t.pc ? 1 : 0, image_source: null, image_type: 'file', elevation: null,
       timers: JSON.stringify(t.timers ?? []), acts_while_hidden: t.actsWhileHidden ? 1 : 0,
     })
   }
@@ -104,5 +104,57 @@ describe('encounter store', () => {
     expect(store.current!.combatLog.map(e => [e.type, e.value ?? e.conditionName])).toEqual([
       ['damage', 6], ['healing', 3], ['condition-added', 'Frightened'],
     ])
+  })
+
+  it('ticks conditions at turn boundaries and takes exactly that back on prevTurn', async () => {
+    const { store } = await encounter([
+      { label: 'A', initiative: 20, conditions: [{ name: 'Frightened', value: 2, hidden: true }, { name: 'Persistent fire', value: null, formula: '1d6' }] },
+      { label: 'B', initiative: 10, conditions: [{ name: 'Stunned', value: 1 }] },
+    ])
+    const before = JSON.parse(JSON.stringify(store.current!.tokens.map(t => t.conditions)))
+    store.nextTurn()
+    const [a, b] = store.current!.tokens
+    expect(a.conditions.find(c => c.name === 'Frightened')?.value).toBe(1)
+    expect(b.conditions.some(c => c.name === 'Stunned')).toBe(false)
+    expect(store.turnPrompts.map(p => p.kind)).toEqual(['persistent'])
+    expect(store.turnNotes).toHaveLength(1)
+    expect(store.current!.combatLog.every(e => e.auto)).toBe(true)
+    store.prevTurn()
+    expect(store.current!.tokens.map(t => t.conditions)).toEqual(before)
+    expect(store.turnPrompts).toEqual([])
+    expect(store.current!.combatLog).toEqual([])
+  })
+
+  it('knocks party tokens out into dying and defeats the rest at 0 HP', async () => {
+    const { store } = await encounter([{ label: 'Hero', initiative: 20, pc: true }, { label: 'Goblin', initiative: 10 }])
+    const [hero, goblin] = store.current!.tokens
+    await store.updateToken(hero.id, { hpCurrent: 0 }, { critical: true })
+    expect(hero.conditions.find(c => c.name === 'Dying')?.value).toBe(2)
+    expect(hero.isDead).toBe(false)
+    store.applyDamage(goblin.id, 20)
+    await Promise.resolve()
+    expect(goblin.isDead).toBe(true)
+    await store.updateToken(hero.id, { hpCurrent: 5 })
+    expect(hero.conditions.map(c => [c.name, c.value])).toEqual([['Wounded', 1]])
+  })
+
+  it('resolves recovery and persistent damage prompts and undoes them with the turn', async () => {
+    const { store } = await encounter([
+      { label: 'A', initiative: 20, conditions: [{ name: 'Persistent bleed', value: null, formula: '2' }] },
+      { label: 'Hero', initiative: 10, pc: true, hp: 0, conditions: [{ name: 'Dying', value: 1 }, { name: 'Unconscious', value: null }] },
+    ])
+    store.nextTurn()
+    const [bleed, recovery] = store.turnPrompts
+    expect(recovery).toMatchObject({ kind: 'recovery', dc: 11 })
+    store.resolvePersistent(bleed.id, 2, true)
+    store.resolveRecovery(recovery.id, 'success')
+    const [a, hero] = store.current!.tokens
+    expect(a.hpCurrent).toBe(8)
+    expect(a.conditions).toEqual([])
+    expect(hero.conditions.map(c => c.name)).toEqual(['Unconscious', 'Wounded'])
+    store.prevTurn()
+    expect(a.hpCurrent).toBe(10)
+    expect(a.conditions.map(c => c.name)).toEqual(['Persistent bleed'])
+    expect(hero.conditions.map(c => [c.name, c.value])).toEqual([['Dying', 1], ['Unconscious', null]])
   })
 })

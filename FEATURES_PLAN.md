@@ -287,6 +287,14 @@ P2 and P3 don't depend on each other and could swap if the party tab matters mor
   - GM screen **DC Table** widget: level picker, the six adjustments with their rarity, the simple DCs, and a source picker listing the pinned creatures/hazards for their Recall Knowledge.
   - Command palette: `dc 7`, `dc level 7 hard`, `dc 7 rare`, `dc trained` (without a difficulty it lists all six adjustments).
   - `tests/dcs.test.ts`.
+- **P9 done 2026-10-29 (v0.18.0)**:
+  - `rules/turnEffects.ts` (pure): `endOfTurn` (frightened −1; a prompt per persistent damage), `startOfTurn` (recovery check prompt at DC 10 + dying; stunned used up by the actions it takes; reminders for stunned, slowed and quickened), `recoveryCheck`, `persistentCheck`, `hpChangeEffects` and `revertChanges`. Dying rules checked on Archives of Nethys 2026-10-29 (Player Core p. 410): knocked out = dying 1 (2 on a critical) + wounded, unconscious; death at 4 − doomed; losing dying adds wounded 1; healing above 0 ends dying and unconscious; a hit at 0 HP raises dying by 1 (2 on a critical).
+  - Persistent damage is a condition named `Persistent <type>` with a `formula` (typed as "Persistent fire 2d6" in the condition dialog, or edited there). The formula stays in the GM window; the player payload already whitelists condition fields.
+  - Encounter store: `nextTurn` records a turn record (timer ticks, condition changes, HP from persistent damage, deaths, log entries, prompts) and `prevTurn` reverts exactly that, putting conditions back where they stood. Prompt results are recorded with the turn that raised them. Automatic log entries carry `auto` and show it.
+  - Per-token **Uses dying rules** (`encounterTokens.uses_dying`, non-indexed; null = on for player tokens, off for the rest) and a **Critical hit** box in the token dialog. Tokens without dying rules are defeated at 0 HP and come back when healed.
+  - `TurnPrompts` over the map in Run mode: recovery check (roll d20 or pick the result rolled at the table), persistent damage (roll the formula or type the damage, flat check DC 15 or 10 assisted, roll or tick "Ends"), dismiss without doing anything; reminders for the token whose turn it is.
+  - Campaign setting `CampaignRules.automation` with three switches (tick-down/reminders, dying, persistent prompts), all on by default, in the campaign edit dialog.
+  - Not done: moving a knocked-out PC's initiative to just before the turn that dropped it, heroic recovery (hero points) and nonlethal damage.
 
 ## 9. Open questions
 

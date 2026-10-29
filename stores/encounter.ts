@@ -13,6 +13,11 @@ import type { Hazard, RulesEntity } from '~/types/rules'
 import { parseDefeated, type DefeatedEnemy } from '~/rules/advancement'
 import { healthState, type HealthState } from '~/composables/useConditions'
 import { lsKey } from '~/utils/appNamespace'
+import { campaignRules, DEFAULT_AUTOMATION, type AutomationSettings } from '~/types/game'
+import {
+  endOfTurn, hpChangeEffects, persistentCheck, recoveryCheck, revertChanges, startOfTurn,
+  type ConditionChange, type Degree, type EffectResult, type TurnPromptSeed,
+} from '~/rules/turnEffects'
 import { playerWindow } from '~/utils/windowChannel'
 import { parseJson, toPlain } from '~/utils/json'
 
@@ -35,10 +40,28 @@ export interface CombatLogEntry {
   timestamp: number
   tokenId: number
   tokenName: string
-  type: 'damage' | 'healing' | 'condition-added' | 'condition-removed' | 'death' | 'revival' | 'note' | 'timer-up'
+  type: 'damage' | 'healing' | 'condition-added' | 'condition-removed' | 'condition-changed' | 'death' | 'revival' | 'note' | 'timer-up'
   value?: number
   conditionName?: string
   note?: string
+  /** Made by the condition automation, not by hand. */
+  auto?: boolean
+}
+
+/** A question the automation asks the GM (recovery check, persistent damage). Session-only. */
+export type TurnPrompt = TurnPromptSeed & { id: number; tokenId: number; tokenName: string }
+
+/** Options for an HP change: a critical hit, or hits taken while already at 0 HP. */
+export interface HpChangeOptions { critical?: boolean; hitsAtZero?: number }
+
+/** What one turn change did by itself, so prevTurn can take exactly that back (session-only). */
+interface TurnRecord {
+  tokenId: number | null
+  timerTokenId: number | null
+  timerIds: string[]
+  logIds: number[]
+  effects: { tokenId: number; changes: ConditionChange[]; hpDelta: number; died: boolean }[]
+  promptIds: number[]
 }
 
 export interface Token {
@@ -70,6 +93,7 @@ export interface TokenCondition {
   hidden?: boolean      // DM-only; players never see it
   color?: string        // hex color resolved at add-time; falls back to catalog/hash
   icon?: string         // gi-* icon name resolved at add-time
+  formula?: string      // persistent damage per turn, e.g. "2d6" (GM only)
 }
 
 /** Countdown on a token (e.g. a breath weapon recharge). Ticks down by one at
@@ -137,6 +161,7 @@ export interface EncounterToken {
   isAlly: boolean             // fights with the party; no XP
   elevation: number | null
   timers: TokenTimer[]
+  usesDying: boolean | null   // null = the default: party tokens do, others are defeated at 0 HP
   playerHealthState?: HealthState  // set only in player-sync payload; undefined in DM view
 }
 
@@ -178,9 +203,14 @@ export const useEncounterStore = defineStore('encounter', () => {
   const wallUndoStack = ref<number[]>([])
   const fovRecomputeTrigger = ref(0)
   const playerViewPrefs = ref<PlayerViewPrefs>(loadPlayerViewPrefs())
-  // Timers ticked by nextTurn, so prevTurn can undo exactly those ticks (session-only)
   let offPlayerReady: (() => void) | null = null
-  const timerTickHistory: Array<{ tokenId: number; timerIds: string[]; logIds: number[] }> = []
+  // Timer ticks and condition changes made by nextTurn, so prevTurn can undo exactly those (session-only)
+  const turnHistory: TurnRecord[] = []
+  const automation = ref<AutomationSettings>({ ...DEFAULT_AUTOMATION })
+  const turnPrompts = ref<TurnPrompt[]>([])
+  /** Reminders for the token whose turn it is (actions lost or gained). */
+  const turnNotes = ref<{ tokenId: number; text: string }[]>([])
+  let nextPromptId = 1
 
   // ── Computed ───────────────────────────────────────────────────────────────
   const allTokens = computed(() => current.value?.tokens ?? [])
@@ -251,6 +281,10 @@ export const useEncounterStore = defineStore('encounter', () => {
       _activeTurnTokenId.value = initiativeOrder.value[storedIndex]?.id ?? null
       walls.value = await dbApi.walls.list(id)
       wallUndoStack.value = []
+      automation.value = campaignRules(await dbApi.campaigns.get(data.campaign_id)).automation
+      turnHistory.length = 0
+      turnPrompts.value = []
+      turnNotes.value = []
       // One listener for the store's lifetime, whichever encounter is loaded.
       // A player view left open from before (GM reloaded) answers the hello.
       if (!asPlayer && !offPlayerReady) {
@@ -453,10 +487,11 @@ export const useEncounterStore = defineStore('encounter', () => {
     syncToPlayer()
   }
 
-  async function updateToken(instanceId: number, updates: Partial<EncounterToken>) {
+  async function updateToken(instanceId: number, updates: Partial<EncounterToken>, hpOpts: HpChangeOptions = {}) {
     if (!current.value) return
     const token = current.value.tokens.find(t => t.id === instanceId)
     if (!token) return
+    updates = withHpEffects(token, updates, hpOpts)
 
     // ── Detect log-worthy changes before mutating ──────────────────────────
     const tokenName = token.label || token.name
@@ -497,6 +532,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     if ('isAlly' in updates) dbUpdates.isAlly = updates.isAlly ? 1 : 0
     if ('elevation' in updates) dbUpdates.elevation = updates.elevation
     if ('timers' in updates) dbUpdates.timers = plain(updates.timers)
+    if ('usesDying' in updates) dbUpdates.usesDying = updates.usesDying
     await dbApi.encounterTokens.update(dbUpdates as { id: number })
     if ('isPlayerToken' in updates && fovMode.value === 'group') {
       fovRecomputeTrigger.value++
@@ -658,13 +694,25 @@ export const useEncounterStore = defineStore('encounter', () => {
     const order = initiativeOrder.value
     if (!order.length) return
     const idx = currentTurnIndex.value
+    const ending = order[idx]
     if (idx + 1 >= order.length) {
       _activeTurnTokenId.value = order[0].id
       roundNumber.value++
     } else {
       _activeTurnTokenId.value = order[idx + 1].id
     }
-    tickTurnStartTimers(_activeTurnTokenId.value)
+    const record: TurnRecord = { tokenId: _activeTurnTokenId.value, timerTokenId: null, timerIds: [], logIds: [], effects: [], promptIds: [] }
+    if (ending) applyEffects(ending, endOfTurn(ending.conditions, automation.value), record)
+    tickTurnStartTimers(_activeTurnTokenId.value, record)
+    const starting = _activeTurnTokenId.value !== null ? getToken(_activeTurnTokenId.value) : undefined
+    turnNotes.value = []
+    if (starting) {
+      const fx = startOfTurn(starting.conditions, automation.value, usesDying(starting))
+      applyEffects(starting, fx, record)
+      turnNotes.value = fx.notes.map(text => ({ tokenId: starting.id, text }))
+    }
+    turnHistory.push(record)
+    if (turnHistory.length > 200) turnHistory.shift()
     syncToPlayer()
     persistTurnState()
   }
@@ -674,7 +722,8 @@ export const useEncounterStore = defineStore('encounter', () => {
     if (!order.length) return
     const idx = currentTurnIndex.value
     if (idx === 0 && roundNumber.value <= 1) return
-    untickTurnStartTimers(_activeTurnTokenId.value)
+    undoTurn(_activeTurnTokenId.value)
+    turnNotes.value = []
     if (idx === 0) {
       if (roundNumber.value > 1) {
         roundNumber.value--
@@ -712,43 +761,175 @@ export const useEncounterStore = defineStore('encounter', () => {
   }
 
   /** Start of `tokenId`'s turn: count its running timers down by one. Callers sync. */
-  function tickTurnStartTimers(tokenId: number | null) {
+  function tickTurnStartTimers(tokenId: number | null, record: TurnRecord) {
     const token = tokenId !== null ? getToken(tokenId) : undefined
-    const ticked: string[] = []
-    const logIds: number[] = []
-    if (token?.timers.length) {
-      token.timers = token.timers.map(t => {
-        if (t.remaining <= 0) return t
-        ticked.push(t.id)
-        if (t.remaining === 1) {
-          // appendLogEntry pushes synchronously, so the new entry is last
-          appendLogEntry({ tokenId: token.id, tokenName: token.label || token.name, type: 'timer-up', note: t.name })
-          const entry = current.value?.combatLog.at(-1)
-          if (entry) logIds.push(entry.id)
-        }
-        return { ...t, remaining: t.remaining - 1 }
-      })
-      if (ticked.length) dbApi.encounterTokens.update({ id: token.id, timers: plain(token.timers) }).catch(err => reportError('Saving the timers', err))
-    }
-    if (tokenId !== null) timerTickHistory.push({ tokenId, timerIds: ticked, logIds })
-    if (timerTickHistory.length > 200) timerTickHistory.shift()
+    if (!token?.timers.length) return
+    record.timerTokenId = token.id
+    token.timers = token.timers.map(t => {
+      if (t.remaining <= 0) return t
+      record.timerIds.push(t.id)
+      if (t.remaining === 1) {
+        const id = logNow({ tokenId: token.id, tokenName: token.label || token.name, type: 'timer-up', note: t.name })
+        if (id !== undefined) record.logIds.push(id)
+      }
+      return { ...t, remaining: t.remaining - 1 }
+    })
+    if (record.timerIds.length) dbApi.encounterTokens.update({ id: token.id, timers: plain(token.timers) }).catch(err => reportError('Saving the timers', err))
   }
 
-  /** Stepping back out of `tokenId`'s turn reverts the tick its turn start applied. */
-  function untickTurnStartTimers(tokenId: number | null) {
-    const last = timerTickHistory[timerTickHistory.length - 1]
+  /** Stepping back out of `tokenId`'s turn reverts what its turn change did by itself. */
+  function undoTurn(tokenId: number | null) {
+    const last = turnHistory[turnHistory.length - 1]
     if (!last || last.tokenId !== tokenId) return
-    timerTickHistory.pop()
+    turnHistory.pop()
+    if (last.promptIds.length) {
+      const drop = new Set(last.promptIds)
+      turnPrompts.value = turnPrompts.value.filter(p => !drop.has(p.id))
+    }
+    for (const fx of [...last.effects].reverse()) revertEffect(fx)
     if (last.logIds.length && current.value) {
       const drop = new Set(last.logIds)
       current.value.combatLog = current.value.combatLog.filter(e => !drop.has(e.id))
       persistCombatLog()
     }
-    const token = getToken(last.tokenId)
+    const token = last.timerTokenId !== null ? getToken(last.timerTokenId) : undefined
     if (!token || !last.timerIds.length) return
     const ids = new Set(last.timerIds)
     token.timers = token.timers.map(t => ids.has(t.id) ? { ...t, remaining: Math.min(t.duration, t.remaining + 1) } : t)
     dbApi.encounterTokens.update({ id: token.id, timers: plain(token.timers) }).catch(err => reportError('Saving the timers', err))
+  }
+
+  // ── Actions — Condition automation (FEATURES_PLAN §10.2) ──────────────────
+  function usesDying(token: EncounterToken): boolean {
+    return token.usesDying ?? token.isPlayerToken
+  }
+
+  /** Appends a log entry and returns its id (appendLogEntry pushes synchronously). */
+  function logNow(partial: Omit<CombatLogEntry, 'id' | 'round' | 'timestamp'>): number | undefined {
+    appendLogEntry(partial)
+    return current.value?.combatLog.at(-1)?.id
+  }
+
+  function logChanges(token: EncounterToken, changes: ConditionChange[]): number[] {
+    const tokenName = token.label || token.name
+    const ids: (number | undefined)[] = changes.map(ch => logNow({
+      tokenId: token.id, tokenName, auto: true, conditionName: ch.name,
+      ...(ch.to === undefined ? { type: 'condition-removed' as const }
+        : ch.from === undefined ? { type: 'condition-added' as const, value: ch.to ?? undefined }
+        : { type: 'condition-changed' as const, value: ch.to ?? undefined }),
+    }))
+    return ids.filter((id): id is number => id !== undefined)
+  }
+
+  /** Applies a result to the token, logs it as automatic and records it for undo. */
+  function applyEffects(token: EncounterToken, fx: EffectResult, record: TurnRecord | null, hpDelta = 0) {
+    if (fx.changes.length) {
+      token.conditions = fx.conditions
+      dbApi.encounterTokens.update({ id: token.id, conditions: plain(token.conditions) }).catch(err => reportError('Saving the conditions', err))
+    }
+    const logIds = logChanges(token, fx.changes)
+    const died = fx.dead && !token.isDead
+    if (died) {
+      token.isDead = true
+      dbApi.encounterTokens.update({ id: token.id, isDead: 1 }).catch(err => reportError('Saving the token', err))
+      const id = logNow({ tokenId: token.id, tokenName: token.label || token.name, type: 'death', auto: true })
+      if (id !== undefined) logIds.push(id)
+    }
+    for (const seed of fx.prompts) {
+      const prompt: TurnPrompt = { ...seed, id: nextPromptId++, tokenId: token.id, tokenName: token.label || token.name }
+      turnPrompts.value = [...turnPrompts.value, prompt]
+      record?.promptIds.push(prompt.id)
+    }
+    if (!record) return
+    record.logIds.push(...logIds)
+    if (fx.changes.length || died || hpDelta) record.effects.push({ tokenId: token.id, changes: fx.changes, hpDelta, died })
+  }
+
+  function revertEffect(fx: TurnRecord['effects'][number]) {
+    const token = getToken(fx.tokenId)
+    if (!token) return
+    const dbUpdates: Record<string, any> = { id: token.id }
+    if (fx.changes.length) {
+      token.conditions = revertChanges(token.conditions, fx.changes)
+      dbUpdates.conditions = plain(token.conditions)
+    }
+    if (fx.hpDelta && token.hpCurrent !== null) {
+      token.hpCurrent = Math.max(0, Math.min(token.hpMax ?? Infinity, token.hpCurrent - fx.hpDelta))
+      dbUpdates.hpCurrent = token.hpCurrent
+    }
+    if (fx.died) {
+      token.isDead = false
+      dbUpdates.isDead = 0
+    }
+    dbApi.encounterTokens.update(dbUpdates as { id: number }).catch(err => reportError('Saving the token', err))
+  }
+
+  /** Adds dying/wounded/unconscious (or defeat) to an HP change made by hand. */
+  function withHpEffects(token: EncounterToken, updates: Partial<EncounterToken>, opts: HpChangeOptions): Partial<EncounterToken> {
+    if (!('hpCurrent' in updates)) return updates
+    const usesDyingNow = updates.usesDying !== undefined ? (updates.usesDying ?? token.isPlayerToken) : usesDying(token)
+    const fx = hpChangeEffects(updates.conditions ?? token.conditions, { from: token.hpCurrent, to: updates.hpCurrent ?? null, ...opts }, usesDyingNow, automation.value)
+    const out = { ...updates }
+    if (fx.changes.length) {
+      // Logged as automatic here; the diff in updateToken then sees no change
+      logChanges(token, fx.changes)
+      token.conditions = fx.conditions
+      out.conditions = fx.conditions
+    }
+    if (fx.dead && !token.isDead) out.isDead = true
+    if (fx.revived && token.isDead) out.isDead = false
+    return out
+  }
+
+  /** Resolves a recovery check prompt. */
+  function resolveRecovery(promptId: number, degree: Degree) {
+    const prompt = takePrompt(promptId)
+    const token = prompt && getToken(prompt.tokenId)
+    if (!token) return
+    const tokenName = token.label || token.name
+    const id = logNow({ tokenId: token.id, tokenName, type: 'note', auto: true, note: `Recovery check: ${degree.replace('-', ' ')}` })
+    const record = recordFor(promptId)
+    if (record && id !== undefined) record.logIds.push(id)
+    applyEffects(token, recoveryCheck(token.conditions, degree), record)
+    syncToPlayer()
+  }
+
+  /** Resolves a persistent damage prompt: the damage taken (0 for none) and whether the flat check ended it. */
+  function resolvePersistent(promptId: number, damage: number, recovered: boolean) {
+    const prompt = takePrompt(promptId)
+    const token = prompt && getToken(prompt.tokenId)
+    if (!token || prompt.kind !== 'persistent') return
+    const record = recordFor(promptId)
+    let hpDelta = 0
+    if (damage > 0 && token.hpCurrent !== null) {
+      const from = token.hpCurrent
+      const to = Math.max(0, from - damage)
+      hpDelta = to - from
+      const id = logNow({ tokenId: token.id, tokenName: token.label || token.name, type: 'damage', value: damage, auto: true, conditionName: prompt.condition })
+      if (id !== undefined) record?.logIds.push(id)
+      token.hpCurrent = to
+      dbApi.encounterTokens.update({ id: token.id, hpCurrent: to }).catch(err => reportError('Saving the token', err))
+      const hpFx = hpChangeEffects(token.conditions, { from, to, hitsAtZero: from <= 0 ? 1 : 0 }, usesDying(token), automation.value)
+      applyEffects(token, hpFx, record, hpDelta)
+      if (hpFx.revived) token.isDead = false
+    }
+    applyEffects(token, persistentCheck(token.conditions, prompt.condition, recovered), record)
+    syncToPlayer()
+  }
+
+  function dismissPrompt(promptId: number) {
+    takePrompt(promptId)
+  }
+
+  function takePrompt(promptId: number): TurnPrompt | undefined {
+    const prompt = turnPrompts.value.find(p => p.id === promptId)
+    turnPrompts.value = turnPrompts.value.filter(p => p.id !== promptId)
+    return prompt
+  }
+
+  /** The turn record that raised a prompt, so its result is undone with that turn. */
+  function recordFor(promptId: number): TurnRecord | null {
+    return turnHistory.find(r => r.promptIds.includes(promptId)) ?? null
   }
 
   // ── Actions — Player view ─────────────────────────────────────────────────
@@ -957,6 +1138,7 @@ export const useEncounterStore = defineStore('encounter', () => {
       isAlly: Boolean(raw.is_ally),
       elevation: raw.elevation ?? null,
       timers: parseJson<TokenTimer[]>(raw.timers, []),
+      usesDying: raw.uses_dying == null ? null : Boolean(raw.uses_dying),
     }
   }
 
@@ -964,10 +1146,11 @@ export const useEncounterStore = defineStore('encounter', () => {
     return current.value?.tokens.find(t => t.id === id)
   }
 
-  function applyDamage(tokenId: number, amount: number) {
+  function applyDamage(tokenId: number, amount: number, opts: HpChangeOptions = {}) {
     const token = getToken(tokenId)
     if (!token || token.hpCurrent === null) return
-    updateToken(tokenId, { hpCurrent: Math.max(0, token.hpCurrent - amount) })
+    const hitsAtZero = token.hpCurrent <= 0 && amount > 0 ? 1 : 0
+    updateToken(tokenId, { hpCurrent: Math.max(0, token.hpCurrent - amount) }, { ...opts, hitsAtZero })
   }
 
   async function setPartyLevel(level: number | null) {
@@ -1088,6 +1271,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     addTokenToEncounter, addCreatureToEncounter, addCreatureToEncounterAuto, setTokenRulesLink, moveToken, updateToken, removeToken, rememberDefeated, clearDefeated, setStatus, addToLibrary, updateLibraryToken,
     openPlayerWindow, closePlayerWindow, setShapeOverlays,
     nextTurn, prevTurn,
+    automation, turnPrompts, turnNotes, usesDying, resolveRecovery, resolvePersistent, dismissPrompt,
     getToken, applyDamage, rollAllInitiative, setInitiativeFormula, setPartyLevel, bulkRemoveTokens, bulkSetTokenVisibility, toggleCondition,
     addLogNote, clearCombatLog,
     addTimer, resetTimer, removeTimer, setTimers,

@@ -307,6 +307,18 @@
                                 <option value="milestone">Milestones</option>
                             </select>
                         </div>
+                        <div class="dlg-field">
+                            <label class="f-label">Automate conditions in combat</label>
+                            <label class="dlg-check" title="Frightened and stunned go down by themselves; reminders for slowed, stunned and quickened">
+                                <input v-model="editCampForm.automation.tickDown" type="checkbox" /> Tick-down and action reminders
+                            </label>
+                            <label class="dlg-check" title="Party tokens gain dying at 0 HP and roll recovery checks; others are defeated">
+                                <input v-model="editCampForm.automation.dying" type="checkbox" /> Dying and recovery checks
+                            </label>
+                            <label class="dlg-check" title="Ask for persistent damage and its flat check at the end of the token's turn">
+                                <input v-model="editCampForm.automation.persistent" type="checkbox" /> Persistent damage prompts
+                            </label>
+                        </div>
                     </div>
                     <div class="pv-dialog-footer">
                         <button class="ghost-btn" @click="editingCamp = null">
@@ -326,7 +338,7 @@
 <script setup lang="ts">
 import { rulesCounts } from "~/composables/useRules";
 import { RULES_KIND_CONFIG, RULES_KINDS } from "~/types/rules";
-import { GAME_CONFIG, GAME_IDS, campaignGame, campaignRules, type AdvancementMode, type GameId } from "~/types/game";
+import { DEFAULT_AUTOMATION, GAME_CONFIG, GAME_IDS, campaignGame, campaignRules, type AdvancementMode, type AutomationSettings, type GameId } from "~/types/game";
 import { dbApi } from "~/composables/useDb";
 import { useFormatters } from "~/composables/useFormatters";
 import { useAppDialogs } from "~/composables/useAppDialogs";
@@ -491,6 +503,7 @@ const editCampForm = ref({
     description: "",
     game: 'pf2e' as GameId,
     advancement: 'xp' as AdvancementMode,
+    automation: { ...DEFAULT_AUTOMATION } as AutomationSettings,
 });
 
 function startEditCampaign(c: any) {
@@ -500,6 +513,7 @@ function startEditCampaign(c: any) {
         description: c.description ?? "",
         game: campaignGame(c),
         advancement: campaignRules(c).advancement,
+        automation: { ...campaignRules(c).automation },
     };
 }
 
@@ -509,7 +523,7 @@ async function saveEditCampaign() {
         name: editCampForm.value.name,
         description: editCampForm.value.description,
         game: editCampForm.value.game,
-        rules: { ...campaignRules(editingCamp.value), advancement: editCampForm.value.advancement },
+        rules: { ...campaignRules(editingCamp.value), advancement: editCampForm.value.advancement, automation: { ...editCampForm.value.automation } },
     });
     const idx = campaigns.value.findIndex((c) => c.id === editingCamp.value.id);
     if (idx !== -1 && updated) campaigns.value[idx] = updated;
@@ -519,6 +533,7 @@ async function saveEditCampaign() {
 </script>
 
 <style scoped>
+.dlg-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text2); margin: 4px 0; cursor: pointer; }
 .home-page {
     flex: 1;
     display: flex;
