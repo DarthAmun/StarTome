@@ -17,6 +17,7 @@
     <LazyDiceRoller v-if="!isPlayerRoute" />
     <LazyAppSoundBar v-if="!isPlayerRoute" />
     <LevelUpDialog v-if="!isPlayerRoute" />
+    <AwardXpDialog v-if="!isPlayerRoute" />
     <div id="spark-layer" class="no-print" aria-hidden="true" />
 
     <!-- New Campaign dialog -->

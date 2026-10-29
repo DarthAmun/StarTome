@@ -40,6 +40,19 @@
           </button>
         </div>
 
+        <!-- Resolve (FEATURES_PLAN.md §5) -->
+        <button
+          v-if="encounter?.status === 'resolved'"
+          class="back-btn back-btn--active"
+          title="Resolved: loot went to the party stash and the XP was recorded. Click to re-open."
+          @click="reopen"
+        >
+          <OhVueIcon name="gi-laurels" scale="0.85" /> Resolved · Re-open
+        </button>
+        <button v-else class="back-btn" title="Move the loot to the party stash and award XP" @click="showResolve = true">
+          <OhVueIcon name="gi-laurels" scale="0.85" /> Resolve
+        </button>
+
         <!-- FOV mode toggle (run mode only; grayed when FOV disabled) -->
         <div v-if="mode === 'run'" class="enc-fov-mode-toggle" :class="{ 'enc-fov-mode-toggle--off': !encounter?.fovEnabled }" :title="encounter?.fovEnabled ? '' : 'Enable FOV & Walls in Prepare mode to use vision control'">
           <button class="fov-mode-btn" :class="{ active: store.fovMode === 'gm' }" :disabled="!encounter?.fovEnabled" title="GM sees all" @click="setFovMode('gm')">
@@ -132,6 +145,22 @@
               <span class="f-label">Difficulty</span>
             </div>
             <EncounterDifficulty :game="campaignGameId" />
+          </div>
+
+          <!-- Loot -->
+          <div class="sidebar-section">
+            <div class="sidebar-header">
+              <span class="f-label">Loot</span>
+            </div>
+            <p class="enc-hint">
+              <template v-if="lootSummary.count || lootSummary.coins">
+                {{ lootSummary.count }} {{ lootSummary.count === 1 ? 'item' : 'items' }}<template v-if="lootSummary.coins"> · {{ lootSummary.coins }}</template>
+              </template>
+              <template v-else>No loot planned yet.</template>
+            </p>
+            <Button severity="secondary" style="width:100%;justify-content:center;margin-top:6px" @click="showLoot = true">
+              <OhVueIcon name="gi-locked-chest" scale="0.85" /> Edit loot
+            </Button>
           </div>
 
           <!-- Battle Map -->
@@ -1046,6 +1075,8 @@
           </div>
         </div>
       </Teleport>
+      <ResolveEncounterDialog v-if="showResolve && encounter" :encounter-id="encounter.id" @close="showResolve = false" @resolved="onResolved" />
+      <EncounterLootDialog v-if="showLoot && encounter" :encounter-id="encounter.id" :campaign-id="encounter.campaignId" :game="campaignGameId" :name="encounter.name" @close="showLoot = false" />
     </div>
     <!-- end encounter-page -->
 
@@ -1104,6 +1135,13 @@ import { ADJUSTMENT_LABEL, applyAdjustment, type Adjustment } from "~/rules/comb
 import type { RulesEntity } from "~/types/rules";
 import { useSounds } from "~/composables/useSounds";
 import { useEntities } from "~/composables/useEntities";
+import { useInventory } from "~/composables/useInventory";
+import { useParty } from "~/composables/useParty";
+import { useResolution } from "~/composables/useResolution";
+import { tokenSides } from "~/rules/encounter";
+import { encounterOwner } from "~/rules/inventory";
+import { formatMoney } from "~/rules/format";
+import { partyMembers } from "~/rules/party";
 
 const ADJUSTMENT_OPTIONS: { value: Adjustment | null; label: string }[] = [
   { value: null, label: 'Normal' },
@@ -1152,9 +1190,56 @@ function setMode(next: 'prepare' | 'run') {
     if (!ok) return;
   }
   mode.value = next;
-  if (store.current?.id) {
-    dbApi.encounters.update({ id: store.current.id, status: next === 'run' ? 'active' : 'prepared' });
+  // A resolved encounter stays resolved until it is re-opened
+  if (store.current?.id && store.current.status !== 'resolved') {
+    const status = next === 'run' ? 'active' : 'prepared';
+    store.setStatus(status);
+    dbApi.encounters.update({ id: store.current.id, status });
   }
+}
+
+// ── Resolution and loot (FEATURES_PLAN.md §5) ──────────────────────────────
+const showResolve = ref(false);
+const showLoot = ref(false);
+const party = useParty();
+const inventory = useInventory();
+
+const lootSummary = computed(() => {
+  const id = store.current?.id;
+  if (!id) return { count: 0, coins: '' };
+  const owner = encounterOwner(id);
+  const count = inventory.entries.value.filter(e => e.owner === owner).reduce((n, e) => n + e.quantity, 0);
+  const cp = inventory.purses.value[owner] ?? 0;
+  return { count, coins: cp ? formatMoney({ cp }, campaignGameId.value) : '' };
+});
+
+function onResolved() {
+  showResolve.value = false;
+  store.setStatus('resolved');
+}
+
+async function reopen() {
+  if (!store.current) return;
+  if (!confirm('Re-open this encounter? Its loot comes back from the party stash (as far as it is still there) and the XP award is taken back. Level-ups stay; undo them on the Party page.')) return;
+  const short = await useResolution().reopenEncounter(store.current.id);
+  store.setStatus('prepared');
+  if (mode.value === 'run') {
+    store.setStatus('active');
+    dbApi.encounters.update({ id: store.current.id, status: 'active' });
+  }
+  if (short.names.length || short.cp) {
+    const parts = [...short.names, short.cp ? formatMoney({ cp: short.cp }, campaignGameId.value) : ''].filter(Boolean);
+    alert(`Not everything was still in the stash, so this stays there or is gone: ${parts.join(', ')}.`);
+  }
+}
+
+/** In Run mode, removed enemy tokens keep their XP for the resolve dialog. */
+async function keepDefeatedXp(ids: Iterable<number>) {
+  if (mode.value !== 'run') return;
+  const wanted = new Set(ids);
+  const partyNpcIds = new Set(partyMembers(party.characters.value).map(c => c.npcEntityId).filter((id): id is number => id !== null));
+  const { enemies } = tokenSides(store.allTokens.filter(t => wanted.has(t.id)), partyNpcIds);
+  await store.rememberDefeated(enemies);
 }
 
 watch(mode, async v => {
@@ -1401,9 +1486,11 @@ function bulkSetVisibility(visible: boolean) {
   clearSelection()
 }
 
-function bulkRemove() {
-  store.bulkRemoveTokens(selectedTokenIds.value)
+async function bulkRemove() {
+  const ids = new Set(selectedTokenIds.value)
   clearSelection()
+  await keepDefeatedXp(ids)
+  store.bulkRemoveTokens(ids)
 }
 
 
@@ -1458,7 +1545,8 @@ function onCtxAddTimer(tokenId: number, name: string, turns: number) {
   store.addTimer(tokenId, name, turns)
 }
 
-function onCtxRemoveToken(tokenId: number) {
+async function onCtxRemoveToken(tokenId: number) {
+  await keepDefeatedXp([tokenId])
   store.removeToken(tokenId)
 }
 
@@ -1782,6 +1870,9 @@ onMounted(async () => {
   campaignGameId.value = campaignGame(camp);
   // NPCs for token linking and the "View NPC" panel
   entitiesStore.loadAll(store.current!.campaignId);
+  // Party (who is an enemy, for kept XP) and the loot summary
+  if (party.loadedCampaign.value !== store.current!.campaignId) party.load(store.current!.campaignId);
+  if (inventory.loadedCampaign.value !== store.current!.campaignId) inventory.load(store.current!.campaignId);
 
   if (!canvasContainer.value) return;
 

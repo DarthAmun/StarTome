@@ -6,7 +6,8 @@ import type { ShapeOverlay } from '~/composables/useEncounterCanvas'
 import { rulesGet, rulesGetMany, rulesSetImage } from '~/composables/useRules'
 import { evaluateFormula } from '~/composables/useFormulaEvaluator'
 import { rollInitiative, rulesScope, tokenStats, type Adjustment } from '~/rules/combat'
-import type { RulesEntity } from '~/types/rules'
+import type { Hazard, RulesEntity } from '~/types/rules'
+import { parseDefeated, type DefeatedEnemy } from '~/rules/advancement'
 import { healthState, type HealthState } from '~/composables/useConditions'
 import { lsKey } from '~/utils/appNamespace'
 
@@ -152,6 +153,8 @@ export interface Encounter {
   soundPlaylistId?: number
   initiativeFormula: string | null
   partyLevel: number | null   // override of the party tab's level for the meter
+  status: string              // 'prepared' | 'active' | 'resolved'
+  defeated: DefeatedEnemy[]   // enemies removed in Run mode; their XP counts at resolve
 }
 
 export const useEncounterStore = defineStore('encounter', () => {
@@ -227,6 +230,8 @@ export const useEncounterStore = defineStore('encounter', () => {
         soundPlaylistId: data.sound_playlist_id ?? undefined,
         initiativeFormula: data.initiative_formula ?? null,
         partyLevel: data.party_level ?? null,
+        status: data.status ?? 'prepared',
+        defeated: parseDefeated(data.defeated),
         tokens: ((data as any).tokens || []).map(normalizeToken),
       }
       roundNumber.value = data.round_number ?? 1
@@ -943,6 +948,37 @@ export const useEncounterStore = defineStore('encounter', () => {
     await Promise.all(toUpdate.map(({ id, initiative }) => dbApi.encounterTokens.update({ id, initiative })))
   }
 
+  /** Keeps the XP of enemy tokens that are about to be removed during play (FEATURES_PLAN.md §4.6). */
+  async function rememberDefeated(tokens: EncounterToken[]) {
+    if (!current.value) return
+    const linked = tokens.filter(t => t.linkedRulesId)
+    if (!linked.length) return
+    const entries = new Map((await rulesGetMany([...new Set(linked.map(t => t.linkedRulesId!))])).map(e => [e.id, e]))
+    const added: DefeatedEnemy[] = []
+    for (const t of linked) {
+      const e = entries.get(t.linkedRulesId!)
+      if (!e || (e.kind !== 'creature' && e.kind !== 'hazard')) continue
+      added.push({
+        name: t.label || e.name, rulesId: e.id, level: e.level, kind: e.kind,
+        complex: e.kind === 'hazard' ? (e as Hazard).complex : undefined, adjustment: t.adjustment,
+      })
+    }
+    if (!added.length || !current.value) return
+    current.value.defeated = [...current.value.defeated, ...added]
+    await dbApi.encounters.update({ id: current.value.id, defeated: JSON.stringify(current.value.defeated) })
+  }
+
+  async function clearDefeated() {
+    if (!current.value) return
+    current.value.defeated = []
+    await dbApi.encounters.update({ id: current.value.id, defeated: '[]' })
+  }
+
+  /** The encounter was resolved or re-opened elsewhere (the resolve dialog writes the database). */
+  function setStatus(status: string) {
+    if (current.value) current.value.status = status
+  }
+
   async function bulkRemoveTokens(ids: Set<number>) {
     if (!current.value || !ids.size) return
     current.value.tokens = current.value.tokens.filter(t => !ids.has(t.id))
@@ -991,7 +1027,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     addWall, undoLastWall, updateWall, deleteWall, toggleDoor,
     setFovEnabled,
     setSoundPlaylistId,
-    addTokenToEncounter, addCreatureToEncounter, addCreatureToEncounterAuto, setTokenRulesLink, moveToken, updateToken, removeToken, addToLibrary, updateLibraryToken,
+    addTokenToEncounter, addCreatureToEncounter, addCreatureToEncounterAuto, setTokenRulesLink, moveToken, updateToken, removeToken, rememberDefeated, clearDefeated, setStatus, addToLibrary, updateLibraryToken,
     openPlayerWindow, closePlayerWindow, setShapeOverlays,
     nextTurn, prevTurn,
     getToken, applyDamage, rollAllInitiative, setInitiativeFormula, setPartyLevel, bulkRemoveTokens, bulkSetTokenVisibility, toggleCondition,

@@ -99,8 +99,19 @@
             Open Battlefield Editor
           </NuxtLink>
 
+          <!-- Resolution -->
+          <div v-if="selectedEncounter.status === 'resolved'" class="enc-resolved">
+            <OhVueIcon name="gi-laurels" scale="0.9" />
+            <span>
+              Resolved {{ formatDate(selectedEncounter.resolvedAt) }} · {{ selectedEncounter.xpTotal ?? 0 }} XP at party level {{ selectedEncounter.partyLevelAtResolve ?? '?' }}
+              · {{ selectedEncounter.xpAwarded ?? 0 }} XP each
+            </span>
+          </div>
+
           <!-- Actions -->
           <div class="enc-detail-actions">
+            <button v-if="selectedEncounter.status === 'resolved'" class="btn btn-ghost btn-sm" title="Loot comes back from the stash, the XP award is taken back" @click="reopen(selectedEncounter.id)">↺ Re-open</button>
+            <button v-else class="btn btn-ghost btn-sm" title="Move the loot to the party stash and award XP" @click="resolvingId = selectedEncounter.id">✓ Resolve</button>
             <button class="btn btn-ghost btn-sm" @click="cloneEncounter(selectedEncounter.id)">⎘ Clone</button>
             <button class="btn btn-danger btn-sm" @click="deleteEncounter(selectedEncounter.id)">Delete</button>
           </div>
@@ -114,6 +125,8 @@
         <button class="btn-accent-sm" style="margin-top:10px" @click="createEncounter">+ New Encounter</button>
       </div>
 
+      <ResolveEncounterDialog v-if="resolvingId" :encounter-id="resolvingId" @close="resolvingId = null" @resolved="onResolved" />
+
     </div>
 
   </div>
@@ -122,6 +135,7 @@
 <script setup lang="ts">
 import { dbApi, getDb } from '~/composables/useDb'
 import { useFormatters } from '~/composables/useFormatters'
+import { useResolution } from '~/composables/useResolution'
 
 const { formatDateShort: formatDate } = useFormatters()
 const route = useRoute()
@@ -175,6 +189,10 @@ async function loadEncounters() {
       roundNumber: r.round_number ?? 0,
       fovEnabled: !!r.fov_enabled,
       tokenCount,
+      resolvedAt: r.resolved_at ?? null,
+      xpTotal: r.xp_total ?? null,
+      xpAwarded: r.xp_awarded ?? null,
+      partyLevelAtResolve: r.party_level_at_resolve ?? null,
     }
   }))
   encounters.value = withTokens
@@ -247,6 +265,22 @@ const STATUS_COLORS: Record<string, string> = {
   active: '#4ab8e8',
   prepared: 'var(--text3)',
   finished: '#b87de8',
+  resolved: '#7cc44e',
+}
+
+// ── Resolution ──
+const resolvingId = ref<number | null>(null)
+
+async function onResolved() {
+  resolvingId.value = null
+  await loadEncounters()
+}
+
+async function reopen(id: number) {
+  if (!confirm('Re-open this encounter? Its loot comes back from the party stash (as far as it is still there) and the XP award is taken back. Level-ups stay; undo them on the Party page.')) return
+  const short = await useResolution().reopenEncounter(id)
+  await loadEncounters()
+  if (short.names.length || short.cp) alert(`Not everything was still in the stash: ${short.names.join(', ')}${short.cp ? ' and some coins' : ''} stay there or are gone.`)
 }
 function statusStyle(status: string) {
   const c = STATUS_COLORS[status] ?? 'var(--text3)'
@@ -256,6 +290,7 @@ function statusStyle(status: string) {
 
 <style scoped>
 .elist-build { text-decoration: none; }
+.enc-resolved { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #7cc44e; }
 .enc-actions {
   display: none;
   gap: 3px;

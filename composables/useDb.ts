@@ -55,6 +55,13 @@ export interface DbEncounter {
   sound_playlist_id?: number | null
   initiative_formula?: string | null
   party_level?: number | null // overrides the party tab's level for this encounter's meter
+  // Resolution (FEATURES_PLAN.md P4); status 'resolved'. Non-indexed, no version bump.
+  defeated?: string            // JSON DefeatedEnemy[]: enemies removed in Run mode, XP kept
+  resolved_at?: string | null
+  xp_total?: number | null     // XP of the enemies counted, against party_level_at_resolve
+  xp_awarded?: number | null   // per participant, as for four PCs, incl. accomplishment XP
+  party_level_at_resolve?: number | null
+  resolution?: string | null   // JSON ResolutionRecord, for the undo
   created_at: string
   updated_at: string
 }
@@ -168,6 +175,20 @@ export interface DbLevelUp {
   trigger: 'manual' | 'quest' | 'encounter'
   ref_id: number | null            // quest entity / encounter id
   changes: string                  // JSON LevelChange[]
+  undone_at?: string | null
+}
+
+/** One XP award (FEATURES_PLAN.md P4): an encounter's or an accomplishment's XP for some characters. */
+export interface DbXpAward {
+  id?: number
+  campaign_id: number
+  at: string
+  source: 'encounter' | 'accomplishment'
+  ref_type: 'encounter' | 'quest' | null
+  ref_id: number | null
+  amount: number                   // per character
+  character_ids: string            // JSON number[]
+  reason: string
   undone_at?: string | null
 }
 
@@ -295,6 +316,7 @@ class StarTomeDb extends Dexie {
   levelUps!:          Table<DbLevelUp>
   inventory!:         Table<DbInventory>
   purses!:            Table<DbPurse>
+  xpAwards!:          Table<DbXpAward>
 
   constructor() {
     super(DB_NAME)
@@ -367,6 +389,10 @@ class StarTomeDb extends Dexie {
     this.version(6).stores({
       inventory:          '++id, campaign_id, owner, item_id',
       purses:             '++id, campaign_id, owner',
+    })
+    // v7: XP awards (FEATURES_PLAN.md P4). Encounter resolution lives on `encounters`.
+    this.version(7).stores({
+      xpAwards:           '++id, campaign_id, at',
     })
   }
 }
@@ -468,6 +494,7 @@ export const dbApi = {
       await db.entityConnections.where('campaign_id').equals(id).delete()
       await db.characters.where('campaign_id').equals(id).delete()
       await db.levelUps.where('campaign_id').equals(id).delete()
+      await db.xpAwards.where('campaign_id').equals(id).delete()
       await db.inventory.where('campaign_id').equals(id).delete()
       await db.purses.where('campaign_id').equals(id).delete()
       await db.campaigns.delete(id)
@@ -562,7 +589,7 @@ export const dbApi = {
         })
       }
 
-      // ── Party (level-up history stays with the original) ───────────────
+      // ── Party (level-up and XP history stay with the original) ─────────
       const characters = await db.characters.where('campaign_id').equals(id).toArray()
       const ownerMap = new Map<string, string>([['stash', 'stash']])
       for (const { id: oldCId, ...c } of characters) {
@@ -574,7 +601,8 @@ export const dbApi = {
       const encounters = await db.encounters.where('campaign_id').equals(id).toArray()
       for (const enc of encounters) {
         const { id: oldEncId, ...rest } = enc
-        const newEncId = await db.encounters.add({ ...rest, campaign_id: newCampaignId })
+        // The resolve record points at the original's characters and XP log; the copy can't undo it
+        const newEncId = await db.encounters.add({ ...rest, campaign_id: newCampaignId, resolution: null })
         ownerMap.set(`encounter:${oldEncId}`, `encounter:${newEncId}`)
 
         const tokens = await db.encounterTokens.where('encounter_id').equals(oldEncId!).toArray()

@@ -55,14 +55,31 @@ export function partyLevel(characters: Pick<PartyCharacter, 'role' | 'treatAsPc'
   return { level: Math.floor(avg), min, max, mixed: min !== max, size: levels.length }
 }
 
-export interface LevelChange { characterId: number; from: number; to: number }
+export interface LevelChange {
+  characterId: number
+  from: number
+  to: number
+  /** XP campaigns: a level costs 1,000 XP; kept for the undo. */
+  xpFrom?: number
+  xpTo?: number
+}
 
-/** One level up for each selected character; characters already at 20 are left out. */
-export function planLevelUp(characters: Pick<PartyCharacter, 'id' | 'level'>[], selected: Iterable<number>): LevelChange[] {
+/**
+ * One level up for each selected character; characters already at 20 are left
+ * out. With `xpCost` (XP campaigns) each pays that much XP, never below 0.
+ */
+export function planLevelUp(characters: (Pick<PartyCharacter, 'id' | 'level'> & { xp?: number })[], selected: Iterable<number>, xpCost?: number): LevelChange[] {
   const ids = new Set(selected)
   return characters
     .filter(c => ids.has(c.id) && c.level < MAX_LEVEL)
-    .map(c => ({ characterId: c.id, from: c.level, to: c.level + 1 }))
+    .map(c => {
+      const change: LevelChange = { characterId: c.id, from: c.level, to: c.level + 1 }
+      if (xpCost) {
+        change.xpFrom = c.xp ?? 0
+        change.xpTo = Math.max(0, change.xpFrom - xpCost)
+      }
+      return change
+    })
 }
 
 /** Default selection for "Level up party": every party member. */

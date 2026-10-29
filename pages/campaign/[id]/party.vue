@@ -14,11 +14,18 @@
           <template v-else>No party members yet</template>
           · <span class="party-mode" :title="modeHint">{{ advancement === 'milestone' ? 'Milestone levelling' : 'XP levelling' }}</span>
         </div>
+        <div v-if="advancement === 'milestone' && pace && pace.encounters" class="party-pace" title="Encounter XP (as for four PCs) resolved since the last level-up. GM Core paces about 1,000 XP per level; only you see this.">
+          <span>Since the last level-up: {{ pace.encounters }} {{ pace.encounters === 1 ? 'encounter' : 'encounters' }}, <b>{{ pace.xp }}</b> / {{ XP_PER_LEVEL.toLocaleString() }} XP</span>
+          <span class="party-pace-bar"><span :style="{ width: `${Math.min(100, pace.fraction * 100)}%` }" :class="{ over: pace.fraction >= 1 }" /></span>
+        </div>
       </div>
       <div class="party-head-actions">
         <NuxtLink class="ghost-btn" :to="`/campaign/${campaignId}/encounter-builder`">
           <OhVueIcon name="gi-crossed-swords" scale="0.8" /> Build encounter
         </NuxtLink>
+        <button v-if="advancement === 'xp'" class="ghost-btn" :disabled="!characters.length" title="Accomplishment XP: minor 10, moderate 30, major 80" @click="openAwardXp">
+          <OhVueIcon name="gi-laurels" scale="0.8" /> Award XP
+        </button>
         <button class="seal-btn" :disabled="!characters.length" @click="openLevelUp">
           <OhVueIcon name="gi-upgrade" scale="0.85" /> Level up party
         </button>
@@ -57,6 +64,12 @@
         </label>
         <span v-else class="party-toggle party-toggle--fixed">Counts for the party</span>
 
+        <label v-if="advancement === 'xp'" class="party-field" :title="`XP toward the next level (${XP_PER_LEVEL.toLocaleString()})`">
+          <span class="party-field-label">XP</span>
+          <input class="party-xp" :class="{ 'party-xp--ready': c.xp >= XP_PER_LEVEL && c.level < MAX_LEVEL }" type="number" min="0" :value="c.xp"
+            @change="setXp(c, ($event.target as HTMLInputElement).value)" />
+        </label>
+
         <label class="party-field" title="Strength modifier, for the encumbrance warning">
           <span class="party-field-label">Str</span>
           <input class="party-str" type="number" min="-5" max="10" placeholder="—" :value="c.strMod ?? ''"
@@ -94,6 +107,19 @@
 
     <PartyInventory :campaign-id="campaignId" :game="game" :characters="characters" :party-level="party.level" />
 
+    <!-- ── XP awards ── -->
+    <section v-if="xpAwards.length" class="party-section">
+      <div class="party-section-title">XP awards</div>
+      <div v-for="a in xpAwards.slice(0, 15)" :key="a.id" class="party-log" :class="{ 'party-log--undone': a.undoneAt }">
+        <span class="party-log-date">{{ formatDate(a.at) }}</span>
+        <span class="party-log-trigger">{{ awardLabel(a) }}</span>
+        <span class="party-log-changes">+{{ a.amount }} XP · {{ a.characterIds.map(nameOf).join(', ') }}</span>
+        <span v-if="a.undoneAt" class="party-log-undone">undone</span>
+        <button v-else-if="a.source === 'accomplishment'" class="ghost-btn party-add-btn" @click="undoXpAward(a.id)">Undo</button>
+        <span v-else class="party-log-undone" title="Re-open the encounter to undo its award">encounter</span>
+      </div>
+    </section>
+
     <!-- ── Level-up history ── -->
     <section v-if="levelUps.length" class="party-section">
       <div class="party-section-title">Level-ups</div>
@@ -115,18 +141,23 @@ import { useParty, type Character, type LevelUpEntry } from '~/composables/usePa
 import { useFormatters } from '~/composables/useFormatters'
 import { campaignGame, campaignRules, type AdvancementMode, type GameId } from '~/types/game'
 import { MAX_LEVEL, MIN_LEVEL, isPartyMember, type CharacterRole } from '~/rules/party'
+import { XP_PER_LEVEL, type Pacing } from '~/rules/advancement'
+import { useResolution } from '~/composables/useResolution'
+import type { XpAwardEntry } from '~/composables/useParty'
 
 const route = useRoute()
 const campaignId = Number(route.params.id)
 const entitiesStore = useEntities()
-const { characters, levelUps, party, load, addCharacter, updateCharacter, removeCharacter, undoLevelUp, requestLevelUp } = useParty()
+const { characters, levelUps, xpAwards, party, load, addCharacter, updateCharacter, removeCharacter, undoLevelUp, requestLevelUp, requestXpAward, undoXpAward } = useParty()
+const { loadPacing } = useResolution()
+const pace = ref<Pacing | null>(null)
 const { formatDate } = useFormatters()
 
 const advancement = ref<AdvancementMode>('xp')
 const game = ref<GameId>('pf2e')
 const modeHint = computed(() => advancement.value === 'milestone'
   ? 'Level up with the button, or by completing a quest marked as milestone. Change the mode in the campaign settings on the home page.'
-  : 'XP awards arrive with encounter resolution. Change the mode in the campaign settings on the home page.')
+  : 'Resolving an encounter awards its XP to the participants; at 1,000 XP a character can level up. Change the mode in the campaign settings on the home page.')
 
 onMounted(async () => {
   const campaign = await dbApi.campaigns.get(campaignId)
@@ -134,6 +165,12 @@ onMounted(async () => {
   game.value = campaignGame(campaign)
   if (!entitiesStore.entities.some(e => e.campaignId === campaignId)) await entitiesStore.loadAll(campaignId)
   await load(campaignId)
+  if (advancement.value === 'milestone') pace.value = await loadPacing(campaignId)
+})
+
+// The pacing restarts at each level-up
+watch(levelUps, async () => {
+  if (advancement.value === 'milestone') pace.value = await loadPacing(campaignId)
 })
 
 const npcs = computed(() => entitiesStore.entities.filter(e => e.campaignId === campaignId && e.type === 'npc'))
@@ -146,6 +183,12 @@ function portrait(c: Character): string | null {
 function setLevel(c: Character, level: number) {
   if (!Number.isFinite(level) || level === c.level) return
   updateCharacter(c.id, { level })
+}
+
+function setXp(c: Character, raw: string) {
+  const v = Math.round(Number(raw))
+  if (raw.trim() === '' || !Number.isFinite(v) || v === c.xp) return
+  updateCharacter(c.id, { xp: v })
 }
 
 function setStr(c: Character, raw: string) {
@@ -189,6 +232,19 @@ function openLevelUp() {
 }
 
 const firstActive = computed(() => levelUps.value.findIndex(l => !l.undoneAt))
+
+function openAwardXp() {
+  requestXpAward({ campaignId, refType: null, refId: null, reason: '' })
+}
+
+function awardLabel(a: XpAwardEntry) {
+  if (a.source === 'encounter') return a.reason ? `Encounter: ${a.reason}` : 'Encounter'
+  if (a.refType === 'quest') {
+    const q = entitiesStore.entities.find(e => e.id === a.refId)
+    return a.reason || (q ? `Quest: ${q.name}` : 'Quest')
+  }
+  return a.reason || 'Accomplishment'
+}
 
 function nameOf(id: number) {
   return characters.value.find(c => c.id === id)?.name ?? '(removed)'
@@ -243,6 +299,13 @@ function triggerLabel(l: LevelUpEntry) {
 .party-stepper button:disabled { opacity: 0.35; cursor: default; }
 .party-stepper input { width: 40px; height: 26px; text-align: center; border: none; border-left: 1px solid var(--border); border-right: 1px solid var(--border); background: transparent; color: var(--text); font-family: var(--fm); -moz-appearance: textfield; }
 .party-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.party-xp { width: 64px; height: 26px; text-align: center; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text); font-family: var(--fm); }
+.party-xp--ready { border-color: #7cc44e; color: #7cc44e; }
+.party-pace { display: flex; align-items: center; gap: 10px; margin-top: 4px; font-size: 12px; color: var(--text3); }
+.party-pace b { color: var(--text); }
+.party-pace-bar { width: 120px; height: 5px; border-radius: 3px; background: var(--surface-hi); overflow: hidden; }
+.party-pace-bar span { display: block; height: 100%; background: var(--accent); }
+.party-pace-bar span.over { background: #7cc44e; }
 .party-str { width: 48px; height: 26px; text-align: center; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text); font-family: var(--fm); }
 .party-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); min-width: 170px; cursor: pointer; }
 .party-toggle--fixed { color: var(--text3); cursor: default; }

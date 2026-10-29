@@ -13,6 +13,9 @@
     </div>
     <div class="ed-notes">
       <span>{{ sides.enemies.length }} {{ sides.enemies.length === 1 ? 'enemy' : 'enemies' }}</span>
+      <span v-if="defeated.length" title="Removed from the map in Run mode; their XP still counts">
+        + {{ defeated.length }} removed <button class="ed-link" title="Forget the removed enemies' XP" @click="store.clearDefeated()">clear</button>
+      </span>
       <span v-if="sides.unlinked.length" class="ed-warn" title="Tokens that aren't party or ally and have no compendium stat block add no XP">
         + {{ sides.unlinked.length }} without a stat block
       </span>
@@ -62,11 +65,16 @@ watch(() => [...new Set(sides.value.enemies.map(t => t.linkedRulesId!))].sort().
   entries.value = { ...entries.value, ...Object.fromEntries(found.map(e => [e.id, e])) }
 }, { immediate: true })
 
-const xpEntries = computed(() => sides.value.enemies.flatMap((t): (XpEntry & { name: string })[] => {
-  const e = entries.value[t.linkedRulesId!]
-  if (!e) return []
-  return [{ name: t.label || e.name, level: e.level, kind: e.kind === 'hazard' ? 'hazard' : 'creature', complex: e.kind === 'hazard' && (e as Hazard).complex, adjustment: t.adjustment }]
-}))
+const defeated = computed(() => encounter.value?.defeated ?? [])
+
+const xpEntries = computed(() => [
+  ...sides.value.enemies.flatMap((t): (XpEntry & { name: string })[] => {
+    const e = entries.value[t.linkedRulesId!]
+    if (!e) return []
+    return [{ name: t.label || e.name, level: e.level, kind: e.kind === 'hazard' ? 'hazard' : 'creature', complex: e.kind === 'hazard' && (e as Hazard).complex, adjustment: t.adjustment }]
+  }),
+  ...defeated.value,
+])
 
 const xp = computed(() => xpEntries.value.reduce((n, e) => n + entryXp(props.game, e, levelUsed.value), 0))
 const strong = computed(() => xpEntries.value.filter(e => tooStrong(e, party.value.min)).map(e => e.name))

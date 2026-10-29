@@ -51,7 +51,8 @@ const selectedCount = computed(() => rows.value.filter(c => selected.value.has(c
 watch(prompt, async (p) => {
   if (!p) return
   if (loadedCampaign.value !== p.campaignId) await load(p.campaignId)
-  selected.value = new Set(characters.value.filter(c => isPartyMember(c) && c.level < MAX_LEVEL).map(c => c.id))
+  const preset = p.selected ? new Set(p.selected) : null
+  selected.value = new Set(characters.value.filter(c => (preset ? preset.has(c.id) : isPartyMember(c)) && c.level < MAX_LEVEL).map(c => c.id))
 }, { immediate: true })
 
 function toggle(id: number) {

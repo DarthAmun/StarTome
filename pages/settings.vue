@@ -662,16 +662,16 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 
 async function exportAll() {
   const db = getDb()
-  const [campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts, tokens, characters, levelUps, inventory, purses, rulesRows, syncState] =
+  const [campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts, tokens, characters, levelUps, xpAwards, inventory, purses, rulesRows, syncState] =
     await Promise.all([
       db.campaigns.toArray(), db.encounters.toArray(), db.encounterTokens.toArray(), db.encounterWalls.toArray(),
       db.entities.toArray(), db.entityLinks.toArray(), db.entitySnapshots.toArray(), db.entityConnections.toArray(), db.graphLayouts.toArray(),
-      db.tokens.toArray(), db.characters.toArray(), db.levelUps.toArray(), db.inventory.toArray(), db.purses.toArray(), db.rules.toArray(), db.syncState.toArray(),
+      db.tokens.toArray(), db.characters.toArray(), db.levelUps.toArray(), db.xpAwards.toArray(), db.inventory.toArray(), db.purses.toArray(), db.rules.toArray(), db.syncState.toArray(),
     ])
   const { entries: rules, overlays: rulesOverlays } = rulesForExport(rulesRows)
   const imageRows = await db.images.bulkGet(imageIdsOf([...rules, ...rulesOverlays] as unknown as Record<string, unknown>[]))
   const images: ExportedImage[] = await Promise.all(imageRows.filter(r => !!r).map(async r => ({ id: r!.id, mime: r!.mime, data: await blobToDataUrl(r!.blob) })))
-  download({ version: 1, app: APP_NS, type: 'all', exportedAt: now(), campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts, tokens, characters, levelUps, inventory, purses, rules, rulesOverlays, images, syncState }, exportFilename(`all-${slug()}.json`))
+  download({ version: 1, app: APP_NS, type: 'all', exportedAt: now(), campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts, tokens, characters, levelUps, xpAwards, inventory, purses, rules, rulesOverlays, images, syncState }, exportFilename(`all-${slug()}.json`))
 }
 
 async function exportCampaigns() {
@@ -690,9 +690,10 @@ async function exportCampaigns() {
   const graphLayouts = campIds.length ? await db.graphLayouts.where('campaign_id').anyOf(campIds).toArray() : []
   const characters = campIds.length ? await db.characters.where('campaign_id').anyOf(campIds).toArray() : []
   const levelUps = campIds.length ? await db.levelUps.where('campaign_id').anyOf(campIds).toArray() : []
+  const xpAwards = campIds.length ? await db.xpAwards.where('campaign_id').anyOf(campIds).toArray() : []
   const inventory = campIds.length ? await db.inventory.where('campaign_id').anyOf(campIds).toArray() : []
   const purses = campIds.length ? await db.purses.where('campaign_id').anyOf(campIds).toArray() : []
-  download({ version: 1, app: APP_NS, type: 'campaigns', exportedAt: now(), campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts, characters, levelUps, inventory, purses }, exportFilename(`campaigns-${slug()}.json`))
+  download({ version: 1, app: APP_NS, type: 'campaigns', exportedAt: now(), campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots, entityConnections, graphLayouts, characters, levelUps, xpAwards, inventory, purses }, exportFilename(`campaigns-${slug()}.json`))
 }
 
 /** Player-facing quest list for the quest board (FORK_PLAN §8.5). */
@@ -948,7 +949,7 @@ function buildImportSections(payload: any) {
   addSection('entities', 'Notes & Entities'); addSection('entityLinks', 'Entity Links')
   addSection('entitySnapshots', 'Entity Snapshots'); addSection('entityConnections', 'Entity Connections')
   addSection('graphLayouts', 'Graphs'); addSection('tokens', 'Tokens')
-  addSection('characters', 'Party members'); addSection('levelUps', 'Level-ups')
+  addSection('characters', 'Party members'); addSection('levelUps', 'Level-ups'); addSection('xpAwards', 'XP awards')
   addSection('inventory', 'Inventory'); addSection('purses', 'Purses')
   addSection('rules', 'Own compendium entries'); addSection('rulesOverlays', 'Portraits, notes & edits on synced entries')
   importSections.value = sections
@@ -980,7 +981,7 @@ async function runImport() {
   queueSection('entities', db.entities); queueSection('entityLinks', db.entityLinks)
   queueSection('entitySnapshots', db.entitySnapshots); queueSection('entityConnections', db.entityConnections)
   queueSection('graphLayouts', db.graphLayouts); queueSection('tokens', db.tokens)
-  queueSection('characters', db.characters); queueSection('levelUps', db.levelUps)
+  queueSection('characters', db.characters); queueSection('levelUps', db.levelUps); queueSection('xpAwards', db.xpAwards)
   queueSection('inventory', db.inventory); queueSection('purses', db.purses)
   // Compendium: images first (entries point at them), then entries and overlays
   const rulesSec = importSections.value.find(s => s.key === 'rules')
@@ -1028,7 +1029,7 @@ async function clearAll() {
   await Promise.all([
     db.campaigns.clear(), db.encounters.clear(), db.encounterTokens.clear(), db.encounterWalls.clear(),
     db.entities.clear(), db.entityLinks.clear(), db.entitySnapshots.clear(), db.entityConnections.clear(), db.graphLayouts.clear(),
-    db.tokens.clear(), db.characters.clear(), db.levelUps.clear(), db.inventory.clear(), db.purses.clear(), db.rules.clear(), db.images.clear(), db.syncState.clear(), db.legacyLibrary.clear(),
+    db.tokens.clear(), db.characters.clear(), db.levelUps.clear(), db.xpAwards.clear(), db.inventory.clear(), db.purses.clear(), db.rules.clear(), db.images.clear(), db.syncState.clear(), db.legacyLibrary.clear(),
   ])
   notifyRulesChanged()
   await loadStats()

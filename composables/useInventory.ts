@@ -239,6 +239,78 @@ async function releaseOwner(campaignId: number, owner: OwnerKey) {
   await reloadIfLoaded(campaignId)
 }
 
+// ── Encounter loot ────────────────────────────────────────────────────────
+
+/** What `transferAll` moved: copies of the source's stacks and its coins. */
+export interface OwnerSnapshot {
+  entries: Omit<DbInventory, 'id'>[]
+  cp: number
+}
+
+/**
+ * Moves everything `from` owns (stacks and coins) to `to`, merging into
+ * identical stacks there, in one transaction. Doesn't reload, so it can run
+ * inside a caller's transaction. Returns what moved, for `restoreSnapshot`.
+ */
+async function transferAll(campaignId: number, from: OwnerKey, to: OwnerKey): Promise<OwnerSnapshot> {
+  const db = getDb()
+  return db.transaction('rw', db.inventory, db.purses, async () => {
+    const rows = await db.inventory.where('owner').equals(from).filter(r => r.campaign_id === campaignId).toArray()
+    const ts = now()
+    for (const row of rows) {
+      const target = await findStack(campaignId, to, { ...toEntry(row), owner: to }, row.id)
+      if (target) {
+        await db.inventory.update(target.id!, { quantity: target.quantity + row.quantity, updated_at: ts })
+        await db.inventory.delete(row.id!)
+      } else {
+        await db.inventory.update(row.id!, { owner: to, updated_at: ts })
+      }
+    }
+    const cp = await purseOf(campaignId, from)
+    if (cp) {
+      await writePurse(campaignId, from, 0)
+      await writePurse(campaignId, to, (await purseOf(campaignId, to)) + cp)
+    }
+    return { entries: rows.map(({ id: _id, ...r }) => r), cp }
+  })
+}
+
+/** What `restoreSnapshot` couldn't take back because it was already used up or moved on. */
+export interface RestoreShortfall { names: string[]; cp: number }
+
+/**
+ * Undo of `transferAll`: takes the snapshot's stacks and coins back from `to`
+ * as far as they're still there. Doesn't reload.
+ */
+async function restoreSnapshot(campaignId: number, snapshot: OwnerSnapshot, from: OwnerKey, to: OwnerKey): Promise<RestoreShortfall> {
+  const db = getDb()
+  const short: RestoreShortfall = { names: [], cp: 0 }
+  await db.transaction('rw', db.inventory, db.purses, async () => {
+    const ts = now()
+    for (const e of snapshot.entries) {
+      const stack = await findStack(campaignId, to, { ...toEntry({ ...e, id: -1 }), owner: to })
+      const taken = Math.min(e.quantity, stack?.quantity ?? 0)
+      if (taken < e.quantity) short.names.push(e.name_override || e.item_id || 'item')
+      if (!stack || !taken) continue
+      if (stack.quantity > taken) await db.inventory.update(stack.id!, { quantity: stack.quantity - taken, updated_at: ts })
+      else await db.inventory.delete(stack.id!)
+      const back = await findStack(campaignId, from, { ...toEntry({ ...e, id: -1 }), owner: from })
+      if (back) await db.inventory.update(back.id!, { quantity: back.quantity + taken, updated_at: ts })
+      else await db.inventory.add({ ...e, owner: from, quantity: taken, updated_at: ts })
+    }
+    if (snapshot.cp) {
+      const have = await purseOf(campaignId, to)
+      const taken = Math.min(have, snapshot.cp)
+      short.cp = snapshot.cp - taken
+      if (taken) {
+        await writePurse(campaignId, to, have - taken)
+        await writePurse(campaignId, from, (await purseOf(campaignId, from)) + taken)
+      }
+    }
+  })
+  return short
+}
+
 export function useInventory() {
   return {
     entries,
@@ -248,5 +320,6 @@ export function useInventory() {
     purseList: computed(() => Object.entries(purses.value).map(([owner, cp]) => ({ owner, cp }))),
     load, addEntry, updateEntry, removeEntry, setIdentified, move,
     setPurse, adjustPurse, transferCoins, splitPurse, releaseOwner,
+    transferAll, restoreSnapshot, reload: reloadIfLoaded,
   }
 }

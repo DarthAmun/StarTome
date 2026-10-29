@@ -6,14 +6,19 @@
  * NPC without a character gets one, so the old workflow (flag an NPC as PC)
  * keeps working. A character's level is mirrored to its NPC entry's free-text
  * `level` so the NPC page shows the same number.
+ *
+ * XP campaigns (P4): awards are logged in `xpAwards` and can be undone; a
+ * level-up costs 1,000 XP, and reaching it opens the level-up prompt.
  */
 import { computed, ref } from 'vue'
-import { getDb, now, parseRecordData, type DbCharacter, type DbLevelUp } from '~/composables/useDb'
+import { dbApi, getDb, now, parseRecordData, type DbCharacter, type DbLevelUp, type DbXpAward } from '~/composables/useDb'
 import { useEntities } from '~/composables/useEntities'
 import { useInventory } from '~/composables/useInventory'
 import { characterOwner } from '~/rules/inventory'
+import { readyToLevel, XP_PER_LEVEL } from '~/rules/advancement'
 import { clampLevel, defaultLevelUpSelection, parseLevel, partyLevel, planLevelUp, type CharacterRole, type LevelChange, type PartyCharacter } from '~/rules/party'
 import type { NpcAttributes } from '~/types/entities'
+import { campaignRules } from '~/types/game'
 
 export interface Character extends PartyCharacter {
   campaignId: number
@@ -41,6 +46,27 @@ function toCharacter(r: DbCharacter): Character {
   }
 }
 
+export interface XpAwardEntry {
+  id: number
+  at: string
+  source: DbXpAward['source']
+  refType: DbXpAward['ref_type']
+  refId: number | null
+  amount: number
+  characterIds: number[]
+  reason: string
+  undoneAt: string | null
+}
+
+function toXpAward(r: DbXpAward): XpAwardEntry {
+  let characterIds: number[] = []
+  try { characterIds = JSON.parse(r.character_ids) } catch {}
+  return {
+    id: r.id!, at: r.at, source: r.source, refType: r.ref_type ?? null, refId: r.ref_id ?? null,
+    amount: r.amount, characterIds, reason: r.reason ?? '', undoneAt: r.undone_at ?? null,
+  }
+}
+
 function toLevelUp(r: DbLevelUp): LevelUpEntry {
   let changes: LevelChange[] = []
   try { changes = JSON.parse(r.changes) } catch {}
@@ -49,11 +75,23 @@ function toLevelUp(r: DbLevelUp): LevelUpEntry {
 
 const characters = ref<Character[]>([])
 const levelUps = ref<LevelUpEntry[]>([])
+const xpAwards = ref<XpAwardEntry[]>([])
 const loadedCampaign = ref<number | null>(null)
 
 /** "Level up the party?" — set by a completed milestone quest, shown by LevelUpDialog in app.vue. */
-export interface LevelUpPrompt { campaignId: number; trigger: DbLevelUp['trigger']; refId: number | null; reason: string }
+export interface LevelUpPrompt {
+  campaignId: number
+  trigger: DbLevelUp['trigger']
+  refId: number | null
+  reason: string
+  /** Pre-ticked characters; default every party member. */
+  selected?: number[]
+}
 const prompt = ref<LevelUpPrompt | null>(null)
+
+/** "Award XP" — opened from the party page, a completed quest or the resolve dialog; shown by AwardXpDialog in app.vue. */
+export interface XpPrompt { campaignId: number; refType: DbXpAward['ref_type']; refId: number | null; reason: string; amount?: number }
+const xpPrompt = ref<XpPrompt | null>(null)
 
 async function npcAttributes(npcId: number): Promise<Record<string, any>> {
   const cached = useEntities().entities.find(e => e.id === npcId)
@@ -90,13 +128,15 @@ async function adoptFlaggedNpcs(campaignId: number) {
 async function load(campaignId: number) {
   await adoptFlaggedNpcs(campaignId)
   const db = getDb()
-  const [rows, ups] = await Promise.all([
+  const [rows, ups, awards] = await Promise.all([
     db.characters.where('campaign_id').equals(campaignId).toArray(),
     db.levelUps.where('campaign_id').equals(campaignId).toArray(),
+    db.xpAwards.where('campaign_id').equals(campaignId).toArray(),
   ])
   loadedCampaign.value = campaignId
   characters.value = rows.map(toCharacter).sort((a, b) => (a.role === b.role ? a.name.localeCompare(b.name) : a.role === 'pc' ? -1 : 1))
   levelUps.value = ups.map(toLevelUp).sort((a, b) => b.at.localeCompare(a.at))
+  xpAwards.value = awards.map(toXpAward).sort((a, b) => b.at.localeCompare(a.at))
 }
 
 async function reloadIfLoaded(campaignId: number) {
@@ -118,7 +158,7 @@ async function addCharacter(input: { campaignId: number; name: string; role: Cha
   await reloadIfLoaded(input.campaignId)
 }
 
-async function updateCharacter(id: number, patch: Partial<Pick<Character, 'name' | 'role' | 'level' | 'treatAsPc' | 'strMod'>>) {
+async function updateCharacter(id: number, patch: Partial<Pick<Character, 'name' | 'role' | 'level' | 'treatAsPc' | 'strMod' | 'xp'>>) {
   const c = characters.value.find(x => x.id === id) ?? (await getDb().characters.get(id).then(r => (r ? toCharacter(r) : undefined)))
   if (!c) return
   const changes: Partial<DbCharacter> = { updated_at: now() }
@@ -127,6 +167,7 @@ async function updateCharacter(id: number, patch: Partial<Pick<Character, 'name'
   if (patch.level !== undefined) changes.level = clampLevel(patch.level)
   if (patch.treatAsPc !== undefined) changes.treat_as_pc = patch.treatAsPc ? 1 : 0
   if (patch.strMod !== undefined) changes.str_mod = patch.strMod
+  if (patch.xp !== undefined && Number.isFinite(patch.xp)) changes.xp = Math.max(0, Math.round(patch.xp))
   await getDb().characters.update(id, changes)
   const npcPatch: Partial<NpcAttributes> = {}
   if (changes.level !== undefined) npcPatch.level = String(changes.level)
@@ -160,11 +201,14 @@ async function removeCharacter(id: number) {
 async function levelUp(campaignId: number, selected: number[], trigger: DbLevelUp['trigger'] = 'manual', refId: number | null = null): Promise<number | null> {
   const db = getDb()
   const rows = (await db.characters.where('campaign_id').equals(campaignId).toArray()).map(toCharacter)
-  const changes = planLevelUp(rows, selected)
+  const xpMode = campaignRules(await dbApi.campaigns.get(campaignId)).advancement === 'xp'
+  const changes = planLevelUp(rows, selected, xpMode ? XP_PER_LEVEL : undefined)
   if (!changes.length) return null
   const ts = now()
   const logId = await db.transaction('rw', db.characters, db.levelUps, async () => {
-    for (const ch of changes) await db.characters.update(ch.characterId, { level: ch.to, updated_at: ts })
+    for (const ch of changes) {
+      await db.characters.update(ch.characterId, { level: ch.to, ...(ch.xpTo !== undefined ? { xp: ch.xpTo } : {}), updated_at: ts })
+    }
     return db.levelUps.add({ campaign_id: campaignId, at: ts, trigger, ref_id: refId, changes: JSON.stringify(changes), undone_at: null })
   }) as number
   for (const ch of changes) await patchNpc(rows.find(r => r.id === ch.characterId)?.npcEntityId ?? null, { level: String(ch.to) })
@@ -184,7 +228,9 @@ async function undoLevelUp(logId: number) {
     for (const ch of entry.changes) {
       const c = await db.characters.get(ch.characterId)
       if (c && c.level === ch.to) {
-        await db.characters.update(ch.characterId, { level: ch.from, updated_at: ts })
+        // XP earned since the level-up stays on top of what the level cost
+        const xp = ch.xpFrom !== undefined && ch.xpTo !== undefined ? { xp: (c.xp ?? 0) + ch.xpFrom - ch.xpTo } : {}
+        await db.characters.update(ch.characterId, { level: ch.from, ...xp, updated_at: ts })
         reverted.push({ npcId: c.npc_entity_id, level: ch.from })
       }
     }
@@ -194,18 +240,94 @@ async function undoLevelUp(logId: number) {
   await reloadIfLoaded(row.campaign_id)
 }
 
+// ── XP ──
+
+export interface AwardXpInput {
+  campaignId: number
+  amount: number
+  characterIds: number[]
+  source: DbXpAward['source']
+  refType?: DbXpAward['ref_type']
+  refId?: number | null
+  reason?: string
+}
+
+/** Writes an award and the characters' XP. Runs inside a caller's transaction; doesn't reload. */
+async function writeXpAward(input: AwardXpInput): Promise<number | null> {
+  const amount = Math.round(input.amount)
+  const ids = [...new Set(input.characterIds)]
+  if (!amount || !ids.length) return null
+  const db = getDb()
+  const ts = now()
+  return db.transaction('rw', db.characters, db.xpAwards, async () => {
+    for (const id of ids) {
+      const c = await db.characters.get(id)
+      if (c) await db.characters.update(id, { xp: Math.max(0, (c.xp ?? 0) + amount), updated_at: ts })
+    }
+    return db.xpAwards.add({
+      campaign_id: input.campaignId, at: ts, source: input.source, ref_type: input.refType ?? null, ref_id: input.refId ?? null,
+      amount, character_ids: JSON.stringify(ids), reason: input.reason ?? '', undone_at: null,
+    }) as Promise<number>
+  })
+}
+
+/** Reverts an award's XP (never below 0). Runs inside a caller's transaction; doesn't reload. */
+async function writeXpUndo(awardId: number) {
+  const db = getDb()
+  await db.transaction('rw', db.characters, db.xpAwards, async () => {
+    const row = await db.xpAwards.get(awardId)
+    if (!row || row.undone_at) return
+    const ts = now()
+    for (const id of toXpAward(row).characterIds) {
+      const c = await db.characters.get(id)
+      if (c) await db.characters.update(id, { xp: Math.max(0, (c.xp ?? 0) - row.amount), updated_at: ts })
+    }
+    await db.xpAwards.update(awardId, { undone_at: ts })
+  })
+}
+
+/** Characters of an XP campaign who can level up now: opens the level-up prompt for them. */
+async function promptReadyToLevel(campaignId: number, trigger: DbLevelUp['trigger'], refId: number | null) {
+  if (campaignRules(await dbApi.campaigns.get(campaignId)).advancement !== 'xp') return
+  const rows = (await getDb().characters.where('campaign_id').equals(campaignId).toArray()).map(toCharacter)
+  const ready = readyToLevel(rows)
+  if (!ready.length) return
+  const names = rows.filter(c => ready.includes(c.id)).map(c => c.name).join(', ')
+  prompt.value = { campaignId, trigger, refId, reason: `${names} reached ${XP_PER_LEVEL.toLocaleString()} XP. Levelling up costs ${XP_PER_LEVEL.toLocaleString()} XP each.`, selected: ready }
+}
+
+/** Awards XP to each character and offers a level-up to anyone who reached 1,000. */
+async function awardXp(input: AwardXpInput): Promise<number | null> {
+  const id = await writeXpAward(input)
+  await reloadIfLoaded(input.campaignId)
+  if (id != null) await promptReadyToLevel(input.campaignId, input.refType === 'encounter' ? 'encounter' : input.refType === 'quest' ? 'quest' : 'manual', input.refId ?? null)
+  return id
+}
+
+async function undoXpAward(awardId: number) {
+  const row = await getDb().xpAwards.get(awardId)
+  if (!row) return
+  await writeXpUndo(awardId)
+  await reloadIfLoaded(row.campaign_id)
+}
+
 function requestLevelUp(p: LevelUpPrompt) { prompt.value = p }
 function dismissPrompt() { prompt.value = null }
+function requestXpAward(p: XpPrompt) { xpPrompt.value = p }
+function dismissXpPrompt() { xpPrompt.value = null }
 
 export function useParty() {
   return {
     characters,
     levelUps,
+    xpAwards,
     loadedCampaign,
     prompt,
+    xpPrompt,
     party: computed(() => partyLevel(characters.value)),
     defaultSelection: computed(() => defaultLevelUpSelection(characters.value)),
     load, addCharacter, updateCharacter, removeCharacter, linkToken, levelUp, undoLevelUp,
-    requestLevelUp, dismissPrompt,
+    requestLevelUp, dismissPrompt, requestXpAward, dismissXpPrompt,
+    awardXp, undoXpAward, writeXpAward, writeXpUndo, promptReadyToLevel, reload: reloadIfLoaded,
   }
 }

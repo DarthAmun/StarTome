@@ -126,8 +126,9 @@ async function updateEntity(id: number, updates: { name?: string; content?: stri
     if (updates.content !== undefined) await syncLinks(id, updates.content)
 
     const after = updates.attributes as { status?: string; milestone?: boolean } | undefined
-    if (before?.type === 'quest' && !wasCompleted && after?.status === 'completed' && after.milestone) {
-      await promptMilestone(before.campaignId, id, updates.name ?? before.name)
+    if (before?.type === 'quest' && !wasCompleted && after?.status === 'completed') {
+      if (after.milestone) await promptMilestone(before.campaignId, id, updates.name ?? before.name)
+      await promptQuestXp(before.campaignId, id, updates.name ?? before.name)
     }
   } catch (err) {
     console.error('[NotesStore] updateEntity:', err)
@@ -140,6 +141,13 @@ async function promptMilestone(campaignId: number, questId: number, questName: s
   const campaign = await dbApi.campaigns.get(campaignId)
   if (campaignRules(campaign).advancement !== 'milestone') return
   useParty().requestLevelUp({ campaignId, trigger: 'quest', refId: questId, reason: `Milestone reached: ${questName}` })
+}
+
+/** A quest was completed in an XP campaign: offer accomplishment XP (FEATURES_PLAN.md §5). */
+async function promptQuestXp(campaignId: number, questId: number, questName: string) {
+  const campaign = await dbApi.campaigns.get(campaignId)
+  if (campaignRules(campaign).advancement !== 'xp') return
+  useParty().requestXpAward({ campaignId, refType: 'quest', refId: questId, reason: `Quest: ${questName}` })
 }
 
 async function setFavorite(id: number, isFavorite: boolean) {

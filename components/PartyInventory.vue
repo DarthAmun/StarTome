@@ -1,7 +1,7 @@
 <template>
   <section class="inv party-section">
     <div class="inv-head">
-      <div class="party-section-title">Inventory</div>
+      <div class="party-section-title">{{ lockOwner ? 'Loot' : 'Inventory' }}</div>
       <div class="inv-view" role="group" aria-label="View">
         <button :class="{ active: view === 'gm' }" @click="view = 'gm'">GM view</button>
         <button :class="{ active: view === 'player' }" title="What the players know: unidentified items show their player name and count as 0" @click="view = 'player'">Player view</button>
@@ -9,7 +9,11 @@
     </div>
 
     <!-- Totals -->
-    <div class="inv-totals">
+    <div v-if="lockOwner" class="inv-totals">
+      <span>Loot value <b>{{ money(totals.byOwner[lockOwner]?.total ?? 0) }}</b></span>
+      <span class="inv-dim">Goes to the party stash when the encounter is resolved</span>
+    </div>
+    <div v-else class="inv-totals">
       <span>Party total <b>{{ money(totals.total) }}</b></span>
       <span class="inv-dim">items {{ money(totals.items) }} · coins {{ money(totals.coins) }}</span>
       <span v-if="unknownCount" class="inv-warn" title="Free-text entries without a price, or compendium items without one">{{ unknownCount }} without a price</span>
@@ -23,7 +27,7 @@
     </div>
 
     <!-- Owners -->
-    <div class="inv-owners">
+    <div v-if="!lockOwner" class="inv-owners">
       <button v-for="o in owners" :key="o.key" class="inv-owner" :class="{ active: o.key === selected }" @click="selected = o.key">
         <OhVueIcon :name="o.key === STASH ? 'gi-locked-chest' : 'gi-person'" scale="0.75" />
         <span>{{ o.name }}</span>
@@ -49,7 +53,7 @@
           Split evenly
         </button>
       </div>
-      <div class="inv-bulk">
+      <div v-if="!lockOwner" class="inv-bulk">
         Bulk {{ formatBulkTotal(totals.byOwner[selected]?.bulk ?? 0) }}
         <template v-if="selectedCharacter">
           <template v-if="selectedCharacter.strMod != null">
@@ -207,7 +211,14 @@ import { campaignRules, type CampaignRules, type GameId } from '~/types/game'
 import type { Item, Runes } from '~/types/rules'
 import { stripGmOnly } from '~/utils/gmContent'
 
-const props = defineProps<{ campaignId: number; game: GameId; characters: Character[]; partyLevel: number | null }>()
+const props = defineProps<{
+  campaignId: number
+  game: GameId
+  characters: Character[]
+  partyLevel: number | null
+  /** Shows only this owner (an encounter's loot), with the stash and characters as move targets. */
+  lockOwner?: OwnerKey
+}>()
 
 const SF2E_GRADES = ['commercial', 'tactical', 'advanced', 'superior', 'elite', 'ultimate', 'paragon']
 
@@ -216,7 +227,7 @@ const { entries, purses, items, purseList, load, addEntry, updateEntry, removeEn
 const { formatDate } = useFormatters()
 
 const view = ref<'gm' | 'player'>('gm')
-const selected = ref<OwnerKey>(STASH)
+const selected = ref<OwnerKey>(props.lockOwner ?? STASH)
 const rules = ref<CampaignRules>(campaignRules(null))
 
 onMounted(async () => {
@@ -245,7 +256,7 @@ const owners = computed(() => [
 ])
 const selectedCharacter = computed(() => props.characters.find(c => characterOwner(c.id) === selected.value) ?? null)
 const selectedLoad = computed(() => owners.value.find(o => o.key === selected.value)?.load ?? null)
-watch(owners, list => { if (!list.some(o => o.key === selected.value)) selected.value = STASH })
+watch(owners, list => { if (!props.lockOwner && !list.some(o => o.key === selected.value)) selected.value = STASH })
 
 const ownerEntries = computed(() => entries.value
   .filter(e => e.owner === selected.value)

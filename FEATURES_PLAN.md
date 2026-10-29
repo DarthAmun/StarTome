@@ -260,6 +260,15 @@ P2 and P3 don't depend on each other and could swap if the party tab matters mor
   - **Set treasure baseline** stores the GM total, the party level and the date in `CampaignRules` (§9.6).
   - Inventory and purses are in the full backup, the campaign export and the import.
   - Not in P3: Play Buddy-linked moves (offers, P6), containers, and the "award or correction?" question when adding after the baseline (P5, where the wealth % reads it).
+- **P4 done 2026-10-29 (v0.11.0)**:
+  - `rules/advancement.ts`: the award per participant as for four PCs (the XP scaled by the four-PC budget of the threat it reached over the group's budget; tested for 1, 3, 5 and 6 PCs), default participants (characters whose NPC entry or library token is on the map, else the party members), 1,000 XP per level, the milestone pacing sum, and the `defeated` list.
+  - Encounters gain `resolved` status, `resolved_at`, `xp_total`, `xp_awarded`, `party_level_at_resolve`, `defeated` and a `resolution` record (non-indexed). New `xpAwards` log (Dexie v7), in the backup, campaign export and import.
+  - **Loot**: the encounter page's Prepare sidebar shows the planned loot and opens a loot dialog (the inventory editor locked to the encounter owner, with the stash and characters as move targets) with "From the enemies' gear" suggestions from `Creature.inventory`.
+  - **Resolve** (toolbar, or the encounters list): enemies with their XP (untick any that don't count), the meter, participants, accomplishment XP (none/10/30/80 or typed), the award, and the loot list. One transaction moves loot and coins to the stash (merging stacks), writes the XP award (XP campaigns) and the record. **Re-open** takes back what is still in the stash, undoes the award and says what couldn't come back; level-ups stay.
+  - In Run mode, removing enemy tokens (context menu or bulk remove) keeps their XP in `defeated`; the meter and the resolve dialog count it, and the meter can clear it.
+  - XP campaigns: XP per character on the roster, **Award XP** (party page; also offered when a quest is completed), the XP log with undo for accomplishments, and a level-up prompt for whoever reaches 1,000. A level-up there costs 1,000 XP, and its undo gives it back.
+  - Milestone campaigns: resolving records the XP without awarding it; the party page shows "since the last level-up: N encounters, X / 1,000 XP".
+  - Not in P4: the treasure-pace hint on the loot tab (P5, with the wealth readout), and "award or correction?" when adding after the baseline (P5).
 
 ## 9. Open questions
 
