@@ -4,6 +4,7 @@
  */
 import { onScopeDispose, ref, shallowRef, toRaw } from 'vue'
 import { notifyRulesChanged } from '~/composables/useRules'
+import { invalidateEntities } from '~/composables/useEntities'
 import type { LegacyAnalysis, LegacyProgress, LegacyReport, RecordDecision } from '~/sync/legacyImport'
 
 export function useLegacyImport() {
@@ -78,6 +79,7 @@ export function useLegacyImport() {
     } finally {
       busy.value = null
       dispose()
+      invalidateEntities()
       notifyRulesChanged()
     }
   }

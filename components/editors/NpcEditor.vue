@@ -90,6 +90,7 @@
 </template>
 
 <script setup lang="ts">
+import { useAttributeDraft } from "~/composables/useAttributeDraft";
 import { useEntities } from "~/composables/useEntities";
 import type { EntitySnapshot } from "~/composables/useEntities";
 import type { EntityAttributes } from "~/types/entities";
@@ -113,7 +114,9 @@ const typeColor = ENTITY_TYPE_CONFIG.npc.color;
 
 // ── Draft state ───────────────────────────────────────────────────────────────
 const draftContent = ref("");
-const draftAttributes = ref<EntityAttributes>({});
+// Follows the stored entity; a save writes only the keys edited here
+const attrDraft = useAttributeDraft(entity, () => viewingSnapshot.value !== null);
+const draftAttributes = attrDraft.draft;
 const attrSave = useDebouncedSave(500);
 
 // ── Attributes panel ──────────────────────────────────────────────────────────
@@ -152,7 +155,7 @@ watch(
         showAttributes.value = false;
         await store.loadEntity(id);
         draftContent.value = entity.value?.content ?? "";
-        draftAttributes.value = { ...(entity.value?.attributes ?? {}) };
+        attrDraft.reset(entity.value?.attributes);
     },
     { immediate: true },
 );
@@ -181,12 +184,12 @@ function onContentUpdate(value: string) {
 }
 
 function onAttributesChange(attrs: EntityAttributes) {
-    draftAttributes.value = attrs;
+    attrDraft.edit(attrs);
     attrSave.schedule(() => {
         if (viewingSnapshot.value) {
             store.updateSnapshotContent(viewingSnapshot.value.id, { attributes: attrs });
         } else {
-            store.updateEntity(props.entityId, { attributes: attrs });
+            store.updateEntity(props.entityId, { attributes: attrDraft.takePatch() });
         }
     });
 }
@@ -212,7 +215,7 @@ watch(() => route.query.snap, (snapId) => {
         if (viewingSnapshot.value) {
             viewingSnapshot.value = null
             draftContent.value = entity.value?.content ?? ''
-            draftAttributes.value = { ...(entity.value?.attributes ?? {}) }
+            attrDraft.reset(entity.value?.attributes)
         }
         return
     }
@@ -221,21 +224,21 @@ watch(() => route.query.snap, (snapId) => {
     if (snap) {
         viewingSnapshot.value = snap
         draftContent.value = snap.content
-        draftAttributes.value = { ...snap.attributes }
+        attrDraft.reset(snap.attributes)
     }
 })
 
 function onViewSnapshot(snap: EntitySnapshot) {
     viewingSnapshot.value = snap;
     draftContent.value = snap.content;
-    draftAttributes.value = { ...snap.attributes };
+    attrDraft.reset(snap.attributes);
     router.replace({ query: { snap: snap.id } })
 }
 
 function onReturnToPresent() {
     viewingSnapshot.value = null;
     draftContent.value = entity.value?.content ?? "";
-    draftAttributes.value = { ...(entity.value?.attributes ?? {}) };
+    attrDraft.reset(entity.value?.attributes);
     router.replace({ query: {} })
 }
 

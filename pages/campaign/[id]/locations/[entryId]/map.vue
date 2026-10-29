@@ -57,7 +57,7 @@ function onNavigateEntity(entity: any) {
 }
 
 onMounted(async () => {
-    if (!store.entities.length) await store.loadAll(campaignId.value);
+    await store.loadAll(campaignId.value);
 });
 </script>
 

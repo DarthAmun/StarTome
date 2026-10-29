@@ -165,7 +165,7 @@ onMounted(async () => {
   const campaign = await dbApi.campaigns.get(campaignId)
   advancement.value = campaignRules(campaign).advancement
   game.value = campaignGame(campaign)
-  if (!entitiesStore.entities.some(e => e.campaignId === campaignId)) await entitiesStore.loadAll(campaignId)
+  await entitiesStore.loadAll(campaignId)
   await load(campaignId)
   if (advancement.value === 'milestone') pace.value = await loadPacing(campaignId)
 })

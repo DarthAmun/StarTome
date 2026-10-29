@@ -132,11 +132,11 @@
                       @open="navigate(item)"
                     />
                     <template v-else>
-                      <span class="gs-result-icon" :style="{ color: entityColor(item.type) }">
-                        <OhVueIcon :name="entityIcon(item.type)" scale="0.8" />
+                      <span class="gs-result-icon" :style="{ color: entityColor(item.type ?? '') }">
+                        <OhVueIcon :name="entityIcon(item.type ?? '')" scale="0.8" />
                       </span>
                       <span class="gs-result-name">{{ item.name }}</span>
-                      <span class="gs-result-sub">{{ entityLabel(item.type) }}</span>
+                      <span class="gs-result-sub">{{ entityLabel(item.type ?? '') }}</span>
                     </template>
                     <div class="gs-result-actions" @click.stop>
                       <button class="gs-bm-btn" :class="{ 'gs-bm-btn--active': isBookmarked(getRoute(item)) }" :title="isBookmarked(getRoute(item)) ? 'Remove bookmark' : 'Bookmark'" @click="toggleResultBookmark(item)">
@@ -245,6 +245,7 @@
 
 <script setup lang="ts">
 import { rulesSearch } from '~/composables/useRules'
+import { normalizeEntity } from '~/composables/useEntities'
 import { RULES_KIND_CONFIG, type RulesKind } from '~/types/rules'
 import { GAME_CONFIG } from '~/types/game'
 import { dbApi } from '~/composables/useDb'
@@ -266,7 +267,8 @@ import NoteEntry        from '~/components/notes/NoteEntry.vue'
 import RandomTableEntry from '~/components/notes/RandomTableEntry.vue'
 import RumorEntry       from '~/components/notes/RumorEntry.vue'
 
-const ENTRY_COMPONENTS: Record<EntityType, any> = {
+// Region results have no entry card and fall back to the plain row
+const ENTRY_COMPONENTS: Partial<Record<EntityType, any>> = {
   npc: NpcEntry, location: LocationEntry, faction: FactionEntry,
   quest: QuestEntry, event: EventEntry, session: SessionEntry, note: NoteEntry,
   'random-table': RandomTableEntry, rumor: RumorEntry,
@@ -327,7 +329,7 @@ async function runCommandSuggestions(q: string) {
   const items = await getSuggestions(q, {
     campaigns,
     router,
-    updateSettings,
+    updateSettings: updateSettings as (k: string, v: any) => void,
     close,
   })
   cmdItems.value = items
@@ -438,7 +440,11 @@ watch(inCommandMode, (val) => {
 
 // ── Search ────────────────────────────────────────────────────────────────────
 
+// Each search gets a number; a slower, older one never overwrites newer results (BUG-15)
+let searchSeq = 0
+
 async function runSearch(q: string) {
+  const seq = ++searchSeq
   // Tag search mode
   if (q.startsWith('#')) {
     const tag = q.slice(1).toLowerCase()
@@ -448,22 +454,14 @@ async function runSearch(q: string) {
       return
     }
     const entityDbRows = await dbApi.entities.searchByTag(tag, 20)
+    if (seq !== searchSeq) return
     const entities: SearchResult[] = entityDbRows.map((r: any) => ({
       kind: 'entity' as const,
       id: r.id,
       name: r.name,
       type: r.type,
       campaignId: r.campaign_id,
-      entity: notesStore.entities.find(en => en.id === r.id) ?? {
-        id: r.id,
-        campaignId: r.campaign_id,
-        type: r.type,
-        name: r.name,
-        content: r.content,
-        attributes: JSON.parse(r.attributes ?? '{}'),
-        createdAt: r.created_at,
-        updatedAt: r.updated_at,
-      },
+      entity: notesStore.entities.find(en => en.id === r.id) ?? normalizeEntity(r),
     }))
     results.value = { campaigns: [], entities, rules: [], encounters: [], graphs: [] }
     cursor.value = 0
@@ -473,32 +471,29 @@ async function runSearch(q: string) {
 
   const lq = q.toLowerCase()
 
-  const allCampaigns = await dbApi.campaigns.list()
+  // All sources at once (PERF-04)
+  const [allCampaigns, entityDbRows, rulesRows, encounterRows, graphRows] = await Promise.all([
+    dbApi.campaigns.list(),
+    dbApi.entities.search(lq, 5),
+    rulesSearch(lq, 6),
+    dbApi.encounters.search(lq, 5),
+    dbApi.graphLayout.searchAll(lq, 5),
+  ])
+  if (seq !== searchSeq) return
   const campaigns: SearchResult[] = allCampaigns
     .filter((c: any) => c.name.toLowerCase().includes(lq))
     .slice(0, 5)
     .map((c: any) => ({ kind: 'campaign', id: c.id, name: c.name }))
 
-  const entityDbRows = await dbApi.entities.search(lq, 5)
   const entities: SearchResult[] = entityDbRows.map((r: any) => ({
     kind: 'entity',
     id: r.id,
     name: r.name,
     type: r.type,
     campaignId: r.campaign_id,
-    entity: notesStore.entities.find(en => en.id === r.id) ?? {
-      id: r.id,
-      campaignId: r.campaign_id,
-      type: r.type,
-      name: r.name,
-      content: r.content,
-      attributes: JSON.parse(r.attributes ?? '{}'),
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    },
+    entity: notesStore.entities.find(en => en.id === r.id) ?? normalizeEntity(r),
   }))
 
-  const rulesRows = await rulesSearch(lq, 6)
   const rulesHits: SearchResult[] = rulesRows.map(e => ({
     kind: 'rules' as const,
     id: e.id,
@@ -507,7 +502,6 @@ async function runSearch(q: string) {
     _subtitle: `${RULES_KIND_CONFIG[e.kind].label}${RULES_KIND_CONFIG[e.kind].hasLevel ? ` ${e.level}` : ''}${e.game === 'both' ? '' : ` · ${GAME_CONFIG[e.game].short}`}`,
   }))
 
-  const encounterRows = await dbApi.encounters.search(lq, 5)
   const encounters: SearchResult[] = encounterRows.map((e: any) => ({
     kind: 'encounter' as const,
     id: e.id!,
@@ -516,7 +510,6 @@ async function runSearch(q: string) {
     _subtitle: `Campaign ${e.campaign_id}`,
   }))
 
-  const graphRows = await dbApi.graphLayout.searchAll(lq, 5)
   const graphs: SearchResult[] = graphRows.map((g: any) => ({
     kind: 'graph' as const,
     id: g.id!,
@@ -626,8 +619,9 @@ function handleCmdKeydown(e: KeyboardEvent) {
   } else if (e.key === 'Enter') {
     const item = interactive[currentIdx === -1 ? 0 : currentIdx]
     if (!item) return
-    if (item.kind === 'pick') execPickItem(item)
-    else if (item.kind === 'cmd' && item.canExecute) execCmdItem(item)
+    const it = item as CmdItem
+    if (it.kind === 'pick') execPickItem(it)
+    else if (it.kind === 'cmd' && it.canExecute) execCmdItem(it)
   } else if (e.key === 'Escape') {
     close()
   }

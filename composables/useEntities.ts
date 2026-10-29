@@ -2,11 +2,11 @@
 // See the DATA MODEL NOTE in composables/useDb.ts for the full two-system explanation.
 import { ref, computed, reactive } from 'vue'
 import { extractLinks } from '~/composables/useEntityParser'
-import { dbApi, getDb, parseRecordData } from '~/composables/useDb'
+import { dbApi, getDb, parseJsonObject } from '~/composables/useDb'
 import type { DbEntitySnapshot } from '~/composables/useDb'
 import type { EntityType, EntityAttributes } from '~/types/entities'
-import { campaignRules } from '~/types/game'
-import { useParty } from '~/composables/useParty'
+import { emitDomainEvent } from '~/composables/useDomainEvents'
+import { reportError } from '~/composables/useNotices'
 
 export interface Entity {
   id: number
@@ -63,32 +63,53 @@ const byType = computed(() => {
 
 // ── Module-level functions ────────────────────────────────────────────────────
 
-async function loadAll(campaignId: number) {
-  if (isLoading.value) return
-  isLoading.value = true
-  currentEntity.value = null
-  try {
-    const [ents, lnks] = await Promise.all([
-      dbApi.entities.list(campaignId),
-      dbApi.entities.listLinks(campaignId),
-    ])
-    entities.value = ents.map(normalize)
-    links.value = lnks.map(normalizeLink)
-  } catch (err) {
-    console.error('[NotesStore] loadAll:', err)
-  } finally {
-    isLoading.value = false
-  }
+// The campaign whose entities are in memory, and the load in flight (BUG-09):
+// a second caller for the same campaign waits for the same load instead of
+// carrying on with what was there before.
+const loadedCampaign = ref<number | null>(null)
+let inflight: { campaignId: number; token: object; promise: Promise<void> } | null = null
+
+/** Data changed outside this store (import, legacy import, wipe): the next loadAll reads again. */
+export function invalidateEntities() {
+  loadedCampaign.value = null
+}
+
+/** Loads a campaign's entities and links. Already loaded → no-op unless `force`. */
+async function loadAll(campaignId: number, { force = false }: { force?: boolean } = {}) {
+  if (inflight?.campaignId === campaignId) return inflight.promise
+  if (!force && loadedCampaign.value === campaignId) return
+  const token = {}
+  const promise = (async () => {
+    isLoading.value = true
+    if (loadedCampaign.value !== campaignId) currentEntity.value = null
+    try {
+      const [ents, lnks] = await Promise.all([
+        dbApi.entities.list(campaignId),
+        dbApi.entities.listLinks(campaignId),
+      ])
+      // A newer load for another campaign started meanwhile: it wins
+      if (inflight?.token !== token) return
+      entities.value = ents.map(normalizeEntity)
+      links.value = lnks.map(normalizeLink)
+      loadedCampaign.value = campaignId
+    } catch (err) {
+      reportError('Loading the campaign', err)
+    } finally {
+      if (inflight?.token === token) { inflight = null; isLoading.value = false }
+    }
+  })()
+  inflight = { campaignId, token, promise }
+  return promise
 }
 
 async function loadEntity(id: number) {
   try {
     const raw = await dbApi.entities.get(id)
     if (!raw) return null
-    currentEntity.value = normalize(raw)
+    currentEntity.value = normalizeEntity(raw)
     return currentEntity.value
   } catch (err) {
-    console.error('[NotesStore] loadEntity:', err)
+    reportError('Loading the entry', err)
     return null
   }
 }
@@ -99,11 +120,11 @@ async function createEntity(campaignId: number, type: EntityType, name: string, 
       campaignId, type, name, content: '',
       attributes: initialAttributes ? JSON.stringify(initialAttributes) : '{}',
     })
-    const entity = normalize(raw)
+    const entity = normalizeEntity(raw)
     entities.value.unshift(entity)
     return entity
   } catch (err) {
-    console.error('[NotesStore] createEntity:', err)
+    reportError('Creating the entry', err)
     throw err
   }
 }
@@ -127,27 +148,12 @@ async function updateEntity(id: number, updates: { name?: string; content?: stri
 
     const after = updates.attributes as { status?: string; milestone?: boolean } | undefined
     if (before?.type === 'quest' && !wasCompleted && after?.status === 'completed') {
-      if (after.milestone) await promptMilestone(before.campaignId, id, updates.name ?? before.name)
-      await promptQuestXp(before.campaignId, id, updates.name ?? before.name)
+      await emitDomainEvent('questCompleted', { campaignId: before.campaignId, questId: id, name: updates.name ?? before.name, milestone: !!after.milestone })
     }
   } catch (err) {
-    console.error('[NotesStore] updateEntity:', err)
+    reportError('Saving the entry', err)
     throw err
   }
-}
-
-/** A milestone quest was completed: in a milestone campaign, ask to level up the party. */
-async function promptMilestone(campaignId: number, questId: number, questName: string) {
-  const campaign = await dbApi.campaigns.get(campaignId)
-  if (campaignRules(campaign).advancement !== 'milestone') return
-  useParty().requestLevelUp({ campaignId, trigger: 'quest', refId: questId, reason: `Milestone reached: ${questName}` })
-}
-
-/** A quest was completed in an XP campaign: offer accomplishment XP (FEATURES_PLAN.md §5). */
-async function promptQuestXp(campaignId: number, questId: number, questName: string) {
-  const campaign = await dbApi.campaigns.get(campaignId)
-  if (campaignRules(campaign).advancement !== 'xp') return
-  useParty().requestXpAward({ campaignId, refType: 'quest', refId: questId, reason: `Quest: ${questName}` })
 }
 
 async function setFavorite(id: number, isFavorite: boolean) {
@@ -159,14 +165,18 @@ async function setFavorite(id: number, isFavorite: boolean) {
 
 async function deleteEntity(id: number) {
   try {
-    await dbApi.snapshots.deleteByEntity(id)
-    await dbApi.connections.deleteByEntity(id)
+    // Links, snapshots, edges and references to it go in the same transaction
     await dbApi.entities.delete(id)
     entities.value = entities.value.filter(e => e.id !== id)
+    // The delete also took its pins off other entries; mirror that here
+    for (const e of entities.value) {
+      const pins = (e.attributes as { mapPins?: { entityId: number }[] }).mapPins
+      if (pins?.some(p => p.entityId === id)) (e.attributes as { mapPins?: unknown[] }).mapPins = pins.filter(p => p.entityId !== id)
+    }
     links.value = links.value.filter(l => l.sourceId !== id)
     if (currentEntity.value?.id === id) currentEntity.value = null
   } catch (err) {
-    console.error('[NotesStore] deleteEntity:', err)
+    reportError('Deleting the entry', err)
     throw err
   }
 }
@@ -203,31 +213,6 @@ function backlinksTo(type: string, name: string) {
   )
 }
 
-function getGraphData(campaignId: number) {
-  const campaignEntities = entities.value.filter(e => e.campaignId === campaignId)
-  const byId = new Map(campaignEntities.map(e => [e.id, e]))
-  const byTypeName = new Map(campaignEntities.map(e => [`${e.type}:${e.name.toLowerCase()}`, e]))
-
-  const nodes = campaignEntities.map(e => ({
-    data: { id: `${e.type}-${e.id}`, label: e.name, type: e.type, entityId: e.id }
-  }))
-
-  const edgeSeen = new Set<string>()
-  const edges: any[] = []
-  for (const l of links.value) {
-    const source = byId.get(l.sourceId)
-    if (!source) continue
-    const target = byTypeName.get(`${l.targetType}:${l.targetName.toLowerCase()}`)
-    if (!target) continue
-    const edgeKey = `${source.type}-${source.id}→${target.type}-${target.id}`
-    if (edgeSeen.has(edgeKey)) continue
-    edgeSeen.add(edgeKey)
-    edges.push({ data: { id: `edge-${l.id}`, source: `${source.type}-${source.id}`, target: `${target.type}-${target.id}`, label: '' } })
-  }
-
-  return { nodes, edges }
-}
-
 // ── Snapshots ────────────────────────────────────────────────────────────────
 
 async function loadSnapshots(entityId: number) {
@@ -236,7 +221,7 @@ async function loadSnapshots(entityId: number) {
     snapshots.value = raw.map(normalizeSnapshot)
     snapshotsEntityId.value = entityId
   } catch (err) {
-    console.error('[NotesStore] loadSnapshots:', err)
+    reportError('Loading the snapshots', err)
   }
 }
 
@@ -267,7 +252,7 @@ async function createSnapshot(
     }
     return snap
   } catch (err) {
-    console.error('[NotesStore] createSnapshot:', err)
+    reportError('Saving the snapshot', err)
     throw err
   }
 }
@@ -291,7 +276,7 @@ async function updateSnapshot(
       eventName: changes.eventName !== undefined ? changes.eventName : snapshots.value[idx].eventName,
     })
   } catch (err) {
-    console.error('[NotesStore] updateSnapshot:', err)
+    reportError('Saving the snapshot', err)
     throw err
   }
 }
@@ -301,7 +286,7 @@ async function deleteSnapshot(id: number): Promise<void> {
     await dbApi.snapshots.delete(id)
     snapshots.value = snapshots.value.filter(s => s.id !== id)
   } catch (err) {
-    console.error('[NotesStore] deleteSnapshot:', err)
+    reportError('Deleting the snapshot', err)
     throw err
   }
 }
@@ -329,7 +314,7 @@ async function updateSnapshotContent(
         snapshots.value[idx].attributes = changes.attributes
     }
   } catch (err) {
-    console.error('[NotesStore] updateSnapshotContent:', err)
+    reportError('Saving the snapshot', err)
     throw err
   }
 }
@@ -355,9 +340,7 @@ function normalizeSnapshot(raw: DbEntitySnapshot): EntitySnapshot {
     label: raw.label,
     note: raw.note,
     content: raw.content,
-    attributes: typeof raw.attributes === 'string'
-      ? JSON.parse(raw.attributes || '{}')
-      : raw.attributes,
+    attributes: parseJsonObject(raw.attributes),
     name: raw.name,
     createdAt: raw.created_at,
     eventId: raw.event_id,
@@ -365,14 +348,15 @@ function normalizeSnapshot(raw: DbEntitySnapshot): EntitySnapshot {
   }
 }
 
-function normalize(raw: any): Entity {
+export function normalizeEntity(raw: any): Entity {
   return {
     id: raw.id,
     campaignId: raw.campaign_id,
     type: raw.type,
     name: raw.name,
     content: raw.content ?? '',
-    attributes: typeof raw.attributes === 'string' ? JSON.parse(raw.attributes || '{}') : (raw.attributes ?? {}),
+    // A corrupt row must not break the whole list (FORK_PLAN §14 REUSE-01)
+    attributes: parseJsonObject(raw.attributes) as EntityAttributes,
     isFavorite: Boolean(raw.is_favorite),
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
@@ -385,7 +369,7 @@ function normalizeLink(raw: any): EntityLink {
     sourceId: raw.source_id,
     targetType: raw.target_type,
     targetName: raw.target_name,
-    metadata: parseRecordData(raw.metadata),
+    metadata: parseJsonObject(raw.metadata),
   }
 }
 
@@ -393,10 +377,10 @@ function normalizeLink(raw: any): EntityLink {
 
 export function useEntities() {
   return reactive({
-    entities, currentEntity, links, isLoading, byType, snapshots, snapshotsEntityId,
+    entities, currentEntity, links, isLoading, loadedCampaign, byType, snapshots, snapshotsEntityId,
     loadAll, loadEntity, createEntity, updateEntity, deleteEntity, setFavorite,
     syncLinks, loadSnapshots, createSnapshot, updateSnapshot,
     updateSnapshotContent, deleteSnapshot,
-    findByTypeAndName, linksFrom, backlinksTo, getGraphData, pinnedLocationsFor,
+    findByTypeAndName, linksFrom, backlinksTo, pinnedLocationsFor,
   })
 }

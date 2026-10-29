@@ -128,12 +128,16 @@
 </template>
 
 <script setup lang="ts">
+import type { Ref } from "vue";
 import {
     VueFlow,
     type Node,
     type Edge,
     type Connection,
     type VueFlowStore,
+    type NodeDragEvent,
+    type EdgeMouseEvent,
+    type NodeTypesObject,
 } from "@vue-flow/core";
 import { Background } from "@vue-flow/background";
 import { Controls } from "@vue-flow/controls";
@@ -142,18 +146,7 @@ import { ENTITY_TYPE_CONFIG } from "~/types/entities";
 import { dbApi, type DbEntityConnection } from "~/composables/useDb";
 import EntityNode from "~/components/graph/EntityNode.vue";
 import { markRaw } from "vue";
-import {
-    GiScrollUnfurled,
-    GiBookAura,
-    GiDeathNote,
-    GiMagicHat,
-    GiHouseKeys,
-    GiSandsOfTime,
-    GiAllSeeingEye,
-    GiCastle,
-    GiCoins,
-    GiBroadsword,
-} from "oh-vue-icons/icons/gi";
+import { gameIcon } from "~/utils/gameIcons";
 
 const props = defineProps<{ campaignId: number; graphId: number; playerView?: boolean }>();
 const emit = defineEmits<{ navigate: [type: string, name: string] }>();
@@ -179,10 +172,11 @@ function onPaneReady(api: VueFlowStore) {
 }
 
 // ── Node type registration ────────────────────────────────────────────────────
-const nodeTypes = { entity: markRaw(EntityNode) };
+const nodeTypes = { entity: markRaw(EntityNode) } as unknown as NodeTypesObject;
 
 // ── Reactive state ────────────────────────────────────────────────────────────
-const nodes = ref<Node[]>([]);
+// Typed as Ref<Node[]> directly: unwrapping Vue Flow's Node generics is too deep for TS
+const nodes = ref([]) as Ref<Node[]>;
 const edges = ref<Edge[]>([]);
 const positions = ref<Record<number, { x: number; y: number }>>({});
 const playerHiddenNodes = ref<Set<number>>(new Set());
@@ -217,20 +211,6 @@ function typeColor(type: string): string {
     return (ENTITY_TYPE_CONFIG as any)[type]?.color ?? "var(--text3)";
 }
 
-// ── Icon registry for SVG fallback ───────────────────────────────────────────
-const iconRegistry: Record<string, any> = {
-    "gi-scroll-unfurled": GiScrollUnfurled,
-    "gi-book-aura": GiBookAura,
-    "gi-death-note": GiDeathNote,
-    "gi-magic-hat": GiMagicHat,
-    "gi-house-keys": GiHouseKeys,
-    "gi-sands-of-time": GiSandsOfTime,
-    "gi-all-seeing-eye": GiAllSeeingEye,
-    "gi-castle": GiCastle,
-    "gi-coins": GiCoins,
-    "gi-broadsword": GiBroadsword,
-};
-
 function makeInitialDataUrl(color: string, initial: string): string {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
     <circle cx="22" cy="22" r="21" fill="#1e1e1e" stroke="${color}" stroke-width="1.5"/>
@@ -240,7 +220,8 @@ function makeInitialDataUrl(color: string, initial: string): string {
 }
 
 function makeOhIconDataUrl(iconName: string, color: string): string | null {
-    const icon = iconRegistry[iconName];
+    // Looked up in the shared registry: importing gi-* icons here would pull in all of them
+    const icon = gameIcon(iconName);
     if (!icon?.raw) return null;
     const iconSize = 28;
     const offset = (44 - iconSize) / 2;
@@ -417,7 +398,7 @@ async function rebuildGraph() {
             }
         }),
     );
-    nodes.value = canvasEnts.map((e) =>
+    nodes.value = (canvasEnts as any[]).map((e): Node =>
         buildNode(
             e,
             positions.value[e.id!],
@@ -496,11 +477,7 @@ async function onConnect(conn: Connection) {
     edges.value = buildEdges();
 }
 
-function onNodeDragStop(event: {
-    event: MouseEvent;
-    node: Node;
-    nodes: Node[];
-}) {
+function onNodeDragStop(event: NodeDragEvent) {
     const { node } = event;
     positions.value = {
         ...positions.value,
@@ -525,7 +502,7 @@ function onNodeDoubleClick(event: { node: Node }) {
     if (entity) emit("navigate", entity.type, entity.name);
 }
 
-function onEdgeContextMenu(event: { event: MouseEvent; edge: Edge }) {
+function onEdgeContextMenu(event: EdgeMouseEvent) {
     event.event.preventDefault();
     if (!event.edge.data?.isExplicit) return;
     const conn = connections.value.find(
@@ -594,7 +571,7 @@ function fitGraph() {
 async function loadGraph() {
     pendingFit = false;
     graphLoading.value = true;
-    if (!store.entities.length) await store.loadAll(props.campaignId);
+    await store.loadAll(props.campaignId);
 
     const [layout, conns] = await Promise.all([
         dbApi.graphLayout.get(props.graphId),

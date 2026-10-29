@@ -1,8 +1,20 @@
-import { getDb } from '~/composables/useDb'
+import { dbApi, getDb, type DbEntity } from '~/composables/useDb'
 import { useEntities } from '~/composables/useEntities'
 import { rulesSearch } from '~/composables/useRules'
 import { RULES_KIND_CONFIG, RULES_KINDS } from '~/types/rules'
 import { lsKey } from '~/utils/appNamespace'
+
+/**
+ * Entities of one type whose name contains `name`: the current campaign's
+ * first, else from every campaign. Searching by type in the query means
+ * matches of other types can't crowd out the wanted ones.
+ */
+async function findEntities(name: string, type: string, campaignId?: number, limit = 8): Promise<(DbEntity & { id: number })[]> {
+  const rows = await dbApi.entities.search(name.toLowerCase(), limit * 4, { type })
+  const here = campaignId != null ? rows.filter(r => r.campaign_id === campaignId) : []
+  return (here.length ? here : rows).slice(0, limit) as (DbEntity & { id: number })[]
+}
+
 
 export interface CmdContext {
   campaign: { id: number; name: string } | null
@@ -325,8 +337,7 @@ async function findSuggestions(
       items.push({ kind: 'cmd', id: 'find-noname', icon: '⌕', label: `find ${eType.label.toLowerCase()} …`, hint: `Search ${eType.plural} in ${ctx.campaign.name}`, canExecute: false, warning: 'type a name' })
       return items
     }
-    const rows = await dbApi.entities.search(nameRest.toLowerCase(), 8)
-    const matches = rows.filter((r: any) => r.type === eType.type)
+    const matches = await findEntities(nameRest, eType.type, ctx.campaign?.id)
     if (!matches.length) {
       items.push({ kind: 'cmd', id: 'find-none', icon: '⌕', label: `No ${eType.plural} matching "${nameRest}"`, hint: '', canExecute: false })
     }
@@ -399,10 +410,7 @@ async function deleteSuggestions(
     return items
   }
   const notesStore = useEntities()
-  const allRows = await dbApi.entities.search(nameStr.toLowerCase(), 8)
-  const byType = allRows.filter((r: any) => r.type === eType!.type)
-  // Prefer campaign-context matches; fall back to all campaigns
-  const rows = ctx.campaign ? (byType.filter((r: any) => r.campaign_id === ctx.campaign!.id).length ? byType.filter((r: any) => r.campaign_id === ctx.campaign!.id) : byType) : byType
+  const rows = await findEntities(nameStr, eType!.type, ctx.campaign?.id)
   if (!rows.length) { items.push({ kind: 'cmd', id: 'del-none', icon: '✕', label: `No ${eType!.plural} matching "${nameStr}"`, hint: '', canExecute: false }); return items }
   const exact = rows.find((r: any) => r.name.toLowerCase() === nameStr.toLowerCase())
   if (exact) {
@@ -455,13 +463,7 @@ async function editSuggestions(
       items.push({ kind: 'cmd', id: 'edit-noname', icon: '✎', label: `edit ${eType!.label.toLowerCase()} …`, hint: `Search ${eType!.plural}`, canExecute: false, warning: 'type a name' })
       return items
     }
-    const allRows = await dbApi.entities.search(namePart.toLowerCase(), 8)
-    const byType = allRows.filter((r: any) => r.type === eType!.type)
-    const matches = ctx.campaign
-      ? (byType.filter((r: any) => r.campaign_id === ctx.campaign!.id).length
-          ? byType.filter((r: any) => r.campaign_id === ctx.campaign!.id)
-          : byType)
-      : byType
+    const matches = await findEntities(namePart, eType!.type, ctx.campaign?.id)
     if (!matches.length) items.push({ kind: 'cmd', id: 'edit-none', icon: '✎', label: `No ${eType!.plural} matching "${namePart}"`, hint: '', canExecute: false })
     for (const r of matches) {
       items.push({ kind: 'pick', id: `edit-pick-${r.id}`, icon: '✎', label: r.name, hint: `Edit ${eType!.label} · type key and value after |`, execute: () => {}, fill: `> edit ${typeWord} ${r.name} | ` })
@@ -472,13 +474,7 @@ async function editSuggestions(
   const key = attrWords[0] ?? ''
   const value = attrWords.slice(1).join(' ')
   const notesStore = useEntities()
-  const allEntityRows = await dbApi.entities.search(namePart.toLowerCase(), 8)
-  const byEntityType = allEntityRows.filter((r: any) => r.type === eType!.type)
-  const preferredRows = ctx.campaign
-    ? (byEntityType.filter((r: any) => r.campaign_id === ctx.campaign!.id).length
-        ? byEntityType.filter((r: any) => r.campaign_id === ctx.campaign!.id)
-        : byEntityType)
-    : byEntityType
+  const preferredRows = await findEntities(namePart, eType!.type, ctx.campaign?.id)
   const entityRow = preferredRows.find((r: any) => r.name.toLowerCase() === namePart.toLowerCase())
     ?? preferredRows[0] ?? null
   const entityAttrs: Record<string, any> = entityRow
@@ -584,13 +580,7 @@ async function appendSuggestions(
       items.push({ kind: 'cmd', id: 'app-noname', icon: '¶', label: `append to ${eType!.label.toLowerCase()} …`, hint: `Search ${eType!.plural}`, canExecute: false, warning: 'type a name' })
       return items
     }
-    const allRows = await dbApi.entities.search(namePart.toLowerCase(), 8)
-    const byType = allRows.filter((r: any) => r.type === eType!.type)
-    const matches = ctx.campaign
-      ? (byType.filter((r: any) => r.campaign_id === ctx.campaign!.id).length
-          ? byType.filter((r: any) => r.campaign_id === ctx.campaign!.id)
-          : byType)
-      : byType
+    const matches = await findEntities(namePart, eType!.type, ctx.campaign?.id)
     if (!matches.length) items.push({ kind: 'cmd', id: 'app-none', icon: '¶', label: `No ${eType!.plural} matching "${namePart}"`, hint: '', canExecute: false })
     for (const r of matches) {
       items.push({ kind: 'pick', id: `app-pick-${r.id}`, icon: '¶', label: r.name, hint: `Append paragraph · type text after |`, execute: () => {}, fill: `> append ${typeWord} ${r.name} | ` })
@@ -599,13 +589,7 @@ async function appendSuggestions(
   }
   const text = afterPipe.trim()
   const notesStore = useEntities()
-  const allAppRows = await dbApi.entities.search(namePart.toLowerCase(), 8)
-  const byAppType = allAppRows.filter((r: any) => r.type === eType!.type)
-  const preferredAppRows = ctx.campaign
-    ? (byAppType.filter((r: any) => r.campaign_id === ctx.campaign!.id).length
-        ? byAppType.filter((r: any) => r.campaign_id === ctx.campaign!.id)
-        : byAppType)
-    : byAppType
+  const preferredAppRows = await findEntities(namePart, eType!.type, ctx.campaign?.id)
   const appEntityRow = preferredAppRows.find((r: any) => r.name.toLowerCase() === namePart.toLowerCase())
     ?? preferredAppRows[0] ?? null
   const appCampaignHint = appEntityRow?.campaign_id
@@ -662,13 +646,7 @@ async function renameSuggestions(
       items.push({ kind: 'cmd', id: 'ren-noname', icon: '↩', label: `rename ${eType!.label.toLowerCase()} …`, hint: `Search ${eType!.plural}`, canExecute: false, warning: 'type the current name' })
       return items
     }
-    const allRows = await dbApi.entities.search(namePart.toLowerCase(), 8)
-    const byType = allRows.filter((r: any) => r.type === eType!.type)
-    const matches = ctx.campaign
-      ? (byType.filter((r: any) => r.campaign_id === ctx.campaign!.id).length
-          ? byType.filter((r: any) => r.campaign_id === ctx.campaign!.id)
-          : byType)
-      : byType
+    const matches = await findEntities(namePart, eType!.type, ctx.campaign?.id)
     if (!matches.length) items.push({ kind: 'cmd', id: 'ren-none', icon: '↩', label: `No ${eType!.plural} matching "${namePart}"`, hint: '', canExecute: false })
     for (const r of matches) {
       items.push({ kind: 'pick', id: `ren-pick-${r.id}`, icon: '↩', label: r.name, hint: `Rename · type new name after |`, execute: () => {}, fill: `> rename ${typeWord} ${r.name} | ` })
@@ -677,13 +655,7 @@ async function renameSuggestions(
   }
   const newName = afterPipe.trim()
   const notesStore = useEntities()
-  const allRenRows = await dbApi.entities.search(namePart.toLowerCase(), 8)
-  const byRenType = allRenRows.filter((r: any) => r.type === eType!.type)
-  const preferredRenRows = ctx.campaign
-    ? (byRenType.filter((r: any) => r.campaign_id === ctx.campaign!.id).length
-        ? byRenType.filter((r: any) => r.campaign_id === ctx.campaign!.id)
-        : byRenType)
-    : byRenType
+  const preferredRenRows = await findEntities(namePart, eType!.type, ctx.campaign?.id)
   const renEntityRow = preferredRenRows.find((r: any) => r.name.toLowerCase() === namePart.toLowerCase())
     ?? preferredRenRows[0] ?? null
   const renCampaignHint = renEntityRow?.campaign_id

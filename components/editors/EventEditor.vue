@@ -48,6 +48,7 @@
 </template>
 
 <script setup lang="ts">
+import { useAttributeDraft } from "~/composables/useAttributeDraft";
 import { useEntities } from "~/composables/useEntities";
 import type { EntityAttributes } from "~/types/entities";
 
@@ -64,7 +65,9 @@ const entity = computed(
 );
 
 const draftContent = ref("");
-const draftAttributes = ref<EntityAttributes>({});
+// Follows the stored entity; a save writes only the keys edited here
+const attrDraft = useAttributeDraft(entity, () => false);
+const draftAttributes = attrDraft.draft;
 const attrSave = useDebouncedSave(500);
 const showAttributes = ref(false);
 
@@ -74,7 +77,7 @@ watch(
         showAttributes.value = false;
         await store.loadEntity(id);
         draftContent.value = entity.value?.content ?? "";
-        draftAttributes.value = { ...(entity.value?.attributes ?? {}) };
+        attrDraft.reset(entity.value?.attributes);
     },
     { immediate: true },
 );
@@ -84,9 +87,9 @@ function onContentUpdate(value: string) {
 }
 
 function onAttributesChange(attrs: EntityAttributes) {
-    draftAttributes.value = attrs;
+    attrDraft.edit(attrs);
     attrSave.schedule(() => {
-        store.updateEntity(props.entityId, { attributes: attrs });
+        store.updateEntity(props.entityId, { attributes: attrDraft.takePatch() });
     });
 }
 
