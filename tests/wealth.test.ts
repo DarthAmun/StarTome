@@ -8,7 +8,7 @@ import type { Item } from '~/types/rules'
 
 const entry = (p: Partial<InventoryEntry>): InventoryEntry => ({
   id: 1, owner: 'stash', itemId: null, quantity: 1, nameOverride: null, priceOverride: null, bulkOverride: null,
-  notes: '', identified: true, playerName: null, playerDescription: null, runes: null, grade: null, ...p,
+  notes: '', identified: true, playerName: null, playerDescription: null, runes: null, grade: null, containerId: null, ...p,
 })
 const zero = { value: 0, consumables: 0 }
 

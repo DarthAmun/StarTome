@@ -47,9 +47,11 @@ export interface InventoryEntry {
   playerDescription: string | null
   runes: Runes | null
   grade: string | null
+  /** The container entry (same owner) this stack is stored in; null = carried loose. */
+  containerId: number | null
 }
 
-type ItemLike = Pick<Item, 'name' | 'price' | 'priceFor' | 'bulk' | 'level' | 'rarity' | 'traits' | 'unidentified' | 'category'>
+type ItemLike = Pick<Item, 'name' | 'price' | 'priceFor' | 'bulk' | 'level' | 'rarity' | 'traits' | 'unidentified' | 'category'> & Partial<Pick<Item, 'container'>>
 
 export interface EffectiveEntry {
   name: string
@@ -113,6 +115,7 @@ export function sameStack(a: InventoryEntry, b: InventoryEntry): boolean {
     && a.bulkOverride === b.bulkOverride && a.notes === b.notes && a.identified === b.identified
     && a.playerName === b.playerName && a.playerDescription === b.playerDescription
     && a.grade === b.grade && JSON.stringify(a.runes) === JSON.stringify(b.runes)
+    && (a.containerId ?? null) === (b.containerId ?? null)
 }
 
 // ── Currency ──────────────────────────────────────────────────────────────
@@ -142,6 +145,50 @@ export type Encumbrance = 'ok' | 'encumbered' | 'overloaded'
 export function ownerBulk(stacks: number[], purseCp: number, coinsHaveBulk: boolean): number {
   const items = stacks.reduce((a, b) => a + b, 0)
   return items + (coinsHaveBulk ? Math.floor(coinCount(purseCp) / 1000) * 10 : 0)
+}
+
+// ── Containers ────────────────────────────────────────────────────────────
+// A backpack's first 2 Bulk doesn't count, a bag of holding's contents weigh
+// nothing up to its capacity: the container's `bulkReduction` comes off what
+// it holds. Contents only count inside a container of the same owner.
+
+/** The container an entry is stored in, if that is a real container of the same owner. */
+export function containerOf<E extends Pick<InventoryEntry, 'id' | 'owner' | 'itemId' | 'containerId'>>(entry: E, entries: E[], items: Map<string, ItemLike>): E | null {
+  if (entry.containerId == null) return null
+  const c = entries.find(e => e.id === entry.containerId)
+  if (!c || c.owner !== entry.owner || c.id === entry.id) return null
+  return c.itemId && items.get(c.itemId)?.container ? c : null
+}
+
+export interface ContainerLoad {
+  /** Bulk (tenths) of what's inside. */
+  contents: number
+  capacity: number
+  /** What the contents add to the owner after the container's reduction. */
+  counted: number
+  over: boolean
+}
+
+export function containerLoad(container: InventoryEntry, entries: InventoryEntry[], items: Map<string, ItemLike>): ContainerLoad | null {
+  const spec = container.itemId ? items.get(container.itemId)?.container : undefined
+  if (!spec) return null
+  const contents = entries
+    .filter(e => containerOf(e, entries, items)?.id === container.id)
+    .reduce((n, e) => n + entryBulk(e, e.itemId ? items.get(e.itemId) : undefined), 0)
+  const capacity = spec.capacity ?? 0
+  return { contents, capacity, counted: Math.max(0, contents - (spec.bulkReduction ?? 0)), over: capacity > 0 && contents > capacity }
+}
+
+/** Item Bulk per owner in tenths: loose stacks, plus each container and what its reduction leaves of its contents. */
+export function itemBulkByOwner(entries: InventoryEntry[], items: Map<string, ItemLike>): Record<OwnerKey, number> {
+  const out: Record<OwnerKey, number> = {}
+  for (const e of entries) {
+    if (containerOf(e, entries, items)) continue
+    const item = e.itemId ? items.get(e.itemId) : undefined
+    const load = item?.container ? containerLoad(e, entries, items) : null
+    out[e.owner] = (out[e.owner] ?? 0) + entryBulk(e, item) + (load?.counted ?? 0)
+  }
+  return out
 }
 
 /** Encumbered above 5 + Str, over the limit above 10 + Str. 10 Light = 1 Bulk; leftover Light doesn't count. */
@@ -220,7 +267,7 @@ export function partyTotals(
   coinsHaveBulk = true,
 ): PartyTotals {
   const byOwner: Record<OwnerKey, OwnerTotal> = {}
-  const bulkStacks: Record<OwnerKey, number[]> = {}
+  const itemBulk = itemBulkByOwner(entries, items)
   const slot = (o: OwnerKey) => (byOwner[o] ??= { items: 0, coins: 0, total: 0, bulk: 0, unknownPrices: 0 })
   for (const entry of entries) {
     const item = entry.itemId ? items.get(entry.itemId) : undefined
@@ -230,14 +277,13 @@ export function partyTotals(
       if (effective(entry, item).unitPrice == null) t.unknownPrices++
       else t.items += entryValue(entry, item)
     }
-    ;(bulkStacks[entry.owner] ??= []).push(entryBulk(entry, item))
   }
   for (const p of purses) slot(p.owner).coins += Math.max(0, Math.floor(p.cp))
   let sumItems = 0
   let sumCoins = 0
   for (const [owner, t] of Object.entries(byOwner)) {
     t.total = t.items + t.coins
-    t.bulk = ownerBulk(bulkStacks[owner] ?? [], t.coins, coinsHaveBulk)
+    t.bulk = ownerBulk([itemBulk[owner] ?? 0], t.coins, coinsHaveBulk)
     if (parseOwner(owner).kind === 'encounter') continue
     sumItems += t.items
     sumCoins += t.coins

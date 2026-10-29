@@ -17,7 +17,7 @@ export function toEntry(r: DbInventory): InventoryEntry {
     nameOverride: r.name_override ?? null, priceOverride: r.price_override ?? null, bulkOverride: r.bulk_override ?? null,
     notes: r.notes ?? '', identified: !!r.identified,
     playerName: r.player_name ?? null, playerDescription: r.player_description ?? null,
-    runes: r.runes ?? null, grade: r.grade ?? null,
+    runes: r.runes ?? null, grade: r.grade ?? null, containerId: r.container_id ?? null,
   }
 }
 
@@ -78,7 +78,7 @@ async function addEntry(input: AddEntryInput): Promise<number> {
     name_override: input.itemId ? null : (input.name?.trim() || 'Unnamed item'),
     price_override: input.priceOverride ?? null, bulk_override: null, notes: '',
     identified: input.identified === false ? 0 : 1, player_name: null, player_description: null,
-    runes: null, grade: null, created_at: ts, updated_at: ts,
+    runes: null, grade: null, container_id: null, created_at: ts, updated_at: ts,
   }
   const existing = await findStack(input.campaignId, input.owner, toEntry({ ...row, id: -1 }))
   let id: number
@@ -121,10 +121,48 @@ async function updateEntry(id: number, patch: EntryPatch) {
   await reloadIfLoaded(row.campaign_id)
 }
 
+/** Entries stored in a container entry. */
+async function contentsOf(containerId: number) {
+  const db = getDb()
+  const c = await db.inventory.get(containerId)
+  if (!c) return []
+  return db.inventory.where('owner').equals(c.owner).filter(r => r.campaign_id === c.campaign_id && r.container_id === containerId).toArray()
+}
+
 async function removeEntry(id: number) {
-  const row = await getDb().inventory.get(id)
+  const db = getDb()
+  const row = await db.inventory.get(id)
   if (!row) return
-  await getDb().inventory.delete(id)
+  // What was inside falls out loose
+  await db.transaction('rw', db.inventory, async () => {
+    for (const c of await contentsOf(id)) await db.inventory.update(c.id!, { container_id: null })
+    await db.inventory.delete(id)
+  })
+  await reloadIfLoaded(row.campaign_id)
+}
+
+/**
+ * Stores an entry in a container of the same owner (or takes it out with
+ * null). A stack already in that container merges. Containers don't nest.
+ */
+async function store(id: number, containerId: number | null) {
+  const db = getDb()
+  const row = await db.inventory.get(id)
+  if (!row || (row.container_id ?? null) === containerId || id === containerId) return
+  if (containerId != null) {
+    const c = await db.inventory.get(containerId)
+    if (!c || c.owner !== row.owner || c.campaign_id !== row.campaign_id || c.container_id != null) return
+    if ((await contentsOf(id)).length) return
+  }
+  await db.transaction('rw', db.inventory, async () => {
+    const target = await findStack(row.campaign_id, row.owner, { ...toEntry(row), containerId }, row.id)
+    if (target) {
+      await db.inventory.update(target.id!, { quantity: target.quantity + row.quantity, updated_at: now() })
+      await db.inventory.delete(row.id!)
+    } else {
+      await db.inventory.update(row.id!, { container_id: containerId, updated_at: now() })
+    }
+  })
   await reloadIfLoaded(row.campaign_id)
 }
 
@@ -145,14 +183,22 @@ async function move(id: number, to: OwnerKey, quantity?: number) {
   if (plan.type === 'none') return
   const ts = now()
   const moved = plan.type === 'split' ? plan.quantity : row.quantity
+  const contents = await contentsOf(id)
   await db.transaction('rw', db.inventory, async () => {
-    const target = await findStack(row.campaign_id, to, { ...toEntry(row), owner: to }, row.id)
+    // A container with contents goes whole and unmerged, its contents with it;
+    // a partial move of it leaves the contents in the stack that stays.
+    if (contents.length && plan.type === 'reassign') {
+      await db.inventory.update(row.id!, { owner: to, container_id: null, updated_at: ts })
+      for (const c of contents) await db.inventory.update(c.id!, { owner: to, updated_at: ts })
+      return
+    }
+    const target = await findStack(row.campaign_id, to, { ...toEntry(row), owner: to, containerId: null }, row.id)
     if (plan.type === 'reassign') {
       if (target) {
         await db.inventory.update(target.id!, { quantity: target.quantity + moved, updated_at: ts })
         await db.inventory.delete(row.id!)
       } else {
-        await db.inventory.update(row.id!, { owner: to, updated_at: ts })
+        await db.inventory.update(row.id!, { owner: to, container_id: null, updated_at: ts })
       }
       return
     }
@@ -160,7 +206,7 @@ async function move(id: number, to: OwnerKey, quantity?: number) {
     if (target) await db.inventory.update(target.id!, { quantity: target.quantity + moved, updated_at: ts })
     else {
       const { id: _id, ...copy } = row
-      await db.inventory.add({ ...copy, owner: to, quantity: moved, created_at: ts, updated_at: ts })
+      await db.inventory.add({ ...copy, owner: to, quantity: moved, container_id: null, created_at: ts, updated_at: ts })
     }
   })
   await reloadIfLoaded(row.campaign_id)
@@ -230,8 +276,13 @@ async function splitPurse(campaignId: number, from: OwnerKey, recipients: OwnerK
 async function releaseOwner(campaignId: number, owner: OwnerKey) {
   if (owner === STASH) return
   const db = getDb()
+  // Containers first, so their contents travel inside them
   const rows = await db.inventory.where('owner').equals(owner).filter(r => r.campaign_id === campaignId).toArray()
-  for (const r of rows) await move(r.id!, STASH)
+  rows.sort((a, b) => Number(a.container_id != null) - Number(b.container_id != null))
+  for (const r of rows) {
+    const current = await db.inventory.get(r.id!)
+    if (current?.owner === owner) await move(r.id!, STASH)
+  }
   const coins = await purseOf(campaignId, owner)
   if (coins) await transferCoins(campaignId, owner, STASH, coins)
   const purse = await db.purses.where('owner').equals(owner).filter(p => p.campaign_id === campaignId).first()
@@ -256,9 +307,11 @@ async function transferAll(campaignId: number, from: OwnerKey, to: OwnerKey): Pr
   const db = getDb()
   return db.transaction('rw', db.inventory, db.purses, async () => {
     const rows = await db.inventory.where('owner').equals(from).filter(r => r.campaign_id === campaignId).toArray()
+    const holders = new Set(rows.map(r => r.container_id).filter((id): id is number => id != null))
     const ts = now()
     for (const row of rows) {
-      const target = await findStack(campaignId, to, { ...toEntry(row), owner: to }, row.id)
+      // A container with contents keeps its id so the contents still point at it
+      const target = holders.has(row.id!) ? undefined : await findStack(campaignId, to, { ...toEntry(row), owner: to }, row.id)
       if (target) {
         await db.inventory.update(target.id!, { quantity: target.quantity + row.quantity, updated_at: ts })
         await db.inventory.delete(row.id!)
@@ -318,7 +371,7 @@ export function useInventory() {
     items,
     loadedCampaign,
     purseList: computed(() => Object.entries(purses.value).map(([owner, cp]) => ({ owner, cp }))),
-    load, addEntry, updateEntry, removeEntry, setIdentified, move,
+    load, addEntry, updateEntry, removeEntry, setIdentified, move, store,
     setPurse, adjustPurse, transferCoins, splitPurse, releaseOwner,
     transferAll, restoreSnapshot, reload: reloadIfLoaded,
   }

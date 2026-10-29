@@ -276,7 +276,10 @@ P2 and P3 don't depend on each other and could swap if the party tab matters mor
   - Party page **Wealth** section: the % of the expected running total (progress through the level from XP, or the milestone pacing), the matched level, the baseline/encounters/awards breakdown, what the party owns now, this level's pace, **Count consumables** and **ABP** toggles, the gear check per party member, the award log with undo.
   - "Count consumables" off leaves consumables out of what was awarded and subtracts the rows' consumable counts priced at the compendium's median consumable price per level, labelled as an estimate.
   - Pace hint ("treasure this level: X of Y") in the encounter builder header and the loot dialog, which also shows where this loot takes the level.
-  - Still open: GM Core's ABP-reduced treasure values (ABP only skips the rune check for now; the readout says so), the PF2e consumable counts and the SF2e grade levels need checking against the books.
+  - Checked 2026-10-29 on Archives of Nethys: the PF2e consumable counts (GM Core Table 10-9) and the SF2e grade levels (Permanent Item Price table) match, both now `verified`. GM Core has **no** ABP-reduced treasure table: its ABP rules say to ignore as much of Party Treasure by Level as you like while keeping currency steady. So ABP skips the rune check and the expected side stays the standard table.
+- **Follow-ups done 2026-10-29 (v0.12.1)**:
+  - **Containers** (§9.3): an entry can be stored in a container entry of the same owner (`inventory.container_id`, non-indexed). The container's `bulkReduction` comes off its contents (backpack: the first 2 Bulk; bag of holding: everything up to capacity), with an "over capacity" warning. A container moves with its contents and is never merged while it holds something; deleting it drops the contents loose; moving a stored stack to another owner takes it out. Containers don't nest. "Stored in" sits in an entry's details, and stored stacks are listed indented under their container.
+  - **`PartyLink` stub** (`partylink/`): the port from FORK_PLAN §9.2 in our own vocabulary plus `NoneLink` (empty reads, refused writes). P6/P7 stay parked until the Play Buddy API is settled and its repo has been looked at.
 
 ## 9. Open questions
 

@@ -7,7 +7,7 @@ import { stripGmOnly } from '~/utils/gmContent'
 function entry(over: Partial<InventoryEntry> = {}): InventoryEntry {
   return {
     id: 1, owner: 'stash', itemId: 'ring', quantity: 1, nameOverride: null, priceOverride: null, bulkOverride: null,
-    notes: '', identified: true, playerName: null, playerDescription: null, runes: null, grade: null, ...over,
+    notes: '', identified: true, playerName: null, playerDescription: null, runes: null, grade: null, containerId: null, ...over,
   }
 }
 

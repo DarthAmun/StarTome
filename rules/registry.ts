@@ -89,13 +89,14 @@ const PF2E_GEAR: GearSchedule = {
   grades: { weapon: [], armor: [] },
   verified: true,
 }
-// SF2e grades follow the same levels (tactical = +1, advanced = +1 striking, …); not yet checked in the book
+// SF2e grades: the core weapon/armor levels of the Permanent Item Price table,
+// https://2e.aonsrd.com/rules/1063-item-prices (checked 2026-10-29)
 const SF2E_GEAR: GearSchedule = {
   kind: 'grades',
   weapon: { potency: [], fundamental: [] },
   armor: { potency: [], fundamental: [] },
   grades: { weapon: [2, 4, 10, 12, 16, 19], armor: [5, 8, 11, 14, 18, 20] },
-  verified: false,
+  verified: true,
 }
 
 /** Item counts per row: level L gives permanent items of L+1 and L, consumables of L+1, L and L−1. */
@@ -133,8 +134,8 @@ export const GAME_RULES: Record<GameId, GameRules> = {
     simpleHazardXp: SIMPLE_HAZARD_XP,
     xpPerLevel: 1000,
     treasure: treasureTable(TREASURE_TOTAL_GP, TREASURE_CURRENCY_GP, TREASURE_EXTRA_PC_GP, 100),
-    // Item counts were taken from the SF2e table; same layout, not yet checked in PF2e GM Core
-    treasureCountsVerified: false,
+    // GM Core Table 10-9, https://2e.aonprd.com/Rules.aspx?ID=2656 (checked 2026-10-29)
+    treasureCountsVerified: true,
     gear: PF2E_GEAR,
     verified: true,
   },

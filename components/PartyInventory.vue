@@ -70,7 +70,7 @@
 
       <!-- Items -->
       <div v-if="!ownerEntries.length" class="party-empty">No items.</div>
-      <div v-for="e in ownerEntries" :key="e.id" class="inv-item" :class="{ 'inv-item--unid': !e.identified }">
+      <div v-for="e in ownerEntries" :key="e.id" class="inv-item" :class="{ 'inv-item--unid': !e.identified, 'inv-item--inside': insideOf(e) }">
         <div class="inv-row">
           <input class="inv-input inv-qty" type="number" min="0" :value="e.quantity" title="Quantity (0 removes)"
             @change="updateEntry(e.id, { quantity: Number(($event.target as HTMLInputElement).value) })" />
@@ -86,6 +86,10 @@
               <span>{{ playerOf(e).name }}</span>
               <span v-if="!e.identified" class="inv-unid">unidentified</span>
             </template>
+            <span v-if="loadOf(e)" class="inv-dim" :class="{ 'inv-warn': loadOf(e)!.over }"
+              :title="`Holds ${formatBulkTotal(loadOf(e)!.contents)} Bulk; ${formatBulkTotal(loadOf(e)!.counted)} of it counts toward the carrier`">
+              holds {{ formatBulkTotal(loadOf(e)!.contents) }} / {{ formatBulkTotal(loadOf(e)!.capacity) }}{{ loadOf(e)!.over ? ' · over capacity' : '' }}
+            </span>
           </div>
           <span class="inv-level" title="Level">{{ shownLevel(e) }}</span>
           <span class="inv-price" :title="priceTitle(e)">{{ shownPrice(e) }}</span>
@@ -158,6 +162,13 @@
               </select>
             </label>
           </template>
+          <label v-if="!lockOwner && (containersFor(e).length || e.containerId != null)">
+            <span>Stored in</span>
+            <select class="inv-input" :value="insideOf(e)?.id ?? ''" @change="store(e.id, val($event) ? Number(val($event)) : null)">
+              <option value="">Carried loose</option>
+              <option v-for="c in containersFor(e)" :key="c.id" :value="c.id">{{ eff(c).name }}</option>
+            </select>
+          </label>
           <label class="inv-wide">
             <span>GM notes</span>
             <textarea class="inv-input" rows="2" :value="e.notes" placeholder="Only you see these; > [!hidden] blocks stay hidden in exports too"
@@ -213,7 +224,7 @@ import type { Character } from '~/composables/useParty'
 import { useWealth } from '~/composables/useWealth'
 import { lootValue } from '~/rules/wealth'
 import { SF2E_GRADES } from '~/rules/registry'
-import { characterOwner, effective, encumbrance, entryBulk, parseOwner, partyTotals, STASH, toPlayerView, unidentifiedName, type Encumbrance, type InventoryEntry, type OwnerKey } from '~/rules/inventory'
+import { characterOwner, containerLoad, containerOf, effective, encumbrance, entryBulk, parseOwner, partyTotals, STASH, toPlayerView, unidentifiedName, type Encumbrance, type InventoryEntry, type OwnerKey } from '~/rules/inventory'
 import { formatBulk, formatMoney, parseBulk, parseMoney } from '~/rules/format'
 import { isPartyMember } from '~/rules/party'
 import { campaignRules, type CampaignRules, type GameId } from '~/types/game'
@@ -232,7 +243,7 @@ const props = defineProps<{
 const AWARD_HINT = 'Treasure the party was given: counts toward the wealth readout. Leave it off for corrections, such as a forgotten item from before.'
 
 const inv = useInventory()
-const { entries, purses, items, purseList, load, addEntry, updateEntry, removeEntry, setIdentified, move, adjustPurse, transferCoins, splitPurse } = inv
+const { entries, purses, items, purseList, load, addEntry, updateEntry, removeEntry, setIdentified, move, store, adjustPurse, transferCoins, splitPurse } = inv
 const { formatDate } = useFormatters()
 
 const view = ref<'gm' | 'player'>('gm')
@@ -267,9 +278,20 @@ const selectedCharacter = computed(() => props.characters.find(c => characterOwn
 const selectedLoad = computed(() => owners.value.find(o => o.key === selected.value)?.load ?? null)
 watch(owners, list => { if (!props.lockOwner && !list.some(o => o.key === selected.value)) selected.value = STASH })
 
-const ownerEntries = computed(() => entries.value
-  .filter(e => e.owner === selected.value)
-  .sort((a, b) => eff(a).name.localeCompare(eff(b).name)))
+/** The owner's stacks, each container followed by what's stored in it. */
+const ownerEntries = computed(() => {
+  const own = entries.value.filter(e => e.owner === selected.value)
+  const byName = (a: InventoryEntry, b: InventoryEntry) => eff(a).name.localeCompare(eff(b).name)
+  const loose = own.filter(e => !containerOf(e, own, items.value)).sort(byName)
+  return loose.flatMap(e => [e, ...own.filter(c => containerOf(c, own, items.value)?.id === e.id).sort(byName)])
+})
+const insideOf = (e: InventoryEntry) => containerOf(e, entries.value, items.value)
+const loadOf = (e: InventoryEntry) => containerLoad(e, entries.value, items.value)
+/** Containers of the same owner this entry can go into; containers holding something don't nest. */
+function containersFor(e: InventoryEntry) {
+  if (entries.value.some(x => x.containerId === e.id)) return []
+  return entries.value.filter(c => c.owner === e.owner && c.id !== e.id && c.containerId == null && !!item(c)?.container)
+}
 
 function loadLabel(l: Encumbrance) {
   return l === 'overloaded' ? 'Over the Bulk limit' : 'Encumbered'
@@ -399,7 +421,7 @@ const addAward = ref(false)
 async function recordAward(itemId: string | null, name: string, quantity: number) {
   if (!addAward.value || props.lockOwner) return
   const probe = { id: -1, owner: selected.value, itemId, quantity, nameOverride: itemId ? null : name, priceOverride: null, bulkOverride: null,
-    notes: '', identified: true, playerName: null, playerDescription: null, runes: null, grade: null }
+    notes: '', identified: true, playerName: null, playerDescription: null, runes: null, grade: null, containerId: null }
   const value = lootValue([probe], items.value)
   const label = `${quantity > 1 ? `${quantity}× ` : ''}${name}`
   if (value.value > 0) await wealth.awardTreasure({ campaignId: props.campaignId, value, label })
@@ -482,6 +504,7 @@ textarea.inv-input { height: auto; padding: 6px 8px; resize: vertical; font-fami
 .inv-qty { width: 56px; text-align: center; font-family: var(--fm); }
 
 .inv-item { border-top: 1px solid var(--border); }
+.inv-item--inside { margin-left: 24px; border-top-style: dashed; }
 .inv-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
 .inv-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--text); }
 .inv-name a { color: inherit; text-decoration: none; }

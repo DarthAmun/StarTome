@@ -219,6 +219,7 @@ export interface DbInventory {
   player_description: string | null
   runes: Runes | null
   grade: string | null
+  container_id?: number | null     // a container entry of the same owner (P5 follow-up); non-indexed
   created_at: string
   updated_at: string
 }
@@ -638,9 +639,15 @@ export const dbApi = {
 
       // ── Inventory + purses (after characters and encounters, for the owner keys) ──
       const entries = await db.inventory.where('campaign_id').equals(id).toArray()
-      for (const { id: _iId, ...e } of entries) {
+      const entryIdMap = new Map<number, number>()
+      for (const { id: oldIId, ...e } of entries) {
         const owner = ownerMap.get(e.owner)
-        if (owner) await db.inventory.add({ ...e, campaign_id: newCampaignId, owner })
+        if (owner) entryIdMap.set(oldIId!, await db.inventory.add({ ...e, campaign_id: newCampaignId, owner }) as number)
+      }
+      // Contents point at their container's new id
+      for (const e of entries) {
+        if (e.container_id == null || !entryIdMap.has(e.id!)) continue
+        await db.inventory.update(entryIdMap.get(e.id!)!, { container_id: entryIdMap.get(e.container_id) ?? null })
       }
       const purses = await db.purses.where('campaign_id').equals(id).toArray()
       for (const { id: _pId, ...p } of purses) {

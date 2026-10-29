@@ -47,7 +47,7 @@
             For a running campaign, enter the party's items and coins in the inventory and press <b>Set treasure baseline</b>. From then on only resolved loot and items added “as treasure” count.
           </div>
           <div v-if="state.rules.abp" class="pw-note">
-            ABP is on: the gear check skips runes. The expected treasure still uses the standard table; GM Core's ABP-reduced values aren't entered yet.
+            ABP is on: the gear check skips runes. GM Core gives no reduced treasure table for ABP (you may hand out less, keeping currency steady), so the expected side stays the standard table.
           </div>
         </div>
 
