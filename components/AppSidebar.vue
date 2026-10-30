@@ -229,6 +229,10 @@
             <OhVueIcon name="gi-scroll-unfurled" scale="0.65" style="color:#b5a07a;width:14px;flex-shrink:0" />
             <span>DM's Tome import</span>
           </NuxtLink>
+          <NuxtLink to="/compendium/homebrew" class="sb-child-tool" :class="{ active: route.path === '/compendium/homebrew' }">
+            <OhVueIcon name="gi-cauldron" scale="0.65" style="color:#7cc44e;width:14px;flex-shrink:0" />
+            <span>Homebrew import</span>
+          </NuxtLink>
         </div>
 
       </div>
