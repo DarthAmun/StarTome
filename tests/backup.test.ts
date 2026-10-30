@@ -210,4 +210,44 @@ describe('backup and import', () => {
     expect((await db.encounters.get(c.enc))!.fog_data).toEqual({ '2,2': 'hidden' })
     expect((await db.encounters.get(c.enc))!.viewport).toEqual({ x: 1, y: 2, scale: 1 })
   })
+  it('imports a hand-written campaign file (CAMPAIGN_FORMAT.md) and derives its links', async () => {
+    const ts = '2026-10-30T12:00:00.000Z'
+    const ent = (id: number, type: string, name: string, content: string, attributes: Record<string, unknown> = {}) =>
+      ({ id, campaign_id: 1, type, name, content, attributes, is_favorite: 0, created_at: ts, updated_at: ts })
+    const file = {
+      version: 2, app: 'startome', type: 'campaigns', exportedAt: ts,
+      campaigns: [{ id: 1, name: 'Embers', description: '', game: 'sf2e', rules: { advancement: 'milestone' }, created_at: ts, updated_at: ts }],
+      entities: [
+        ent(1, 'npc', 'Ilsa Varn', 'Captain of {{faction: Dawn Company}}.\n\n> [!hidden] Secret\n> Traitor.', { level: '6', isAlive: true }),
+        ent(2, 'faction', 'Dawn Company', 'Led by {{npc: Ilsa Varn}}; based on {{location: Absalom Station}}.', { factionType: 'mercenary' }),
+        ent(3, 'location', 'Absalom Station', '', { locationType: 'city' }),
+        ent(4, 'quest', 'Lost Cargo', 'Find it.', { status: 'active', questGiver: 'Ilsa Varn', questGiverId: 1, questGiverType: 'npc' }),
+      ],
+      entityConnections: [{ id: 1, campaign_id: 1, source_entity_id: 1, target_entity_id: 2, label: 'leads', direction: 'one-way', color: null }],
+    } as unknown as BackupPayload
+    const db = getDb()
+    await seed('Mine')
+    await importPayload(file, { mode: 'merge', sections: ALL })
+
+    const camp = (await db.campaigns.toArray()).find(c => c.name === 'Embers')!
+    expect(camp.game).toBe('sf2e')
+    const ents = await db.entities.where('campaign_id').equals(camp.id!).toArray()
+    const byName = (n: string) => ents.find(e => e.name === n)!
+    expect((byName('Lost Cargo').attributes as any).questGiverId).toBe(byName('Ilsa Varn').id)
+    const links = await db.entityLinks.where('source_id').equals(byName('Dawn Company').id!).toArray()
+    expect(links.map(l => `${l.target_type}:${l.target_name}`).sort()).toEqual(['location:Absalom Station', 'npc:Ilsa Varn'])
+    expect(await db.entityConnections.where('campaign_id').equals(camp.id!).first())
+      .toMatchObject({ source_entity_id: byName('Ilsa Varn').id, target_entity_id: byName('Dawn Company').id })
+  })
+
+  it('keeps the links of an exported file as they are', async () => {
+    const theirs = await seed('Theirs')
+    const db = getDb()
+    await db.entities.update(theirs.loc, { content: '{{npc: Someone Else}}' })
+    const file = await readBack(await exportCampaignsPayload([theirs.id]))
+    await importPayload(file, { mode: 'merge', sections: ALL })
+    const camp = (await db.campaigns.toArray()).filter(c => c.name === 'Theirs')[1]
+    const loc = (await db.entities.where('campaign_id').equals(camp.id!).toArray()).find(e => e.type === 'location')!
+    expect((await db.entityLinks.where('source_id').equals(loc.id!).toArray()).map(l => l.target_name)).toEqual(['Theirs Kib'])
+  })
 })

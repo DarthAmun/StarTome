@@ -25,6 +25,7 @@ import {
   type DbEntityConnection, type DbEntityLink, type DbEntitySnapshot, type DbGraphLayout, type DbInventory, type DbLevelUp,
   type DbPurse, type DbToken, type DbTreasureAward, type DbXpAward,
 } from '~/composables/useDb'
+import { extractLinks } from '~/composables/useEntityParser'
 import { imageIdsOf, planRulesImport, rulesForExport, type ExportedImage, type RulesOverlay } from '~/converters/export'
 import { blobToDataUrl, dataUrlToBlob, imageRefId, isImageRef } from '~/rules/images'
 import type { RulesEntity } from '~/types/rules'
@@ -257,6 +258,13 @@ async function writeMerged(rows: Partial<CampaignRows>, opts: MergeOptions, coun
   }
   for (const l of (rows.entityLinks ?? []).filter(l => ent.has(l.source_id))) {
     await add('entityLinks', { ...withoutId(l), source_id: ent.get(l.source_id)! })
+  }
+  // Hand-written files (CAMPAIGN_FORMAT.md) bring content without its links: derive them as saving would
+  const linked = new Set((rows.entityLinks ?? []).map(l => l.source_id))
+  for (const e of entities.filter(e => !linked.has(e.id!))) {
+    for (const l of extractLinks(typeof e.content === 'string' ? e.content : '')) {
+      await db.entityLinks.add({ source_id: ent.get(e.id!)!, target_type: l.type, target_name: l.name, metadata: l.metadata ?? {} })
+    }
   }
   for (const s of (rows.entitySnapshots ?? []).filter(s => ent.has(s.entity_id))) {
     await add('entitySnapshots', { ...withoutId(s), entity_id: ent.get(s.entity_id)!, event_id: s.event_id != null ? ent.get(s.event_id) ?? null : null })
