@@ -25,6 +25,18 @@ export const DC_STEPS: { key: DcStep; label: string; adjust: number }[] = [
 export const SIMPLE_DCS: Record<Proficiency, number> = { untrained: 10, trained: 15, expert: 20, master: 30, legendary: 40 }
 export const PROFICIENCIES = Object.keys(SIMPLE_DCS) as Proficiency[]
 
+export type Degree = 'critical-success' | 'success' | 'failure' | 'critical-failure'
+
+/** Degree of success of a check: ±10 for criticals, a natural 20/1 one step up/down. */
+export function checkDegree(d20: number, modifier: number, dc: number): Degree {
+  const order: Degree[] = ['critical-failure', 'failure', 'success', 'critical-success']
+  const total = d20 + modifier
+  let i = total >= dc + 10 ? 3 : total >= dc ? 2 : total <= dc - 10 ? 0 : 1
+  if (d20 === 20) i = Math.min(3, i + 1)
+  if (d20 === 1) i = Math.max(0, i - 1)
+  return order[i]
+}
+
 export const MIN_DC_LEVEL = -1
 export const MAX_DC_LEVEL = 25
 

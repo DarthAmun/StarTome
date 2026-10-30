@@ -17,6 +17,8 @@
           </div>
           <PartyInventory :campaign-id="campaignId" :game="game" :characters="characters" :party-level="party.level" :lock-owner="owner" />
 
+          <TreasureRollPanel v-if="party.level != null" :campaign-id="campaignId" :game="game" :owner="owner" :level="party.level" :party-size="party.size" :pace="pace" />
+
           <!-- Enemies' gear -->
           <section v-if="gear.length" class="eld-gear">
             <div class="eld-title">From the enemies' gear</div>

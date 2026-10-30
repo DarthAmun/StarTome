@@ -77,6 +77,9 @@
         </label>
 
         <div class="party-actions">
+          <button class="party-icon-btn" title="Earn income (downtime)" @click="incomeFor = c">
+            <OhVueIcon name="gi-coins" scale="0.75" />
+          </button>
           <button class="party-icon-btn" :title="c.role === 'pc' ? 'Make companion' : 'Make player character'"
             @click="updateCharacter(c.id, { role: c.role === 'pc' ? 'companion' : 'pc' })">
             <OhVueIcon :name="c.role === 'pc' ? 'gi-meeple-group' : 'gi-deadly-strike'" scale="0.75" />
@@ -106,6 +109,8 @@
     </section>
 
     <PartyInventory :campaign-id="campaignId" :game="game" :characters="characters" :party-level="party.level" />
+
+    <EarnIncomeDialog v-if="incomeFor" :campaign-id="campaignId" :game="game" :character="incomeFor" @close="incomeFor = null" />
 
     <PartyWealth :campaign-id="campaignId" :game="game" :characters="characters" :party="party" />
 
@@ -234,6 +239,9 @@ function openLevelUp() {
 }
 
 const firstActive = computed(() => levelUps.value.findIndex(l => !l.undoneAt))
+
+/** Earn Income (FEATURES_PLAN §10.4) for this party member. */
+const incomeFor = ref<{ id: number; name: string; level: number } | null>(null)
 
 function openAwardXp() {
   requestXpAward({ campaignId, refType: null, refId: null, reason: '' })

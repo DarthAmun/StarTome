@@ -9,6 +9,7 @@
  * Archives of Nethys 2026-10-29.
  */
 import { conditionInfo, getConditionColor } from '~/composables/useConditions'
+import { checkDegree, type Degree } from '~/rules/dcs'
 import type { TokenCondition } from '~/stores/encounter'
 import { DEFAULT_AUTOMATION, type AutomationSettings } from '~/types/game'
 
@@ -41,7 +42,7 @@ export interface EffectResult {
   revived?: boolean
 }
 
-export type Degree = 'critical-success' | 'success' | 'failure' | 'critical-failure'
+export type { Degree }
 
 export const RECOVERY_DC_BASE = 10
 export const PERSISTENT_DC = 15
@@ -173,11 +174,7 @@ export function startOfTurn(conds: TokenCondition[], settings: AutomationSetting
 
 /** Degree of success of a flat check: ±10 for criticals, a natural 20/1 steps up/down. */
 export function flatCheckDegree(roll: number, dc: number): Degree {
-  const order: Degree[] = ['critical-failure', 'failure', 'success', 'critical-success']
-  let i = roll >= dc + 10 ? 3 : roll >= dc ? 2 : roll <= dc - 10 ? 0 : 1
-  if (roll === 20) i = Math.min(3, i + 1)
-  if (roll === 1) i = Math.max(0, i - 1)
-  return order[i]
+  return checkDegree(roll, 0, dc)
 }
 
 const RECOVERY_DELTA: Record<Degree, number> = { 'critical-success': -2, success: -1, failure: 1, 'critical-failure': 2 }
