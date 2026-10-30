@@ -89,7 +89,18 @@ async function matchingIds(q: RulesQuery): Promise<string[]> {
   if (q.dir === 'desc') coll = coll.reverse()
   const keep = matcher(q)
   const ids: string[] = []
-  await coll.each(row => { if (keep(row)) ids.push(row.id) })
+  // Both releases ship the same conditions (same Foundry doc id): across games show one, the PF2e copy
+  const twins = q.kind === 'condition' && !q.games?.length ? new Map<string, number>() : null
+  await coll.each(row => {
+    if (!keep(row)) return
+    const docId = twins && row.origin === 'foundry' && row.game !== 'both' ? row.id.split(':').pop()! : null
+    if (docId) {
+      const at = twins!.get(docId)
+      if (at !== undefined) { if (row.game === 'pf2e') ids[at] = row.id; return }
+      twins!.set(docId, ids.length)
+    }
+    ids.push(row.id)
+  })
   return ids
 }
 
