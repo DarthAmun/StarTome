@@ -1,6 +1,6 @@
 # StarTome homebrew import format
 
-You are helping me homebrew content for **Starfinder 2e** (or Pathfinder 2e). When I ask for an importable file, output **one JSON file** in the format below, in a single ```json code block, nothing omitted. I import it in StarTome via **Compendium › Homebrew import**.
+You are helping me homebrew content for **Starfinder 2e** (or Pathfinder 2e). When I ask for an importable file, output **one JSON file** in the format below, in a single ```json code block, nothing omitted. I import it in StarTome on the **Import & Export** page, by dropping the file or pasting your answer; it opens the homebrew import.
 
 The importer checks every entry: it fixes small slips (text numbers, "350 credits", missing optional lists) and lists each fix, and leaves out entries it can't read. When I paste back its "problems" list, send a corrected file with the **same ids**. Aim for zero fixes: follow the shapes exactly.
 
@@ -171,7 +171,9 @@ Required: `complex`, `stealth`, `disable`, `actions`. The rest optional (`strike
 { "kind": "feat", "level": 4, "category": "class", "cost": 1, "prerequisites": ["trained in Computers"], "trigger": "…", "frequency": "once per hour", "requirements": "…" }
 ```
 
-`category`: `ancestry`, `class`, `general`, `skill`, `archetype`. Put the class/ancestry name in `traits` (e.g. `["operative"]`). Required: `category`, `cost`, `prerequisites`.
+`category`: `ancestry`, `class`, `general`, `skill`, `archetype`, `classfeature`. Put the class/ancestry name in `traits` (e.g. `["operative"]`). Required: `category`, `cost`, `prerequisites`.
+
+Optional for class features: `choices` and `optionOf` (see "Classes and subclasses").
 
 ### action
 
@@ -195,9 +197,34 @@ Reference entries: rules text in `description`, quick facts in `facts` (string, 
 - class: `"HP per level"`, `"Key attribute"`, `"Perception"`, `"Fortitude"`, `"Reflex"`, `"Will"`, `"Trained skills"`
 - deity: `"Category"`, `"Divine attribute"`, `"Divine font"`, `"Divine skill"`, `"Sanctification"`, `"Domains"`, `"Alternate domains"`, `"Favored weapon"`, `"Cleric spells"`
 
+Class only, optional: `features`, the class features by level: `[{ "level": 1, "name": "Domain" }, { "level": 7, "name": "Expert Spellcaster" }]`. Each name should match a `classfeature` feat in the file.
+
 ```json
 { "kind": "ancestry", "facts": { "HP": 8, "Size": "Medium", "Speed": "25 feet", "Attribute boosts": ["Constitution", "Wisdom", "Free"], "Languages": ["Common", "Ysoki"] } }
 ```
+
+## Classes and subclasses
+
+Subclasses (domains, connections, muses, fighting styles …) are **not** classes. Build them the way the official data does, as three parts:
+
+1. **The class** (`kind: "class"`): facts, description and `features` by level, including the feature where the choice is made.
+2. **The choosing feature**: a `feat` with `category: "classfeature"`, the class's trait, and `choices` naming the group: `["conduit-domain"]`. Its description explains the choice.
+3. **Each option**: a `feat` with `category: "classfeature"`, the class's trait, the same level as the choosing feature, and `optionOf: ["conduit-domain"]`. Its **name is the option alone** ("Fire Domain"), never "Conduit: Fire Domain".
+
+The group tag is `<class trait>-<choice>`, lower-case: `conduit-domain`, `envoy-leadership-style`. The class's trait is its name as a slug (`"conduit"`), and every class feature and class feat carries it in `traits`.
+
+```json
+[
+  { "kind": "class", "name": "Conduit", "facts": { "HP per level": 8, "Key attribute": "Wisdom" },
+    "features": [{ "level": 1, "name": "Domain" }, { "level": 1, "name": "Conduit Spellcasting" }] },
+  { "kind": "feat", "name": "Domain", "category": "classfeature", "level": 1, "traits": ["conduit"], "cost": null,
+    "prerequisites": [], "choices": ["conduit-domain"], "description": "Choose one domain …" },
+  { "kind": "feat", "name": "Fire Domain", "category": "classfeature", "level": 1, "traits": ["conduit"], "cost": null,
+    "prerequisites": [], "optionOf": ["conduit-domain"], "description": "…" }
+]
+```
+
+(Common fields left out above for brevity; real entries need all of them.) Granted spells, skills and focus spells of an option go in its description, with `{{spell: Name}}` links.
 
 ## Checklist before you answer
 
@@ -206,4 +233,5 @@ Reference entries: rules text in `description`, quick facts in `facts` (string, 
 3. `sortName` = lower-cased `name`; fresh UUIDs for new entries, same id for revisions.
 4. Prices in cp (credits × 10), bulk in tenths, distances in feet as numbers.
 5. Numbers are balanced for the stated level (GM Core tables for creatures/hazards, treasure-by-level for item prices).
-6. After the JSON, list each entry as `name — kind, level` and anything you assumed.
+6. Subclasses are `classfeature` feats with `optionOf`, named without the class; the class lists its features by level.
+7. After the JSON, list each entry as `name — kind, level` and anything you assumed.

@@ -2,7 +2,7 @@
   <div class="hb-page">
     <div class="sys-subnav">
       <div class="sys-breadcrumb">
-        <span class="sys-breadcrumb-link">Compendium</span>
+        <NuxtLink to="/data" class="sys-breadcrumb-link">Import &amp; Export</NuxtLink>
         <span class="sys-breadcrumb-sep">›</span>
         <span class="sys-breadcrumb-cur">Homebrew import</span>
       </div>
@@ -125,6 +125,7 @@
 </template>
 
 <script setup lang="ts">
+import { takePendingImport } from '~/composables/usePendingImport'
 import { getDb, now } from '~/composables/useDb'
 import { notifyRulesChanged } from '~/composables/useRules'
 import { newRulesId } from '~/rules/factory'
@@ -163,6 +164,10 @@ onMounted(() => {
     const g = localStorage.getItem(GAME_KEY)
     if (g === 'sf2e' || g === 'pf2e' || g === 'both') game.value = g
   } catch {}
+  // Sent here from Import & Export
+  const p = takePendingImport()
+  if (p?.text) load(p.text, p.label)
+  else if (p?.file) void readFile(p.file)
 })
 
 function setGame(g: GameId | 'both') {

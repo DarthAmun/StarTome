@@ -437,6 +437,8 @@ const KIND_SHAPES: Record<RulesKind, Shape> = {
     trigger: opt(str),
     frequency: opt(str),
     requirements: opt(str),
+    choices: opt(traits),
+    optionOf: opt(traits),
   },
   action: {
     cost: req(actionCost),
@@ -454,7 +456,10 @@ const KIND_SHAPES: Record<RulesKind, Shape> = {
   ancestry: { facts: req(record(either(num, str, strArr))) },
   heritage: { facts: req(record(either(num, str, strArr))) },
   background: { facts: req(record(either(num, str, strArr))) },
-  class: { facts: req(record(either(num, str, strArr))) },
+  class: {
+    facts: req(record(either(num, str, strArr))),
+    features: opt(arrOf(shape({ level: req(num, 1), name: req(str) }))),
+  },
   deity: { facts: req(record(either(num, str, strArr))) },
 }
 

@@ -1,0 +1,924 @@
+<template>
+  <div class="data-page screen-in">
+    <div class="sys-subnav">
+      <div class="sys-breadcrumb">
+        <span class="sys-breadcrumb-cur">Import &amp; Export</span>
+      </div>
+    </div>
+
+    <div class="data-body">
+      <!-- ── Import anything ──────────────────────────────────── -->
+      <section class="sett-section data-import">
+        <div class="sett-section-title">Import</div>
+        <div class="data-import-row">
+          <label class="data-drop" :class="{ 'data-drop--over': dragOver }"
+            @dragover.prevent="dragOver = true" @dragleave="dragOver = false" @drop.prevent="onDrop">
+            <input type="file" accept=".json,.zip,.md,.txt,application/json,application/zip,text/plain" class="data-file" @change="onPick" />
+            <b>Drop any StarTome file here</b>
+            <span class="data-muted">or click to choose one</span>
+          </label>
+          <div class="data-paste">
+            <textarea v-model="pasted" class="data-textarea" spellcheck="false"
+              placeholder="…or paste what Claude wrote (a ```json block works too)" />
+            <button class="sett-btn" :disabled="!pasted.trim()" @click="importText(pasted, 'Pasted text')">Import</button>
+          </div>
+        </div>
+        <p v-if="importError" class="data-error">{{ importError }}</p>
+        <p class="data-hint">
+          Works out what the file is and opens the right import: backups, campaign and token files, a campaign or setting
+          from Claude, homebrew compendium entries, DM's Tome exports, and a Foundry <code>json-assets.zip</code>.
+          Or go straight to <NuxtLink to="/compendium/sync">Foundry sync</NuxtLink> ·
+          <NuxtLink to="/compendium/legacy">DM's Tome import</NuxtLink> (also reads DM's Tome in this browser) ·
+          <NuxtLink to="/compendium/homebrew">Homebrew import</NuxtLink> ·
+          <a href="#" @click.prevent="imgFolderOpen = true">Image folder</a>
+        </p>
+      </section>
+
+      <!-- ── Guides for Claude ────────────────────────────────── -->
+      <section class="sett-section">
+        <div class="sett-section-title">Format guides for Claude</div>
+        <div class="sett-group">
+          <div v-for="g in GUIDES" :key="g.file" class="sett-row">
+            <div class="sett-row-text">
+              <span class="sett-label">{{ g.label }}</span>
+              <span class="sett-desc">{{ g.desc }}</span>
+            </div>
+            <button class="sett-btn sett-btn--claude" @click="downloadGuide(g.file, g.text)">↓ {{ g.file }}</button>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- Database stats -->
+      <section class="sett-section">
+        <div class="sett-section-title">Database</div>
+        <div class="sett-group">
+          <div v-if="stats" class="sett-stats-row" style="border-bottom:none">
+            <span class="sett-stat">{{ stats.campaigns }} campaigns</span>
+            <span class="sett-stat">{{ stats.entities }} notes</span>
+            <span class="sett-stat">{{ stats.graphs }} graphs</span>
+            <span class="sett-stat">{{ stats.rulesSynced }} synced entries</span>
+            <span class="sett-stat">{{ stats.rulesOwn }} own entries</span>
+            <span class="sett-stat">{{ stats.images }} portraits</span>
+            <span class="sett-stat">{{ stats.tokens }} tokens</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Image Tools -->
+      <section class="sett-section">
+        <div class="sett-section-title">Image Tools</div>
+        <div class="sett-group">
+
+          <div class="sett-row">
+            <div class="sett-row-text">
+              <span class="sett-label">Image Folder Import</span>
+              <span class="sett-desc">Match a folder of images to compendium entries by filename, then set them as portraits or token art.</span>
+            </div>
+            <button class="sett-btn" @click="imgFolderOpen = true">↑ Import</button>
+          </div>
+
+          <div class="sett-row">
+            <div class="sett-row-text">
+              <span class="sett-label">Re-compress Images</span>
+              <span class="sett-desc">Downscale all stored images to ≤1920 px. Check a category to also convert it to JPEG for smaller files (PNGs lose transparency).</span>
+              <div class="sett-check-grid">
+                <label class="sett-check">
+                  <input type="checkbox" v-model="rcJpegBanners" :disabled="recompressing" />
+                  Campaign banners → JPEG
+                </label>
+                <label class="sett-check">
+                  <input type="checkbox" v-model="rcJpegMaps" :disabled="recompressing" />
+                  Encounter maps → JPEG
+                </label>
+                <label class="sett-check">
+                  <input type="checkbox" v-model="rcJpegTokens" :disabled="recompressing" />
+                  Token images → JPEG
+                </label>
+                <label class="sett-check">
+                  <input type="checkbox" v-model="rcJpegRecords" :disabled="recompressing" />
+                  Compendium portraits → JPEG
+                </label>
+              </div>
+            </div>
+            <button class="sett-btn" :disabled="recompressing" @click="recompressImages">{{ recompressLabel }}</button>
+          </div>
+
+          <div class="sett-row">
+            <div class="sett-row-text">
+              <span class="sett-label">Clean up unused images</span>
+              <span class="sett-desc">Deletes stored portraits and token art that no compendium entry uses any more (left behind by replaced images).</span>
+            </div>
+            <button class="sett-btn" :disabled="cleaningImages" @click="cleanUpImages">{{ cleanupLabel }}</button>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Full Backup -->
+      <section class="sett-section">
+        <div class="sett-section-title">Full Backup</div>
+        <div class="sett-group">
+          <div class="sett-row">
+            <div class="sett-row-text">
+              <span class="sett-label">Everything</span>
+              <span class="sett-desc">All campaigns, tokens, your own compendium entries and your portraits, notes and edits on synced ones (the synced content itself is not included; sync it again after importing). Coming from DM's Tome? The <NuxtLink to="/compendium/legacy">DM's Tome import</NuxtLink> brings its campaigns over, from an export or straight from its database.</span>
+            </div>
+            <div class="sett-btn-pair">
+              <button class="sett-btn" @click="exportAll">↓ Export</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Campaigns -->
+      <section class="sett-section">
+        <div class="sett-section-title">Campaigns</div>
+        <div class="sett-group">
+
+          <div class="sett-row">
+            <div class="sett-row-text">
+              <span class="sett-label">Campaigns</span>
+              <span class="sett-desc">Campaigns with encounters, notes, links, party and the library tokens they use. Importing adds them alongside what's here.</span>
+              <select v-if="campaigns.length" v-model="exportCampaignId" class="sett-md-select">
+                <option :value="null">All campaigns</option>
+                <option v-for="c in campaigns" :key="c.id" :value="c.id">{{ c.name }}</option>
+              </select>
+            </div>
+            <div class="sett-btn-pair">
+              <button class="sett-btn" @click="exportCampaigns">↓ Export</button>
+            </div>
+          </div>
+
+          <div class="sett-row">
+            <div class="sett-row-text">
+              <span class="sett-label">Export as Markdown</span>
+              <span class="sett-desc">Download a campaign's notes as a Markdown zip</span>
+              <select v-if="campaigns.length" v-model="mdExportCampaignId" class="sett-md-select">
+                <option :value="null">— choose campaign —</option>
+                <option v-for="c in campaigns" :key="c.id" :value="c.id">{{ c.name }}</option>
+              </select>
+              <label class="sett-check sett-export-gm">
+                <input type="checkbox" v-model="mdIncludeGmOnly" /> Include GM-only blocks
+              </label>
+            </div>
+            <button class="sett-btn" :disabled="!mdExportCampaignId || mdExporting" @click="exportCampaignMarkdown">
+              {{ mdExporting ? 'Exporting…' : '↓ Export' }}
+            </button>
+          </div>
+
+          <div class="sett-row">
+            <div class="sett-row-text">
+              <span class="sett-label">Export for Claude</span>
+              <span class="sett-desc">Single Markdown file optimised for uploading to a Claude project as reference knowledge</span>
+              <select v-if="campaigns.length" v-model="claudeExportCampaignId" class="sett-md-select">
+                <option :value="null">— choose campaign —</option>
+                <option v-for="c in campaigns" :key="c.id" :value="c.id">{{ c.name }}</option>
+              </select>
+              <label class="sett-check sett-export-gm">
+                <input type="checkbox" v-model="claudeIncludeGmOnly" /> Include GM-only blocks
+              </label>
+            </div>
+            <button class="sett-btn sett-btn--claude" :disabled="!claudeExportCampaignId || claudeExporting" @click="exportCampaignForClaude">
+              {{ claudeExporting ? 'Building…' : '↓ Export' }}
+            </button>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Quest board -->
+      <section class="sett-section">
+        <div class="sett-section-title">Quest Board</div>
+        <div class="sett-group">
+          <div class="sett-row">
+            <div class="sett-row-text">
+              <span class="sett-label">Quest board export</span>
+              <span class="sett-desc">A campaign's quests for players: GM-only blocks removed, reward items resolved against the compendium (level, price, rarity)</span>
+              <select v-if="campaigns.length" v-model="questBoardCampaignId" class="sett-md-select">
+                <option :value="null">— choose campaign —</option>
+                <option v-for="c in campaigns" :key="c.id" :value="c.id">{{ c.name }}</option>
+              </select>
+            </div>
+            <button class="sett-btn" :disabled="!questBoardCampaignId" @click="exportQuestBoard">↓ Export</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tokens -->
+      <section class="sett-section">
+        <div class="sett-section-title">Tokens</div>
+        <div class="sett-group">
+          <div class="sett-row">
+            <div class="sett-row-text">
+              <span class="sett-label">Token templates</span>
+              <span class="sett-desc">Token templates and their images</span>
+            </div>
+            <div class="sett-btn-pair">
+              <button class="sett-btn" @click="exportTokens">↓ Export</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <ImageFolderImportModal :open="imgFolderOpen" @close="imgFolderOpen = false" />
+
+  <ImportModal
+    :open="modalOpen"
+    :phase="modalPhase"
+    :payload="modalPayload"
+    :sections="importSections"
+    :mode="importMode"
+    :log-lines="logLines"
+    :progress-done="progressDone"
+    :progress-total="progressTotal"
+    @close="modalOpen = false"
+    @run="runImport"
+    @update:sections="importSections = $event"
+    @update:mode="importMode = $event"
+  />
+</template>
+
+<script setup lang="ts">
+import { APP_NS, APP_NAME, exportFilename } from '~/utils/appNamespace'
+import { stripGmOnly } from '~/utils/gmContent'
+import JSZip from 'jszip'
+import { getDb, dbApi, now, parseJsonObject } from '~/composables/useDb'
+import { compressDataUrl } from '~/utils/image'
+import { notifyRulesChanged, rulesFindByName } from '~/composables/useRules'
+import { invalidateEntities } from '~/composables/useEntities'
+import { setPendingImport } from '~/composables/usePendingImport'
+import { cleanUpUnusedImages, dataUrlToBlob, imageRefId, isImageRef, resolveImageDataUrl } from '~/rules/images'
+import { buildQuestBoard, itemRefNames } from '~/converters/export'
+import { CAMPAIGN_TABLES, TABLE_LABELS, exportAllPayload, exportCampaignsPayload, exportTokensPayload, importPayload, jsonBlob, type BackupPayload, type ImportMode } from '~/sync/backup'
+import { detectImport, isZip } from '~/sync/importDetect'
+import { campaignGame } from '~/types/game'
+import type { Item } from '~/types/rules'
+import { ENTITY_TYPE_CONFIG } from '~/types/entities'
+import type { EntityType } from '~/types/entities'
+import type { ImportSection, LogLine } from '~/components/ImportModal.vue'
+import homebrewGuide from '~/HOMEBREW_FORMAT.md?raw'
+import campaignGuide from '~/CAMPAIGN_FORMAT.md?raw'
+
+useHead({ title: 'Import & Export — StarTome' })
+
+const router = useRouter()
+
+// ── Import: detect, then hand off ──────────────────────────────────────────
+const dragOver = ref(false)
+const pasted = ref('')
+const importError = ref('')
+
+async function importFile(f: File) {
+  importError.value = ''
+  const head = new Uint8Array(await f.slice(0, 2).arrayBuffer())
+  if (isZip(f.name, head)) {
+    setPendingImport({ file: f, label: f.name })
+    router.push('/compendium/sync')
+    return
+  }
+  // DM's Tome exports run to hundreds of MB: hand the file itself on, don't keep the text
+  let text: string
+  try { text = await f.text() } catch (err) { importError.value = `Couldn't read ${f.name}: ${(err as Error).message}`; return }
+  importText(text, f.name, f)
+}
+
+function importText(text: string, label: string, file?: File) {
+  importError.value = ''
+  const target = detectImport(text)
+  switch (target.kind) {
+    case 'backup': openBackup(target.payload); pasted.value = ''; break
+    case 'legacy':
+      setPendingImport({ file: file ?? new File([text], label.endsWith('.json') ? label : 'export.json', { type: 'application/json' }), label })
+      router.push('/compendium/legacy')
+      break
+    case 'homebrew':
+      setPendingImport({ text, label })
+      router.push('/compendium/homebrew')
+      break
+    case 'unknown': importError.value = `${label}: ${target.error}`
+  }
+}
+
+function onDrop(e: DragEvent) {
+  dragOver.value = false
+  const f = e.dataTransfer?.files?.[0]
+  if (f) void importFile(f)
+}
+
+function onPick(e: Event) {
+  const f = (e.target as HTMLInputElement).files?.[0]
+  if (f) void importFile(f)
+  ;(e.target as HTMLInputElement).value = ''
+}
+
+// ── Guides ─────────────────────────────────────────────────────────────────
+const GUIDES = [
+  { file: 'CAMPAIGN_FORMAT.md', text: campaignGuide, label: 'Campaigns & settings', desc: 'Give this to Claude to get a campaign file: NPCs, locations, factions, quests, events, rumors, tables, session prep.' },
+  { file: 'HOMEBREW_FORMAT.md', text: homebrewGuide, label: 'Homebrew compendium', desc: 'Give this to Claude to get compendium entries: creatures, items, spells, feats, classes and subclasses.' },
+]
+
+function downloadGuide(name: string, text: string) {
+  downloadBlob(new Blob([text], { type: 'text/markdown' }), name)
+}
+
+// ── Database, exports, backup import ───────────────────────────────────────
+interface DbStats {
+  campaigns: number; encounters: number; encounterTokens: number
+  entities: number; entityLinks: number; tokens: number
+  rulesSynced: number; rulesOwn: number; images: number
+  graphs: number; entityConnections: number
+}
+
+const stats = ref<DbStats | null>(null)
+const campaigns = ref<{ id: number; name: string }[]>([])
+const mdExportCampaignId = ref<number | null>(null)
+const mdExporting = ref(false)
+const mdIncludeGmOnly = ref(true)
+const claudeExportCampaignId = ref<number | null>(null)
+const claudeExporting = ref(false)
+const claudeIncludeGmOnly = ref(true)
+const questBoardCampaignId = ref<number | null>(null)
+const exportCampaignId = ref<number | null>(null)
+
+const imgFolderOpen    = ref(false)
+const recompressing  = ref(false)
+const rcJpegBanners  = ref(true)
+const rcJpegMaps     = ref(true)
+const rcJpegTokens   = ref(true)
+const rcJpegRecords  = ref(true)
+const recompressDone  = ref(0)
+const recompressTotal = ref(0)
+const recompressLabel  = computed(() => {
+  if (recompressing.value) return `Working… ${recompressDone.value} / ${recompressTotal.value}`
+  if (recompressTotal.value > 0 && recompressDone.value === recompressTotal.value) return `Done — ${recompressDone.value} images`
+  return '↻ Compress'
+})
+
+const cleaningImages = ref(false)
+const cleanupLabel = ref('Clean up')
+async function cleanUpImages() {
+  cleaningImages.value = true
+  try {
+    const n = await cleanUpUnusedImages()
+    cleanupLabel.value = n ? `Deleted ${n.toLocaleString()}` : 'Nothing to delete'
+    await loadStats()
+  } finally {
+    cleaningImages.value = false
+  }
+}
+
+async function recompressImages() {
+  if (recompressing.value) return
+  recompressing.value = true
+  recompressDone.value = 0
+  recompressTotal.value = 0
+  try {
+    const db = getDb()
+    const jpegBanners = rcJpegBanners.value
+    const jpegMaps    = rcJpegMaps.value
+    const jpegTokens  = rcJpegTokens.value
+    const jpegRecords = rcJpegRecords.value
+
+    const [c, enc, tok, etok, imageIds] = await Promise.all([
+      db.campaigns.toArray(),
+      db.encounters.toArray(),
+      db.tokens.toArray(),
+      db.encounterTokens.toArray(),
+      db.images.toCollection().primaryKeys(),
+    ])
+
+    type Task = { table: any; id: number; field: string; value: string; toJpeg: boolean }
+
+    // Maps are blobs in the image store now; a data URL here is an old row
+    const mapImageIds = new Set(enc.map(e => e.map_source).filter(isImageRef).map(imageRefId))
+    const tableDefs = [
+      { table: db.campaigns,       rows: c,    field: 'banner_source', toJpeg: jpegBanners },
+      { table: db.encounters,      rows: enc,  field: 'map_source',    toJpeg: jpegMaps    },
+      { table: db.tokens,          rows: tok,  field: 'image_source',  toJpeg: jpegTokens  },
+      { table: db.encounterTokens, rows: etok, field: 'image_source',  toJpeg: jpegTokens  },
+    ]
+
+    const tasks: Task[] = []
+    for (const { table, rows, field, toJpeg } of tableDefs) {
+      for (const row of rows) {
+        const value = (row as any)[field]
+        if (value?.startsWith('data:')) tasks.push({ table, id: row.id!, field, value, toJpeg })
+      }
+    }
+
+    recompressTotal.value = tasks.length + imageIds.length
+    for (const task of tasks) {
+      const compressed = await compressDataUrl(task.value, task.toJpeg)
+      await task.table.update(task.id, { [task.field]: compressed })
+      recompressDone.value++
+    }
+    // Compendium portraits and encounter maps live as blobs in the image store
+    for (const id of imageIds) {
+      const dataUrl = await resolveImageDataUrl(`img:${id}`)
+      if (dataUrl) {
+        const blob = dataUrlToBlob(await compressDataUrl(dataUrl, mapImageIds.has(id) ? jpegMaps : jpegRecords))
+        await db.images.update(id, { blob, mime: blob.type })
+      }
+      recompressDone.value++
+    }
+  } finally {
+    recompressing.value = false
+  }
+}
+
+async function loadCampaigns() {
+  campaigns.value = (await dbApi.campaigns.list()).map((c: any) => ({ id: c.id, name: c.name }))
+}
+
+async function loadStats() {
+  const db = getDb()
+  const [c, enc, et, ent, el, tok, synced, total, img, gl, ec] = await Promise.all([
+    db.campaigns.count(), db.encounters.count(), db.encounterTokens.count(),
+    db.entities.count(), db.entityLinks.count(), db.tokens.count(),
+    db.rules.where('origin').equals('foundry').count(), db.rules.count(), db.images.count(),
+    db.graphLayouts.count(), db.entityConnections.count(),
+  ])
+  stats.value = { campaigns: c, encounters: enc, encounterTokens: et, entities: ent, entityLinks: el, tokens: tok, rulesSynced: synced, rulesOwn: total - synced, images: img, graphs: gl, entityConnections: ec }
+}
+
+onMounted(() => { loadStats(); loadCampaigns() })
+
+function download(data: Record<string, unknown>, filename: string) {
+  downloadBlob(jsonBlob(data), filename)
+}
+
+function slug() { return now().slice(0, 10) }
+function safeFilename(s: string) { return s.replace(/[/\\:*?"<>|]/g, '_') }
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = filename; a.click()
+  // Revoking right away can cut off a large download
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
+async function exportAll() {
+  downloadBlob(jsonBlob(await exportAllPayload()), exportFilename(`all-${slug()}.json`))
+}
+
+async function exportCampaigns() {
+  const ids = exportCampaignId.value != null ? [exportCampaignId.value] : undefined
+  const name = ids ? safeFilename(campaigns.value.find(c => c.id === ids[0])?.name ?? 'campaign') : 'campaigns'
+  downloadBlob(jsonBlob(await exportCampaignsPayload(ids)), exportFilename(`${name}-${slug()}.json`))
+}
+
+/** Player-facing quest list for the quest board (FORK_PLAN §8.5). */
+async function exportQuestBoard() {
+  const id = questBoardCampaignId.value
+  if (!id) return
+  const db = getDb()
+  const campaign = await db.campaigns.get(id)
+  if (!campaign) return
+  const game = campaignGame(campaign)
+  const rows = await db.entities.where('campaign_id').equals(id).filter(e => e.type === 'quest').toArray()
+  const quests = rows.map(r => ({ id: r.id!, name: r.name, content: r.content ?? '', attributes: parseJsonObject(r.attributes) }))
+  // Resolve every referenced item once, then build synchronously
+  const items = new Map<string, Item | undefined>()
+  const refs = new Set(quests.flatMap(q => [...itemRefNames(q.attributes.reward ?? ''), ...itemRefNames(q.content)]))
+  for (const name of refs) items.set(name.toLowerCase(), (await rulesFindByName('item', name, game)) as Item | undefined)
+  const board = buildQuestBoard(APP_NS, { name: campaign.name, game }, quests, name => items.get(name.toLowerCase()), now())
+  download(board as unknown as Record<string, unknown>, exportFilename(`questboard-${safeFilename(campaign.name)}-${slug()}.json`))
+}
+
+async function exportTokens() {
+  downloadBlob(jsonBlob(await exportTokensPayload()), exportFilename(`tokens-${slug()}.json`))
+}
+
+function wikilinkify(text: string): string {
+  if (!text) return ''
+  return text.replace(/\{\{(\w+):\s*([^}]+)\}\}/g, (_m, _type, name) => `[[${name.trim()}]]`)
+}
+
+function entityFrontmatter(e: any): string {
+  const lines = ['---', `name: "${(e.name ?? '').replace(/"/g, '\\"')}"`, `type: "${e.type ?? ''}"`]
+  if (e.tags?.length) lines.push(`tags: [${e.tags.map((t: string) => `"${t}"`).join(', ')}]`)
+  lines.push('---')
+  return lines.join('\n')
+}
+
+async function exportCampaignMarkdown() {
+  if (!mdExportCampaignId.value) return
+  mdExporting.value = true
+  try {
+    const db = getDb()
+    const campaignId = mdExportCampaignId.value
+    const gm = (md: string) => mdIncludeGmOnly.value ? md : stripGmOnly(md)
+    const campaign = await db.campaigns.get(campaignId)
+    if (!campaign) { alert('Campaign not found.'); return }
+    const entities = (await dbApi.entities.list(campaignId)) as any[]
+    const encounters = await db.encounters.where('campaign_id').equals(campaignId).toArray()
+    const zip = new JSZip()
+    const root = zip.folder(safeFilename(campaign.name))!
+    root.file('_index.md', [`---`, `name: "${campaign.name.replace(/"/g, '\\"')}"`, `---`, ``, `# ${campaign.name}`, ``, campaign.description ? wikilinkify(gm(campaign.description)) : '_No description._'].join('\n'))
+    const notesFolder = root.folder('notes')!
+    for (const e of entities) {
+      const folder = notesFolder.folder(safeFilename(e.type ?? 'misc'))!
+      folder.file(`${safeFilename(e.name ?? 'Unnamed')}.md`, [entityFrontmatter(e), '', `# ${e.name ?? 'Unnamed'}`, '', wikilinkify(gm(e.content ?? e.notes ?? '')) || '_No content._'].join('\n'))
+    }
+    if (encounters.length) {
+      const encFolder = root.folder('encounters')!
+      encFolder.file('_index.md', [`# Encounters — ${campaign.name}`, '', ...encounters.map(enc => `- **${enc.name ?? 'Unnamed'}**`)].join('\n'))
+    }
+    const blob = await zip.generateAsync({ type: 'blob' })
+    downloadBlob(blob, `${safeFilename(campaign.name)}-${slug()}.zip`)
+  } finally { mdExporting.value = false }
+}
+
+// ── Claude export ─────────────────────────────────────────────────────────────
+
+const CLAUDE_TYPE_ORDER: EntityType[] = ['npc', 'location', 'faction', 'quest', 'event', 'session', 'note', 'rumor', 'random-table']
+
+type MetaField = { key: string; label: string; transform?: (v: any) => string | false; alwaysEmit?: boolean }
+
+function buildMeta(a: Record<string, any>, fields: MetaField[]): string {
+  const parts: string[] = []
+  for (const { key, label, transform, alwaysEmit } of fields) {
+    const v = a[key]
+    if (!alwaysEmit && (v === undefined || v === null || v === '')) continue
+    const text = transform ? transform(v) : String(v)
+    if (text !== false) parts.push(`**${label}:** ${text}`)
+  }
+  return parts.join(' | ')
+}
+
+const META_FIELDS: Partial<Record<EntityType, MetaField[]>> = {
+  npc: [
+    { key: 'isPlayerCharacter', label: 'PC',    transform: v => v ? 'Yes' : false },
+    { key: 'title',  label: 'Title' },
+    { key: 'race',   label: 'Race' },
+    { key: 'role',   label: 'Role' },
+    { key: 'level',  label: 'Level' },
+    { key: 'isAlive', label: 'Vital', transform: v => v === false ? 'Dead' : 'Alive', alwaysEmit: true },
+    { key: 'status', label: 'Status' },
+  ],
+  location: [
+    { key: 'locationType', label: 'Type' },
+    { key: 'status',       label: 'Status' },
+  ],
+  faction: [
+    { key: 'factionType',     label: 'Type' },
+    { key: 'size',            label: 'Size' },
+    { key: 'isSecret',        label: 'Secret',  transform: v => v ? 'Yes' : false },
+    { key: 'headquartersName', label: 'HQ' },
+  ],
+  quest: [
+    { key: 'status',     label: 'Status' },
+    { key: 'questGiver', label: 'Quest Giver' },
+    { key: 'reward',     label: 'Reward' },
+  ],
+  event: [
+    { key: 'date',     label: 'Date' },
+    { key: 'location', label: 'Location' },
+  ],
+  session: [
+    { key: 'mode', label: 'Status' },
+    { key: 'date', label: 'Date' },
+  ],
+}
+
+function entityMeta(type: string, attrs: any): string {
+  if (!attrs || typeof attrs !== 'object') return ''
+  const fields = META_FIELDS[type as EntityType]
+  return fields ? buildMeta(attrs, fields) : ''
+}
+
+function renderLinks(linksByEntity: Map<number, { source: number; target: number }[]>, entityId: number, entityIndex: Map<number, string>): string {
+  const entityLinks = linksByEntity.get(entityId)
+  if (!entityLinks?.length) return ''
+  const names = new Set<string>()
+  for (const l of entityLinks) {
+    const name = entityIndex.get(l.source === entityId ? l.target : l.source)
+    if (name) names.add(name)
+  }
+  if (!names.size) return ''
+  return `\n**Related:** ${[...names].map(n => `[[${n}]]`).join(', ')}`
+}
+
+async function exportCampaignForClaude() {
+  if (!claudeExportCampaignId.value) return
+  claudeExporting.value = true
+  try {
+    const db = getDb()
+    const campaignId = claudeExportCampaignId.value
+    const gm = (md: string) => claudeIncludeGmOnly.value ? md : stripGmOnly(md)
+    const campaign = await db.campaigns.get(campaignId)
+    if (!campaign) { alert('Campaign not found.'); return }
+
+    const rawEntities = (await dbApi.entities.list(campaignId)) as any[]
+    const entIds = rawEntities.map(e => e.id as number)
+    const rawLinks = entIds.length ? await db.entityLinks.where('source_id').anyOf(entIds).toArray() : []
+
+    const entityIndex = new Map<number, string>()
+    for (const e of rawEntities) entityIndex.set(e.id, e.name ?? 'Unnamed')
+
+    // attributes can arrive as a serialised JSON string from the DB
+    const entities = rawEntities.map(e => {
+      let attrs: any = e.attributes ?? {}
+      attrs = parseJsonObject(attrs)
+      return { ...e, attributes: attrs }
+    })
+
+    // A link names its target by type and name; both ends list the other
+    const byTypeName = new Map<string, number>(rawEntities.map(e => [`${e.type}:${String(e.name).toLowerCase()}`, e.id as number]))
+    const linksByEntity = new Map<number, { source: number; target: number }[]>()
+    for (const l of rawLinks) {
+      const target = byTypeName.get(`${l.target_type}:${l.target_name.toLowerCase()}`)
+      if (target == null || target === l.source_id) continue
+      const pair = { source: l.source_id, target }
+      for (const id of [pair.source, pair.target]) {
+        if (!linksByEntity.has(id)) linksByEntity.set(id, [])
+        linksByEntity.get(id)!.push(pair)
+      }
+    }
+
+    const byType = new Map<string, typeof entities>()
+    for (const e of entities) {
+      const t = e.type ?? 'note'
+      if (!byType.has(t)) byType.set(t, [])
+      byType.get(t)!.push(e)
+    }
+
+    const lines: string[] = []
+    const exportDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+
+    lines.push(`# ${campaign.name} — Campaign Knowledge Base`)
+    lines.push(`*Exported from ${APP_NAME} · ${exportDate}*`)
+    if (campaign.description) {
+      lines.push('')
+      lines.push('## Campaign Overview')
+      lines.push('')
+      lines.push(wikilinkify(gm(campaign.description)))
+    }
+
+    const orderedTypes = [
+      ...CLAUDE_TYPE_ORDER.filter(t => byType.has(t)),
+      ...[...byType.keys()].filter(t => !CLAUDE_TYPE_ORDER.includes(t as EntityType)),
+    ]
+
+    for (const type of orderedTypes) {
+      const entries = byType.get(type)!
+      const label = ENTITY_TYPE_CONFIG[type as EntityType]?.plural ?? type
+      lines.push('')
+      lines.push(`---`)
+      lines.push('')
+      lines.push(`## ${label} (${entries.length})`)
+
+      for (const e of entries) {
+        lines.push('')
+        lines.push(`### ${e.name ?? 'Unnamed'}`)
+
+        const meta = entityMeta(type, e.attributes)
+        if (meta) lines.push(meta)
+
+        const relatedLine = renderLinks(linksByEntity, e.id, entityIndex)
+        if (relatedLine) lines.push(relatedLine)
+
+        const body = wikilinkify(gm(e.content ?? e.notes ?? ''))
+        if (body.trim()) {
+          lines.push('')
+          lines.push(body.trim())
+        }
+      }
+    }
+
+    lines.push('')
+    lines.push('---')
+    lines.push(`*${entities.length} entries across ${orderedTypes.length} categories*`)
+
+    downloadBlob(new Blob([lines.join('\n')], { type: 'text/markdown' }), `${safeFilename(campaign.name)}-claude-${slug()}.md`)
+  } finally { claudeExporting.value = false }
+}
+
+const modalOpen    = ref(false)
+const modalPhase   = ref<'configure' | 'running' | 'done'>('configure')
+const modalPayload = ref<any>(null)
+const importSections   = ref<ImportSection[]>([])
+const importMode       = ref<ImportMode>('merge')
+const logLines         = ref<LogLine[]>([])
+const progressDone     = ref(0)
+const progressTotal    = ref(0)
+
+function openBackup(payload: any) {
+  modalPayload.value = markRaw(payload)
+  buildImportSections(payload)
+  modalPhase.value = 'configure'; logLines.value = []; progressDone.value = 0; progressTotal.value = 0
+  modalOpen.value = true
+}
+
+function buildImportSections(payload: any) {
+  const sections: ImportSection[] = []
+  for (const key of [...CAMPAIGN_TABLES, 'rules', 'rulesOverlays'] as const) {
+    const arr: unknown[] | undefined = payload[key]
+    if (arr?.length) sections.push({ key, label: TABLE_LABELS[key], count: arr.length, enabled: true })
+  }
+  importSections.value = sections
+  // A full backup defaults to restoring it; anything else is added alongside
+  importMode.value = payload.type === 'all' ? 'replace' : 'merge'
+}
+
+async function runImport() {
+  if (!modalPayload.value) return
+  const payload = modalPayload.value as BackupPayload
+  if (importMode.value === 'replace' && !confirm('Replace all campaign data? Every campaign, note, encounter, token and party record in this browser is deleted and replaced by this file. Your synced compendium stays.')) return
+  modalPhase.value = 'running'; logLines.value = []; progressDone.value = 0
+  const sections = new Set(importSections.value.filter(s => s.enabled).map(s => s.key))
+  progressTotal.value = importSections.value.filter(s => s.enabled).reduce((n, s) => n + s.count, 0)
+  const addLog = (ok: boolean, msg: string) => { logLines.value = [...logLines.value, { ok, msg }] }
+  if (!progressTotal.value) { addLog(false, 'Nothing was selected to import.'); modalPhase.value = 'done'; return }
+  try {
+    const result = await importPayload(payload, { mode: importMode.value, sections })
+    for (const sec of importSections.value) {
+      if (sec.enabled) addLog(true, `${sec.label}: ${(result.counts[sec.key] ?? 0).toLocaleString()} of ${sec.count.toLocaleString()} imported`)
+    }
+    if (result.skippedLegacyLibrary) addLog(false, `Skipped ${result.skippedLegacyLibrary} systems/records: DM's Tome's rules library isn't imported; the compendium comes from the Foundry sync.`)
+    if (result.missingOverlays) addLog(false, `${result.missingOverlays} portraits/notes belong to synced entries this browser doesn't have yet. Run the Foundry sync, then import this file again.`)
+  } catch (err) {
+    addLog(false, `Import failed, nothing was changed: ${(err as Error).message ?? err}`)
+  }
+  progressDone.value = progressTotal.value
+  invalidateEntities()
+  notifyRulesChanged()
+  await Promise.all([loadStats(), loadCampaigns()])
+  modalPhase.value = 'done'
+}
+</script>
+
+<style scoped>
+.data-page { display: flex; flex-direction: column; flex: 1; overflow: hidden; background: var(--bg); }
+.data-body {
+  flex: 1; overflow-y: auto; padding: 18px 24px 40px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); grid-auto-rows: max-content; gap: 12px; align-content: start;
+}
+.data-import { grid-column: 1 / -1; }
+.data-import-row { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; gap: 10px; padding: 12px 16px 4px; }
+.data-drop {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center;
+  border: 2px dashed var(--border-hi); border-radius: 10px; padding: 22px; color: var(--text2); font-size: 13px; cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.data-drop b { color: var(--text); }
+.data-drop:hover, .data-drop--over { border-color: var(--accent); background: var(--surface-hi); }
+.data-file { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.data-paste { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+.data-textarea {
+  width: 100%; min-height: 96px; resize: vertical; font-family: var(--fm); font-size: 11.5px;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 8px;
+}
+.data-muted { color: var(--text3); font-size: 12px; }
+.data-error { color: #e87a7a; font-size: 12.5px; margin: 4px 16px 0; }
+.data-hint { font-size: 11.5px; color: var(--text3); line-height: 1.6; margin: 6px 16px 12px; }
+.data-hint a { color: var(--accent-l, var(--accent)); }
+.data-hint code { font-family: var(--fm); }
+@media (max-width: 640px) {
+  .data-body { padding: 14px 16px 32px; grid-template-columns: 1fr; }
+  .data-import-row { grid-template-columns: 1fr; }
+}
+
+/* Shared with Settings */
+.sett-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r3);
+  overflow: hidden;
+}
+.sett-section-title {
+  font-family: var(--fh);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text2);
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.sett-section--danger .sett-section-title { color: var(--danger); }
+.sett-group { display: flex; flex-direction: column; }
+.sett-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.sett-stat {
+  font-family: var(--fm);
+  font-size: 11px;
+  color: var(--text3);
+  background: var(--surface-hi);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+.sett-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.sett-row:last-child { border-bottom: none; }
+.sett-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.sett-label { font-size: 13px; font-weight: 500; color: var(--text); }
+.sett-desc { font-size: 11px; color: var(--text3); line-height: 1.4; }
+.sett-check { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text2); cursor: pointer; user-select: none; }
+.sett-check input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
+.sett-export-gm { margin-top: 6px; }
+.sett-check-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 16px; margin-top: 8px; }
+.sett-theme-pills { display: flex; gap: 4px; flex-shrink: 0; margin-top: 2px; }
+.sett-pill-btn {
+  padding: 4px 12px;
+  border-radius: var(--r1);
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.12s;
+  font-family: var(--fu);
+}
+.sett-pill-btn:hover { border-color: var(--border-hi); color: var(--text); }
+.sett-pill-btn.active { background: var(--accent-bg); border-color: oklch(58% 0.24 295 / 0.4); color: var(--accent); font-weight: 500; }
+.sett-toggle {
+  flex-shrink: 0;
+  width: 38px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--surface-hi);
+  border: 1px solid var(--border);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+  margin-top: 2px;
+}
+.sett-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--text3);
+  transition: transform 0.2s, background 0.2s;
+}
+.sett-toggle.on { background: var(--accent-bg); border-color: oklch(58% 0.24 295 / 0.4); }
+.sett-toggle.on::after { transform: translateX(18px); background: var(--accent); }
+.sett-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: var(--r1);
+  background: var(--surface-hi);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s;
+  margin-top: 2px;
+  font-family: var(--fu);
+}
+.sett-btn:hover { border-color: var(--border-hi); color: var(--text); }
+.sett-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.sett-btn--danger { color: var(--danger); border-color: oklch(54% 0.22 22 / 0.3); }
+.sett-btn--danger:hover { background: var(--danger-bg); border-color: var(--danger); }
+.sett-btn--claude { color: #d97706; border-color: rgba(217, 119, 6, 0.35); }
+.sett-btn--claude:not(:disabled):hover { background: rgba(217, 119, 6, 0.1); border-color: #d97706; color: #b45309; }
+.sett-btn-pair { display: flex; gap: 4px; flex-shrink: 0; margin-top: 2px; }
+.sett-md-select {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-hi);
+  border: 1px solid var(--border);
+  border-radius: var(--r1);
+  padding: 4px 8px;
+  max-width: 220px;
+  cursor: pointer;
+  outline: none;
+  font-family: var(--fu);
+}
+.sett-md-select:focus { border-color: oklch(58% 0.24 295 / 0.5); }
+.sett-about { display: flex; align-items: center; gap: 16px; padding: 20px 16px; }
+.sett-about-logo { width: 48px; height: 48px; border-radius: 10px; object-fit: cover; opacity: 0.85; flex-shrink: 0; }
+.sett-about-name { font-family: var(--fh); font-size: 16px; color: var(--text); margin-bottom: 3px; }
+.sett-about-version { font-family: var(--fm); font-size: 11px; color: var(--accent); margin-bottom: 6px; }
+.sett-about-desc { font-size: 12px; color: var(--text3); line-height: 1.5; }
+.sett-row--wrap { flex-wrap: wrap; gap: 10px; }
+</style>

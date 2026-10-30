@@ -2,7 +2,7 @@
   <div class="leg-page">
     <div class="sys-subnav">
       <div class="sys-breadcrumb">
-        <span class="sys-breadcrumb-link">Compendium</span>
+        <NuxtLink to="/data" class="sys-breadcrumb-link">Import &amp; Export</NuxtLink>
         <span class="sys-breadcrumb-sep">›</span>
         <span class="sys-breadcrumb-cur">DM's Tome import</span>
       </div>
@@ -106,6 +106,7 @@
 
 <script setup lang="ts">
 import { useLegacyImport } from '~/composables/useLegacyImport'
+import { takePendingImport } from '~/composables/usePendingImport'
 import { hasLegacyDb } from '~/sync/legacyImport'
 import type { LoreTable } from '~/converters/legacy/lore'
 
@@ -123,6 +124,9 @@ const dragOver = ref(false)
 const importAnyway = ref(false)
 
 onMounted(async () => {
+  // Sent here from Import & Export
+  const p = takePendingImport()
+  if (p?.file) open({ file: p.file })
   // DM's Tome's database is only reachable when both apps share an origin (the deployed github.io site)
   try { legacyDbAvailable.value = await hasLegacyDb() } catch {}
 })

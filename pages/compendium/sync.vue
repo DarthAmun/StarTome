@@ -2,7 +2,7 @@
   <div class="syn-page">
     <div class="sys-subnav">
       <div class="sys-breadcrumb">
-        <span class="sys-breadcrumb-link">Compendium</span>
+        <NuxtLink to="/data" class="sys-breadcrumb-link">Import &amp; Export</NuxtLink>
         <span class="sys-breadcrumb-sep">›</span>
         <span class="sys-breadcrumb-cur">Foundry sync</span>
       </div>
@@ -161,6 +161,7 @@
 </template>
 
 <script setup lang="ts">
+import { takePendingImport } from '~/composables/usePendingImport'
 import { getDb, type DbSyncState } from '~/composables/useDb'
 import {
   compareVersions, fetchLatestRelease, loadSyncStates, RELEASES_PAGE, useFoundrySync, type LatestRelease,
@@ -226,7 +227,12 @@ async function checkUpdates() {
   }
 }
 
-onMounted(() => { loadInstalled(); checkUpdates() })
+onMounted(() => {
+  loadInstalled(); checkUpdates()
+  // Sent here from Import & Export
+  const p = takePendingImport()
+  if (p?.file) void useFile(p.file)
+})
 watch(revision, loadInstalled)
 
 // ── Import ─────────────────────────────────────────────────────────────────

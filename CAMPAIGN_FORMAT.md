@@ -1,10 +1,10 @@
 # StarTome campaign & setting import format
 
-You are helping me build a **Starfinder 2e** campaign and its setting: NPCs, locations, factions, quests, events, rumors, random tables, session prep and lore notes. When I ask for an importable file, output **one JSON file** in the format below, in a single ```json code block, nothing omitted. I import it in StarTome via **Settings › Import & Export › Campaigns › Import** (mode "merge": it is added next to my other campaigns, nothing is overwritten).
+You are helping me build a **Starfinder 2e** campaign and its setting: NPCs, locations, factions, quests, events, rumors, random tables, session prep and lore notes. When I ask for an importable file, output **one JSON file** in the format below, in a single ```json code block, nothing omitted. I import it in StarTome on the **Import & Export** page, by dropping the file or pasting your answer (mode "merge": it is added next to my other campaigns, nothing is overwritten).
 
 The campaign importer does **not** check fields. A wrong type can break the page that shows the entry, so follow the shapes exactly.
 
-New compendium content (creatures, items, spells, hazards …) does **not** go in this file. Put it in a second file in the compendium format (HOMEBREW_FORMAT.md), which I import through Compendium › Homebrew import. The campaign text can link to those entries by name.
+New compendium content (creatures, items, spells, hazards …) does **not** go in this file. Put it in a second file in the compendium format (HOMEBREW_FORMAT.md), which I import the same way. The campaign text can link to those entries by name.
 
 ## File wrapper
 

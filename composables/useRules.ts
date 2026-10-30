@@ -12,7 +12,7 @@ import { newRulesEntity, newRulesId } from '~/rules/factory'
 import { isOverlayPath, setPath, withLocalEdits } from '~/rules/edits'
 import { dataUrlToBlob, deleteImage, imageRefId, isImageRef, storeImage } from '~/rules/images'
 import type { GameId } from '~/types/game'
-import { isRulesKind, RULES_KIND_CONFIG, RULES_KINDS, type Item, type Rarity, type RulesEntity, type RulesKind, type RulesOrigin } from '~/types/rules'
+import { isRulesKind, RULES_KIND_CONFIG, RULES_KINDS, type Feat, type Item, type Rarity, type RulesEntity, type RulesKind, type RulesOrigin } from '~/types/rules'
 
 export interface RulesQuery {
   kind: RulesKind
@@ -212,6 +212,14 @@ export async function rulesFindByName(kind: RulesKind, name: string, game?: Game
   const score = (e: RulesEntity) =>
     (game && (e.game === game || e.game === 'both') ? 4 : 0) + (e.supersededBy ? 0 : 2) + (e.publication?.remaster ? 1 : 0)
   return withLocalEdits(rows.sort((a, b) => score(b) - score(a))[0])
+}
+
+/** Feats carrying a class's trait (its features and subclass options), for one game. */
+export async function rulesClassFeats(trait: string, game: GameId | 'both'): Promise<Feat[]> {
+  const rows = await getDb().rules.where('traits').equals(trait).toArray()
+  return rows
+    .filter(r => r.kind === 'feat' && !r.supersededBy && !r.upstream?.removed && (game === 'both' || r.game === 'both' || r.game === game))
+    .map(r => withLocalEdits(r) as Feat)
 }
 
 /** Route of the compendium entry a {{kind: Name}} ref points to, or null if there is none. */

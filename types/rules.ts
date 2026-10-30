@@ -219,6 +219,10 @@ export interface Feat extends RulesEntityBase {
   trigger?: string
   frequency?: string
   requirements?: string
+  /** Class feature that offers a choice (Foundry ChoiceSet): the option groups it picks from, e.g. ['mystic-connection']. */
+  choices?: string[]
+  /** Class feature that is one option of such a choice (a subclass: muse, connection, domain …). */
+  optionOf?: string[]
 }
 
 export interface Action extends RulesEntityBase {
@@ -243,7 +247,11 @@ export interface Condition extends RulesEntityBase {
 export interface ReferenceEntry extends RulesEntityBase {
   kind: 'ancestry' | 'heritage' | 'background' | 'class' | 'deity'
   facts: Record<string, string | number | string[]>
+  /** Class: its class features by level (names of feat entries). */
+  features?: ClassFeatureRef[]
 }
+
+export interface ClassFeatureRef { level: number; name: string }
 
 export type RulesEntity = Item | Creature | Hazard | Spell | Feat | Action | Condition | ReferenceEntry
 

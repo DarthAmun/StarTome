@@ -250,6 +250,10 @@
         <label v-if="L.kind === 'feat'" class="red-field red-span-3"><span>Frequency</span><input class="red-input" :value="L.frequency ?? ''" @change="set('frequency', opt($event))" /></label>
         <label class="red-field red-span-3"><span>Trigger</span><input class="red-input" :value="L.trigger ?? ''" @change="set('trigger', opt($event))" /></label>
         <label class="red-field red-span-3"><span>Requirements</span><input class="red-input" :value="L.requirements ?? ''" @change="set('requirements', opt($event))" /></label>
+        <template v-if="L.kind === 'feat'">
+          <label class="red-field red-span-3" title="A class feature that is one subclass option: give it the class's trait and a group tag like conduit-domain"><span>Subclass option of <em>group tags, e.g. conduit-domain</em></span><input class="red-input" :value="formatList(L.optionOf)" @change="set('optionOf', tagsOrNone($event))" /></label>
+          <label class="red-field red-span-3" title="A class feature where the character picks one option from these groups"><span>Lets you choose from <em>group tags</em></span><input class="red-input" :value="formatList(L.choices)" @change="set('choices', tagsOrNone($event))" /></label>
+        </template>
       </div>
     </section>
 
@@ -267,6 +271,10 @@
     <section v-if="'facts' in L" class="red-section">
       <h4>Details <em>one "key: value" per line</em></h4>
       <textarea class="red-input" rows="5" :value="formatFacts(L.facts)" placeholder="HP: 8&#10;Size: Medium" @change="set('facts', parseFacts(str($event)))" />
+      <template v-if="L.kind === 'class'">
+        <h4>Class features <em>one level per line</em></h4>
+        <textarea class="red-input" rows="5" :value="formatFeatures(L.features)" placeholder="1: Domain, Conduit Spellcasting&#10;3: Expert Spellcaster" @change="set('features', featuresOrNone($event))" />
+      </template>
     </section>
 
     <!-- ── Text ──────────────────────────────────────────────── -->
@@ -289,8 +297,8 @@ import { rulesUpdate } from '~/composables/useRules'
 import { setPath } from '~/rules/edits'
 import { coinsToCp, formatActionCost, formatBulk, parseActionCost, parseBulk, SIZE_LABEL, titleCase } from '~/rules/format'
 import {
-  formatFacts, formatIwrList, formatList, formatNumberMap, formatSenses, formatSpeeds, formatSpellList,
-  parseFacts, parseIwr, parseList, parseNumberMap, parseSenses, parseSpeeds, parseSpellList, parseTraits, splitList,
+  formatFacts, formatFeatures, formatIwrList, formatList, formatNumberMap, formatSenses, formatSpeeds, formatSpellList,
+  parseFacts, parseFeatures, parseIwr, parseList, parseNumberMap, parseSenses, parseSpeeds, parseSpellList, parseTraits, splitList,
 } from '~/rules/parse'
 import {
   ITEM_CATEGORIES, RARITIES, RULES_KIND_CONFIG, SIZES,
@@ -335,6 +343,8 @@ defineExpose({ flush })
 const target = (e: Event) => e.target as HTMLInputElement
 const str = (e: Event) => target(e).value
 const opt = (e: Event) => target(e).value.trim() || undefined
+const tagsOrNone = (e: Event) => { const t = parseTraits(str(e)); return t.length ? t : undefined }
+const featuresOrNone = (e: Event) => { const f = parseFeatures(str(e)); return f.length ? f : undefined }
 const num = (e: Event) => Number(target(e).value) || 0
 const optNum = (e: Event) => target(e).value === '' ? undefined : Number(target(e).value)
 const checked = (e: Event) => target(e).checked

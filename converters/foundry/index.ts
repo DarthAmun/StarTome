@@ -26,8 +26,9 @@ export function kindOfFoundryType(type: string): RulesKind | null {
  * Bumped whenever converter output changes for unchanged Foundry data, so the
  * next sync re-converts every pack instead of skipping it by checksum.
  * 2: weapon/armor runes.
+ * 3: class features by level, subclass choices/options.
  */
-export const CONVERTER_VERSION = 2
+export const CONVERTER_VERSION = 3
 
 export interface ConvertResult { entity: RulesEntity | null; issues: ConvertIssue[] }
 

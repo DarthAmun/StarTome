@@ -171,6 +171,11 @@
       <p v-if="(feat ?? action)!.frequency" class="rsb-line"><b>Frequency</b> {{ (feat ?? action)!.frequency }}</p>
       <p v-if="(feat ?? action)!.trigger" class="rsb-line"><b>Trigger</b> {{ (feat ?? action)!.trigger }}</p>
       <p v-if="(feat ?? action)!.requirements" class="rsb-line"><b>Requirements</b> {{ (feat ?? action)!.requirements }}</p>
+      <p v-if="optionParents.length || optionClass" class="rsb-line">
+        <b>Subclass</b>
+        <template v-for="(p, i) in optionParents" :key="p.id"><span class="rsb-link" @click.stop="openEntry(p)">{{ p.name }}</span><template v-if="i < optionParents.length - 1">, </template></template>
+        <template v-if="optionClass">{{ optionParents.length ? ' option of the ' : 'option of the ' }}<span class="rsb-link" @click.stop="openEntry(optionClass)">{{ optionClass.name }}</span></template>
+      </p>
     </template>
 
     <!-- ── Condition ─────────────────────────────────────────── -->
@@ -179,6 +184,22 @@
     <!-- ── Reference kinds ───────────────────────────────────── -->
     <template v-if="reference && factEntries.length">
       <p v-for="[k, v] in factEntries" :key="k" class="rsb-line"><b>{{ titleCase(humanize(k)) }}</b> {{ Array.isArray(v) ? v.join(', ') : v }}</p>
+    </template>
+
+    <!-- ── Class: features and subclasses ────────────────────── -->
+    <template v-if="featureRows.length">
+      <div class="rsb-sub">Class features</div>
+      <p v-for="row in featureRows" :key="row.level" class="rsb-line">
+        <b>{{ ordinal(row.level) }}</b>
+        <template v-for="(n, i) in row.names" :key="n"><span class="rsb-link" @click.stop="openFeature(n)">{{ n }}</span><template v-if="i < row.names.length - 1">, </template></template>
+      </p>
+    </template>
+    <template v-if="optionGroups.length">
+      <div class="rsb-sub">Subclasses</div>
+      <p v-for="g in optionGroups" :key="g.tag" class="rsb-line">
+        <b>{{ g.label }}</b> <span class="rsb-muted">({{ ordinal(g.level) }})</span>
+        <template v-for="(o, i) in g.options" :key="o.id"><span class="rsb-link" @click.stop="openEntry(o)">{{ o.name }}</span><template v-if="i < g.options.length - 1">, </template></template>
+      </p>
     </template>
 
     <!-- ── Body ──────────────────────────────────────────────── -->
@@ -211,7 +232,8 @@
 <script setup lang="ts">
 import { useDiceRoll } from '~/composables/useDiceRoll'
 import { useEntityMarkdown } from '~/composables/useEntityMarkdown'
-import { rulesFindByName } from '~/composables/useRules'
+import { rulesClassFeats, rulesFindByName, useRulesRevision } from '~/composables/useRules'
+import { classOptionGroups, classTrait, featuresByLevel, type OptionGroup } from '~/rules/subclasses'
 import {
   formatActionCost, formatBulk, formatMoney, formatTrait, RARITY_COLOR, signed, SIZE_LABEL, titleCase,
 } from '~/rules/format'
@@ -289,6 +311,53 @@ const hazardDefense = computed(() => {
   if (h.resistances?.length) parts.push(`<b>Resistances</b> ${esc(h.resistances.map(formatIwr).join(', '))}`)
   return parts.join('; ')
 })
+
+// Subclasses (rules/subclasses.ts): a class lists its features and options; an option names its class
+const classFeats = shallowRef<Feat[]>([])
+const optionParents = shallowRef<Feat[]>([])
+const optionClass = shallowRef<RulesEntity | null>(null)
+const rulesRevision = useRulesRevision()
+const featureRows = computed(() => props.entity.kind === 'class' ? featuresByLevel(props.entity as ReferenceEntry) : [])
+const optionGroups = computed<OptionGroup[]>(() => props.entity.kind === 'class' ? classOptionGroups(props.entity, classFeats.value) : [])
+
+let subclassToken = 0
+watch(() => [props.entity, rulesRevision.value] as const, async ([e]) => {
+  const token = ++subclassToken
+  let feats: Feat[] = [], parents: Feat[] = [], cls: RulesEntity | null = null
+  if (e.kind === 'class') {
+    feats = await rulesClassFeats(classTrait(e.name), e.game)
+  } else if (e.kind === 'feat' && (e as Feat).optionOf?.length) {
+    const tags = new Set((e as Feat).optionOf)
+    for (const t of e.traits) {
+      const c = await rulesFindByName('class', t.replace(/-/g, ' '), props.game)
+      if (!c) continue
+      cls = c
+      parents = (await rulesClassFeats(t, e.game)).filter(f => f.choices?.some(x => tags.has(x)))
+      break
+    }
+  }
+  if (token !== subclassToken) return
+  classFeats.value = feats
+  optionParents.value = parents
+  optionClass.value = cls
+}, { immediate: true })
+
+function ordinal(n: number) {
+  const teen = n % 100 >= 11 && n % 100 <= 13
+  return `${n}${teen ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th'}`
+}
+
+function openEntry(e: RulesEntity) {
+  router.push(`/compendium/${RULES_KIND_CONFIG[e.kind].segment}?id=${e.id}`)
+}
+
+/** A class feature by name: the one carrying the class's trait first ("Weapon Expertise" exists per class). */
+async function openFeature(name: string) {
+  const key = name.toLowerCase()
+  const own = classFeats.value.find(f => f.name.toLowerCase() === key)
+  const target = own ?? await rulesFindByName('feat', name, props.game)
+  if (target) openEntry(target)
+}
 
 const factEntries = computed(() => Object.entries(reference.value?.facts ?? {}).filter(([, v]) => v !== '' && !(Array.isArray(v) && !v.length)))
 
@@ -399,6 +468,8 @@ async function onClick(e: MouseEvent) {
   font-family: var(--fm); font-size: 0.88em; white-space: nowrap;
 }
 .rsb :deep(.roll-ref:hover) { background: rgba(184, 134, 11, 0.22); }
+.rsb-sub { margin: 10px 0 2px; font-family: var(--fh); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--kind-color); }
+.rsb-muted { color: var(--text3); }
 .rsb-link { color: var(--accent-l, var(--kind-color)); cursor: pointer; text-decoration: underline dotted; }
 .rsb-md :deep(.entity-ref) { color: var(--accent-l, var(--kind-color)); cursor: pointer; text-decoration: underline dotted; }
 hr { border: none; border-top: 1px solid var(--border-hi); margin: 8px 0; }

@@ -106,6 +106,9 @@
         <NuxtLink to="/sounds" class="sb-bottom-row" :class="{ active: route.path.startsWith('/sounds') }" data-tip="Sounds">
           <span class="sb-bottom-icon"><OhVueIcon name="gi-sound-waves" scale="0.85" /></span>
         </NuxtLink>
+        <NuxtLink to="/data" class="sb-bottom-row" :class="{ active: isDataRoute }" data-tip="Import & Export">
+          <span class="sb-bottom-icon"><OhVueIcon name="md-importexport" scale="0.85" /></span>
+        </NuxtLink>
         <NuxtLink to="/settings" class="sb-bottom-row" :class="{ active: route.path === '/settings' }" data-tip="Settings">
           <span class="sb-bottom-icon"><OhVueIcon name="md-settings" scale="0.85" /></span>
         </NuxtLink>
@@ -220,19 +223,6 @@
             <span class="sb-child-label">{{ k.plural }}</span>
             <span class="sb-child-count">{{ compendiumCounts[k.kind] || '' }}</span>
           </NuxtLink>
-          <div class="sb-child-sep" />
-          <NuxtLink to="/compendium/sync" class="sb-child-tool" :class="{ active: route.path === '/compendium/sync' }">
-            <OhVueIcon name="md-autorenew" scale="0.65" style="color:#e8c44a;width:14px;flex-shrink:0" />
-            <span>Foundry sync</span>
-          </NuxtLink>
-          <NuxtLink to="/compendium/legacy" class="sb-child-tool" :class="{ active: route.path === '/compendium/legacy' }">
-            <OhVueIcon name="gi-scroll-unfurled" scale="0.65" style="color:#b5a07a;width:14px;flex-shrink:0" />
-            <span>DM's Tome import</span>
-          </NuxtLink>
-          <NuxtLink to="/compendium/homebrew" class="sb-child-tool" :class="{ active: route.path === '/compendium/homebrew' }">
-            <OhVueIcon name="gi-cauldron" scale="0.65" style="color:#7cc44e;width:14px;flex-shrink:0" />
-            <span>Homebrew import</span>
-          </NuxtLink>
         </div>
 
       </div>
@@ -243,6 +233,10 @@
         <NuxtLink to="/sounds" class="sb-bottom-row" :class="{ active: route.path.startsWith('/sounds') }">
           <span class="sb-bottom-icon"><OhVueIcon name="gi-sound-waves" scale="0.85" /></span>
           <span class="sb-bottom-label">Sounds</span>
+        </NuxtLink>
+        <NuxtLink to="/data" class="sb-bottom-row" :class="{ active: isDataRoute }">
+          <span class="sb-bottom-icon"><OhVueIcon name="md-importexport" scale="0.85" /></span>
+          <span class="sb-bottom-label">Import &amp; Export</span>
         </NuxtLink>
         <NuxtLink to="/settings" class="sb-bottom-row" :class="{ active: route.path === '/settings' }">
           <span class="sb-bottom-icon"><OhVueIcon name="md-settings" scale="0.85" /></span>
@@ -270,6 +264,8 @@ import { useEncounterStore } from '~/stores/encounter'
 const { showNewCampaign } = useAppDialogs()
 
 const route = useRoute()
+/** The importers are reached from Import & Export, so it stays lit on them. */
+const isDataRoute = computed(() => route.path === '/data' || ['/compendium/sync', '/compendium/legacy', '/compendium/homebrew'].includes(route.path))
 const router = useRouter()
 const notesStore = useEntities()
 const encounterStore = useEncounterStore()

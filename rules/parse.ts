@@ -3,7 +3,7 @@
  * would type ("fire 5, cold iron 10"); each `formatX` produces the text the
  * input shows, so a round trip is stable.
  */
-import type { Resistance, Sense, Spellcasting, Weakness } from '~/types/rules'
+import type { ClassFeatureRef, Resistance, Sense, Spellcasting, Weakness } from '~/types/rules'
 
 /** Splits on commas (or another separator) outside parentheses. */
 export function splitList(text: string, sep = ','): string[] {
@@ -141,4 +141,21 @@ export function parseFacts(text: string): Record<string, string | string[]> {
 
 export function formatFacts(facts: Record<string, string | number | string[]> | undefined): string {
   return Object.entries(facts ?? {}).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join('\n')
+}
+
+/** Class features, one level per line: "1: Domain, Conduit Spellcasting" */
+export function parseFeatures(text: string): ClassFeatureRef[] {
+  const out: ClassFeatureRef[] = []
+  for (const line of text.split('\n')) {
+    const m = line.match(/^\s*(\d+)\s*(?:st|nd|rd|th)?\s*:\s*(.*)$/i)
+    if (!m) continue
+    for (const name of splitList(m[2])) out.push({ level: Number(m[1]), name })
+  }
+  return out.sort((a, b) => a.level - b.level)
+}
+
+export function formatFeatures(features: ClassFeatureRef[] | undefined): string {
+  const byLevel = new Map<number, string[]>()
+  for (const f of features ?? []) byLevel.set(f.level, [...(byLevel.get(f.level) ?? []), f.name])
+  return [...byLevel.entries()].sort(([a], [b]) => a - b).map(([l, names]) => `${l}: ${names.join(', ')}`).join('\n')
 }

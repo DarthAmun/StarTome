@@ -186,6 +186,6 @@ All data lives in browser IndexedDB in the database `startome`. Every localStora
 
 Exports from DM's Tome (`dmstome-*.json`) come in through Compendium › DM's Tome import.
 
-Settings › Import & Export backs up campaigns, encounters, tokens, your own compendium entries and your portraits/notes/edits on synced ones (the synced content itself is re-synced, not exported). A quest board export gives players a GM-text-free quest list.
+The Import & Export page (sidebar) takes any StarTome file, a DM's Tome export or a Foundry `json-assets.zip` in one drop zone and opens the right importer. It backs up campaigns, encounters, tokens, your own compendium entries and your portraits/notes/edits on synced ones (the synced content itself is re-synced, not exported). A quest board export gives players a GM-text-free quest list.
 
 Manual export: DevTools → Application → IndexedDB → right-click → Export

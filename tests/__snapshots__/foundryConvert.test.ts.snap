@@ -269,6 +269,72 @@ exports[`Foundry converter — whole output > pf2e/Fighter 1`] = `
     ],
     "Will": "trained",
   },
+  "features": [
+    {
+      "level": 1,
+      "name": "Reactive Strike",
+    },
+    {
+      "level": 1,
+      "name": "Shield Block",
+    },
+    {
+      "level": 3,
+      "name": "Bravery",
+    },
+    {
+      "level": 5,
+      "name": "Fighter Weapon Mastery",
+    },
+    {
+      "level": 7,
+      "name": "Battlefield Surveyor",
+    },
+    {
+      "level": 7,
+      "name": "Weapon Specialization",
+    },
+    {
+      "level": 9,
+      "name": "Battle Hardened",
+    },
+    {
+      "level": 9,
+      "name": "Combat Flexibility",
+    },
+    {
+      "level": 11,
+      "name": "Armor Expertise",
+    },
+    {
+      "level": 11,
+      "name": "Fighter Expertise",
+    },
+    {
+      "level": 13,
+      "name": "Weapon Legend",
+    },
+    {
+      "level": 15,
+      "name": "Greater Weapon Specialization",
+    },
+    {
+      "level": 15,
+      "name": "Improved Flexibility",
+    },
+    {
+      "level": 15,
+      "name": "Tempered Reflexes",
+    },
+    {
+      "level": 17,
+      "name": "Armor Mastery",
+    },
+    {
+      "level": 19,
+      "name": "Versatile Legend",
+    },
+  ],
   "game": "pf2e",
   "id": "fvtt:pf2e:classes:8zn3cD6GSmoo1LW4",
   "kind": "class",

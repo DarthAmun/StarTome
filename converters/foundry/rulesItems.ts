@@ -51,6 +51,11 @@ export function convertFeat(doc: FoundryDoc, ctx: ConvertContext): Feat {
   }
   const freq = frequencyOf(s.frequency)
   if (freq) feat.frequency = freq
+  // Subclasses: a feature's ChoiceSet picks a class feature carrying one of these tags
+  const choices = [...new Set([...JSON.stringify(s.rules ?? []).matchAll(/item:tag:([a-z0-9-]+)/g)].map(m => m[1]))]
+  if (choices.length) feat.choices = choices
+  const tags: string[] = s.traits?.otherTags ?? []
+  if (feat.category === 'classfeature' && tags.length) feat.optionOf = tags
   return feat
 }
 
@@ -98,6 +103,7 @@ function namesOfItems(items: any): string[] {
 export function convertReference(doc: FoundryDoc, ctx: ConvertContext): ReferenceEntry {
   const s = doc.system ?? {}
   const facts: ReferenceEntry['facts'] = {}
+  let features: ReferenceEntry['features']
   const set = (k: string, v: string | number | string[] | undefined | null) => {
     if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) return
     facts[k] = v
@@ -129,6 +135,10 @@ export function convertReference(doc: FoundryDoc, ctx: ConvertContext): Referenc
       set('Perception', RANK[s.perception])
       for (const [k, label] of [['fortitude', 'Fortitude'], ['reflex', 'Reflex'], ['will', 'Will']] as const) set(label, RANK[s.savingThrows?.[k]])
       set('Trained skills', [...(s.trainedSkills?.value ?? []).map(humanizeSlug), ...(s.trainedSkills?.additional ? [`${s.trainedSkills.additional} more`] : [])])
+      features = Object.values<any>(s.items ?? {})
+        .filter(f => f?.name)
+        .map(f => ({ level: Number(f.level) || 1, name: String(f.name) }))
+        .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name))
       break
     case 'deity': {
       set('Category', s.category)
@@ -152,5 +162,6 @@ export function convertReference(doc: FoundryDoc, ctx: ConvertContext): Referenc
     kind: doc.type as ReferenceEntry['kind'],
     description: text(s.description?.value, ctx),
     facts,
+    ...(features?.length ? { features } : {}),
   }
 }
