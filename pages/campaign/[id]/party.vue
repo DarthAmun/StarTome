@@ -270,7 +270,7 @@ function triggerLabel(l: LevelUpEntry) {
 </script>
 
 <style scoped>
-.party { flex: 1; overflow-y: auto; padding: 28px 32px 48px; max-width: 980px; }
+.party { flex: 1; overflow-y: auto; padding: 28px 32px 48px; }
 .party-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
 .party-title { margin: 0 0 4px; }
 .party-head-actions { display: flex; gap: 8px; align-items: center; }
