@@ -579,6 +579,12 @@
                     @click="store.rollAllInitiative()"
                   ><OhVueIcon name="gi-dice-six-faces-six" scale="0.85" /></button>
                   <button
+                    v-if="linkedInEncounter.length"
+                    class="init-nav-btn"
+                    :title="`Ask ${linkedInEncounter.map(c => c.name).join(', ')} to roll initiative in Play Buddy; results fill the turn order`"
+                    @click="askInitiative"
+                  ><OhVueIcon name="gi-sands-of-time" scale="0.8" /></button>
+                  <button
                     class="init-nav-btn init-formula-btn"
                     :class="{ active: showInitFormula }"
                     title="Configure initiative formula"
@@ -832,6 +838,7 @@
         :grid-x="ctxMenu.gridX"
         :grid-y="ctxMenu.gridY"
         :target-token="ctxMenu.targetToken"
+        :linked-name="ctxMenu.targetToken ? linkedCharOf(ctxMenu.targetToken)?.name ?? null : null"
         @close="ctxMenu.open = false"
         @add-token-here="onCtxAddTokenHere"
         @edit-token="onCtxEditToken"
@@ -994,6 +1001,8 @@ import { useSounds } from "~/composables/useSounds";
 import { useEntities } from "~/composables/useEntities";
 import { useInventory } from "~/composables/useInventory";
 import { useParty } from "~/composables/useParty";
+import { usePlayBuddy } from "~/composables/usePlayBuddy";
+import { notify } from "~/composables/useNotices";
 import { useResolution } from "~/composables/useResolution";
 import { tokenSides } from "~/rules/encounter";
 import { encounterOwner } from "~/rules/inventory";
@@ -1365,7 +1374,27 @@ function onCtxSetInitiative(tokenId: number, value: number | null) {
 }
 
 function onCtxApplyDamage(tokenId: number, amount: number) {
-  store.applyDamage(tokenId, amount)
+  const token = store.getToken(tokenId)
+  const linked = token ? linkedCharOf(token) : null
+  // A Play Buddy character's HP is the player's: damage goes to their app, the new HP comes back
+  if (linked && amount > 0) void playBuddy.requestDamage(store.current!.campaignId, linked, [{ amount, type: 'untyped' }], [], store.current?.name)
+  else store.applyDamage(tokenId, amount)
+}
+
+// ── Play Buddy (PLAYBUDDY_API.md) ──
+const playBuddy = usePlayBuddy()
+function linkedCharOf(token: EncounterToken) {
+  return token.tokenId == null ? null : party.characters.value.find(c => c.pbPlayerId && c.tokenId === token.tokenId) ?? null
+}
+const linkedInEncounter = computed(() => {
+  const seen = new Map<number, ReturnType<typeof linkedCharOf>>()
+  for (const t of store.current?.tokens ?? []) { const c = linkedCharOf(t); if (c) seen.set(c.id, c) }
+  return [...seen.values()].filter((c): c is NonNullable<typeof c> => !!c)
+})
+async function askInitiative() {
+  if (!store.current) return
+  await playBuddy.requestInitiative(store.current.campaignId, store.current.id, linkedInEncounter.value, 'perception', `Initiative — ${store.current.name}`)
+  notify(`Asked ${linkedInEncounter.value.map(c => c.name).join(', ')} to roll initiative in Play Buddy.`, 'info')
 }
 
 const npcPanel = ref<{ open: boolean; name: string }>({ open: false, name: '' })

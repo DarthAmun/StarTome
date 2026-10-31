@@ -49,6 +49,10 @@ export interface InventoryEntry {
   grade: string | null
   /** The container entry (same owner) this stack is stored in; null = carried loose. */
   containerId: number | null
+  /** Mirrored from Play Buddy: read-only here (PLAYBUDDY_API.md). */
+  pbEntryId?: string | null
+  /** Offered to a Play Buddy player and waiting for the answer (a linkOffers row). */
+  pbOfferId?: number | null
 }
 
 type ItemLike = Pick<Item, 'name' | 'price' | 'priceFor' | 'bulk' | 'level' | 'rarity' | 'traits' | 'unidentified' | 'category'> & Partial<Pick<Item, 'container'>>

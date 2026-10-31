@@ -58,6 +58,7 @@
           <span class="ctx-inline-label">
             Damage
             <span v-if="targetToken.hpMax" class="ctx-hp-hint">{{ targetToken.hpCurrent }}/{{ targetToken.hpMax }}</span>
+            <span v-if="linkedName" class="ctx-hp-hint" :title="`Damage goes to ${linkedName}'s Play Buddy, which applies it with their resistances`">→ Play Buddy</span>
           </span>
           <input
             v-model.number="dmgValue"
@@ -164,6 +165,8 @@ const props = defineProps<{
   gridY: number
   targetToken: EncounterToken | null
   open: boolean
+  /** The token's character is linked to Play Buddy: damage goes to the player's app. */
+  linkedName?: string | null
 }>()
 
 const emit = defineEmits<{

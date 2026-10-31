@@ -114,7 +114,7 @@ describe('containers in the repository', () => {
 describe('PartyLink stub', () => {
   it('links nothing: empty reads, refused writes', async () => {
     expect(await NoneLink.probe()).toEqual({ ok: false, reason: 'disabled' })
-    expect(await NoneLink.listPlayers()).toEqual([])
-    await expect(NoneLink.sendOffer('all', { kind: 'coins', cp: 100 })).rejects.toBeInstanceOf(LinkUnavailableError)
+    expect(await NoneLink.status('all', ['basic'])).toEqual([])
+    await expect(NoneLink.sendOffer('k', ['p1'], { kind: 'coins', cp: 100 })).rejects.toBeInstanceOf(LinkUnavailableError)
   })
 })

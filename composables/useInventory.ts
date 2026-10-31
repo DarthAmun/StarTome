@@ -11,6 +11,7 @@ import { onTablesChanged } from '~/db/changes'
 import { rulesGetMany } from '~/composables/useRules'
 import { planMove, sameStack, splitCoins, STASH, type InventoryEntry, type OwnerKey } from '~/rules/inventory'
 import type { BulkTenths, Item, Runes } from '~/types/rules'
+import type { MirrorItem } from '~/partylink/port'
 
 export function toEntry(r: DbInventory): InventoryEntry {
   return {
@@ -19,6 +20,7 @@ export function toEntry(r: DbInventory): InventoryEntry {
     notes: r.notes ?? '', identified: !!r.identified,
     playerName: r.player_name ?? null, playerDescription: r.player_description ?? null,
     runes: r.runes ?? null, grade: r.grade ?? null, containerId: r.container_id ?? null,
+    pbEntryId: r.pb_entry_id ?? null, pbOfferId: r.pb_offer_id ?? null,
   }
 }
 
@@ -312,6 +314,67 @@ async function releaseOwner(campaignId: number, owner: OwnerKey) {
   await reloadIfLoaded(campaignId)
 }
 
+// ── Play Buddy (PLAYBUDDY_API.md) ──────────────────────────────────────────
+
+/**
+ * Replaces a linked character's items and coins with what Play Buddy shares.
+ * Their app owns that inventory, so these rows are a read-only mirror;
+ * `items: null` (inventory not shared) leaves the rows alone.
+ */
+async function replaceMirror(campaignId: number, owner: OwnerKey, items: MirrorItem[] | null, coinsCp: number | null, linkedCharacterId?: number) {
+  const db = getDb()
+  const ts = now()
+  await db.transaction('rw', db.inventory, db.purses, db.characters, async () => {
+    // A status read that finishes after the character was removed or unlinked writes nothing
+    if (linkedCharacterId !== undefined && !(await db.characters.get(linkedCharacterId))?.pb_player_id) return
+    if (items) {
+      await ownerRows(campaignId, owner).delete()
+      const ids = new Map<string, number>()
+      for (const i of items) {
+        const id = await db.inventory.add({
+          campaign_id: campaignId, owner, item_id: i.rulesId, quantity: i.quantity,
+          // Without a compendium match the row carries Play Buddy's own name, price and Bulk
+          name_override: i.rulesId ? null : i.name,
+          price_override: i.rulesId ? null : Math.round(i.price / (i.priceFor || 1)),
+          bulk_override: i.rulesId ? null : i.bulk,
+          notes: '', identified: i.identified ? 1 : 0,
+          player_name: i.identified ? null : i.name, player_description: null,
+          runes: i.runes, grade: null, container_id: null, pb_entry_id: i.entryId, created_at: ts, updated_at: ts,
+        } satisfies DbInventory) as number
+        ids.set(i.entryId, id)
+      }
+      for (const i of items) {
+        const container = i.containerEntryId ? ids.get(i.containerEntryId) : undefined
+        if (container) await db.inventory.update(ids.get(i.entryId)!, { container_id: container })
+      }
+    }
+    if (coinsCp !== null) await writePurse(campaignId, owner, coinsCp)
+  })
+  if (items) await cacheItems(items.map(i => i.rulesId))
+  await reloadIfLoaded(campaignId)
+}
+
+/** Marks stash stacks as offered (a linkOffers row id) or clears the mark (null). */
+async function markOffered(campaignId: number, ids: number[], linkOfferId: number | null) {
+  await getDb().inventory.where('id').anyOf(ids).modify({ pb_offer_id: linkOfferId, updated_at: now() })
+  await reloadIfLoaded(campaignId)
+}
+
+/** An item offer was answered: accepted takes the offered quantities out of the stash; anything else just unmarks. */
+async function settleOffered(campaignId: number, stacks: { inventoryId: number; quantity: number }[], accepted: boolean) {
+  const db = getDb()
+  await db.transaction('rw', db.inventory, async () => {
+    for (const s of stacks) {
+      const row = await db.inventory.get(s.inventoryId)
+      if (!row) continue
+      const left = accepted ? row.quantity - s.quantity : row.quantity
+      if (left <= 0) await db.inventory.delete(row.id!)
+      else await db.inventory.update(row.id!, { quantity: left, pb_offer_id: null, updated_at: now() })
+    }
+  })
+  await reloadIfLoaded(campaignId)
+}
+
 // ── Encounter loot ────────────────────────────────────────────────────────
 
 /**
@@ -439,6 +502,6 @@ export function useInventory() {
     purseList: computed(() => Object.entries(purses.value).map(([owner, cp]) => ({ owner, cp }))),
     load, addEntry, updateEntry, removeEntry, setIdentified, move, store,
     setPurse, adjustPurse, transferCoins, splitPurse, releaseOwner,
-    transferAll, restoreSnapshot, reload: reloadIfLoaded,
+    transferAll, restoreSnapshot, replaceMirror, markOffered, settleOffered, reload: reloadIfLoaded,
   }
 }

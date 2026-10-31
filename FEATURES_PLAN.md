@@ -169,6 +169,8 @@ The builder is a **tool, not a saved thing**. The VTT encounter remains the one 
 
 ## 6. Integration with the character app (Play Buddy)
 
+> **2026-10-31:** superseded by **PLAYBUDDY_API.md** (the GM API v1 spec for Carl) and built on StarTome's side: `partylink/` (wire types, converters, `PlayBuddyLink`), `composables/usePlayBuddy.ts`, the Play Buddy panel on the party page, offers from the inventory, initiative/damage requests in encounters, share-file import, and `scripts/playbuddy-mock.mjs`. The notes below are the earlier plan.
+
 **Changed 2026-10-28:** you have access to Play Buddy's repo and can extend its GM API as needed, short of rewriting the app. So the draft API's gaps become **API additions we write**, not blockers. The repo isn't on this machine yet, so everything below must be checked against its code before it's built.
 
 FORK_PLAN §9's adapter stays: a `PartyLink` port, `NoneLink` as the default (the app works fully without Play Buddy), `wire/` + `convert/` as pure converters, offers, and manual JSON paste as the fallback.

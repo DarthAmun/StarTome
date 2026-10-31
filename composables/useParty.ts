@@ -28,6 +28,7 @@ import { campaignRules } from '~/types/game'
 import { parseJson, toPlain } from '~/utils/json'
 import { onDomainEvent } from '~/composables/useDomainEvents'
 import { onTablesChanged } from '~/db/changes'
+import type { CharacterMirror } from '~/partylink/port'
 
 export interface Character extends PartyCharacter {
   campaignId: number
@@ -36,6 +37,10 @@ export interface Character extends PartyCharacter {
   npcEntityId: number | null
   /** Library token the encounter builder places for this character. */
   tokenId: number | null
+  /** Linked Play Buddy player (PLAYBUDDY_API.md); their app owns the sheet. */
+  pbPlayerId: string | null
+  /** What that player last shared. */
+  pbStatus: CharacterMirror | null
 }
 
 export interface LevelUpEntry {
@@ -52,6 +57,7 @@ function toCharacter(r: DbCharacter): Character {
     id: r.id!, campaignId: r.campaign_id, name: r.name, role: r.role,
     level: r.level, xp: r.xp ?? 0, treatAsPc: r.role === 'pc' || !!r.treat_as_pc,
     strMod: r.str_mod ?? null, npcEntityId: r.npc_entity_id ?? null, tokenId: r.token_id ?? null,
+    pbPlayerId: r.pb_player_id ?? null, pbStatus: r.pb_status ?? null,
   }
 }
 
@@ -221,11 +227,11 @@ onTablesChanged(['characters', 'levelUps', 'xpAwards'], () => {
   if (loadedCampaign.value != null) void load(loadedCampaign.value, { adopt: false })
 })
 
-async function addCharacter(input: { campaignId: number; name: string; role: CharacterRole; npcEntityId?: number | null; level?: number }) {
+async function addCharacter(input: { campaignId: number; name: string; role: CharacterRole; npcEntityId?: number | null; level?: number }): Promise<number> {
   const ts = now()
   const npcLevel = input.npcEntityId ? parseLevel((await npcAttributes(input.npcEntityId)).level) : null
   const level = clampLevel(input.level ?? npcLevel ?? partyLevel(characters.value).level ?? 1)
-  await getDb().characters.add({
+  const id = await getDb().characters.add({
     campaign_id: input.campaignId, name: input.name.trim(), role: input.role, level, xp: 0,
     treat_as_pc: input.role === 'pc' ? 1 : 0, str_mod: null, npc_entity_id: input.npcEntityId ?? null,
     created_at: ts, updated_at: ts,
@@ -234,6 +240,7 @@ async function addCharacter(input: { campaignId: number; name: string; role: Cha
   // The NPC, its tokens and their placements follow the party
   await syncPcFlags(input.npcEntityId)
   await reloadIfLoaded(input.campaignId)
+  return id as number
 }
 
 async function updateCharacter(id: number, patch: Partial<Pick<Character, 'name' | 'role' | 'level' | 'treatAsPc' | 'strMod' | 'xp'>>) {
@@ -252,6 +259,36 @@ async function updateCharacter(id: number, patch: Partial<Pick<Character, 'name'
   await reloadIfLoaded(c.campaignId)
 }
 
+/** Links a character to a Play Buddy player, or unlinks it (null). Unlinking keeps the last mirror as plain data. */
+async function linkPlayer(id: number, link: { playerId: string; characterId: string | null } | null) {
+  const row = await getDb().characters.get(id)
+  if (!row) return
+  await getDb().characters.update(id, {
+    pb_player_id: link?.playerId ?? null, pb_character_id: link?.characterId ?? null,
+    ...(link ? {} : { pb_status: null }), updated_at: now(),
+  })
+  await reloadIfLoaded(row.campaign_id)
+}
+
+/**
+ * Stores what a linked player shares. Their level and Strength follow Play
+ * Buddy, since the player levels up in their own app.
+ */
+async function applyMirror(id: number, mirror: CharacterMirror) {
+  const row = await getDb().characters.get(id)
+  if (!row) return
+  // Levels the player didn't send this time keep their last known values
+  // (and levels the player stopped sharing are dropped)
+  const merged: CharacterMirror = { ...(row.pb_status ?? {}), ...mirror }
+  for (const level of mirror.notShared) delete merged[level]
+  const changes: Partial<DbCharacter> = { pb_status: toPlain(merged), pb_character_id: mirror.characterId || row.pb_character_id || null, updated_at: now() }
+  if (mirror.basic && mirror.basic.level !== row.level) changes.level = clampLevel(mirror.basic.level)
+  if (mirror.skills) changes.str_mod = mirror.skills.strMod
+  await getDb().characters.update(id, changes)
+  if (changes.level !== undefined) await patchNpc(row.npc_entity_id, { level: String(changes.level) })
+  await reloadIfLoaded(row.campaign_id)
+}
+
 /** Remembers the library token that stands for the character on the map. */
 async function linkToken(id: number, tokenId: number | null) {
   const row = await getDb().characters.get(id)
@@ -268,6 +305,12 @@ async function linkToken(id: number, tokenId: number | null) {
 async function removeCharacter(id: number) {
   const row = await getDb().characters.get(id)
   if (!row) return
+  // A linked character's items are Play Buddy's mirror, not the party's: they go, not to the stash.
+  // Unlinked first, so a status read still in flight writes nothing (see replaceMirror)
+  if (row.pb_player_id) {
+    await getDb().characters.update(id, { pb_player_id: null })
+    await useInventory().replaceMirror(row.campaign_id, characterOwner(id), [], 0)
+  }
   await useInventory().releaseOwner(row.campaign_id, characterOwner(id))
   await getDb().characters.delete(id)
   // A removed PC stops being one everywhere, so it isn't adopted again either
@@ -276,22 +319,81 @@ async function removeCharacter(id: number) {
 }
 
 /** Raises each selected character by one level and records the action. Returns the log entry id. */
+/** Characters with a level-up still waiting for their Play Buddy player: id → offered level. */
+async function pendingLevelUps(campaignId: number): Promise<Map<number, number>> {
+  const out = new Map<number, number>()
+  for (const r of await getDb().levelUps.where('campaign_id').equals(campaignId).toArray()) {
+    if (r.undone_at) continue
+    for (const ch of toLevelUp(r).changes) if (ch.offer?.state === 'pending') out.set(ch.characterId, ch.to)
+  }
+  return out
+}
+
 async function levelUp(campaignId: number, selected: number[], trigger: DbLevelUp['trigger'] = 'manual', refId: number | null = null): Promise<number | null> {
   const db = getDb()
   const rows = (await db.characters.where('campaign_id').equals(campaignId).toArray()).map(toCharacter)
   const xpMode = campaignRules(await dbApi.campaigns.get(campaignId)).advancement === 'xp'
-  const changes = planLevelUp(rows, selected, xpMode ? XP_PER_LEVEL : undefined)
+  // A character whose level-up still waits for the player isn't offered a second one
+  const waiting = await pendingLevelUps(campaignId)
+  const changes = planLevelUp(rows, selected.filter(id => !waiting.has(id)), xpMode ? XP_PER_LEVEL : undefined)
   if (!changes.length) return null
+  const linked = new Set(rows.filter(r => r.pbPlayerId).map(r => r.id))
+  for (const ch of changes) if (linked.has(ch.characterId)) ch.offer = { id: null, state: 'pending' }
   const ts = now()
   const logId = await db.transaction('rw', db.characters, db.levelUps, async () => {
     for (const ch of changes) {
-      await db.characters.update(ch.characterId, { level: ch.to, ...(ch.xpTo !== undefined ? { xp: ch.xpTo } : {}), updated_at: ts })
+      // XP is StarTome's and is paid now (refunded if declined); a linked character's level waits for the player
+      await db.characters.update(ch.characterId, {
+        ...(ch.offer ? {} : { level: ch.to }), ...(ch.xpTo !== undefined ? { xp: ch.xpTo } : {}), updated_at: ts,
+      })
     }
     return db.levelUps.add({ campaign_id: campaignId, at: ts, trigger, ref_id: refId, changes: toPlain(changes), undone_at: null })
   }) as number
-  for (const ch of changes) await patchNpc(rows.find(r => r.id === ch.characterId)?.npcEntityId ?? null, { level: String(ch.to) })
+  for (const ch of changes) if (!ch.offer) await patchNpc(rows.find(r => r.id === ch.characterId)?.npcEntityId ?? null, { level: String(ch.to) })
   await reloadIfLoaded(campaignId)
+  if (changes.some(ch => ch.offer)) {
+    const { usePlayBuddy } = await import('~/composables/usePlayBuddy')
+    for (const ch of changes.filter(x => x.offer)) {
+      const offer = await usePlayBuddy().offerLevelUp(campaignId, rows.find(r => r.id === ch.characterId)!, ch.to, logId)
+      await setLevelUpOffer(logId, ch.characterId, { id: offer?.id ?? null })
+    }
+    await reloadIfLoaded(campaignId)
+  }
   return logId
+}
+
+/** Updates a linked character's change in a level-up log entry. */
+async function setLevelUpOffer(logId: number, characterId: number, patch: Partial<NonNullable<LevelChange['offer']>>) {
+  const db = getDb()
+  const row = await db.levelUps.get(logId)
+  if (!row) return null
+  const changes = toLevelUp(row).changes
+  const ch = changes.find(x => x.characterId === characterId)
+  if (!ch?.offer) return null
+  ch.offer = { ...ch.offer, ...patch }
+  await db.levelUps.update(logId, { changes: toPlain(changes) })
+  return ch
+}
+
+/**
+ * The player answered a level-up offer. Accepted: the level moves (Play Buddy's
+ * status says the same). Anything else: the XP it cost comes back.
+ */
+async function settleLevelUp(logId: number, characterId: number, state: Exclude<NonNullable<LevelChange['offer']>['state'], 'pending'>) {
+  const before = (await getDb().levelUps.get(logId))
+  const prev = before ? toLevelUp(before).changes.find(x => x.characterId === characterId)?.offer?.state : undefined
+  if (prev !== 'pending') return
+  const ch = await setLevelUpOffer(logId, characterId, { state })
+  const c = await getDb().characters.get(characterId)
+  if (!ch || !c) return
+  if (state === 'accepted') {
+    const level = Math.max(c.level, ch.to)
+    await getDb().characters.update(characterId, { level, updated_at: now() })
+    await patchNpc(c.npc_entity_id, { level: String(level) })
+  } else if (ch.xpFrom !== undefined && ch.xpTo !== undefined) {
+    await getDb().characters.update(characterId, { xp: (c.xp ?? 0) + ch.xpFrom - ch.xpTo, updated_at: now() })
+  }
+  await reloadIfLoaded(c.campaign_id)
 }
 
 /** Reverts a level-up for every character still at the level it raised them to. */
@@ -300,10 +402,23 @@ async function undoLevelUp(logId: number) {
   const row = await db.levelUps.get(logId)
   if (!row || row.undone_at) return
   const entry = toLevelUp(row)
+  // Play Buddy level-ups the player hasn't answered are withdrawn (which refunds their XP);
+  // accepted ones stay, since the player already levelled up in their app
+  const offered = entry.changes.filter(ch => ch.offer)
+  if (offered.length) {
+    const { usePlayBuddy } = await import('~/composables/usePlayBuddy')
+    for (const ch of offered) {
+      if (ch.offer!.state !== 'pending') continue
+      const offer = ch.offer!.id != null ? await db.linkOffers.get(ch.offer!.id) : undefined
+      if (offer) await usePlayBuddy().withdraw(offer)
+      else await settleLevelUp(logId, ch.characterId, 'withdrawn')
+    }
+  }
   const ts = now()
   const reverted: { npcId: number | null; level: number }[] = []
   await db.transaction('rw', db.characters, db.levelUps, async () => {
     for (const ch of entry.changes) {
+      if (ch.offer) continue
       const c = await db.characters.get(ch.characterId)
       if (c && c.level === ch.to) {
         // XP earned since the level-up stays on top of what the level cost
@@ -411,7 +526,7 @@ export function useParty() {
     xpPrompt,
     party: computed(() => partyLevel(characters.value)),
     defaultSelection: computed(() => defaultLevelUpSelection(characters.value)),
-    load, addCharacter, updateCharacter, removeCharacter, linkToken, levelUp, undoLevelUp, setNpcPlayerCharacter,
+    load, addCharacter, updateCharacter, removeCharacter, linkToken, linkPlayer, applyMirror, levelUp, settleLevelUp, pendingLevelUps, undoLevelUp, setNpcPlayerCharacter,
     requestLevelUp, dismissPrompt, requestXpAward, dismissXpPrompt,
     awardXp, undoXpAward, writeXpAward, writeXpUndo, promptReadyToLevel, reload: reloadIfLoaded,
   }

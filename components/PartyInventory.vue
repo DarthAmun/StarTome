@@ -41,6 +41,8 @@
       <div class="inv-purse">
         <OhVueIcon name="gi-two-coins" scale="0.85" />
         <span class="inv-purse-amount">{{ money(purses[selected] ?? 0) }}</span>
+        <span v-if="selectedLinked" class="inv-dim">From Play Buddy: {{ selectedCharacter!.name }}'s player owns these coins and items. Give from the stash; they arrive when the player accepts.</span>
+        <template v-else>
         <input v-model="coinInput" class="inv-input inv-coin-input" :placeholder="game === 'sf2e' ? 'e.g. 250 cr' : 'e.g. 12 gp 5 sp'" @keydown.enter="changeCoins(1)" />
         <button class="ghost-btn inv-small" :disabled="coinCp == null" @click="changeCoins(1)">Add</button>
         <label v-if="!lockOwner" class="inv-check" :title="AWARD_HINT">
@@ -55,6 +57,7 @@
           title="Each party member gets an equal share; the remainder stays in the stash" @click="splitStash">
           Split evenly
         </button>
+        </template>
       </div>
       <div v-if="!lockOwner" class="inv-bulk">
         Bulk {{ formatBulkTotal(totals.byOwner[selected]?.bulk ?? 0) }}
@@ -72,7 +75,8 @@
       <div v-if="!ownerEntries.length" class="party-empty">No items.</div>
       <div v-for="e in ownerEntries" :key="e.id" class="inv-item" :class="{ 'inv-item--unid': !e.identified, 'inv-item--inside': insideOf(e) }">
         <div class="inv-row">
-          <input class="inv-input inv-qty" type="number" min="0" :value="e.quantity" title="Quantity (0 removes)"
+          <span v-if="e.pbEntryId || e.pbOfferId" class="inv-qty inv-qty--fixed">{{ e.quantity }}</span>
+          <input v-else class="inv-input inv-qty" type="number" min="0" :value="e.quantity" title="Quantity (0 removes)"
             @change="updateEntry(e.id, { quantity: Number(($event.target as HTMLInputElement).value) })" />
           <div class="inv-name">
             <template v-if="view === 'gm'">
@@ -81,6 +85,7 @@
               <span v-if="e.itemId && !items.get(e.itemId)" class="inv-warn" title="The compendium entry is missing; sync or import it">missing entry</span>
               <span v-if="!e.identified" class="inv-unid" :title="`Players see: ${playerOf(e).name}`">unidentified · “{{ playerOf(e).name }}”</span>
               <span v-if="runeLabel(e)" class="inv-dim">{{ runeLabel(e) }}</span>
+              <span v-if="e.pbOfferId" class="inv-offered" :title="offerTitle(e)">offered</span>
             </template>
             <template v-else>
               <span>{{ playerOf(e).name }}</span>
@@ -94,7 +99,13 @@
           <span class="inv-level" title="Level">{{ shownLevel(e) }}</span>
           <span class="inv-price" :title="priceTitle(e)">{{ shownPrice(e) }}</span>
           <span class="inv-bulk-cell" title="Bulk">{{ formatBulkTotal(entryBulk(e, item(e))) }}</span>
-          <div class="inv-actions">
+          <div v-if="e.pbEntryId" class="inv-actions">
+            <button v-if="!e.identified" class="party-icon-btn" title="Identify: Play Buddy reveals it to the player" @click="identifyMirrored(e)">
+              <OhVueIcon name="md-visibilityoff" scale="0.75" />
+            </button>
+          </div>
+          <div v-else-if="e.pbOfferId" class="inv-actions" />
+          <div v-else class="inv-actions">
             <button class="party-icon-btn" :title="e.identified ? 'Mark as unidentified' : 'Identify'" @click="setIdentified(e.id, !e.identified)">
               <OhVueIcon :name="e.identified ? 'md-visibility' : 'md-visibilityoff'" scale="0.75" />
             </button>
@@ -119,7 +130,8 @@
           <select v-model="moveTo" class="inv-input inv-select">
             <option v-for="o in owners.filter(x => x.key !== selected)" :key="o.key" :value="o.key">{{ o.name }}</option>
           </select>
-          <button class="seal-btn inv-small" :disabled="!moveTo" @click="doMove(e)">Move</button>
+          <button class="seal-btn inv-small" :disabled="!moveTo" @click="doMove(e)">{{ linkedOwner(moveTo) ? 'Offer' : 'Move' }}</button>
+          <span v-if="linkedOwner(moveTo)" class="inv-dim">goes to Play Buddy; stays here until accepted</span>
           <button class="ghost-btn inv-small" @click="moving = null">Cancel</button>
         </div>
 
@@ -188,8 +200,8 @@
         </div>
       </div>
 
-      <!-- Add -->
-      <div class="inv-add">
+      <!-- Add (not to a Play Buddy mirror: those items come from the player's app) -->
+      <div v-if="!selectedLinked" class="inv-add">
         <div class="inv-add-bar">
           <input v-model="addQuery" class="inv-input inv-add-input" placeholder="Add an item: search the compendium or type a name…" @keydown.enter="addTyped" />
           <input v-model.number="addQty" class="inv-input inv-qty" type="number" min="1" title="Quantity" />
@@ -221,6 +233,7 @@ import { useInventory } from '~/composables/useInventory'
 import { rulesQuery } from '~/composables/useRules'
 import { useFormatters } from '~/composables/useFormatters'
 import type { Character } from '~/composables/useParty'
+import { usePlayBuddy } from '~/composables/usePlayBuddy'
 import { useWealth } from '~/composables/useWealth'
 import { lootValue } from '~/rules/wealth'
 import { SF2E_GRADES } from '~/rules/registry'
@@ -365,8 +378,24 @@ function startMove(e: InventoryEntry) {
   moveTo.value = owners.value.find(o => o.key !== selected.value)?.key ?? ''
 }
 async function doMove(e: InventoryEntry) {
-  await move(e.id, moveTo.value, Math.min(e.quantity, Math.max(1, moveQty.value || 1)))
+  const quantity = Math.min(e.quantity, Math.max(1, moveQty.value || 1))
+  const target = linkedOwner(moveTo.value)
+  if (target) await playBuddy.offerItems(props.campaignId, target, [{ entry: e, item: item(e), quantity }])
+  else await move(e.id, moveTo.value, quantity)
   moving.value = null
+}
+
+// ── Play Buddy: linked characters own their inventory; the GM offers ──
+const playBuddy = usePlayBuddy()
+const linkedOwner = (owner: OwnerKey) => props.characters.find(c => c.pbPlayerId && characterOwner(c.id) === owner) ?? null
+const selectedLinked = computed(() => !!selectedCharacter.value?.pbPlayerId)
+function offerTitle(e: InventoryEntry) {
+  const o = playBuddy.offers.value.find(x => x.id === e.pbOfferId)
+  return o ? `${o.summary} (${o.state})` : 'Offered to a Play Buddy player'
+}
+async function identifyMirrored(e: InventoryEntry) {
+  const c = selectedCharacter.value
+  if (c) await playBuddy.identify(props.campaignId, c, e, eff(e).name)
 }
 
 // ── Coins ──
@@ -387,13 +416,28 @@ async function changeCoins(sign: 1 | -1) {
 }
 watch(coinTarget, async to => {
   if (!to || coinCp.value == null) return
-  await transferCoins(props.campaignId, selected.value, to, coinCp.value)
+  const target = linkedOwner(to)
+  if (target) await playBuddy.offerCoins(props.campaignId, target, Math.min(coinCp.value, purses.value[selected.value] ?? 0), money(coinCp.value), selected.value)
+  else await transferCoins(props.campaignId, selected.value, to, coinCp.value)
   coinInput.value = ''
   coinTarget.value = ''
 })
 const lastSplit = ref('')
 async function splitStash() {
   const n = memberOwners.value.length
+  const linked = memberOwners.value.map(linkedOwner).filter((c): c is Character => !!c)
+  if (linked.length) {
+    // Linked members get their share as an offer; the rest straight away
+    const each = Math.floor((purses.value[STASH] ?? 0) / n)
+    if (!each) { lastSplit.value = 'Not enough coins to split.'; return }
+    for (const owner of memberOwners.value) {
+      const c = linkedOwner(owner)
+      if (c) await playBuddy.offerCoins(props.campaignId, c, each, money(each))
+      else await transferCoins(props.campaignId, STASH, owner, each)
+    }
+    lastSplit.value = `Gave ${money(each)} to each of ${n} members (${linked.length} as Play Buddy offers); ${money(purses.value[STASH] ?? 0)} stays in the stash.`
+    return
+  }
   const { each, remainder } = await splitPurse(props.campaignId, STASH, memberOwners.value)
   lastSplit.value = each ? `Gave ${money(each)} to each of ${n} members; ${money(remainder)} stays in the stash.` : 'Not enough coins to split.'
 }
@@ -483,6 +527,8 @@ function addTyped() {
 .inv-load--overloaded { color: var(--blood, #d04a4a); border-color: #d04a4a66; }
 .inv-note { font-size: 12px; color: var(--text2); margin: 4px 0 8px; }
 .inv-small { padding: 3px 10px; font-size: 12px; }
+.inv-qty--fixed { display: inline-block; text-align: center; font-family: var(--fm); font-size: 12px; color: var(--text2); }
+.inv-offered { padding: 1px 6px; border-radius: 4px; font-size: 11px; color: #e8c44a; border: 1px solid #e8c44a66; }
 
 .inv-owners { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .inv-owner { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 13px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--text2); cursor: pointer; }

@@ -25,6 +25,7 @@ import { parseJson } from '~/utils/json'
 import type { CampaignRules, GameId } from '~/types/game'
 import type { RulesEntity, Runes } from '~/types/rules'
 import type { Adjustment } from '~/rules/combat'
+import type { CharacterMirror, DeliveryState, LinkOffer, LinkRequest } from '~/partylink/port'
 import { dataUrlToBlob } from '~/rules/images'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -36,6 +37,8 @@ export interface DbCampaign {
   banner_type?: 'file' | 'url'
   game?: GameId                  // missing on campaigns imported from DM's Tome → read via campaignGame()
   rules?: Partial<CampaignRules> // read via campaignRules()
+  /** The Play Buddy game this campaign is linked to (PLAYBUDDY_API.md); lastSeq = last event handled. */
+  playbuddy?: { gameId: string; gameName: string; lastSeq: number } | null
   created_at: string
   updated_at: string
 }
@@ -172,6 +175,11 @@ export interface DbCharacter {
   str_mod: number | null           // manual, for the encumbrance warning
   npc_entity_id: number | null     // the campaign NPC entry (portrait, lore page, token)
   token_id?: number | null         // library token placed by the encounter builder
+  /** Play Buddy player this character is linked to; their app owns the sheet (PLAYBUDDY_API.md). */
+  pb_player_id?: string | null
+  pb_character_id?: string | null
+  /** Last shared status, in our vocabulary (partylink/port.ts CharacterMirror). */
+  pb_status?: CharacterMirror | null
   created_at: string
   updated_at: string
 }
@@ -229,6 +237,10 @@ export interface DbInventory {
   runes: Runes | null
   grade: string | null
   container_id?: number | null     // a container entry of the same owner (P5 follow-up); non-indexed
+  /** Mirror of a Play Buddy inventory entry: read-only here, replaced on every status read. */
+  pb_entry_id?: string | null
+  /** Stash stack offered to a Play Buddy player; cleared when the offer is answered. */
+  pb_offer_id?: number | null      // linkOffers row
   created_at: string
   updated_at: string
 }
@@ -239,6 +251,33 @@ export interface DbPurse {
   campaign_id: number
   owner: string
   cp: number
+  updated_at: string
+}
+
+/** A Play Buddy offer or request (PLAYBUDDY_API.md §6.4–6.5), from outbox to answer. */
+export interface DbLinkOffer {
+  id?: number
+  campaign_id: number
+  /** Idempotency key: stored before sending, so a retry never sends twice. */
+  key: string
+  kind: 'items' | 'coins' | 'levelUp' | 'heroPoint' | 'identify' | 'roll' | 'damage'
+  character_id: number
+  player_id: string
+  /** Offer or request id from Play Buddy; null while in the outbox. */
+  remote_id: string | null
+  state: 'outbox' | DeliveryState
+  reason: string | null
+  summary: string                  // "Longsword +1, 2× Healing Potion"
+  payload: LinkOffer | LinkRequest
+  /** Stash stacks (and how many of each) an item offer takes when accepted. */
+  stacks: { inventoryId: number; quantity: number }[]
+  /** Coin offers: the purse the coins left, refunded if the player declines. */
+  from_owner?: string | null
+  /** Level-up offers: the party's level-up log entry (levelUps) it belongs to. */
+  level_up_id?: number | null
+  /** Initiative roll requests: the encounter whose turn order the result fills. */
+  encounter_id: number | null
+  created_at: string
   updated_at: string
 }
 
@@ -330,6 +369,7 @@ class StarTomeDb extends Dexie {
   purses!:            Table<DbPurse>
   xpAwards!:          Table<DbXpAward>
   treasureAwards!:    Table<DbTreasureAward>
+  linkOffers!:        Table<DbLinkOffer>
 
   constructor() {
     super(DB_NAME)
@@ -440,6 +480,10 @@ class StarTomeDb extends Dexie {
     // v14: the backup of DM's Tome's rules library goes. Only DM's Tome's
     // campaigns are imported, and DM's Tome itself still holds its library.
     this.version(14).stores({ legacyLibrary: null })
+    // v15: Play Buddy offers and requests (PLAYBUDDY_API.md), outbox included
+    this.version(15).stores({
+      linkOffers:         '++id, campaign_id, key, remote_id, state',
+    })
   }
 }
 

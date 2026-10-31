@@ -9,6 +9,7 @@ export type ImportTarget =
   | { kind: 'legacy' }                         // DM's Tome export → DM's Tome import
   | { kind: 'backup'; payload: any }           // StarTome backup / campaign / tokens file → import dialog
   | { kind: 'homebrew' }                       // compendium entries (HOMEBREW_FORMAT.md) → homebrew import
+  | { kind: 'playbuddy'; name: string }        // a Play Buddy share file (PLAYBUDDY_API.md §9) → a campaign's party
   | { kind: 'unknown'; error: string }
 
 /** ZIP files start with "PK": a Foundry json-assets.zip goes to the compendium sync. */
@@ -26,6 +27,7 @@ export function detectImport(text: string): ImportTarget {
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
     // DM's Tome writes version 1 with campaigns; StarTome writes version 2
     if (raw.version === 1 && Array.isArray(raw.campaigns)) return { kind: 'legacy' }
+    if (raw.format === 'playbuddy-share') return { kind: 'playbuddy', name: raw.status?.basic?.name ?? 'a character' }
     const hasData = [...CAMPAIGN_TABLES, 'rulesOverlays'].some(k => Array.isArray(raw[k]) && raw[k].length)
     if (hasData) return { kind: 'backup', payload: raw }
   }

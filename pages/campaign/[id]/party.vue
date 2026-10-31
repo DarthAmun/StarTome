@@ -47,6 +47,7 @@
           <NuxtLink v-if="c.npcEntityId" :to="`/campaign/${campaignId}/npcs/${c.npcEntityId}`">{{ c.name }}</NuxtLink>
           <span v-else>{{ c.name }}</span>
           <span class="party-role-badge" :class="`party-role-badge--${c.role}`">{{ c.role === 'pc' ? 'PC' : 'Companion' }}</span>
+          <span v-if="pendingLevel(c) != null" class="party-pending" title="Offered in Play Buddy; the level changes when the player accepts">Level {{ pendingLevel(c) }} offered</span>
         </div>
 
         <label class="party-field" title="Level">
@@ -108,6 +109,8 @@
       </div>
     </section>
 
+    <PlayBuddyPanel v-if="game === 'pf2e'" ref="playBuddy" :campaign-id="campaignId" :characters="characters" />
+
     <PartyInventory :campaign-id="campaignId" :game="game" :characters="characters" :party-level="party.level" />
 
     <EarnIncomeDialog v-if="incomeFor" :campaign-id="campaignId" :game="game" :character="incomeFor" @close="incomeFor = null" />
@@ -133,7 +136,7 @@
       <div v-for="(l, i) in levelUps.slice(0, 15)" :key="l.id" class="party-log" :class="{ 'party-log--undone': l.undoneAt }">
         <span class="party-log-date">{{ formatDate(l.at) }}</span>
         <span class="party-log-trigger">{{ triggerLabel(l) }}</span>
-        <span class="party-log-changes">{{ l.changes.map(ch => `${nameOf(ch.characterId)} ${ch.from}→${ch.to}`).join(', ') }}</span>
+        <span class="party-log-changes">{{ l.changes.map(ch => `${nameOf(ch.characterId)} ${ch.from}→${ch.to}${ch.offer ? ` (Play Buddy: ${OFFER_LABEL[ch.offer.state]})` : ''}`).join(', ') }}</span>
         <span v-if="l.undoneAt" class="party-log-undone">undone</span>
         <button v-else-if="i === firstActive" class="ghost-btn party-add-btn" @click="undoLevelUp(l.id)">Undo</button>
       </div>
@@ -143,6 +146,8 @@
 
 <script setup lang="ts">
 import { dbApi } from '~/composables/useDb'
+import { takePendingImport } from '~/composables/usePendingImport'
+import { readShareFile } from '~/partylink/convert'
 import { useEntities } from '~/composables/useEntities'
 import { useParty, type Character, type LevelUpEntry } from '~/composables/useParty'
 import { useFormatters } from '~/composables/useFormatters'
@@ -166,6 +171,8 @@ const modeHint = computed(() => advancement.value === 'milestone'
   ? 'Level up with the button, or by completing a quest marked as milestone. Change the mode in the campaign settings on the home page.'
   : 'Resolving an encounter awards its XP to the participants; at 1,000 XP a character can level up. Change the mode in the campaign settings on the home page.')
 
+const playBuddy = ref<{ openShare: (name: string, text: string) => void } | null>(null)
+
 onMounted(async () => {
   const campaign = await dbApi.campaigns.get(campaignId)
   advancement.value = campaignRules(campaign).advancement
@@ -173,12 +180,27 @@ onMounted(async () => {
   await entitiesStore.loadAll(campaignId)
   await load(campaignId)
   if (advancement.value === 'milestone') pace.value = await loadPacing(campaignId)
+  // A Play Buddy share file sent here from Import & Export
+  const pending = takePendingImport()
+  const share = pending?.text ? readShareFile(pending.text) : null
+  if (share) { await nextTick(); playBuddy.value?.openShare(share.status.basic?.name ?? pending!.label, pending!.text!) }
 })
 
 // The pacing restarts at each level-up
 watch(levelUps, async () => {
   if (advancement.value === 'milestone') pace.value = await loadPacing(campaignId)
 })
+
+// Play Buddy level-ups wait for the player (useParty.levelUp)
+const OFFER_LABEL = { pending: 'offered', accepted: 'accepted', declined: 'declined', withdrawn: 'withdrawn', expired: 'expired', failed: 'failed' } as const
+function pendingLevel(c: Character) {
+  for (const l of levelUps.value) {
+    if (l.undoneAt) continue
+    const ch = l.changes.find(x => x.characterId === c.id && x.offer?.state === 'pending')
+    if (ch) return ch.to
+  }
+  return null
+}
 
 const npcs = computed(() => entitiesStore.entities.filter(e => e.campaignId === campaignId && e.type === 'npc'))
 
@@ -301,6 +323,7 @@ function triggerLabel(l: LevelUpEntry) {
 .party-name a:hover { text-decoration: underline; }
 .party-role-badge { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--text3); }
 .party-role-badge--pc { color: #7cc44e; border-color: #7cc44e55; }
+.party-pending { font-size: 10.5px; padding: 1px 6px; border-radius: 4px; color: #e8c44a; border: 1px solid #e8c44a66; white-space: nowrap; }
 
 .party-field { display: flex; align-items: center; gap: 6px; }
 .party-field-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text3); }

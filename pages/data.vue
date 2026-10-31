@@ -24,9 +24,17 @@
           </div>
         </div>
         <p v-if="importError" class="data-error">{{ importError }}</p>
+        <div v-if="shareFile" class="data-share">
+          <span>Play Buddy share file for <b>{{ shareFile.name }}</b>. Which campaign's party?</span>
+          <select v-model="shareCampaign" class="sett-md-select">
+            <option v-for="c in campaigns" :key="c.id" :value="c.id">{{ c.name }}</option>
+          </select>
+          <button class="sett-btn" :disabled="shareCampaign == null" @click="openShare">Open party</button>
+          <button class="sett-btn" @click="shareFile = null">Cancel</button>
+        </div>
         <p class="data-hint">
           Works out what the file is and opens the right import: backups, campaign and token files, a campaign or setting
-          from Claude, homebrew compendium entries, DM's Tome exports, and a Foundry <code>json-assets.zip</code>.
+          from Claude, homebrew compendium entries, Play Buddy share files, DM's Tome exports, and a Foundry <code>json-assets.zip</code>.
           Or go straight to <NuxtLink to="/compendium/sync">Foundry sync</NuxtLink> ·
           <NuxtLink to="/compendium/legacy">DM's Tome import</NuxtLink> (also reads DM's Tome in this browser) ·
           <NuxtLink to="/compendium/homebrew">Homebrew import</NuxtLink> ·
@@ -328,6 +336,11 @@ function importText(text: string, label: string, file?: File) {
       setPendingImport({ text, label })
       router.push('/compendium/homebrew')
       break
+    case 'playbuddy':
+      shareFile.value = { name: target.name, text, label }
+      shareCampaign.value = campaigns.value[0]?.id ?? null
+      pasted.value = ''
+      break
     case 'unknown': importError.value = `${label}: ${target.error}`
   }
 }
@@ -336,6 +349,16 @@ function onDrop(e: DragEvent) {
   dragOver.value = false
   const f = e.dataTransfer?.files?.[0]
   if (f) void importFile(f)
+}
+
+// A share file belongs to a party character; the party page asks which one
+const shareFile = ref<{ name: string; text: string; label: string } | null>(null)
+const shareCampaign = ref<number | null>(null)
+function openShare() {
+  if (!shareFile.value || shareCampaign.value == null) return
+  setPendingImport({ text: shareFile.value.text, label: shareFile.value.label })
+  router.push(`/campaign/${shareCampaign.value}/party`)
+  shareFile.value = null
 }
 
 function onPick(e: Event) {
@@ -831,6 +854,8 @@ async function runImport() {
 }
 .data-muted { color: var(--text3); font-size: 12px; }
 .data-error { color: #e87a7a; font-size: 12.5px; margin: 4px 16px 0; }
+.data-share { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 16px 0; font-size: 12.5px; color: var(--text2); }
+.data-share b { color: var(--text); }
 .data-hint { font-size: 11.5px; color: var(--text3); line-height: 1.6; margin: 6px 16px 12px; }
 .data-hint a { color: var(--accent-l, var(--accent)); }
 .data-hint code, .sett-desc code { font-family: var(--fm); }

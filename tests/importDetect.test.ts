@@ -28,6 +28,10 @@ describe('import detection', () => {
     expect(kind('```json\n[{"kind":"item"}]\n```')).toBe('homebrew')
   })
 
+  it('routes Play Buddy share files to a party', () => {
+    expect(detectImport(JSON.stringify({ format: 'playbuddy-share', formatVersion: 1, status: { basic: { name: 'Groknar' } } }))).toEqual({ kind: 'playbuddy', name: 'Groknar' })
+  })
+
   it('explains what it does not recognise', () => {
     expect(kind('hello')).toBe('unknown')
     expect(kind({ foo: 1 })).toBe('unknown')

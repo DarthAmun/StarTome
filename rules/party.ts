@@ -62,6 +62,11 @@ export interface LevelChange {
   /** XP campaigns: a level costs 1,000 XP; kept for the undo. */
   xpFrom?: number
   xpTo?: number
+  /**
+   * Characters linked to Play Buddy level up in the player's app: the change is
+   * an offer (a linkOffers row) and the level moves only once it's accepted.
+   */
+  offer?: { id: number | null; state: 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'expired' | 'failed' }
 }
 
 /**
