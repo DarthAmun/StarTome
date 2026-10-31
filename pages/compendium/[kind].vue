@@ -58,6 +58,12 @@
             <span class="cmp-flabel">Source</span>
             <button v-for="o in ORIGINS" :key="o.key" class="cmp-chip" :class="{ on: prefs.origins.includes(o.key) }" @click="toggle(prefs.origins, o.key)">{{ o.label }}</button>
           </div>
+          <div v-if="kindPacks.length" class="cmp-frow">
+            <span class="cmp-flabel">Pack</span>
+            <button v-for="p in kindPacks" :key="p.title" class="cmp-chip" :class="{ on: prefs.packs.includes(p.title) }" @click="toggle(prefs.packs, p.title)">
+              {{ p.title || 'No pack' }} <span class="cmp-chip-n">{{ p.count }}</span>
+            </button>
+          </div>
           <div class="cmp-frow">
             <label class="cmp-check"><input v-model="prefs.favoritesOnly" type="checkbox" /> Favorites only</label>
             <label class="cmp-check"><input v-model="prefs.showLegacy" type="checkbox" /> Show superseded legacy</label>
@@ -133,10 +139,11 @@
 <script setup lang="ts">
 import { lsKey } from '~/utils/appNamespace'
 import {
-  rulesCreate, rulesDelete, rulesDuplicate, rulesGet, rulesQuery, rulesResetEdits, rulesUpdate, useRulesRevision,
+  rulesCreate, rulesDelete, rulesDuplicate, rulesGet, rulesQuery, rulesResetEdits, rulesUpdate, rulesUserEntries, useRulesRevision,
   type RulesPage, type RulesQuery,
 } from '~/composables/useRules'
 import { formatBulk, formatMoney, RARITY_COLOR, SIZE_LABEL } from '~/rules/format'
+import { summarizePacks, type PackSummary } from '~/rules/packs'
 import { GAME_CONFIG, GAME_IDS, type GameId } from '~/types/game'
 import {
   kindForSegment, RARITIES, RULES_KIND_CONFIG,
@@ -170,10 +177,11 @@ interface Prefs {
   favoritesOnly: boolean
   showLegacy: boolean
   showRemoved?: boolean
+  packs: string[]
   sort: 'name' | 'level'
   dir: 'asc' | 'desc'
 }
-const DEFAULT_PREFS: Prefs = { game: 'all', levelMin: null, levelMax: null, rarities: [], traits: '', origins: [], favoritesOnly: false, showLegacy: false, showRemoved: false, sort: 'name', dir: 'asc' }
+const DEFAULT_PREFS: Prefs = { game: 'all', levelMin: null, levelMax: null, rarities: [], traits: '', origins: [], favoritesOnly: false, showLegacy: false, showRemoved: false, packs: [], sort: 'name', dir: 'asc' }
 
 function loadPrefs(): Prefs {
   try {
@@ -190,14 +198,21 @@ watch(prefs, () => {
 const search = ref('')
 const showFilters = ref(false)
 
+// Homebrew packs of this kind (rules/packs.ts), for the Pack filter
+const kindPacks = shallowRef<PackSummary[]>([])
+watch([kind, revision], async () => {
+  const k = kind.value
+  kindPacks.value = k ? summarizePacks((await rulesUserEntries()).filter(e => e.kind === k)) : []
+}, { immediate: true })
+
 const activeFilterCount = computed(() =>
   (prefs.levelMin !== null && prefs.levelMin !== '' ? 1 : 0) + (prefs.levelMax !== null && prefs.levelMax !== '' ? 1 : 0)
   + (prefs.rarities.length ? 1 : 0) + (prefs.traits.trim() ? 1 : 0) + (prefs.origins.length ? 1 : 0)
-  + (prefs.favoritesOnly ? 1 : 0) + (prefs.showLegacy ? 1 : 0) + (prefs.showRemoved ? 1 : 0),
+  + (prefs.favoritesOnly ? 1 : 0) + (prefs.showLegacy ? 1 : 0) + (prefs.showRemoved ? 1 : 0) + (prefs.packs.length ? 1 : 0),
 )
 
 function clearFilters() {
-  Object.assign(prefs, { levelMin: null, levelMax: null, rarities: [], traits: '', origins: [], favoritesOnly: false, showLegacy: false, showRemoved: false })
+  Object.assign(prefs, { levelMin: null, levelMax: null, rarities: [], traits: '', origins: [], favoritesOnly: false, showLegacy: false, showRemoved: false, packs: [] })
 }
 
 function toggle<T>(list: T[], v: T) {
@@ -222,6 +237,7 @@ function queryOpts(): RulesQuery {
     rarities: prefs.rarities,
     traits: prefs.traits.split(',').map(t => t.trim().toLowerCase().replace(/\s+/g, '-')).filter(Boolean),
     origins: prefs.origins,
+    packs: prefs.packs,
     favoritesOnly: prefs.favoritesOnly,
     hideSuperseded: !prefs.showLegacy,
     showRemoved: !!prefs.showRemoved,
@@ -381,6 +397,7 @@ function rowSub(e: RulesEntity): string {
 .cmp-num, .cmp-text { background: var(--parch-dark); border: 1px solid var(--border-hi); border-radius: 4px; color: var(--text); font-size: 12px; padding: 3px 6px; }
 .cmp-text { flex: 1; min-width: 0; }
 .cmp-dash { color: var(--text3); }
+.cmp-chip-n { font-family: var(--fm); font-size: 10px; color: var(--text3); }
 .cmp-chip { background: none; border: 1px solid var(--border-hi); border-radius: 10px; color: var(--text2); font-size: 11px; padding: 1px 8px; cursor: pointer; text-transform: capitalize; }
 .cmp-chip.on { color: var(--text); border-color: var(--accent); background: var(--surface-hi); }
 .cmp-check { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--text2); margin-right: 10px; cursor: pointer; }

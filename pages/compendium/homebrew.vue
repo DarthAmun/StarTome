@@ -25,6 +25,9 @@
             v-for="g in GAME_CHOICES" :key="g.id" class="hb-game-btn" :class="{ 'hb-game-btn--on': game === g.id }"
             @click="setGame(g.id)"
           >{{ g.label }}</button>
+          <span class="hb-muted hb-pack-label">and go into the pack</span>
+          <input v-model="pack" class="hb-pack" list="hb-packs" placeholder="none" title="Entries that name their own pack (publication.title) keep it" @change="rawEntries && check()" />
+          <datalist id="hb-packs"><option v-for="p in packNames" :key="p" :value="p" /></datalist>
         </div>
 
         <template v-if="!rows">
@@ -126,8 +129,9 @@
 
 <script setup lang="ts">
 import { takePendingImport } from '~/composables/usePendingImport'
+import { summarizePacks, withPack } from '~/rules/packs'
 import { getDb, now } from '~/composables/useDb'
-import { notifyRulesChanged } from '~/composables/useRules'
+import { notifyRulesChanged, rulesUserEntries } from '~/composables/useRules'
 import { newRulesId } from '~/rules/factory'
 import {
   checkHomebrewEntry, issuesReport, planHomebrewImport, readHomebrewText,
@@ -147,6 +151,8 @@ const STATUS_LABEL: Record<HomebrewStatus, string> = { new: 'New', update: 'Upda
 const GAME_KEY = lsKey('homebrew-game')
 
 const game = ref<GameId | 'both'>('sf2e')
+const pack = ref('')
+const packNames = ref<string[]>([])
 const pasted = ref('')
 const dragOver = ref(false)
 const error = ref('')
@@ -164,6 +170,7 @@ onMounted(() => {
     const g = localStorage.getItem(GAME_KEY)
     if (g === 'sf2e' || g === 'pf2e' || g === 'both') game.value = g
   } catch {}
+  void rulesUserEntries().then(rows => { packNames.value = summarizePacks(rows).map(p => p.title).filter(Boolean) })
   // Sent here from Import & Export
   const p = takePendingImport()
   if (p?.text) load(p.text, p.label)
@@ -215,6 +222,8 @@ function load(text: string, label: string) {
 async function check() {
   const ts = now()
   const checks = rawEntries.value!.map((raw, i) => checkHomebrewEntry(raw, i, { now: ts, game: game.value, newId: newRulesId }))
+  // Entries that name no pack go into the chosen one
+  for (const c of checks) if (c.entry && !c.entry.publication && pack.value.trim()) c.entry = withPack(c.entry, pack.value)
   const db = getDb()
   const ok = checks.filter(c => c.entry).map(c => c.entry!)
   const [existing, named] = await Promise.all([
@@ -305,6 +314,8 @@ function reset() {
 .hb-error { color: #e87a7a; font-size: 13px; margin: 0; }
 .hb-text { font-size: 13px; color: var(--text2); margin: 0; line-height: 1.6; }
 .hb-section a { color: var(--accent-l, var(--accent)); }
+.hb-pack-label { margin-left: 8px; }
+.hb-pack { width: 200px; font-size: 12px; padding: 3px 8px; background: var(--bg); color: var(--text); border: 1px solid var(--border-hi); border-radius: 5px; }
 .hb-game { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; }
 .hb-game-btn {
   background: none; border: 1px solid var(--border-hi); border-radius: 999px; padding: 2px 10px; color: var(--text2);

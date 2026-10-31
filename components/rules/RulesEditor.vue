@@ -33,6 +33,11 @@
           <span>Traits <em>comma-separated</em></span>
           <input class="red-input" :value="formatList(local.traits)" @change="set('traits', parseTraits(str($event)))" />
         </label>
+        <label v-if="local.origin === 'user'" class="red-field red-span-3" title="Groups your homebrew: filter by it in the lists, export it from Import & Export">
+          <span>Pack <em>e.g. Homebrew: Conduit; empty = no pack</em></span>
+          <input class="red-input" :value="local.publication?.title ?? ''" list="red-packs" @focus="loadPacks" @change="setPack(str($event))" />
+          <datalist id="red-packs"><option v-for="p in packNames" :key="p" :value="p" /></datalist>
+        </label>
       </div>
     </section>
 
@@ -293,8 +298,9 @@
 
 <script setup lang="ts">
 import { useDebouncedSave } from '~/composables/useDebouncedSave'
-import { rulesUpdate } from '~/composables/useRules'
+import { rulesUpdate, rulesUserEntries } from '~/composables/useRules'
 import { setPath } from '~/rules/edits'
+import { summarizePacks, withPack } from '~/rules/packs'
 import { coinsToCp, formatActionCost, formatBulk, parseActionCost, parseBulk, SIZE_LABEL, titleCase } from '~/rules/format'
 import {
   formatFacts, formatFeatures, formatIwrList, formatList, formatNumberMap, formatSenses, formatSpeeds, formatSpellList,
@@ -343,6 +349,14 @@ defineExpose({ flush })
 const target = (e: Event) => e.target as HTMLInputElement
 const str = (e: Event) => target(e).value
 const opt = (e: Event) => target(e).value.trim() || undefined
+// Homebrew pack = publication title (rules/packs.ts)
+const packNames = ref<string[]>([])
+async function loadPacks() {
+  packNames.value = summarizePacks(await rulesUserEntries()).map(p => p.title).filter(Boolean)
+}
+function setPack(title: string) {
+  set('publication', withPack(local.value, title).publication)
+}
 const tagsOrNone = (e: Event) => { const t = parseTraits(str(e)); return t.length ? t : undefined }
 const featuresOrNone = (e: Event) => { const f = parseFeatures(str(e)); return f.length ? f : undefined }
 const num = (e: Event) => Number(target(e).value) || 0

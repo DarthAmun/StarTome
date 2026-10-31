@@ -261,7 +261,7 @@ const opt = (check: Checker): Field => ({ check })
 
 /** Recomputed or forced by the import, so not reported as dropped. */
 const SILENT_KEYS = new Set(['id', 'kind', 'origin', 'sortName', 'sourceRefs', 'createdAt', 'updatedAt'])
-const OWNED_BY_APP = new Set(['img', 'tokenImg', 'localEdits', 'upstream', 'legacy', 'build', 'supersededBy'])
+export const OWNED_BY_APP = new Set(['img', 'tokenImg', 'localEdits', 'upstream', 'legacy', 'build', 'supersededBy'])
 const dropReason = (k: string) => (OWNED_BY_APP.has(k) ? 'set by StarTome itself; left out' : 'unknown field; left out')
 
 const damageRoll: Checker = (v, path, ctx) => {

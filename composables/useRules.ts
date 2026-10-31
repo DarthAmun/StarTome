@@ -10,6 +10,7 @@ import { getDb, now } from '~/composables/useDb'
 import { onTablesChanged } from '~/db/changes'
 import { newRulesEntity, newRulesId } from '~/rules/factory'
 import { isOverlayPath, setPath, withLocalEdits } from '~/rules/edits'
+import { packOf } from '~/rules/packs'
 import { dataUrlToBlob, deleteImage, imageRefId, isImageRef, storeImage } from '~/rules/images'
 import type { GameId } from '~/types/game'
 import { isRulesKind, RULES_KIND_CONFIG, RULES_KINDS, type Feat, type Item, type Rarity, type RulesEntity, type RulesKind, type RulesOrigin } from '~/types/rules'
@@ -30,6 +31,8 @@ export interface RulesQuery {
   /** Include entries that disappeared from their Foundry pack (kept for links). Default false. */
   showRemoved?: boolean
   favoritesOnly?: boolean
+  /** Homebrew packs (publication title; '' = no pack). Only your own entries match. */
+  packs?: string[]
   sort?: 'name' | 'level'
   dir?: 'asc' | 'desc'
   offset?: number
@@ -57,6 +60,7 @@ function matcher(q: RulesQuery): (e: RulesEntity) => boolean {
   const origins = q.origins?.length ? new Set(q.origins) : null
   const traits = q.traits?.map(t => t.toLowerCase()) ?? []
   const hideSuperseded = q.hideSuperseded ?? true
+  const packs = q.packs?.length ? new Set(q.packs) : null
   return (raw) => {
     const e = withLocalEdits(raw)
     if (games && !games.has(e.game)) return false
@@ -64,6 +68,7 @@ function matcher(q: RulesQuery): (e: RulesEntity) => boolean {
     if (!q.showRemoved && e.upstream?.removed) return false
     if (q.favoritesOnly && !e.isFavorite) return false
     if (origins && !origins.has(e.origin)) return false
+    if (packs && (e.origin !== 'user' || !packs.has(packOf(e)))) return false
     if (rarities && !rarities.has(e.rarity)) return false
     if (q.levelMin !== null && q.levelMin !== undefined && e.level < q.levelMin) return false
     if (q.levelMax !== null && q.levelMax !== undefined && e.level > q.levelMax) return false
@@ -220,6 +225,14 @@ export async function rulesClassFeats(trait: string, game: GameId | 'both'): Pro
   return rows
     .filter(r => r.kind === 'feat' && !r.supersededBy && !r.upstream?.removed && (game === 'both' || r.game === 'both' || r.game === game))
     .map(r => withLocalEdits(r) as Feat)
+}
+
+/** Your own (homebrew) entries, effective, optionally only those in the given packs (rules/packs.ts). */
+export async function rulesUserEntries(packs?: string[]): Promise<RulesEntity[]> {
+  const rows = (await getDb().rules.where('origin').equals('user').toArray()).map(withLocalEdits)
+  if (!packs) return rows
+  const keep = new Set(packs)
+  return rows.filter(e => keep.has(packOf(e)))
 }
 
 /** Route of the compendium entry a {{kind: Name}} ref points to, or null if there is none. */

@@ -131,6 +131,34 @@
         </div>
       </section>
 
+      <!-- Homebrew packs -->
+      <section class="sett-section">
+        <div class="sett-section-title">Homebrew</div>
+        <div class="sett-group">
+          <div class="sett-row">
+            <div class="sett-row-text">
+              <span class="sett-label">Your compendium entries</span>
+              <span class="sett-desc">
+                Export packs as a homebrew file: to share, keep a copy, or give back to Claude for changes (it imports again with the same ids).
+                A pack is the entry's <em>Pack</em> field; Claude sets it as <code>publication.title</code>. Portraits stay here.
+              </span>
+              <div v-if="packs.length" class="data-packs">
+                <label v-for="p in packs" :key="p.title" class="sett-check data-pack">
+                  <input v-model="pickedPacks" type="checkbox" :value="p.title" />
+                  <span :class="{ 'data-muted': p.title === NO_PACK }">{{ p.title || 'No pack' }}</span>
+                  <span class="data-count">{{ p.count }}</span>
+                  <button v-if="p.title !== NO_PACK" class="data-rename" title="Rename this pack" @click.prevent="renamePack(p.title)">rename</button>
+                </label>
+              </div>
+              <span v-else class="sett-desc">No homebrew entries yet.</span>
+            </div>
+            <div class="sett-btn-pair">
+              <button class="sett-btn" :disabled="!pickedPacks.length" @click="exportHomebrew">↓ Export {{ pickedCount || '' }}</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Campaigns -->
       <section class="sett-section">
         <div class="sett-section-title">Campaigns</div>
@@ -248,7 +276,8 @@ import { stripGmOnly } from '~/utils/gmContent'
 import JSZip from 'jszip'
 import { getDb, dbApi, now, parseJsonObject } from '~/composables/useDb'
 import { compressDataUrl } from '~/utils/image'
-import { notifyRulesChanged, rulesFindByName } from '~/composables/useRules'
+import { notifyRulesChanged, rulesFindByName, rulesUserEntries } from '~/composables/useRules'
+import { homebrewFile, NO_PACK, summarizePacks, withPack, type PackSummary } from '~/rules/packs'
 import { invalidateEntities } from '~/composables/useEntities'
 import { setPendingImport } from '~/composables/usePendingImport'
 import { cleanUpUnusedImages, dataUrlToBlob, imageRefId, isImageRef, resolveImageDataUrl } from '~/rules/images'
@@ -445,7 +474,34 @@ async function loadStats() {
   stats.value = { campaigns: c, encounters: enc, encounterTokens: et, entities: ent, entityLinks: el, tokens: tok, rulesSynced: synced, rulesOwn: total - synced, images: img, graphs: gl, entityConnections: ec }
 }
 
-onMounted(() => { loadStats(); loadCampaigns() })
+onMounted(() => { loadStats(); loadCampaigns(); loadPacks() })
+
+// ── Homebrew packs (rules/packs.ts) ─────────────────────────────────────────
+const packs = ref<PackSummary[]>([])
+const pickedPacks = ref<string[]>([])
+const pickedCount = computed(() => packs.value.filter(p => pickedPacks.value.includes(p.title)).reduce((n, p) => n + p.count, 0))
+
+async function loadPacks() {
+  packs.value = summarizePacks(await rulesUserEntries())
+  pickedPacks.value = pickedPacks.value.filter(t => packs.value.some(p => p.title === t))
+}
+
+async function exportHomebrew() {
+  const entries = await rulesUserEntries(pickedPacks.value)
+  if (!entries.length) return
+  const named = pickedPacks.value.length === 1 && pickedPacks.value[0] ? safeFilename(pickedPacks.value[0]) : 'homebrew'
+  download(homebrewFile(entries, APP_NS, now()), exportFilename(`${named}-${slug()}.json`))
+}
+
+async function renamePack(title: string) {
+  const next = prompt(`Rename the pack "${title}" to:`, title)?.trim()
+  if (!next || next === title) return
+  const entries = await rulesUserEntries([title])
+  await getDb().rules.bulkPut(entries.map(e => ({ ...withPack(e, next), updatedAt: now() })))
+  notifyRulesChanged()
+  pickedPacks.value = pickedPacks.value.map(t => (t === title ? next : t))
+  await loadPacks()
+}
 
 function download(data: Record<string, unknown>, filename: string) {
   downloadBlob(jsonBlob(data), filename)
@@ -747,7 +803,7 @@ async function runImport() {
   progressDone.value = progressTotal.value
   invalidateEntities()
   notifyRulesChanged()
-  await Promise.all([loadStats(), loadCampaigns()])
+  await Promise.all([loadStats(), loadCampaigns(), loadPacks()])
   modalPhase.value = 'done'
 }
 </script>
@@ -777,7 +833,13 @@ async function runImport() {
 .data-error { color: #e87a7a; font-size: 12.5px; margin: 4px 16px 0; }
 .data-hint { font-size: 11.5px; color: var(--text3); line-height: 1.6; margin: 6px 16px 12px; }
 .data-hint a { color: var(--accent-l, var(--accent)); }
-.data-hint code { font-family: var(--fm); }
+.data-hint code, .sett-desc code { font-family: var(--fm); }
+.data-packs { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.data-pack { font-size: 12px; }
+.data-count { font-family: var(--fm); font-size: 11px; color: var(--text3); }
+.data-rename { background: none; border: none; padding: 0 4px; font-size: 11px; color: var(--text3); cursor: pointer; opacity: 0; }
+.data-pack:hover .data-rename { opacity: 1; }
+.data-rename:hover { color: var(--accent); }
 @media (max-width: 640px) {
   .data-body { padding: 14px 16px 32px; grid-template-columns: 1fr; }
   .data-import-row { grid-template-columns: 1fr; }

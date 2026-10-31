@@ -33,7 +33,7 @@ Only `rules` is needed. (A bare array of entries also works.)
 | `traits` | string[] | Lower-case slugs: `"fire"`, `"tech"`, `"analog"`, `"two-hand-d10"`, `"versatile-p"`. Do **not** put rarity or size in traits. Can be `[]`. |
 | `description` | string | Markdown (see "Text"). Can be `""`. |
 | `sourceRefs` | `[]` | Always an empty array. |
-| `publication` | object, optional | `{ "title": "Homebrew: <my setting>", "remaster": true }` — use it to group my homebrew. |
+| `publication` | object, optional | `{ "title": "Homebrew: <pack>", "remaster": true }`: the **pack** the entry belongs to. Use the same title for everything in one set (a class with its feats and subclasses, a setting's gear) and ask me which pack if unsure. |
 | `tags` | string[], optional | My own labels, e.g. `["homebrew", "act-2"]`. |
 | `createdAt`, `updatedAt` | string | ISO timestamp, e.g. `"2026-10-30T12:00:00.000Z"`. |
 
