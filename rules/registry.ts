@@ -62,6 +62,8 @@ export interface GameRules {
   dcByLevel: number[]
   /** Creature trait → skills for Recall Knowledge (Creature Identification Skills). */
   identification: Record<string, string[]>
+  /** Weapon traits that add damage on a critical hit (COMBAT_PLAN.md §4), see rules/rolls.ts. */
+  critTraits: string[]
   verified: boolean
 }
 
@@ -159,6 +161,7 @@ export const GAME_RULES: Record<GameId, GameRules> = {
     gear: PF2E_GEAR,
     dcByLevel: DC_BY_LEVEL,
     identification: PF2E_IDENTIFICATION,
+    critTraits: ['deadly', 'fatal'],
     verified: true,
   },
   sf2e: {
@@ -173,6 +176,7 @@ export const GAME_RULES: Record<GameId, GameRules> = {
     gear: SF2E_GEAR,
     dcByLevel: DC_BY_LEVEL,
     identification: SF2E_IDENTIFICATION,
+    critTraits: ['deadly', 'fatal'],
     verified: false,
   },
 }

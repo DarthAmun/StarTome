@@ -67,9 +67,9 @@
 
     <!-- ── Creature ───────────────────────────────────────────── -->
     <template v-if="creature">
-      <p class="rsb-line"><b>Perception</b> {{ signed(creature.perception) }}<template v-if="creature.senses.length">; {{ creature.senses.map(formatSense).join(', ') }}</template></p>
+      <p class="rsb-line"><b>Perception</b> <button class="rsb-roll" :title="`Roll Perception`" @click.stop="check('Perception', creature.perception)">{{ signed(creature.perception) }}</button><template v-if="creature.senses.length">; {{ creature.senses.map(formatSense).join(', ') }}</template></p>
       <p v-if="creature.languages.length" class="rsb-line"><b>Languages</b> {{ creature.languages.join(', ') }}</p>
-      <p v-if="skillLine" class="rsb-line"><b>Skills</b> {{ skillLine }}</p>
+      <p v-if="skills.length" class="rsb-line"><b>Skills</b>{{ ' ' }}<template v-for="(sk, i) in skills" :key="sk.key">{{ i ? ', ' : '' }}{{ sk.label }}{{ ' ' }}<button class="rsb-roll" :title="`Roll ${sk.label}`" @click.stop="check(sk.label, sk.mod)">{{ signed(sk.mod) }}</button></template></p>
       <p v-if="creature.inventory.length" class="rsb-line">
         <b>Items</b>
         <template v-for="(inv, ii) in creature.inventory" :key="ii">
@@ -87,7 +87,9 @@
       <hr />
       <p class="rsb-line">
         <b>AC</b> {{ creature.ac }}<template v-if="creature.acNote"> ({{ creature.acNote }})</template>;
-        <b>Fort</b> {{ signed(creature.saves.fort) }}, <b>Ref</b> {{ signed(creature.saves.ref) }}, <b>Will</b> {{ signed(creature.saves.will) }}<template v-if="creature.saveNote">; {{ creature.saveNote }}</template>
+        <b>Fort</b> <button class="rsb-roll" title="Roll Fortitude" @click.stop="check('Fortitude save', creature.saves.fort)">{{ signed(creature.saves.fort) }}</button>,
+        <b>Ref</b> <button class="rsb-roll" title="Roll Reflex" @click.stop="check('Reflex save', creature.saves.ref)">{{ signed(creature.saves.ref) }}</button>,
+        <b>Will</b> <button class="rsb-roll" title="Roll Will" @click.stop="check('Will save', creature.saves.will)">{{ signed(creature.saves.will) }}</button><template v-if="creature.saveNote">; {{ creature.saveNote }}</template>
       </p>
       <p class="rsb-line">
         <b>HP</b> {{ creature.hp }}<template v-if="creature.hpNote"> ({{ creature.hpNote }})</template>
@@ -105,12 +107,13 @@
       <hr />
       <p class="rsb-line"><b>Speed</b> {{ speedLine }}</p>
       <p v-for="(s, i) in creature.strikes" :key="'s' + i" class="rsb-line">
-        <b>{{ s.range === 'melee' ? 'Melee' : 'Ranged' }}</b> <span class="rsb-glyph">◆</span> {{ s.name }} {{ signed(s.bonus) }}
+        <b>{{ s.range === 'melee' ? 'Melee' : 'Ranged' }}</b> <span class="rsb-glyph">◆</span> {{ s.name }}
+        <template v-for="step in MAP_STEPS" :key="step"><button class="rsb-roll" :title="MAP_TITLE[step]" @click.stop="attack(s, step)">{{ signed(strikeModifier(s, step)) }}</button><template v-if="step < 2">/</template></template>
         <template v-if="s.traits.length"> ({{ s.traits.map(formatTrait).join(', ') }})</template>,
-        <b>Damage</b> {{ s.damage.map(d => `${d.formula} ${d.type}`).join(' plus ') }}<template v-if="s.effects?.length"> plus {{ s.effects.join(', ') }}</template>
+        <b>Damage</b> <button class="rsb-roll" title="Roll damage" @click.stop="damage(s)">{{ s.damage.map(d => `${d.formula} ${d.type}`).join(' plus ') }}</button><template v-if="s.effects?.length"> plus {{ s.effects.join(', ') }}</template>
       </p>
       <p v-for="(sc, i) in creature.spellcasting" :key="'sc' + i" class="rsb-line">
-        <b>{{ sc.name }}</b> DC {{ sc.dc }}<template v-if="sc.attack !== undefined">, attack {{ signed(sc.attack) }}</template>;
+        <b>{{ sc.name }}</b> DC {{ sc.dc }}<template v-if="sc.attack !== undefined">, attack <button class="rsb-roll" title="Roll a spell attack" @click.stop="spellAttack(sc.name, sc.attack)">{{ signed(sc.attack) }}</button></template>;
         <template v-for="(group, gi) in spellsByRank(sc)" :key="gi">
           <b>{{ group.label }}</b>
           <template v-for="(sp, si) in group.spells" :key="si">
@@ -135,9 +138,10 @@
       <div v-if="hazard.disable" class="rsb-md rsb-line" v-html="md(`**Disable** ${hazard.disable}`)" />
       <p v-if="hazardDefense" class="rsb-line" v-html="hazardDefense" />
       <p v-for="(st, i) in hazard.strikes ?? []" :key="'hs' + i" class="rsb-line">
-        <b>{{ st.range === 'melee' ? 'Melee' : 'Ranged' }}</b> <span class="rsb-glyph">◆</span> {{ st.name }} {{ signed(st.bonus) }}
+        <b>{{ st.range === 'melee' ? 'Melee' : 'Ranged' }}</b> <span class="rsb-glyph">◆</span> {{ st.name }}
+        <template v-for="step in MAP_STEPS" :key="step"><button class="rsb-roll" :title="MAP_TITLE[step]" @click.stop="attack(st, step)">{{ signed(strikeModifier(st, step)) }}</button><template v-if="step < 2">/</template></template>
         <template v-if="st.traits.length"> ({{ st.traits.map(formatTrait).join(', ') }})</template>,
-        <b>Damage</b> {{ st.damage.map(d => `${d.formula} ${d.type}`).join(' plus ') }}<template v-if="st.effects?.length"> plus {{ st.effects.join(', ') }}</template>
+        <b>Damage</b> <button class="rsb-roll" title="Roll damage" @click.stop="damage(st)">{{ st.damage.map(d => `${d.formula} ${d.type}`).join(' plus ') }}</button><template v-if="st.effects?.length"> plus {{ st.effects.join(', ') }}</template>
       </p>
       <p v-for="a in hazard.actions" :key="a.name" class="rsb-line rsb-action">
         <b>{{ a.name }}</b> <span v-if="formatActionCost(a.cost)" class="rsb-glyph">{{ formatActionCost(a.cost) }}</span>
@@ -230,7 +234,8 @@
 </template>
 
 <script setup lang="ts">
-import { useDiceRoll } from '~/composables/useDiceRoll'
+import { useDiceRoll, useStatRolls } from '~/composables/useDiceRoll'
+import { strikeModifier, type MapStep } from '~/rules/rolls'
 import { useEntityMarkdown } from '~/composables/useEntityMarkdown'
 import { rulesClassFeats, rulesFindByName, useRulesRevision } from '~/composables/useRules'
 import { classOptionGroups, classTrait, featuresByLevel, type OptionGroup } from '~/rules/subclasses'
@@ -242,7 +247,7 @@ import { GAME_CONFIG, type GameId } from '~/types/game'
 import {
   isRulesKind, RULES_KIND_CONFIG, RULES_KINDS,
   type AbilityKey, type Action, type Condition, type Creature, type Feat, type Hazard, type Item,
-  type ReferenceEntry, type Resistance, type RulesEntity, type Sense, type Spell, type Spellcasting, type StatAction, type Weakness,
+  type ReferenceEntry, type Resistance, type RulesEntity, type Sense, type Spell, type Spellcasting, type StatAction, type Strike, type Weakness,
 } from '~/types/rules'
 
 const props = defineProps<{ entity: RulesEntity; game?: GameId }>()
@@ -283,12 +288,30 @@ const headGlyph = computed(() => {
 
 const sizeLabel = computed(() => creature.value ? SIZE_LABEL[creature.value.size] : '')
 
-const skillLine = computed(() =>
+const skills = computed(() =>
   Object.entries(creature.value?.skills ?? {})
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([k, v]) => `${titleCase(humanize(k))} ${signed(v)}`)
-    .join(', '),
+    .map(([k, v]) => ({ key: k, label: titleCase(humanize(k)), mod: v })),
 )
+
+// ── Rolls (COMBAT_PLAN.md §4): the encounter panel or the dice panel handles them ──
+const MAP_STEPS: MapStep[] = [0, 1, 2]
+const MAP_TITLE: Record<MapStep, string> = { 0: 'First attack', 1: 'Second attack (multiple attack penalty)', 2: 'Third attack (multiple attack penalty)' }
+const MAP_SUFFIX: Record<MapStep, string> = { 0: '', 1: ' (2nd attack)', 2: ' (3rd attack)' }
+const { roll } = useStatRolls(() => props.game)
+
+function check(label: string, modifier: number) {
+  roll({ kind: 'check', label: `${props.entity.name}: ${label}`, modifier })
+}
+function attack(strike: Strike, step: MapStep) {
+  roll({ kind: 'attack', label: `${props.entity.name}: ${strike.name}${MAP_SUFFIX[step]}`, modifier: strikeModifier(strike, step), strike })
+}
+function damage(strike: Strike) {
+  roll({ kind: 'damage', label: `${props.entity.name}: ${strike.name} damage`, strike })
+}
+function spellAttack(name: string, modifier: number) {
+  roll({ kind: 'attack', label: `${props.entity.name}: ${name} spell attack`, modifier })
+}
 
 const speedLine = computed(() => {
   const s = creature.value?.speeds ?? {}
@@ -468,6 +491,14 @@ async function onClick(e: MouseEvent) {
   font-family: var(--fm); font-size: 0.88em; white-space: nowrap;
 }
 .rsb :deep(.roll-ref:hover) { background: rgba(184, 134, 11, 0.22); }
+/* Numbers to roll: Strikes, damage, saves, Perception, skills */
+.rsb-roll {
+  display: inline; padding: 0 3px; margin: 0 1px; border: none; border-radius: 3px; cursor: pointer;
+  background: rgba(184, 134, 11, 0.1); color: inherit; font: inherit; line-height: inherit;
+  border-bottom: 1px dotted rgba(184, 134, 11, 0.7);
+}
+.rsb-roll:hover { background: rgba(184, 134, 11, 0.25); }
+.rsb-roll:focus-visible { outline: 2px solid var(--gold, #d4b54a); outline-offset: 1px; }
 .rsb-sub { margin: 10px 0 2px; font-family: var(--fh); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--kind-color); }
 .rsb-muted { color: var(--text3); }
 .rsb-link { color: var(--accent-l, var(--kind-color)); cursor: pointer; text-decoration: underline dotted; }

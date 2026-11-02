@@ -247,4 +247,15 @@ describe('encounter store', () => {
     expect(store.initiativeOrder[0].id).toBe(late.id)
     expect(store.initiativeOrder[store.currentTurnIndex].label).toBe('A')
   })
+
+  it('logs stat-block rolls with the target and the degree', async () => {
+    const { store } = await encounter([{ label: 'Goblin', initiative: 10 }, { label: 'Hero', initiative: 5 }])
+    const goblin = store.current!.tokens[0]
+    await store.logRoll(goblin.id, { label: 'Goblin: Dogslicer', total: 21, degree: 'success', targetName: 'Hero' })
+    await store.logRoll(goblin.id, { label: 'Goblin: Perception', total: 12 })
+    expect(store.current!.combatLog.map(({ type, note, value, degree, targetName }) => ({ type, note, value, degree, targetName }))).toEqual([
+      { type: 'roll', note: 'Goblin: Dogslicer', value: 21, degree: 'success', targetName: 'Hero' },
+      { type: 'roll', note: 'Goblin: Perception', value: 12, degree: undefined, targetName: undefined },
+    ])
+  })
 })

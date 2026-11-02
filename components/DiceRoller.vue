@@ -63,7 +63,9 @@
           <div v-if="result" class="dp-result" :class="{ 'dp-result--crit': result.isCrit, 'dp-result--fail': result.isFail }">
             <div v-if="result.isCrit" class="dp-result-badge dp-result-badge--crit">NAT 20 ✦</div>
             <div v-else-if="result.isFail" class="dp-result-badge dp-result-badge--fail">NAT 1</div>
+            <div v-if="result.title" class="dp-result-title">{{ result.title }}</div>
             <div class="dp-result-total">{{ result.total }}</div>
+            <div v-if="result.outcome" class="dp-result-outcome">{{ result.outcome }}</div>
             <div class="dp-result-breakdown">{{ result.breakdown }}</div>
           </div>
         </Transition>
@@ -113,6 +115,9 @@ interface RollResult {
   total: number
   breakdown: string
   label: string
+  /** Set for rolls from a stat block: what was rolled. */
+  title?: string
+  outcome?: string
   isCrit: boolean
   isFail: boolean
   id: number
@@ -146,7 +151,7 @@ function clearAll() {
 }
 
 // ── External roll trigger ─────────────────────────────────────
-const { pendingRoll, clearPendingRoll } = useDiceRoll()
+const { pendingRoll, clearPendingRoll, shownRoll, clearShownRoll } = useDiceRoll()
 
 function parseDiceExpression(expr: string): boolean {
   // Normalise: remove spaces, uppercase D → d
@@ -183,6 +188,19 @@ watch(pendingRoll, (expr) => {
     panelOpen.value = true
     nextTick(rollDice)
   }
+})
+
+// A finished roll from a stat block (useDiceRoll().showRoll)
+watch(shownRoll, (r) => {
+  if (!r) return
+  clearShownRoll()
+  const shown: RollResult = {
+    total: r.total, breakdown: r.breakdown, label: r.label, title: r.label, outcome: r.outcome,
+    isCrit: !!r.isCrit, isFail: !!r.isFail, id: ++nextId,
+  }
+  result.value = shown
+  history.value = [shown, ...history.value].slice(0, 8)
+  panelOpen.value = true
 })
 
 function rollDice() {
@@ -524,6 +542,8 @@ function rollDice() {
   margin-bottom: 6px;
 }
 .dp-result--fail .dp-result-total { color: var(--danger); }
+.dp-result-title { font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
+.dp-result-outcome { font-size: 12px; color: var(--text); margin-bottom: 4px; }
 .dp-result-breakdown {
   font-size: 11px;
   color: var(--dp-breakdown-fg);

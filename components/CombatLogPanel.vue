@@ -18,6 +18,7 @@
             <template v-if="entry.type === 'damage'">took {{ entry.value }} damage<template v-if="entry.conditionName"> ({{ entry.conditionName }})</template><template v-if="entry.absorbed">, {{ entry.absorbed }} by temp HP</template></template>
             <template v-else-if="entry.type === 'healing'">healed {{ entry.value }} HP</template>
             <template v-else-if="entry.type === 'temp-hp'">has {{ entry.value }} temp HP</template>
+            <template v-else-if="entry.type === 'roll'">rolled {{ rollLabel(entry) }}: <b>{{ entry.value }}</b><template v-if="entry.targetName"> vs {{ entry.targetName }}</template><template v-if="entry.degree"> — {{ ATTACK_LABEL[entry.degree] }}</template></template>
             <template v-else-if="entry.type === 'condition-added'">gained {{ entry.conditionName }}<template v-if="entry.value"> {{ entry.value }}</template></template>
             <template v-else-if="entry.type === 'condition-changed'">{{ entry.conditionName }} is now {{ entry.value }}</template>
             <template v-else-if="entry.type === 'condition-removed'">lost {{ entry.conditionName }}</template>
@@ -37,7 +38,8 @@
 <script setup lang="ts">
 /** The encounter page's Run-mode log: add a note to a token, read the round-by-round events, ask to clear. */
 import { computed, ref } from 'vue'
-import { useEncounterStore } from '~/stores/encounter'
+import { ATTACK_LABEL } from '~/rules/rolls'
+import { useEncounterStore, type CombatLogEntry } from '~/stores/encounter'
 
 const emit = defineEmits<{ clear: [] }>()
 const store = useEncounterStore()
@@ -45,6 +47,13 @@ const store = useEncounterStore()
 const logNoteTokenId = ref<number | null>(null)
 const logNoteText = ref('')
 const reversedLog = computed(() => [...(store.current?.combatLog ?? [])].reverse())
+
+/** "Goblin: Dogslicer" → "Dogslicer": the token's name is already in the row. */
+function rollLabel(entry: CombatLogEntry) {
+  const label = entry.note ?? ''
+  const i = label.indexOf(': ')
+  return i >= 0 ? label.slice(i + 2) : label
+}
 
 function submitLogNote() {
   if (!logNoteTokenId.value || !logNoteText.value.trim()) return
@@ -146,6 +155,7 @@ function submitLogNote() {
 .log-event--damage        { color: var(--blood); }
 .log-event--healing       { color: var(--grass); }
 .log-event--temp-hp       { color: var(--temp-hp, #4a90d9); }
+.log-event--roll          { color: var(--ink); }
 .log-auto { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); margin-right: 4px; }
 .log-event--condition-changed { color: var(--arcane-l, #9f7abf); }
 .log-event--condition-added  { color: var(--arcane-l, #9f7abf); }

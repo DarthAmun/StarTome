@@ -298,6 +298,7 @@
             :pb-mirror="statPanelToken ? linkedCharOf(statPanelToken)?.pbStatus ?? null : null"
             @close="statPanelTokenId = null"
             @link="openLinkModal"
+            @apply-damage="onCtxApplyDamage"
           />
 
           <!-- Drop hint when no map -->
@@ -1363,12 +1364,12 @@ function onCtxSetInitiative(tokenId: number, value: number | null) {
   if (value !== null) store.updateToken(tokenId, { initiative: value })
 }
 
-function onCtxApplyDamage(tokenId: number, amount: number) {
+function onCtxApplyDamage(tokenId: number, amount: number, critical = false) {
   const token = store.getToken(tokenId)
   const linked = token ? linkedCharOf(token) : null
   // A Play Buddy character's HP is the player's: damage goes to their app, the new HP comes back
   if (linked && amount > 0) void playBuddy.requestDamage(store.current!.campaignId, linked, [{ amount, type: 'untyped' }], [], store.current?.name)
-  else store.applyDamage(tokenId, amount)
+  else store.applyDamage(tokenId, amount, { critical })
 }
 
 // ── Play Buddy (PLAYBUDDY_API.md) ──

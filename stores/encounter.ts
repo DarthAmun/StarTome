@@ -42,10 +42,13 @@ export interface CombatLogEntry {
   timestamp: number
   tokenId: number
   tokenName: string
-  type: 'damage' | 'healing' | 'temp-hp' | 'condition-added' | 'condition-removed' | 'condition-changed' | 'death' | 'revival' | 'note' | 'timer-up'
+  type: 'damage' | 'healing' | 'temp-hp' | 'roll' | 'condition-added' | 'condition-removed' | 'condition-changed' | 'death' | 'revival' | 'note' | 'timer-up'
   value?: number
   /** Part of a damage entry's value taken by temporary HP. */
   absorbed?: number
+  /** A roll's degree of success against the target (COMBAT_PLAN.md §4). */
+  degree?: Degree
+  targetName?: string
   conditionName?: string
   note?: string
   /** Made by the condition automation, not by hand. */
@@ -659,6 +662,16 @@ export const useEncounterStore = defineStore('encounter', () => {
     }
     log.push(entry)
     await persistCombatLog()
+  }
+
+  /** A roll from a token's stat block: what was rolled (note), the total and, against a target, the degree. */
+  function logRoll(tokenId: number, roll: { label: string; total: number; degree?: Degree | null; targetName?: string | null }) {
+    const token = getToken(tokenId)
+    if (!token) return
+    return appendLogEntry({
+      tokenId, tokenName: token.label || token.name, type: 'roll', note: roll.label, value: roll.total,
+      ...(roll.degree ? { degree: roll.degree } : {}), ...(roll.targetName ? { targetName: roll.targetName } : {}),
+    })
   }
 
   async function addLogNote(tokenId: number, note: string) {
@@ -1410,7 +1423,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     nextTurn, prevTurn,
     automation, turnPrompts, turnNotes, usesDying, resolveRecovery, resolvePersistent, dismissPrompt,
     getToken, applyDamage, setTempHp, grantTempHp, rollAllInitiative, setInitiativeFormula, setPartyLevel, bulkRemoveTokens, bulkSetTokenVisibility, toggleCondition,
-    addLogNote, clearCombatLog,
+    addLogNote, logRoll, clearCombatLog,
     addTimer, resetTimer, removeTimer, setTimers,
     setPlayerViewPrefs, sendPing, playerTurnOrder,
   }
