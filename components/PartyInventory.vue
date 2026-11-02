@@ -360,7 +360,8 @@ function setBulk(e: InventoryEntry, raw: string) {
 }
 function setRune(e: InventoryEntry, key: 'potency' | 'striking' | 'resilient', value: number) {
   const base: Runes = e.runes ?? { potency: 0, property: [] }
-  const next: Runes = { ...base, [key]: value || undefined, potency: key === 'potency' ? value : base.potency }
+  // Plain copy: e.runes is a reactive proxy, and IndexedDB can't clone proxies (the property array)
+  const next: Runes = { ...base, property: [...base.property], [key]: value || undefined, potency: key === 'potency' ? value : base.potency }
   const empty = !next.potency && !next.striking && !next.resilient && !next.property.length
   updateEntry(e.id, { runes: empty ? null : next })
 }
