@@ -138,3 +138,37 @@ export function rulesScope(entity: RulesEntity | null | undefined, adj?: Adjustm
 export function rollInitiative(entity: RulesEntity | null | undefined, adj?: Adjustment | null, d20 = () => Math.floor(Math.random() * 20) + 1): number {
   return d20() + (tokenStats(entity, adj).perception ?? 0)
 }
+
+export interface GridSpot { x: number; y: number }
+
+/**
+ * `count` free spots for tokens of `size` squares, nearest first around
+ * `anchor` (rings of growing distance, row by row). A spot is free when no
+ * square of the new token overlaps a placed token or an earlier pick. Spots
+ * stay on the map's positive quadrant; when the search runs out, the anchor
+ * is used again.
+ */
+export function freeSpots(anchor: GridSpot, placed: { gridX: number; gridY: number; size: number }[], count: number, size = 1, maxRing = 12): GridSpot[] {
+  const taken = new Set<string>()
+  const occupy = (x: number, y: number, s: number) => {
+    for (let dx = 0; dx < s; dx++) for (let dy = 0; dy < s; dy++) taken.add(`${x + dx},${y + dy}`)
+  }
+  for (const t of placed) occupy(t.gridX, t.gridY, Math.max(1, t.size))
+  const fits = (x: number, y: number) => {
+    if (x < 0 || y < 0) return false
+    for (let dx = 0; dx < size; dx++) for (let dy = 0; dy < size; dy++) if (taken.has(`${x + dx},${y + dy}`)) return false
+    return true
+  }
+  const out: GridSpot[] = []
+  for (let r = 0; r <= maxRing && out.length < count; r++) {
+    for (let y = anchor.y - r; y <= anchor.y + r && out.length < count; y++) {
+      for (let x = anchor.x - r; x <= anchor.x + r && out.length < count; x++) {
+        if (Math.max(Math.abs(x - anchor.x), Math.abs(y - anchor.y)) !== r || !fits(x, y)) continue
+        out.push({ x, y })
+        occupy(x, y, size)
+      }
+    }
+  }
+  while (out.length < count) out.push({ ...anchor })
+  return out
+}

@@ -19,7 +19,7 @@ Status: **approved** (2026-11-02). Your answers are in §7, including the two de
   2. **Stat blocks**: reachable only by right-click → "View record". The initiative list (`TurnRail`) has no click at all.
   3. **Rolls**: stat-block numbers (Strikes, saves, skills, Perception, spell DC/attack) are plain text. The dice roller takes only an expression: no label, no MAP, no target, no degree, nothing in the combat log.
   4. **Areas**: shapes are drawings. They aren't saved, they're measured in pixels, not squares, and nothing knows which tokens are inside.
-  5. **Quick add**: the creature search lives in the **left sidebar, which only shows in Prepare mode** (`pages/encounter/[id]/index.vue` line 141). In Run mode, right-click → "Add token here" only offers library tokens. There's no "empty" token at all.
+  5. **Quick add**: the creature search is a tab of the right sidebar **that only shows in Prepare mode** (Run mode shows Order | Log there). In Run mode, right-click → "Add token here" only offers library tokens. There's no "empty" token at all.
 - **Order** (dependency, then size): **1 Temp HP → 5 Run-mode quick add → 2 Stat blocks from the initiative list → 3 Rolls → 4 Areas + DC effects.** Temp HP is small and every later "apply damage" goes through it. Quick add and stat-block access are small and stand alone. Rolls need the stat block next to the turn order. Areas reuse the roll engine (saves, damage, degree) and the damage path, so they come last.
 
 ---
@@ -68,7 +68,7 @@ PF2e and SF2e share the rule: temp HP are lost first when you take damage. Heali
 
 ### What exists
 - `addCreatureToEncounter(rulesId, x, y, adjustment)` writes a creature-direct token (`token_id = null`) with HP/AC/size from `tokenStats` and the linked image. `addCreatureToEncounterAuto` picks a free square near (5,5).
-- The creature search with the weak/normal/elite switch is part of the left sidebar, which is `v-if="mode === 'prepare'"`.
+- The creature search with the weak/normal/elite switch is the right sidebar's Creatures tab, which only exists in Prepare mode.
 - Run mode's right-click "Add token here" (`onCtxAddTokenHere`) opens the library-token picker only.
 - `rollAllInitiative` rolls for everyone; there's no single-token roll.
 - A token with neither `token_id` nor `linked_rules_id` already works: `_resolveTokenDisplays` gives it an empty name, and the label shows instead.

@@ -512,44 +512,14 @@
             <!-- ── Creatures tab ── -->
             <template v-if="libSidebarTab === 'creatures'">
             <div class="sidebar-section" style="flex:1;display:flex;flex-direction:column;overflow:hidden;border-bottom:none">
-              <div class="token-search">
-                <InputText ref="searchInputRef" v-model="creatureSearch" placeholder="Search creatures and hazards…" />
-              </div>
-              <div class="creature-adjust" role="radiogroup" aria-label="Weak/elite adjustment for placement">
-                <button v-for="opt in ADJUSTMENT_OPTIONS" :key="opt.label" class="creature-adjust-btn"
-                  :class="{ 'creature-adjust-btn--active': placeAdjustment === opt.value }"
-                  role="radio" :aria-checked="placeAdjustment === opt.value"
-                  @click="placeAdjustment = opt.value">{{ opt.label }}</button>
-              </div>
-              <div class="token-list" style="flex:1;overflow-y:auto">
-                <div
-                  v-for="rec in creatureResults"
-                  :key="rec.id"
-                  class="token-chip creature-chip"
-                  draggable="true"
-                  @dragstart="onCreatureDragStart($event, rec)"
-                  @dragend="onLibraryDragEnd"
-                >
-                  <div class="token-thumb">
-                    <img v-if="rec.img" :src="rec.img" class="enc-token-img" />
-                    <span v-else class="enc-token-initial enc-token-initial--creature">{{ rec.name.charAt(0) }}</span>
-                  </div>
-                  <div class="creature-chip-info">
-                    <span class="token-lib-name">{{ rec.name }}</span>
-                    <span class="creature-chip-type">{{ rec.kind }} {{ rec.level }}{{ otherGameTag(rec.game, campaignGameId) }}</span>
-                  </div>
-                  <button class="icon-btn-sq" title="Place on map" @click.stop="store.addCreatureToEncounterAuto(rec.id, placeAdjustment)">
-                    <OhVueIcon name="md-add" scale="0.75" />
-                  </button>
-                </div>
-                <p v-if="creatureResults.length === 0 && !creatureLoading" class="enc-hint" style="padding:12px 0">
-                  <template v-if="creatureSearch">No matches</template>
-                  <template v-else>The compendium has no creatures yet. <NuxtLink to="/compendium/sync">Sync it from Foundry</NuxtLink>.</template>
-                </p>
-                <p v-else-if="creatureTotal > creatureResults.length" class="enc-hint" style="padding:8px 0">
-                  {{ creatureResults.length }} of {{ creatureTotal }} — search to narrow down
-                </p>
-              </div>
+              <CreatureSearchList
+                v-model:adjustment="placeAdjustment"
+                :game="campaignGameId"
+                draggable
+                @place="(rec, adj) => store.addCreatureToEncounterAuto(rec.id, adj)"
+                @dragstart="onCreatureDragStart"
+                @dragend="onLibraryDragEnd"
+              />
             </div>
             </template><!-- end creatures tab -->
 
@@ -572,6 +542,9 @@
                   <span class="init-round-label">Round {{ store.roundNumber }}</span>
                   <button class="init-nav-btn" @click="store.nextTurn()">
                     <OhVueIcon name="md-chevronright" scale="0.8" />
+                  </button>
+                  <button class="init-nav-btn" title="Add a creature or empty token to the fight (A)" @click="openQuickAdd()">
+                    <OhVueIcon name="md-add" scale="0.8" />
                   </button>
                   <button
                     class="init-nav-btn init-roll-all-btn"
@@ -832,6 +805,15 @@
       </Teleport>
 
       <!-- ── Canvas Context Menu ───────────────────────────────────────────────── -->
+      <QuickAddDialog
+        :open="quickAdd.open"
+        :game="campaignGameId"
+        :where="quickAdd.where"
+        @close="quickAdd.open = false"
+        @add-creature="onQuickAddCreature"
+        @add-blank="onQuickAddBlank"
+      />
+
       <EncounterContextMenu
         :open="ctxMenu.open"
         :x="ctxMenu.x"
@@ -842,6 +824,7 @@
         :linked-name="ctxMenu.targetToken ? linkedCharOf(ctxMenu.targetToken)?.name ?? null : null"
         @close="ctxMenu.open = false"
         @add-token-here="onCtxAddTokenHere"
+        @quick-add-here="(x, y) => openQuickAdd({ gridX: x, gridY: y })"
         @edit-token="onCtxEditToken"
         @add-condition="onCtxAddCondition"
         @quick-condition="onCtxQuickCondition"
@@ -989,7 +972,8 @@ import { lsKey } from '~/utils/appNamespace'
 import { campaignGame, type GameId } from '~/types/game'
 import { useEncounterStore } from "~/stores/encounter";
 import type { LibraryTokenForm } from "~/components/LibraryTokenModal.vue";
-import type { EncounterToken, HpChangeOptions } from "~/stores/encounter";
+import type { BlankTokenInput, EncounterToken, HpChangeOptions } from "~/stores/encounter";
+import type { QuickAddOptions } from "~/components/QuickAddDialog.vue";
 import { useEncounterCanvas, type ShapeType, type ShapeOverlay } from "../../../composables/useEncounterCanvas";
 import { dbApi, type DbEncounterWall } from "~/composables/useDb";
 import { imageTypeOf, pickImageFile } from "~/utils/image";
@@ -1573,15 +1557,12 @@ const newToken = ref<LibraryTokenForm>(emptyTokenForm());
 
 // ── Token library sidebar tab (Tokens | Creatures) ────────────────────────
 const libSidebarTab = ref<'tokens' | 'creatures'>('tokens')
-const {
-  search: creatureSearch, results: creatureResults, total: creatureTotal, loading: creatureLoading, refresh: refreshCreatures,
-} = useCreatureSearch(campaignGameId, { limit: 60, hazards: true, emptyLists: true })
 const placeAdjustment = ref<Adjustment | null>(null)
 
 const searchInputRef = ref<any>(null)
 
 watch(libSidebarTab, async (tab) => {
-  if (tab === 'creatures') refreshCreatures()
+  if (tab !== 'tokens') return
   await nextTick()
   searchInputRef.value?.$el?.focus()
 })
@@ -2019,7 +2000,43 @@ const handleWallUndo = async (e: KeyboardEvent) => {
     await store.undoLastWall();
     canvas?.redrawWalls();
   }
+  // A: quick add in Run mode, unless typing somewhere
+  if (e.key.toLowerCase() === 'a' && !e.ctrlKey && !e.metaKey && !e.altKey && mode.value === 'run' && !quickAdd.open && !isTypingTarget(e.target)) {
+    e.preventDefault();
+    openQuickAdd();
+  }
 };
+
+function isTypingTarget(t: EventTarget | null) {
+  const el = t as HTMLElement | null
+  return !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
+}
+
+// ── Quick add (Run mode): a creature or an empty token joins the fight ────
+const quickAdd = reactive({ open: false, where: '', gridX: 5, gridY: 5, spread: true })
+
+/** At a square (right-click), or next to whoever is acting. */
+function openQuickAdd(at?: { gridX: number; gridY: number }) {
+  if (at) {
+    Object.assign(quickAdd, { gridX: at.gridX, gridY: at.gridY, spread: false, where: 'at the clicked square' })
+  } else {
+    const actor = currentTurnTokenId.value !== null ? store.getToken(currentTurnTokenId.value) : undefined
+    Object.assign(quickAdd, actor
+      ? { gridX: actor.gridX, gridY: actor.gridY, spread: true, where: `next to ${actor.label || actor.name}` }
+      : { gridX: 5, gridY: 5, spread: true, where: '' })
+  }
+  quickAdd.open = true
+}
+
+async function onQuickAddCreature(rulesId: string, adjustment: Adjustment | null, opts: QuickAddOptions) {
+  quickAdd.open = false
+  await store.addCreatureToEncounter(rulesId, quickAdd.gridX, quickAdd.gridY, adjustment, { ...opts, spread: quickAdd.spread || opts.count > 1, rollInitiative: true, announce: true })
+}
+
+async function onQuickAddBlank(input: BlankTokenInput, opts: QuickAddOptions) {
+  quickAdd.open = false
+  await store.addBlankToken(input, quickAdd.gridX, quickAdd.gridY, { ...opts, spread: quickAdd.spread || opts.count > 1, rollInitiative: true, announce: true })
+}
 
 watch(shapes, () => {
   store.setShapeOverlays(shapes.value);
@@ -2424,9 +2441,6 @@ function getImageUrl(token: any): string {
   font-size: 11px;
   color: var(--gold);
 }
-.enc-token-initial--creature {
-  color: var(--blood);
-}
 
 /* ── Library sidebar tabs ── */
 .lib-tab-bar {
@@ -2473,22 +2487,6 @@ function getImageUrl(token: any): string {
   background: rgba(184,134,11,0.05);
 }
 
-/* ── Creature chip ── */
-.creature-chip { cursor: grab; }
-.creature-chip:active { cursor: grabbing; }
-.creature-chip-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.creature-chip-type {
-  font-family: var(--font-head);
-  font-size: 8px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-ghost);
-}
 
 /* ── Token modal: linked record row ── */
 .f-hint {
@@ -3056,21 +3054,6 @@ function getImageUrl(token: any): string {
   color: var(--ink);
 }
 .link-record-meta { font-size: 10px; color: var(--ink-ghost); text-transform: capitalize; margin-left: 4px; }
-.creature-adjust { display: flex; gap: 4px; padding: 0 0 8px; }
-.creature-adjust-btn {
-  flex: 1;
-  font-family: var(--font-head);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 3px 0;
-  border: 1px solid var(--parch-line);
-  border-radius: 2px;
-  background: transparent;
-  color: var(--ink-faded);
-  cursor: pointer;
-}
-.creature-adjust-btn--active { border-color: var(--gold); color: var(--ink); background: rgba(184,134,11,0.08); }
 .record-panel-adjust { font-size: 11px; font-style: italic; color: var(--ink-faded); margin-bottom: 6px; }
 .link-record-list {
   max-height: 240px;

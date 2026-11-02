@@ -13,6 +13,10 @@
           <OhVueIcon name="md-add" scale="0.85" class="ctx-icon" />
           Add Token Here
         </button>
+        <button class="ctx-item" @click="emit('quick-add-here', gridX, gridY); emit('close')">
+          <OhVueIcon name="fa-dragon" scale="0.85" class="ctx-icon" />
+          Add Creature Here…
+        </button>
       </template>
 
       <!-- Token click -->
@@ -191,6 +195,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   'add-token-here': [gridX: number, gridY: number]
+  'quick-add-here': [gridX: number, gridY: number]
   'edit-token': [tokenId: number]
   'add-condition': [tokenId: number]
   'quick-condition': [tokenId: number, name: string]

@@ -2,6 +2,9 @@ import 'fake-indexeddb/auto'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getDb } from '~/composables/useDb'
+import { rulesSaveUser } from '~/composables/useRules'
+import { newRulesEntity } from '~/rules/factory'
+import type { Creature } from '~/types/rules'
 import { useEncounterStore } from '~/stores/encounter'
 
 async function encounter(tokens: { label: string; initiative: number | null; visible?: boolean; actsWhileHidden?: boolean; dead?: boolean; timers?: unknown[]; conditions?: unknown[]; pc?: boolean; hp?: number; temp?: number }[]) {
@@ -30,7 +33,7 @@ describe('encounter store', () => {
   beforeEach(async () => {
     setActivePinia(createPinia())
     const db = getDb()
-    await Promise.all([db.campaigns.clear(), db.encounters.clear(), db.encounterTokens.clear()])
+    await Promise.all([db.campaigns.clear(), db.encounters.clear(), db.encounterTokens.clear(), db.rules.clear()])
   })
 
   it('orders turns by initiative, leaving out the dead and the hidden unless they act while hidden', async () => {
@@ -207,5 +210,41 @@ describe('encounter store', () => {
     expect(store.current!.combatLog.find(e => e.type === 'damage')).toMatchObject({ value: 5, absorbed: 3 })
     store.prevTurn()
     expect([a.hpCurrent, a.tempHp]).toEqual([10, 3])
+  })
+
+  it('adds creatures mid-fight on free squares with rolled initiative, weak/elite HP and the ally flag', async () => {
+    const wolf = await rulesSaveUser({ ...(newRulesEntity('creature', { name: 'Wolf', game: 'pf2e' }) as Creature), level: 1, size: 'med', perception: 7, ac: 15, hp: 24 })
+    const { store } = await encounter([{ label: 'Hero', initiative: 15 }])
+    const added = await store.addCreatureToEncounter(wolf.id, 0, 0, 'elite', { count: 2, ally: true, rollInitiative: true, announce: true })
+    expect(added).toHaveLength(2)
+    const spots = added.map(t => `${t.gridX},${t.gridY}`)
+    expect(new Set([...spots, '0,0']).size).toBe(3)
+    for (const t of added) {
+      expect([t.hpMax, t.hpCurrent, t.ac, t.isAlly, t.adjustment]).toEqual([24 + 10, 24 + 10, 17, true, 'elite'])
+      // Elite Perception 9 + d20
+      expect(t.initiative).toBeGreaterThanOrEqual(10)
+      expect(t.initiative).toBeLessThanOrEqual(29)
+    }
+    expect(store.current!.combatLog.map(e => [e.type, e.note])).toEqual([['note', 'joined the fight'], ['note', 'joined the fight']])
+  })
+
+  it('adds empty tokens with the typed stats and no links', async () => {
+    const { store } = await encounter([])
+    const [t] = await store.addBlankToken({ label: 'Summoned Wolf', hpMax: 18, ac: 14, size: 2, initiativeModifier: 30 }, 3, 4, { rollInitiative: true })
+    expect([t.label, t.hpCurrent, t.hpMax, t.ac, t.size, t.gridX, t.gridY]).toEqual(['Summoned Wolf', 18, 18, 14, 2, 3, 4])
+    expect([t.tokenId, t.linkedRulesId, t.linkedEntityId]).toEqual([null, null, null])
+    expect(t.initiative).toBeGreaterThanOrEqual(31)
+    const two = await store.addBlankToken({ label: 'Guard', hpMax: null, ac: null, size: 1, initiativeModifier: 0 }, 3, 4, { count: 2 })
+    expect(two.map(x => x.label)).toEqual(['Guard 1', 'Guard 2'])
+    expect(two.map(x => x.initiative)).toEqual([null, null])
+  })
+
+  it("keeps the turn on whoever is acting when a faster token joins", async () => {
+    const { store } = await encounter([{ label: 'A', initiative: 20 }, { label: 'B', initiative: 10 }])
+    store.setStatus('active')
+    expect(store.initiativeOrder[store.currentTurnIndex].label).toBe('A')
+    const [late] = await store.addBlankToken({ label: 'Late', hpMax: 5, ac: 10, size: 1, initiativeModifier: 100 }, 0, 0, { rollInitiative: true })
+    expect(store.initiativeOrder[0].id).toBe(late.id)
+    expect(store.initiativeOrder[store.currentTurnIndex].label).toBe('A')
   })
 })

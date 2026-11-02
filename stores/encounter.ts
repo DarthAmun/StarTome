@@ -8,7 +8,7 @@ import type { ShapeOverlay } from '~/composables/useEncounterCanvas'
 import { rulesGet, rulesGetMany, rulesSetImage } from '~/composables/useRules'
 import { resolveImageDataUrl, storeInlineImage } from '~/rules/images'
 import { evaluateFormula } from '~/composables/useFormulaEvaluator'
-import { rollInitiative, rulesScope, tokenStats, type Adjustment } from '~/rules/combat'
+import { freeSpots, rollInitiative, rulesScope, tokenStats, type Adjustment } from '~/rules/combat'
 import { damageWithTemp, grantTemp } from '~/rules/hp'
 import type { Hazard, RulesEntity } from '~/types/rules'
 import { parseDefeated, type DefeatedEnemy } from '~/rules/advancement'
@@ -56,6 +56,30 @@ export interface CombatLogEntry {
 export type TurnPrompt = TurnPromptSeed & { id: number; tokenId: number; tokenName: string }
 
 /** Options for an HP change: a critical hit, or hits taken while already at 0 HP. */
+/** How tokens join an encounter (COMBAT_PLAN.md §2). */
+export interface PlaceOptions {
+  /** How many to place, on free squares nearest the given one. */
+  count?: number
+  /** Look for free squares even for one token. */
+  spread?: boolean
+  /** Fights with the party (summons): no XP. */
+  ally?: boolean
+  /** Roll initiative right away (mid-fight adds). */
+  rollInitiative?: boolean
+  /** Log "joined the fight". */
+  announce?: boolean
+}
+
+/** A token without a library or compendium link, typed in by hand. */
+export interface BlankTokenInput {
+  label: string
+  hpMax: number | null
+  ac: number | null
+  size: number
+  /** Added to the d20 for initiative (or `perception` in the encounter's formula). */
+  initiativeModifier: number
+}
+
 export interface HpChangeOptions {
   critical?: boolean
   hitsAtZero?: number
@@ -437,33 +461,100 @@ export const useEncounterStore = defineStore('encounter', () => {
   }
 
   /** Places a compendium creature (or hazard) directly, without a library token. */
-  async function addCreatureToEncounter(rulesId: string, gridX: number, gridY: number, adjustment: Adjustment | null = null) {
-    if (!current.value) return
+  async function addCreatureToEncounter(rulesId: string, gridX: number, gridY: number, adjustment: Adjustment | null = null, opts: PlaceOptions = {}): Promise<EncounterToken[]> {
+    if (!current.value) return []
     try {
       const entry = await rulesGet(rulesId)
-      if (!entry) return
+      if (!entry) return []
       const stats = tokenStats(entry, adjustment)
       const img = await dbApi.linkedImages.get(null, rulesId)
-      const result = await dbApi.encounterTokens.add({
-        encounterId: current.value.id,
-        tokenId: null,
-        gridX,
-        gridY,
-        size: stats.size,
-        isVisible: 1,
-        hpCurrent: stats.hpMax,
-        hpMax: stats.hpMax,
-        ac: stats.ac,
-        linkedRulesId: rulesId,
-        adjustment,
-        imageSource: img?.source ?? null,
-        imageType: img?.type ?? 'file',
-      })
-      current.value.tokens.push(normalizeToken(result))
+      const spots = placeSpots(gridX, gridY, stats.size, opts)
+      keepTurnPointer()
+      const added: EncounterToken[] = []
+      for (const spot of spots) {
+        const result = await dbApi.encounterTokens.add({
+          encounterId: current.value.id,
+          tokenId: null,
+          gridX: spot.x,
+          gridY: spot.y,
+          size: stats.size,
+          isVisible: 1,
+          hpCurrent: stats.hpMax,
+          hpMax: stats.hpMax,
+          ac: stats.ac,
+          linkedRulesId: rulesId,
+          adjustment,
+          isAlly: opts.ally,
+          initiative: opts.rollInitiative ? rollFor({ adjustment, ac: stats.ac, hpCurrent: stats.hpMax, hpMax: stats.hpMax } as EncounterToken, entry) : null,
+          imageSource: img?.source ?? null,
+          imageType: img?.type ?? 'file',
+        })
+        const token = normalizeToken(result)
+        current.value.tokens.push(token)
+        added.push(token)
+      }
+      if (opts.announce) announce(added)
       syncToPlayer()
+      return added
     } catch (err) {
       reportError('Placing the creature', err)
+      return []
     }
+  }
+
+  /** Places tokens typed in by hand (name, HP, AC), with no library or compendium link. */
+  async function addBlankToken(input: BlankTokenInput, gridX: number, gridY: number, opts: PlaceOptions = {}): Promise<EncounterToken[]> {
+    if (!current.value) return []
+    try {
+      const size = Math.max(1, Math.floor(input.size) || 1)
+      const spots = placeSpots(gridX, gridY, size, opts)
+      keepTurnPointer()
+      const label = input.label.trim() || 'Token'
+      const added: EncounterToken[] = []
+      for (const [i, spot] of spots.entries()) {
+        const result = await dbApi.encounterTokens.add({
+          encounterId: current.value.id,
+          tokenId: null,
+          gridX: spot.x,
+          gridY: spot.y,
+          size,
+          isVisible: 1,
+          label: spots.length > 1 ? `${label} ${i + 1}` : label,
+          hpCurrent: input.hpMax,
+          hpMax: input.hpMax,
+          ac: input.ac,
+          isAlly: opts.ally,
+          initiative: opts.rollInitiative ? rollFor({ hpCurrent: input.hpMax, hpMax: input.hpMax, ac: input.ac } as EncounterToken, undefined, input.initiativeModifier) : null,
+        })
+        const token = normalizeToken(result)
+        current.value.tokens.push(token)
+        added.push(token)
+      }
+      if (opts.announce) announce(added)
+      syncToPlayer()
+      return added
+    } catch (err) {
+      reportError('Placing the token', err)
+      return []
+    }
+  }
+
+  /** Where new tokens go: the square itself, or free squares nearest it. */
+  function placeSpots(gridX: number, gridY: number, size: number, opts: PlaceOptions) {
+    const count = Math.max(1, Math.min(20, Math.floor(opts.count ?? 1)))
+    if (count === 1 && !opts.spread) return [{ x: gridX, y: gridY }]
+    return freeSpots({ x: gridX, y: gridY }, current.value?.tokens ?? [], count, size)
+  }
+
+  /** A token joining mid-fight with a higher initiative mustn't take over the turn of whoever is acting. */
+  function keepTurnPointer() {
+    if (_activeTurnTokenId.value === null && initiativeOrder.value.length && current.value?.status === 'active') {
+      _activeTurnTokenId.value = initiativeOrder.value[currentTurnIndex.value].id
+    }
+  }
+
+  function announce(tokens: EncounterToken[]) {
+    for (const t of tokens) appendLogEntry({ tokenId: t.id, tokenName: t.label || t.name, type: 'note', note: 'joined the fight' })
   }
 
   /** Links a placed token to a compendium entry (or switches weak/elite) and
@@ -1209,9 +1300,6 @@ export const useEncounterStore = defineStore('encounter', () => {
 
   async function rollAllInitiative() {
     if (!current.value) return
-    const formula = current.value.initiativeFormula?.trim()
-    const useFormula = !!formula
-
     // Linked compendium entries give Perception (Stealth for hazards) and the formula scope
     const tokensToRoll = current.value.tokens.filter(t => t.initiative === null)
     const ids = [...new Set(tokensToRoll.map(t => t.linkedRulesId).filter((id): id is string => !!id))]
@@ -1220,15 +1308,28 @@ export const useEncounterStore = defineStore('encounter', () => {
     const toUpdate: { id: number; initiative: number }[] = []
     for (const token of tokensToRoll) {
       const entry = token.linkedRulesId ? entries.get(token.linkedRulesId) : undefined
-      const roll = useFormula
-        ? evaluateFormula(formula!, buildTokenScope(token, entry))
-        : rollInitiative(entry, token.adjustment)
+      const roll = rollFor(token, entry)
       token.initiative = roll
       toUpdate.push({ id: token.id, initiative: roll })
     }
     if (!toUpdate.length) return
     syncToPlayer()
     await Promise.all(toUpdate.map(({ id, initiative }) => dbApi.encounterTokens.update({ id, initiative })))
+  }
+
+  /**
+   * One token's initiative: the encounter's formula when set, else Perception
+   * (Stealth for hazards) of the linked entry. `modifier` stands in for
+   * Perception on tokens without one (typed in by hand).
+   */
+  function rollFor(token: EncounterToken, entry: RulesEntity | undefined, modifier = 0): number {
+    const formula = current.value?.initiativeFormula?.trim()
+    if (formula) {
+      const scope = buildTokenScope(token, entry)
+      if (!entry) scope.perception = modifier
+      return evaluateFormula(formula, scope)
+    }
+    return entry ? rollInitiative(entry, token.adjustment) : Math.floor(Math.random() * 20) + 1 + modifier
   }
 
   /** Keeps the XP of enemy tokens that are about to be removed during play (FEATURES_PLAN.md §4.6). */
@@ -1290,13 +1391,7 @@ export const useEncounterStore = defineStore('encounter', () => {
   }
 
   async function addCreatureToEncounterAuto(rulesId: string, adjustment: Adjustment | null = null) {
-    const occupied = new Set((current.value?.tokens ?? []).map(t => `${t.gridX},${t.gridY}`))
-    let gx = 5, gy = 5
-    for (let i = 0; i < 30 && occupied.has(`${gx},${gy}`); i++) {
-      gx = 4 + (i % 6)
-      gy = 4 + Math.floor(i / 6)
-    }
-    return addCreatureToEncounter(rulesId, gx, gy, adjustment)
+    return addCreatureToEncounter(rulesId, 5, 5, adjustment, { spread: true })
   }
 
   return {
@@ -1310,7 +1405,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     addWall, undoLastWall, updateWall, deleteWall, toggleDoor,
     setFovEnabled,
     setSoundPlaylistId,
-    addTokenToEncounter, addCreatureToEncounter, addCreatureToEncounterAuto, setTokenRulesLink, moveToken, updateToken, removeToken, rememberDefeated, clearDefeated, setStatus, addToLibrary, updateLibraryToken,
+    addTokenToEncounter, addCreatureToEncounter, addCreatureToEncounterAuto, addBlankToken, setTokenRulesLink, moveToken, updateToken, removeToken, rememberDefeated, clearDefeated, setStatus, addToLibrary, updateLibraryToken,
     openPlayerWindow, closePlayerWindow, setShapeOverlays,
     nextTurn, prevTurn,
     automation, turnPrompts, turnNotes, usesDying, resolveRecovery, resolvePersistent, dismissPrompt,

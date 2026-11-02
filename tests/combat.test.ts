@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { adjustedLevel, applyAdjustment, bumpFormula, rollInitiative, rulesScope, tokenStats } from '~/rules/combat'
+import { adjustedLevel, applyAdjustment, bumpFormula, freeSpots, rollInitiative, rulesScope, tokenStats } from '~/rules/combat'
 import { newRulesEntity } from '~/rules/factory'
 import type { Creature, Hazard } from '~/types/rules'
 
@@ -82,3 +82,26 @@ describe('token stats and initiative', () => {
     expect(s).toMatchObject({ perception: 5, level: 1, ac: 16, hp: 6, fort: 5, stealth: 8, lore_goblins: 4 })
   })
 })
+
+describe('free spots for new tokens', () => {
+  it('takes the anchor when free, then the nearest free squares around it', () => {
+    expect(freeSpots({ x: 5, y: 5 }, [], 1)).toEqual([{ x: 5, y: 5 }])
+    const spots = freeSpots({ x: 5, y: 5 }, [{ gridX: 5, gridY: 5, size: 1 }], 3)
+    expect(spots).toEqual([{ x: 4, y: 4 }, { x: 5, y: 4 }, { x: 6, y: 4 }])
+  })
+
+  it('keeps large tokens off every square of placed tokens and of each other', () => {
+    const placed = [{ gridX: 0, gridY: 0, size: 2 }]
+    const spots = freeSpots({ x: 0, y: 0 }, placed, 2, 2)
+    const squares = (p: { x: number; y: number }, s: number) => [0, 1].flatMap(dx => [0, 1].map(dy => `${p.x + dx},${p.y + dy}`)).slice(0, s * s)
+    const all = [...squares({ x: 0, y: 0 }, 2), ...spots.flatMap(p => squares(p, 2))]
+    expect(new Set(all).size).toBe(all.length)
+    expect(spots.every(p => p.x >= 0 && p.y >= 0)).toBe(true)
+  })
+
+  it('falls back to the anchor when nothing is free nearby', () => {
+    const placed = [{ gridX: 0, gridY: 0, size: 3 }]
+    expect(freeSpots({ x: 0, y: 0 }, placed, 1, 1, 1)).toEqual([{ x: 0, y: 0 }])
+  })
+})
+
