@@ -290,6 +290,16 @@
           <!-- Condition automation: recovery checks, persistent damage, action reminders -->
           <TurnPrompts v-if="mode === 'run'" />
 
+          <!-- Stat block of a token, opened from the turn order or the token menu -->
+          <StatBlockPanel
+            :token="statPanelToken"
+            :game="campaignGameId"
+            :npc="statPanelNpc"
+            :pb-mirror="statPanelToken ? linkedCharOf(statPanelToken)?.pbStatus ?? null : null"
+            @close="statPanelTokenId = null"
+            @link="openLinkModal"
+          />
+
           <!-- Drop hint when no map -->
           <div v-if="!encounter?.mapSource" class="canvas-empty-state">
             <OhVueIcon name="md-map" scale="4" class="enc-empty-icon" />
@@ -586,7 +596,9 @@
                       'order-token-row--dead': token.isDead,
                       'order-token-row--bulk': selectedTokenIds.has(token.id),
                       'order-token-row--skipped': !token.isVisible && !token.actsWhileHidden && !token.isDead,
+                      'order-token-row--panel': statPanelTokenId === token.id,
                     }"
+                    :title="statPanelTokenId === token.id ? 'Close the stat block' : 'Show the stat block'"
                     @click="onOrderRowClick($event, token)"
                     @contextmenu.prevent="onTokenRowRightClick($event, token)"
                   >
@@ -739,19 +751,6 @@
             </div>
           </div>
         </div>
-      </Teleport>
-
-      <!-- ── Record Slide-In Panel ───────────────────────────────────────────── -->
-      <Teleport to="body">
-        <Transition name="record-panel-slide">
-          <div v-if="recordPanel?.open" class="record-panel">
-            <button class="record-panel-close" @click="recordPanel = null">✕</button>
-            <div class="record-panel-inner">
-              <div v-if="recordPanel.adjustment" class="record-panel-adjust">{{ ADJUSTMENT_LABEL[recordPanel.adjustment] }} adjustment applied</div>
-              <RulesStatBlock :entity="recordPanel.entity" :game="campaignGameId" />
-            </div>
-          </div>
-        </Transition>
       </Teleport>
 
       <!-- ── Token Edit Modal ──────────────────────────────────────────────────── -->
@@ -975,13 +974,13 @@ import type { LibraryTokenForm } from "~/components/LibraryTokenModal.vue";
 import type { BlankTokenInput, EncounterToken, HpChangeOptions } from "~/stores/encounter";
 import type { QuickAddOptions } from "~/components/QuickAddDialog.vue";
 import { useEncounterCanvas, type ShapeType, type ShapeOverlay } from "../../../composables/useEncounterCanvas";
-import { dbApi, type DbEncounterWall } from "~/composables/useDb";
+import { dbApi, parseJsonObject, type DbEncounterWall } from "~/composables/useDb";
 import { imageTypeOf, pickImageFile } from "~/utils/image";
 import { hexColorToNumber } from "~/composables/useConditions";
 import { useConditionPanel } from "~/composables/useConditionPanel";
 import { useCreatureSearch, otherGameTag } from "~/composables/useCreatureSearch";
 import { rulesGet } from "~/composables/useRules";
-import { ADJUSTMENT_LABEL, applyAdjustment, type Adjustment } from "~/rules/combat";
+import { applyAdjustment, type Adjustment } from "~/rules/combat";
 import type { RulesEntity } from "~/types/rules";
 import { useSounds } from "~/composables/useSounds";
 import { useEntities } from "~/composables/useEntities";
@@ -1173,13 +1172,18 @@ async function confirmLink() {
   linkPendingTokenId.value = null;
 }
 
-// ── Stat block slide-in panel ──────────────────────────────────────────────
-const recordPanel = ref<{ open: boolean; entity: RulesEntity; adjustment: Adjustment | null } | null>(null);
+// ── Stat block panel (COMBAT_PLAN.md §3) ───────────────────────────────────
+const statPanelTokenId = ref<number | null>(null);
+const statPanelToken = computed(() => statPanelTokenId.value === null ? null : store.getToken(statPanelTokenId.value) ?? null);
+const statPanelNpc = computed(() => {
+  const id = statPanelToken.value?.linkedEntityId;
+  const ent = id ? entitiesStore.entities.find(e => e.id === id) : undefined;
+  return ent ? { name: ent.name, attrs: parseJsonObject(ent.attributes) } : null;
+});
 
-async function openRecordPanel(rulesId: string, adjustment: Adjustment | null) {
-  const entry = await rulesGet(rulesId);
-  if (!entry) return;
-  recordPanel.value = { open: true, entity: applyAdjustment(entry, adjustment), adjustment };
+/** Opens a token's stat block; the same token again closes it. */
+function toggleStatPanel(tokenId: number) {
+  statPanelTokenId.value = statPanelTokenId.value === tokenId ? null : tokenId;
 }
 
 // ── Condition modal ────────────────────────────────────────────────────────
@@ -1339,7 +1343,7 @@ function onOrderRowClick(event: MouseEvent, token: any) {
     return
   }
   clearSelection()
-  selectToken(token)
+  toggleStatPanel(token.id)
 }
 
 function bulkSetVisibility(visible: boolean) {
@@ -1393,8 +1397,7 @@ function onCtxViewNpc(tokenId: number) {
 }
 
 function onCtxViewRecord(tokenId: number) {
-  const token = store.getToken(tokenId)
-  if (token?.linkedRulesId) openRecordPanel(token.linkedRulesId, token.adjustment)
+  statPanelTokenId.value = tokenId
 }
 
 function onCtxToggleVisibility(tokenId: number) {
@@ -3054,7 +3057,6 @@ function getImageUrl(token: any): string {
   color: var(--ink);
 }
 .link-record-meta { font-size: 10px; color: var(--ink-ghost); text-transform: capitalize; margin-left: 4px; }
-.record-panel-adjust { font-size: 11px; font-style: italic; color: var(--ink-faded); margin-bottom: 6px; }
 .link-record-list {
   max-height: 240px;
   overflow-y: auto;
@@ -3096,46 +3098,6 @@ function getImageUrl(token: any): string {
   padding: 10px 16px 14px;
   border-top: 1px solid var(--parch-line);
 }
-/* ── Record slide-in panel ── */
-.record-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 360px;
-  z-index: var(--z-modal);
-  background-color: var(--parch);
-  background-image: var(--paper);
-  background-blend-mode: multiply;
-  box-shadow: -4px 0 32px rgba(28, 20, 16, 0.35);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.record-panel-close {
-  position: absolute;
-  top: 12px;
-  right: 14px;
-  background: none;
-  border: none;
-  font-size: 14px;
-  color: var(--ink-ghost);
-  cursor: pointer;
-  z-index: 1;
-  line-height: 1;
-  padding: 4px;
-  transition: color 0.15s;
-}
-.record-panel-close:hover { color: var(--blood); }
-.record-panel-inner {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px 18px 24px;
-}
-.record-panel-slide-enter-active,
-.record-panel-slide-leave-active { transition: transform 0.25s ease; }
-.record-panel-slide-enter-from,
-.record-panel-slide-leave-to { transform: translateX(100%); }
 
 /* ── Right sidebar tabs ── */
 .rsb-tabs {
@@ -3212,6 +3174,7 @@ function getImageUrl(token: any): string {
   background: rgba(139,26,26,0.06) !important;
 }
 .order-token-row--dead { opacity: 0.4; }
+.order-token-row--panel .order-token-name { text-decoration: underline; text-decoration-color: var(--gold); text-underline-offset: 3px; }
 
 /* Row 1: thumb + name + initiative + gear */
 .order-row-1 {
