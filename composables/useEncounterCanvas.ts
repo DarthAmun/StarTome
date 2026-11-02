@@ -47,6 +47,20 @@ export interface CanvasOptions {
   onTokenPointerLeave?: (tokenId: number) => void;
   /** Ping tool click, or a long press on the map in select mode. `focus` = Shift held. */
   onPing?: (col: number, row: number, focus: boolean) => void;
+  /**
+   * Area tool (COMBAT_PLAN.md §5): the squares to preview with the pointer at
+   * `at` (half-grid) after an optional first click at `anchor`.
+   */
+  getAreaDraft?: (anchor: { col: number; row: number } | null, at: { col: number; row: number }) => CanvasArea | null;
+  /** Area tool click. Returns true when the click set the first point and a second is needed. */
+  onAreaClick?: (anchor: { col: number; row: number } | null, at: { col: number; row: number }) => boolean;
+}
+
+/** An area as the canvas draws it: its squares ("col,row") and color. */
+export interface CanvasArea {
+  id: string;
+  cells: string[];
+  color: number;
 }
 
 const PING_COLOR = 0xffd24a;
@@ -63,6 +77,7 @@ export function useEncounterCanvas(options: CanvasOptions) {
   let mapSprite: PIXI.Sprite | null = null;
   let gridGraphics: PIXI.Graphics | null = null;
   let shapesContainer: PIXI.Container | null = null;
+  let areasContainer: PIXI.Container | null = null;
   let fogContainer: PIXI.Container | null = null;
   let tokenContainer: PIXI.Container | null = null;
   let rulerLayer: PIXI.Container | null = null;
@@ -403,7 +418,69 @@ export function useEncounterCanvas(options: CanvasOptions) {
 
   function clearShapeAnchor() {
     shapeAnchor = null;
+    areaAnchor = null;
     shapePreviewLayer?.removeChildren();
+  }
+
+  // ── Areas (COMBAT_PLAN.md §5): shaded squares with an outline ─────────────
+  let areaList: CanvasArea[] = [];
+  let areaAnchor: { col: number; row: number } | null = null;
+
+  function drawAreaCells(g: PIXI.Graphics, area: CanvasArea, alpha = 0.25) {
+    const enc = store.current;
+    if (!enc) return;
+    const { gridSize: s, gridOffsetX: ox, gridOffsetY: oy } = enc;
+    const cells = new Set(area.cells);
+    for (const k of cells) {
+      const [c, r] = k.split(",").map(Number);
+      g.rect(ox + c * s, oy + r * s, s, s);
+    }
+    g.fill({ color: area.color, alpha });
+    // Outline: the edges between a covered and an uncovered square
+    for (const k of cells) {
+      const [c, r] = k.split(",").map(Number);
+      const x = ox + c * s, y = oy + r * s;
+      if (!cells.has(`${c},${r - 1}`)) g.moveTo(x, y).lineTo(x + s, y);
+      if (!cells.has(`${c},${r + 1}`)) g.moveTo(x, y + s).lineTo(x + s, y + s);
+      if (!cells.has(`${c - 1},${r}`)) g.moveTo(x, y).lineTo(x, y + s);
+      if (!cells.has(`${c + 1},${r}`)) g.moveTo(x + s, y).lineTo(x + s, y + s);
+    }
+    g.stroke({ color: area.color, width: 2, alpha: 0.9 });
+  }
+
+  function drawAreas() {
+    if (!areasContainer) return;
+    areasContainer.removeChildren();
+    for (const area of areaList) {
+      const g = new PIXI.Graphics();
+      drawAreaCells(g, area);
+      areasContainer.addChild(g);
+    }
+  }
+
+  /** Replaces the drawn areas. */
+  function setAreas(list: CanvasArea[]) {
+    areaList = list;
+    drawAreas();
+  }
+
+  function drawAreaPreview(at: { col: number; row: number }) {
+    if (!shapePreviewLayer) return;
+    shapePreviewLayer.removeChildren();
+    const draft = options.getAreaDraft?.(areaAnchor, at);
+    if (!draft) return;
+    const g = new PIXI.Graphics();
+    drawAreaCells(g, draft, 0.35);
+    shapePreviewLayer.addChild(g);
+  }
+
+  /** The topmost area covering the square under the pointer. */
+  function getAreaAtScreen(screenX: number, screenY: number): string | null {
+    const p = screenToGrid(screenX, screenY);
+    if (!p) return null;
+    const k = `${Math.floor(p.col)},${Math.floor(p.row)}`;
+    for (let i = areaList.length - 1; i >= 0; i--) if (areaList[i].cells.includes(k)) return areaList[i].id;
+    return null;
   }
 
   // ── Wall helpers ──────────────────────────────────────────────────────────
@@ -811,6 +888,7 @@ export function useEncounterCanvas(options: CanvasOptions) {
     mapSprite = new PIXI.Sprite();
     gridGraphics = new PIXI.Graphics();
     shapesContainer = new PIXI.Container();
+    areasContainer = new PIXI.Container();
     fogContainer = new PIXI.Container();
     wallsGraphics = new PIXI.Graphics();
     tokenContainer = new PIXI.Container();
@@ -821,6 +899,7 @@ export function useEncounterCanvas(options: CanvasOptions) {
     worldContainer.addChild(mapSprite);
     worldContainer.addChild(gridGraphics);
     worldContainer.addChild(shapesContainer);
+    worldContainer.addChild(areasContainer);
     worldContainer.addChild(fogContainer);
     worldContainer.addChild(wallsGraphics); // above fog, below tokens (GM only)
     worldContainer.addChild(tokenContainer);
@@ -901,6 +980,7 @@ export function useEncounterCanvas(options: CanvasOptions) {
     if (!gridGraphics || !mapSprite) return;
     const enc = store.current;
     if (!enc) return;
+    drawAreas();
 
     gridGraphics.clear();
     const { gridSize, gridOffsetX, gridOffsetY } = enc;
@@ -1500,6 +1580,21 @@ export function useEncounterCanvas(options: CanvasOptions) {
         return;
       }
 
+      // Area placement: one click (burst, emanation) or origin then aim (cone, line)
+      if (options.isDmMode && tool === "area") {
+        if (e.button === 2) {
+          clearShapeAnchor();
+          return;
+        }
+        if (e.button === 0 && enc) {
+          const at = screenToHalfGrid(e.global.x, e.global.y, enc);
+          const needsMore = options.onAreaClick?.(areaAnchor, at) ?? false;
+          areaAnchor = needsMore ? at : null;
+          drawAreaPreview(at);
+        }
+        return;
+      }
+
       // Pan — middle mouse or alt+left
       if (
         e.button === 1 ||
@@ -1531,6 +1626,13 @@ export function useEncounterCanvas(options: CanvasOptions) {
       if (options.isDmMode && tool === "wall") {
         wallSnapPreview = getWallSnapPoint(e.global.x, e.global.y);
         renderWallDraft();
+        return;
+      }
+
+      // Area preview follows the pointer
+      if (tool === "area") {
+        const enc = store.current;
+        if (enc) drawAreaPreview(screenToHalfGrid(e.global.x, e.global.y, enc));
         return;
       }
 
@@ -1691,6 +1793,8 @@ export function useEncounterCanvas(options: CanvasOptions) {
     clearShapeAnchor,
     clearRuler,
     getShapeAtScreen,
+    setAreas,
+    getAreaAtScreen,
     redrawWalls,
     getWallAtPoint,
     setActiveCoverType,

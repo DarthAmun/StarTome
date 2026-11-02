@@ -71,6 +71,7 @@ export interface DbEncounter {
   xp_awarded?: number | null   // per participant, as for four PCs, incl. accomplishment XP
   party_level_at_resolve?: number | null
   resolution?: Record<string, unknown> | string | null   // ResolutionRecord, for the undo
+  areas?: unknown[] | string   // AreaOverlay[] (COMBAT_PLAN.md §5); non-indexed, no version bump
   created_at: string
   updated_at: string
 }
@@ -526,7 +527,7 @@ function watchUpgrades(db: StarTomeDb) {
  * JSON text; `rowValues` converts a row, `structureColumns` a whole database.
  */
 export const VALUE_COLUMNS: Record<string, Record<string, unknown>> = {
-  encounters: { fog_data: {}, viewport: { x: 0, y: 0, scale: 1 }, combat_log: [], defeated: [], resolution: null },
+  encounters: { fog_data: {}, viewport: { x: 0, y: 0, scale: 1 }, combat_log: [], defeated: [], resolution: null, areas: [] },
   encounterTokens: { conditions: [], timers: [] },
   encounterWalls: { points: [] },
   entities: { attributes: {} },

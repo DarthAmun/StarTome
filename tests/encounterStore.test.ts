@@ -258,4 +258,25 @@ describe('encounter store', () => {
       { type: 'roll', note: 'Goblin: Perception', value: 12, degree: undefined, targetName: undefined },
     ])
   })
+
+  it('saves areas with the encounter, as plain values, and reloads them', async () => {
+    const { store, id } = await encounter([{ label: 'Goblin', initiative: 10 }])
+    await store.addArea({ id: 'a1', kind: 'burst', originX: 2, originY: 2, sizeFt: 10, label: '10-foot burst', color: '#e8a040',
+      effect: { save: 'ref', dc: 20, basic: true, damage: { formula: '4d6', type: 'fire' } } })
+    await store.updateArea('a1', { hidden: true })
+    const row = await getDb().encounters.get(id)
+    expect((row!.areas as { id: string; hidden?: boolean }[]).map(a => [a.id, a.hidden])).toEqual([['a1', true]])
+    setActivePinia(createPinia())
+    const again = useEncounterStore()
+    await again.loadEncounter(id)
+    expect(again.current!.areas[0]).toMatchObject({ id: 'a1', kind: 'burst', effect: { dc: 20 } })
+    expect(again.areaCells(again.current!.areas[0]).size).toBe(12)
+    await again.removeArea('a1')
+    expect((await getDb().encounters.get(id))!.areas).toEqual([])
+  })
+
+  it('reads encounters from before areas as having none', async () => {
+    const { store } = await encounter([])
+    expect(store.current!.areas).toEqual([])
+  })
 })

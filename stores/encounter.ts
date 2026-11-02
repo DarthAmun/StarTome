@@ -10,6 +10,7 @@ import { resolveImageDataUrl, storeInlineImage } from '~/rules/images'
 import { evaluateFormula } from '~/composables/useFormulaEvaluator'
 import { freeSpots, rollInitiative, rulesScope, tokenStats, type Adjustment } from '~/rules/combat'
 import { damageWithTemp, grantTemp } from '~/rules/hp'
+import { cellsInArea, type AreaOverlay } from '~/rules/areas'
 import type { Hazard, RulesEntity } from '~/types/rules'
 import { parseDefeated, type DefeatedEnemy } from '~/rules/advancement'
 import { healthState, type HealthState } from '~/composables/useConditions'
@@ -224,6 +225,7 @@ export interface Encounter {
   partyLevel: number | null   // override of the party tab's level for the meter
   status: string              // 'prepared' | 'active' | 'resolved'
   defeated: DefeatedEnemy[]   // enemies removed in Run mode; their XP counts at resolve
+  areas: AreaOverlay[]        // bursts, cones … with their save effects (COMBAT_PLAN.md §5)
 }
 
 export const useEncounterStore = defineStore('encounter', () => {
@@ -311,6 +313,7 @@ export const useEncounterStore = defineStore('encounter', () => {
         partyLevel: data.party_level ?? null,
         status: data.status ?? 'prepared',
         defeated: parseDefeated(data.defeated),
+        areas: parseJson<AreaOverlay[]>(data.areas, []),
         tokens: ((data as any).tokens || []).map(normalizeToken),
       }
       roundNumber.value = data.round_number ?? 1
@@ -1145,6 +1148,7 @@ export const useEncounterStore = defineStore('encounter', () => {
       gridOffsetX: enc.gridOffsetX,
       gridOffsetY: enc.gridOffsetY,
       shapes: shapeOverlays.value.map(s => structuredClone(toRaw(s))),
+      areas: playerAreas(),
       currentTurnIndex: currentTurnIndex.value,
       activeTurnTokenId: _activeTurnTokenId.value,
       roundNumber: roundNumber.value,
@@ -1152,6 +1156,43 @@ export const useEncounterStore = defineStore('encounter', () => {
       wallDoorStates: walls.value.map(w => ({ id: w.id, isOpen: w.isOpen })),
       playerViewPrefs: { ...playerViewPrefs.value },
     })
+  }
+
+  // ── Actions — Areas (COMBAT_PLAN.md §5) ───────────────────────────────────
+  function areaCells(area: AreaOverlay): Set<string> {
+    return cellsInArea(area, current.value?.tokens ?? [])
+  }
+
+  /** Players see where an area is, never its effect or DC; hidden ones not at all. */
+  function playerAreas() {
+    return (current.value?.areas ?? []).filter(a => !a.hidden).map(a => ({ id: a.id, color: a.color, cells: [...areaCells(a)] }))
+  }
+
+  async function persistAreas() {
+    if (!current.value) return
+    await dbApi.encounters.update({ id: current.value.id, areas: plain(current.value.areas) })
+  }
+
+  async function addArea(area: AreaOverlay) {
+    if (!current.value) return
+    current.value.areas.push(area)
+    syncToPlayer()
+    await persistAreas()
+  }
+
+  async function updateArea(id: string, changes: Partial<AreaOverlay>) {
+    const area = current.value?.areas.find(a => a.id === id)
+    if (!area) return
+    Object.assign(area, changes)
+    syncToPlayer()
+    await persistAreas()
+  }
+
+  async function removeArea(id: string) {
+    if (!current.value) return
+    current.value.areas = current.value.areas.filter(a => a.id !== id)
+    syncToPlayer()
+    await persistAreas()
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -1420,6 +1461,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     setSoundPlaylistId,
     addTokenToEncounter, addCreatureToEncounter, addCreatureToEncounterAuto, addBlankToken, setTokenRulesLink, moveToken, updateToken, removeToken, rememberDefeated, clearDefeated, setStatus, addToLibrary, updateLibraryToken,
     openPlayerWindow, closePlayerWindow, setShapeOverlays,
+    addArea, updateArea, removeArea, areaCells,
     nextTurn, prevTurn,
     automation, turnPrompts, turnNotes, usesDying, resolveRecovery, resolvePersistent, dismissPrompt,
     getToken, applyDamage, setTempHp, grantTempHp, rollAllInitiative, setInitiativeFormula, setPartyLevel, bulkRemoveTokens, bulkSetTokenVisibility, toggleCondition,

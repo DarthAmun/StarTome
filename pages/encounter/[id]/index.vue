@@ -1,7 +1,7 @@
 <template>
   <div
     class="encounter-page"
-    :class="{ 'fog-paint-mode': activeTool === 'fog' || activeTool === 'measure' || activeTool === 'shapes' || activeTool === 'ping' }"
+    :class="{ 'fog-paint-mode': activeTool === 'fog' || activeTool === 'measure' || activeTool === 'shapes' || activeTool === 'ping' || activeTool === 'area' }"
   >
       <!-- ── Top toolbar ─────────────────────────────────────────────────────── -->
       <header class="encounter-toolbar">
@@ -401,6 +401,24 @@
             </label>
           </div>
 
+          <!-- Area tool submenu (COMBAT_PLAN.md §5) -->
+          <div v-if="activeTool === 'area'" class="shape-submenu area-submenu">
+            <button
+              v-for="k in AREA_KINDS" :key="k"
+              class="area-kind-btn"
+              :class="{ active: areaTool.kind.value === k }"
+              :title="AREA_HINT[k]"
+              @click="areaTool.kind.value = k"
+            >{{ k }}</button>
+            <label class="area-size" title="Size in feet">
+              <input v-model.number="areaTool.sizeFt.value" type="number" min="5" step="5" class="area-size-input" />
+              <span>ft</span>
+            </label>
+            <label class="shape-color-swatch" :style="{ background: areaTool.color.value }" title="Pick color">
+              <input v-model="areaTool.color.value" type="color" class="shape-color-input" />
+            </label>
+          </div>
+
           <!-- Floating tool buttons -->
           <div class="map-tool-dock">
             <button
@@ -434,6 +452,14 @@
               @click="toggleTool('shapes')"
             >
               <OhVueIcon name="fa-shapes" scale="1.0" />
+            </button>
+            <button
+              class="map-tool-btn"
+              :class="{ active: activeTool === 'area' }"
+              title="Areas: bursts, cones, lines and emanations that know who is inside"
+              @click="toggleTool('area')"
+            >
+              <OhVueIcon name="gi-fire-ring" scale="1.0" />
             </button>
             <button
               v-if="encounter?.fovEnabled"
@@ -788,6 +814,24 @@
         </template>
       </Teleport>
 
+      <!-- ── Area Context Menu ──────────────────────────────────────────────────── -->
+      <Teleport to="body">
+        <template v-if="areaCtxMenu.open && ctxArea">
+          <div class="ctx-back" @click="areaCtxMenu.open = false" @contextmenu.prevent="areaCtxMenu.open = false" />
+          <div class="sh-ctx-menu" :style="{ left: areaCtxMenu.x + 'px', top: areaCtxMenu.y + 'px' }">
+            <div class="sh-ctx-title">{{ ctxArea.label }}</div>
+            <button class="sh-ctx-item" @click="onCtxToggleAreaHidden">
+              <OhVueIcon :name="ctxArea.hidden ? 'md-visibility' : 'md-visibilityoff'" scale="0.85" style="opacity:0.7;flex-shrink:0" />
+              {{ ctxArea.hidden ? 'Show to players' : 'Hide from players' }}
+            </button>
+            <button class="sh-ctx-item sh-ctx-item--danger" @click="onCtxRemoveArea">
+              <OhVueIcon name="md-delete" scale="0.85" style="opacity:0.7;flex-shrink:0" />
+              Remove Area
+            </button>
+          </div>
+        </template>
+      </Teleport>
+
       <!-- ── Wall Context Menu ────────────────────────────────────────────────────── -->
       <Teleport to="body">
         <template v-if="wallCtxMenu.open">
@@ -975,6 +1019,8 @@ import type { LibraryTokenForm } from "~/components/LibraryTokenModal.vue";
 import type { BlankTokenInput, EncounterToken, HpChangeOptions } from "~/stores/encounter";
 import type { QuickAddOptions } from "~/components/QuickAddDialog.vue";
 import { useEncounterCanvas, type ShapeType, type ShapeOverlay } from "../../../composables/useEncounterCanvas";
+import { useAreaTool } from "~/composables/useAreaTool";
+import { AREA_KINDS, type AreaKind } from "~/rules/areas";
 import { dbApi, parseJsonObject, type DbEncounterWall } from "~/composables/useDb";
 import { imageTypeOf, pickImageFile } from "~/utils/image";
 import { hexColorToNumber } from "~/composables/useConditions";
@@ -1006,7 +1052,7 @@ const store = useEncounterStore();
 const entitiesStore = useEntities();
 const canvasContainer = ref<HTMLElement | null>(null);
 
-const activeTool = ref<"select" | "fog" | "measure" | "shapes" | "wall" | "ping">("select");
+const activeTool = ref<"select" | "fog" | "measure" | "shapes" | "wall" | "ping" | "area">("select");
 
 // ── Player view layout ────────────────────────────────────────────────────
 const showPlayerViewPrefs = ref(false);
@@ -1242,8 +1288,14 @@ function onCanvasRightClick(e: MouseEvent) {
         && e.offsetY >= b.y && e.offsetY <= b.y + b.h
   }) ?? null
 
-  // If no token was hit, check for a shape overlay at the click position
+  // If no token was hit, check for an area, then a shape overlay at the click position
   if (!hit) {
+    const areaId = canvas.getAreaAtScreen(e.offsetX, e.offsetY)
+    if (areaId) {
+      Object.assign(areaCtxMenu, { x: e.clientX, y: e.clientY, areaId, open: true })
+      return
+    }
+
     const hitShape = canvas.getShapeAtScreen(e.offsetX, e.offsetY)
     if (hitShape) {
       shapeCtxMenu.x = e.clientX
@@ -1433,6 +1485,29 @@ function onCtxAddTimer(tokenId: number, name: string, turns: number) {
 async function onCtxRemoveToken(tokenId: number) {
   await keepDefeatedXp([tokenId])
   store.removeToken(tokenId)
+}
+
+// ── Areas (COMBAT_PLAN.md §5) ──────────────────────────────────────────────
+const areaTool = useAreaTool();
+const AREA_HINT: Record<AreaKind, string> = {
+  burst: 'Burst: click a grid intersection',
+  emanation: 'Emanation: click a token (it follows the token)',
+  cone: 'Cone: click a token or point, then click where it points (45° steps)',
+  line: 'Line: click a token or point, then click where it points',
+};
+const areaCtxMenu = reactive({ open: false, x: 0, y: 0, areaId: null as string | null });
+const ctxArea = computed(() => store.current?.areas.find(a => a.id === areaCtxMenu.areaId) ?? null);
+
+watch(areaTool.canvasAreas, (list) => canvas?.setAreas(list), { deep: true });
+
+function onCtxToggleAreaHidden() {
+  if (ctxArea.value) store.updateArea(ctxArea.value.id, { hidden: !ctxArea.value.hidden });
+  areaCtxMenu.open = false;
+}
+
+function onCtxRemoveArea() {
+  if (areaCtxMenu.areaId) store.removeArea(areaCtxMenu.areaId);
+  areaCtxMenu.open = false;
 }
 
 function onCtxRemoveShape() {
@@ -1669,7 +1744,7 @@ function openAddTokenModal() {
 // Dragging type: 'token' or 'creature'
 let draggingPayload: { type: 'token'; tokenId: number } | { type: 'creature'; rulesId: string } | null = null
 
-function toggleTool(tool: "fog" | "measure" | "shapes" | "wall" | "ping") {
+function toggleTool(tool: "fog" | "measure" | "shapes" | "wall" | "ping" | "area") {
   activeTool.value = activeTool.value === tool ? "select" : tool;
 }
 
@@ -1753,6 +1828,8 @@ onMounted(async () => {
     onShapeCommit: (anchorCol, anchorRow, endCol, endRow) => {
       addShape(anchorCol, anchorRow, endCol, endRow);
     },
+    getAreaDraft: areaTool.getAreaDraft,
+    onAreaClick: areaTool.onAreaClick,
     onWallComplete: async ({ points, coverType }) => {
       await store.addWall(points, coverType);
       canvas?.redrawWalls();
@@ -1775,6 +1852,7 @@ onMounted(async () => {
     await canvas.loadMap(store.current.mapSource, store.current.mapType);
   }
   await canvas.renderTokens();
+  canvas.setAreas(areaTool.canvasAreas.value);
   canvas.redrawWalls();
   canvas.recomputeFov();
 
@@ -1988,7 +2066,7 @@ function removeShape(id: string) {
 // Clear ruler when switching away from measure tool
 watch(activeTool, (tool: string) => {
   if (tool !== "measure") canvas?.clearRuler();
-  if (tool !== "shapes") canvas?.clearShapeAnchor();
+  canvas?.clearShapeAnchor();
 });
 
 // Redraw walls reactively when the store's wall list changes
@@ -3552,6 +3630,19 @@ function getImageUrl(token: any): string {
   line-height: 1;
 }
 
+.area-submenu { align-items: center; }
+.area-kind-btn {
+  font-family: var(--font-head); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 5px 9px; border-radius: 20px; border: 1px solid rgba(232, 220, 197, 0.18); background: transparent;
+  color: rgba(232, 220, 197, 0.7); cursor: pointer;
+}
+.area-kind-btn.active { border-color: var(--gold); color: #f0e6cf; background: rgba(184,134,11,0.2); }
+.area-size { display: flex; align-items: center; gap: 3px; font-size: 11px; color: rgba(232, 220, 197, 0.7); }
+.area-size-input {
+  width: 46px; padding: 3px 4px; border-radius: 4px; border: 1px solid rgba(232, 220, 197, 0.18);
+  background: rgba(0,0,0,0.3); color: #f0e6cf; font-family: var(--font-mono); font-size: 12px;
+}
+.sh-ctx-title { padding: 6px 12px 4px; font-family: var(--font-head); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-ghost); }
 .shape-submenu {
   position: absolute;
   bottom: 76px; /* sits above .map-tool-dock (bottom:20 + 48px height + 8px gap) */

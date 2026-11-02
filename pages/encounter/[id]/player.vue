@@ -39,6 +39,7 @@ import { playerWindow } from '~/utils/windowChannel'
 import { ImageCache } from '~/utils/playerPayload'
 import { dbApi } from '~/composables/useDb'
 import { useEncounterCanvas, type ShapeOverlay } from '../../../composables/useEncounterCanvas'
+import { hexColorToNumber } from '~/composables/useConditions'
 import { useEncounterStore } from '~/stores/encounter'
 
 const route = useRoute()
@@ -164,6 +165,9 @@ onMounted(async () => {
       if (!renderedShapeIds.has(shape.id)) canvas?.addShapeOverlay(shape)
     }
     renderedShapeIds = incomingIds
+
+    // Areas: where they are only (COMBAT_PLAN.md §5)
+    canvas?.setAreas((data.areas ?? []).map((a: { id: string; color: string; cells: string[] }) => ({ id: a.id, cells: a.cells, color: hexColorToNumber(a.color) })))
 
     // Recompute FOV with the fully updated state
     canvas?.recomputeFov()
