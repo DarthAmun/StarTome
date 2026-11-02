@@ -279,4 +279,34 @@ describe('encounter store', () => {
     const { store } = await encounter([])
     expect(store.current!.areas).toEqual([])
   })
+
+  it('asks for saves when a token ends its turn in a lingering area or walks into one, and expires it', async () => {
+    const { store } = await encounter([{ label: 'A', initiative: 20 }, { label: 'B', initiative: 10 }])
+    const [a, b] = store.current!.tokens
+    await store.moveToken(a.id, 2, 2)
+    await store.moveToken(b.id, 9, 9)
+    const effect = { save: 'fort' as const, dc: 18, basic: true, damage: { formula: '2d6', type: 'poison' } }
+    await store.addArea({ id: 'cloud', kind: 'burst', originX: 3, originY: 3, sizeFt: 10, label: 'Cloud', color: '#55aa55', effect, lingering: { trigger: 'turn-end', untilRound: 1 } })
+    await store.addArea({ id: 'pit', kind: 'burst', originX: 8, originY: 8, sizeFt: 5, label: 'Spikes', color: '#aa5555', effect, lingering: { trigger: 'enter' } })
+    store.setStatus('active')
+    store.nextTurn()
+    expect(store.areaPrompts.map(p => [p.areaId, p.tokenIds, p.reason])).toEqual([['cloud', [a.id], 'A ends its turn in Cloud']])
+    store.closeAreaPrompt(store.areaPrompts[0].id)
+    // Moving within the area or out of it asks nothing; stepping in does
+    await store.moveToken(b.id, 7, 7)
+    await store.moveToken(b.id, 8, 8)
+    expect(store.areaPrompts.map(p => [p.areaId, p.reason])).toEqual([['pit', 'B enters Spikes']])
+    // Round 2 begins: the cloud (until round 1) is gone, the pit stays
+    store.nextTurn()
+    expect(store.current!.areas.map(x => x.id)).toEqual(['pit'])
+  })
+
+  it('adds an area save\'s conditions, keeping the higher value of one the token has', async () => {
+    const { store } = await encounter([{ label: 'A', initiative: 20, conditions: [{ name: 'Frightened', value: 2 }] }])
+    const a = store.current!.tokens[0]
+    await store.addConditions(a.id, [{ name: 'Frightened', value: 1 }, { name: 'Prone', value: null }])
+    expect(a.conditions.map(c => [c.name, c.value])).toEqual([['Frightened', 2], ['Prone', null]])
+    await store.addConditions(a.id, [{ name: 'Frightened', value: 3 }])
+    expect(a.conditions.find(c => c.name === 'Frightened')?.value).toBe(3)
+  })
 })

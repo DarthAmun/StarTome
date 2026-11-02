@@ -1,6 +1,6 @@
 # Combat Plan: temp HP, stat blocks, rolls, areas, quick add
 
-Status: **approved** (2026-11-02). Your answers are in §7, including the two defaults marked *(default)*. No code has changed. It is based on the five items you listed and the code at `0c45856`.
+Status: **built** (2026-11-02), items 1–5 committed; §8 lists where the build differs from this plan. Your answers are in §7, including the two defaults marked *(default)*. No code has changed. It is based on the five items you listed and the code at `0c45856`.
 
 ---
 
@@ -260,3 +260,21 @@ Items 1–3 are independent and could run in parallel (2 and 3 both touch `TurnR
 6. **Areas + DC**: save prompt with damage by degree, **plus lingering areas** that prompt on enter / turn start / turn end.
 7. **Old shapes**: kept as free drawings; areas are a separate tool.
 8. **Foundry chips** *(default)*: `@Check` / `@Template` become clickable area chips; needs a re-sync to show up in existing data.
+
+---
+
+## 8. Built differently (2026-11-02)
+
+- **Item 1:** the "+N" temp HP badge is in the encounter page's order list; `TurnRail` shows no HP.
+- **Item 3:** a click on an order row opens the stat block; the gear still edits the token (before, a row click edited too).
+- **Item 4:**
+  - Attack targets come from a picker in the stat-block panel; the map has no lasting token selection.
+  - DiceRoller, the formula evaluator and the command palette keep their own dice code for now.
+  - Fatal's extra die is added after doubling, like deadly's; Player Core only says so for deadly.
+  - No component test for the attack buttons (the project has no component-test setup); checked in the browser.
+- **Item 5:**
+  - "Place area" reads the area, DC and damage from the ability text StarTome already has ("20-foot burst … DC 22 basic Reflex … ::dice[6d6 fire]"), so no converter change and no Foundry re-sync.
+  - It's on creature and hazard abilities only. Spells in a creature's spell list are names, and SF2e area weapons have no area data in the converter yet.
+  - Non-basic saves start at full damage on a failure or critical failure and none otherwise; each row's damage can be edited.
+  - Stepping back a turn doesn't take back lingering prompts or bring back an expired area.
+

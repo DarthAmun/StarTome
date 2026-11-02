@@ -299,6 +299,14 @@
             @close="statPanelTokenId = null"
             @link="openLinkModal"
             @apply-damage="onCtxApplyDamage"
+            @place-area="onPlaceArea"
+          />
+
+          <!-- Saves against an area (COMBAT_PLAN.md §5) -->
+          <AreaSavePrompt
+            v-if="mode === 'run'"
+            :pb-mirror-of="t => linkedCharOf(t)?.pbStatus ?? null"
+            @apply-damage="onCtxApplyDamage"
           />
 
           <!-- Drop hint when no map -->
@@ -819,7 +827,15 @@
         <template v-if="areaCtxMenu.open && ctxArea">
           <div class="ctx-back" @click="areaCtxMenu.open = false" @contextmenu.prevent="areaCtxMenu.open = false" />
           <div class="sh-ctx-menu" :style="{ left: areaCtxMenu.x + 'px', top: areaCtxMenu.y + 'px' }">
-            <div class="sh-ctx-title">{{ ctxArea.label }}</div>
+            <div class="sh-ctx-title">{{ ctxArea.label }}<template v-if="ctxArea.effect"> · DC {{ ctxArea.effect.dc }}</template></div>
+            <button class="sh-ctx-item" @click="areaEffectId = ctxArea.id; areaCtxMenu.open = false">
+              <OhVueIcon name="md-editnote" scale="0.85" style="opacity:0.7;flex-shrink:0" />
+              Effect…
+            </button>
+            <button v-if="ctxArea.effect" class="sh-ctx-item" @click="onCtxAreaSaves">
+              <OhVueIcon name="fa-dice-d20" scale="0.85" style="opacity:0.7;flex-shrink:0" />
+              Roll saves
+            </button>
             <button class="sh-ctx-item" @click="onCtxToggleAreaHidden">
               <OhVueIcon :name="ctxArea.hidden ? 'md-visibility' : 'md-visibilityoff'" scale="0.85" style="opacity:0.7;flex-shrink:0" />
               {{ ctxArea.hidden ? 'Show to players' : 'Hide from players' }}
@@ -831,6 +847,13 @@
           </div>
         </template>
       </Teleport>
+
+      <AreaEffectDialog
+        :open="areaEffectId !== null"
+        :area="store.current?.areas.find(a => a.id === areaEffectId) ?? null"
+        @close="areaEffectId = null"
+        @save="onAreaEffectSave"
+      />
 
       <!-- ── Wall Context Menu ────────────────────────────────────────────────────── -->
       <Teleport to="body">
@@ -1020,7 +1043,8 @@ import type { BlankTokenInput, EncounterToken, HpChangeOptions } from "~/stores/
 import type { QuickAddOptions } from "~/components/QuickAddDialog.vue";
 import { useEncounterCanvas, type ShapeType, type ShapeOverlay } from "../../../composables/useEncounterCanvas";
 import { useAreaTool } from "~/composables/useAreaTool";
-import { AREA_KINDS, type AreaKind } from "~/rules/areas";
+import { AREA_KINDS, type AreaKind, type AreaOverlay } from "~/rules/areas";
+import type { AreaSpec } from "~/composables/useDiceRoll";
 import { dbApi, parseJsonObject, type DbEncounterWall } from "~/composables/useDb";
 import { imageTypeOf, pickImageFile } from "~/utils/image";
 import { hexColorToNumber } from "~/composables/useConditions";
@@ -1499,6 +1523,37 @@ const areaCtxMenu = reactive({ open: false, x: 0, y: 0, areaId: null as string |
 const ctxArea = computed(() => store.current?.areas.find(a => a.id === areaCtxMenu.areaId) ?? null);
 
 watch(areaTool.canvasAreas, (list) => canvas?.setAreas(list), { deep: true });
+
+const areaEffectId = ref<string | null>(null);
+
+async function onAreaEffectSave(changes: Partial<AreaOverlay>, rollNow: boolean) {
+  const id = areaEffectId.value;
+  areaEffectId.value = null;
+  if (!id) return;
+  await store.updateArea(id, changes);
+  if (rollNow) openAreaSaves(id);
+}
+
+/** The save prompt shows in Run mode; from Prepare it switches there. */
+function openAreaSaves(id: string) {
+  if (mode.value !== 'run') setMode('run');
+  store.openAreaPrompt(id);
+}
+
+function onCtxAreaSaves() {
+  if (areaCtxMenu.areaId) openAreaSaves(areaCtxMenu.areaId);
+  areaCtxMenu.open = false;
+}
+
+/** "Place area" in a stat block: an emanation goes around the token now, other areas wait for clicks on the map, which the panel would cover. */
+function onPlaceArea(spec: AreaSpec, tokenId: number | null) {
+  if (!areaTool.start(spec, tokenId)) return;
+  activeTool.value = 'area';
+  statPanelTokenId.value = null;
+}
+
+// Leaving the area tool drops an ability that wasn't placed
+watch(activeTool, (tool) => { if (tool !== 'area') areaTool.pending.value = null; });
 
 function onCtxToggleAreaHidden() {
   if (ctxArea.value) store.updateArea(ctxArea.value.id, { hidden: !ctxArea.value.hidden });

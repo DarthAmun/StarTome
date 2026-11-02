@@ -96,7 +96,7 @@
  * HP, AC and conditions. GM only.
  */
 import { computed, provide, ref, shallowRef, watch } from 'vue'
-import { ROLL_CONTEXT, type StatRoll } from '~/composables/useDiceRoll'
+import { ROLL_CONTEXT, type AreaSpec, type StatRoll } from '~/composables/useDiceRoll'
 import { getConditionColor, hpColor } from '~/composables/useConditions'
 import { rulesGet } from '~/composables/useRules'
 import type { CharacterMirror } from '~/partylink/port'
@@ -125,6 +125,8 @@ const emit = defineEmits<{
   link: [tokenId: number]
   /** Damage for the target; the page routes it (Play Buddy characters get a request). */
   'apply-damage': [tokenId: number, amount: number, critical: boolean]
+  /** An ability's area to put on the map, used by this token. */
+  'place-area': [spec: AreaSpec, tokenId: number | null]
 }>()
 
 const store = useEncounterStore()
@@ -190,7 +192,7 @@ function signedMod(n: number) {
 
 function push(r: Omit<PanelRoll, 'id' | 'applied'>) {
   rolls.value = [{ ...r, id: nextRollId++, applied: null }, ...rolls.value].slice(0, 6)
-  if (props.token) store.logRoll(props.token.id, { label: r.label, total: r.total, degree: r.kind === 'attack' ? r.degree : null, targetName: r.targetName })
+  if (props.token) store.logRoll(props.token.id, { label: r.label, total: r.total, degree: r.kind === 'attack' ? r.degree : null, targetName: r.targetName, attack: r.kind === 'attack' })
 }
 
 function roll(r: StatRoll) {
@@ -228,7 +230,7 @@ function apply(r: PanelRoll, factor: number) {
   if (amount > 0) emit('apply-damage', r.targetId, amount, !!r.critical)
 }
 
-provide(ROLL_CONTEXT, { roll })
+provide(ROLL_CONTEXT, { roll, placeArea: spec => emit('place-area', spec, props.token?.id ?? null) })
 
 function formatAt(iso: string) {
   const d = new Date(iso)

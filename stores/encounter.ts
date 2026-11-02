@@ -10,7 +10,7 @@ import { resolveImageDataUrl, storeInlineImage } from '~/rules/images'
 import { evaluateFormula } from '~/composables/useFormulaEvaluator'
 import { freeSpots, rollInitiative, rulesScope, tokenStats, type Adjustment } from '~/rules/combat'
 import { damageWithTemp, grantTemp } from '~/rules/hp'
-import { cellsInArea, type AreaOverlay } from '~/rules/areas'
+import { cellsInArea, tokenInCells, type AreaOverlay, type AreaTrigger } from '~/rules/areas'
 import type { Hazard, RulesEntity } from '~/types/rules'
 import { parseDefeated, type DefeatedEnemy } from '~/rules/advancement'
 import { healthState, type HealthState } from '~/composables/useConditions'
@@ -50,6 +50,8 @@ export interface CombatLogEntry {
   /** A roll's degree of success against the target (COMBAT_PLAN.md §4). */
   degree?: Degree
   targetName?: string
+  /** The roll was an attack: its degree reads Hit / Miss. */
+  attack?: boolean
   conditionName?: string
   note?: string
   /** Made by the condition automation, not by hand. */
@@ -60,6 +62,16 @@ export interface CombatLogEntry {
 export type TurnPrompt = TurnPromptSeed & { id: number; tokenId: number; tokenName: string }
 
 /** Options for an HP change: a critical hit, or hits taken while already at 0 HP. */
+/** An area's saves to resolve: everyone inside, or the tokens a lingering area caught. */
+export interface AreaPrompt {
+  id: number
+  areaId: string
+  /** null = every token in the area when the prompt opens. */
+  tokenIds: number[] | null
+  /** Why it came up, e.g. "Goblin ends its turn in Cloudkill". */
+  reason: string | null
+}
+
 /** How tokens join an encounter (COMBAT_PLAN.md §2). */
 export interface PlaceOptions {
   /** How many to place, on free squares nearest the given one. */
@@ -249,6 +261,9 @@ export const useEncounterStore = defineStore('encounter', () => {
   const turnPrompts = ref<TurnPrompt[]>([])
   /** Reminders for the token whose turn it is (actions lost or gained). */
   const turnNotes = ref<{ tokenId: number; text: string }[]>([])
+  /** Save prompts of areas, oldest first (COMBAT_PLAN.md §5). Session-only. */
+  const areaPrompts = ref<AreaPrompt[]>([])
+  let nextAreaPromptId = 1
   let nextPromptId = 1
 
   // ── Computed ───────────────────────────────────────────────────────────────
@@ -588,8 +603,13 @@ export const useEncounterStore = defineStore('encounter', () => {
     if (!current.value) return
     const token = current.value.tokens.find(t => t.id === instanceId)
     if (!token) return
+    // Lingering areas that trigger on entering: inside now, not before
+    const entered = lingeringAreas('enter').filter(a => !tokenInCells(areaCells(a), token))
     token.gridX = gridX
     token.gridY = gridY
+    for (const a of entered) {
+      if (tokenInCells(areaCells(a), token)) openAreaPrompt(a.id, [token.id], `${token.label || token.name} enters ${a.label}`)
+    }
     await dbApi.encounterTokens.update({ id: instanceId, gridX, gridY })
     syncToPlayer()
   }
@@ -668,12 +688,13 @@ export const useEncounterStore = defineStore('encounter', () => {
   }
 
   /** A roll from a token's stat block: what was rolled (note), the total and, against a target, the degree. */
-  function logRoll(tokenId: number, roll: { label: string; total: number; degree?: Degree | null; targetName?: string | null }) {
+  function logRoll(tokenId: number, roll: { label: string; total: number; degree?: Degree | null; targetName?: string | null; attack?: boolean }) {
     const token = getToken(tokenId)
     if (!token) return
     return appendLogEntry({
       tokenId, tokenName: token.label || token.name, type: 'roll', note: roll.label, value: roll.total,
       ...(roll.degree ? { degree: roll.degree } : {}), ...(roll.targetName ? { targetName: roll.targetName } : {}),
+      ...(roll.attack ? { attack: true } : {}),
     })
   }
 
@@ -821,6 +842,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     if (idx + 1 >= order.length) {
       _activeTurnTokenId.value = order[0].id
       roundNumber.value++
+      expireAreas()
     } else {
       _activeTurnTokenId.value = order[idx + 1].id
     }
@@ -834,6 +856,8 @@ export const useEncounterStore = defineStore('encounter', () => {
       applyEffects(starting, fx, record)
       turnNotes.value = fx.notes.map(text => ({ tokenId: starting.id, text }))
     }
+    if (ending) lingerFor(ending, 'turn-end', 'ends its turn in')
+    if (starting) lingerFor(starting, 'turn-start', 'starts its turn in')
     turnHistory.push(record)
     if (turnHistory.length > 200) turnHistory.shift()
     syncToPlayer()
@@ -1195,6 +1219,54 @@ export const useEncounterStore = defineStore('encounter', () => {
     await persistAreas()
   }
 
+  /** Opens an area's save prompt: for the given tokens, or everyone inside. */
+  function openAreaPrompt(areaId: string, tokenIds: number[] | null = null, reason: string | null = null) {
+    // One prompt per area and token set is enough
+    const same = areaPrompts.value.find(p => p.areaId === areaId && JSON.stringify(p.tokenIds) === JSON.stringify(tokenIds))
+    if (same) return same.id
+    const prompt: AreaPrompt = { id: nextAreaPromptId++, areaId, tokenIds, reason }
+    areaPrompts.value = [...areaPrompts.value, prompt]
+    return prompt.id
+  }
+
+  function closeAreaPrompt(id: number) {
+    areaPrompts.value = areaPrompts.value.filter(p => p.id !== id)
+  }
+
+  function lingeringAreas(trigger: AreaTrigger): AreaOverlay[] {
+    return (current.value?.areas ?? []).filter(a => a.effect && a.lingering?.trigger === trigger)
+  }
+
+  function lingerFor(token: EncounterToken, trigger: AreaTrigger, verb: string) {
+    for (const a of lingeringAreas(trigger)) {
+      if (tokenInCells(areaCells(a), token)) openAreaPrompt(a.id, [token.id], `${token.label || token.name} ${verb} ${a.label}`)
+    }
+  }
+
+  /** Areas whose last round has passed go away at the start of a round. */
+  function expireAreas() {
+    if (!current.value) return
+    const done = current.value.areas.filter(a => a.lingering?.untilRound != null && roundNumber.value > a.lingering.untilRound)
+    if (!done.length) return
+    const ids = new Set(done.map(a => a.id))
+    current.value.areas = current.value.areas.filter(a => !ids.has(a.id))
+    areaPrompts.value = areaPrompts.value.filter(p => !ids.has(p.areaId))
+    void persistAreas()
+  }
+
+  /** Adds conditions from an area's save; a condition the token has keeps the higher value. */
+  async function addConditions(tokenId: number, conds: { name: string; value: number | null }[]) {
+    const token = getToken(tokenId)
+    if (!token || !conds.length) return
+    const next = token.conditions.map(c => ({ ...c }))
+    for (const add of conds) {
+      const have = next.find(c => c.name === add.name)
+      if (!have) next.push({ name: add.name, value: add.value })
+      else if (add.value !== null && (have.value ?? 0) < add.value) have.value = add.value
+    }
+    await updateToken(tokenId, { conditions: next })
+  }
+
   // ── Helpers ────────────────────────────────────────────────────────────────
   async function persistEncounter() {
     if (!current.value) return
@@ -1461,7 +1533,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     setSoundPlaylistId,
     addTokenToEncounter, addCreatureToEncounter, addCreatureToEncounterAuto, addBlankToken, setTokenRulesLink, moveToken, updateToken, removeToken, rememberDefeated, clearDefeated, setStatus, addToLibrary, updateLibraryToken,
     openPlayerWindow, closePlayerWindow, setShapeOverlays,
-    addArea, updateArea, removeArea, areaCells,
+    addArea, updateArea, removeArea, areaCells, areaPrompts, openAreaPrompt, closeAreaPrompt, addConditions,
     nextTurn, prevTurn,
     automation, turnPrompts, turnNotes, usesDying, resolveRecovery, resolvePersistent, dismissPrompt,
     getToken, applyDamage, setTempHp, grantTempHp, rollAllInitiative, setInitiativeFormula, setPartyLevel, bulkRemoveTokens, bulkSetTokenVisibility, toggleCondition,

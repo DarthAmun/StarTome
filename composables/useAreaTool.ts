@@ -8,7 +8,8 @@
 import { computed, ref } from 'vue'
 import { hexColorToNumber } from '~/composables/useConditions'
 import type { CanvasArea } from '~/composables/useEncounterCanvas'
-import { cellsInArea, edgeOrigin, snapAngle45, type AreaKind, type AreaOverlay, type AreaShape, type AreaToken } from '~/rules/areas'
+import type { AreaSpec } from '~/composables/useDiceRoll'
+import { cellsInArea, edgeOrigin, snapAngle45, type AreaEffect, type AreaKind, type AreaOverlay, type AreaShape, type AreaToken } from '~/rules/areas'
 import { useEncounterStore } from '~/stores/encounter'
 
 type Point = { col: number; row: number }
@@ -18,6 +19,8 @@ export function useAreaTool() {
   const kind = ref<AreaKind>('burst')
   const sizeFt = ref(20)
   const color = ref('#e8a040')
+  /** An ability being placed (Place area in a stat block): its name and effect go onto the next area. */
+  const pending = ref<{ label: string; effect: AreaEffect } | null>(null)
 
   const tokens = (): AreaToken[] => store.current?.tokens ?? []
 
@@ -57,9 +60,38 @@ export function useAreaTool() {
   function onAreaClick(anchor: Point | null, at: Point): boolean {
     const shape = shapeFor(anchor, at)
     if (!shape) return true
-    const area: AreaOverlay = { ...shape, id: crypto.randomUUID(), label: `${shape.sizeFt}-foot ${shape.kind}`, color: color.value }
-    void store.addArea(area)
+    void commit(shape)
     return false
+  }
+
+  async function commit(shape: AreaShape) {
+    const p = pending.value
+    pending.value = null
+    const area: AreaOverlay = {
+      ...shape, id: crypto.randomUUID(), color: color.value,
+      label: p?.label ?? `${shape.sizeFt}-foot ${shape.kind}`,
+      ...(p ? { effect: p.effect } : {}),
+    }
+    await store.addArea(area)
+    // An ability's area asks for saves right away
+    if (area.effect) store.openAreaPrompt(area.id)
+    return area
+  }
+
+  /**
+   * Starts placing an ability's area. An emanation around the creature
+   * using it is placed at once; anything else waits for clicks on the map.
+   * Returns true when the map tool is needed.
+   */
+  function start(spec: AreaSpec, sourceTokenId: number | null): boolean {
+    kind.value = spec.kind
+    sizeFt.value = spec.sizeFt
+    pending.value = { label: spec.label, effect: spec.effect }
+    if (spec.kind === 'emanation' && sourceTokenId !== null) {
+      void commit({ kind: 'emanation', originX: 0, originY: 0, sizeFt: spec.sizeFt, attachedTokenId: sourceTokenId })
+      return false
+    }
+    return true
   }
 
   /** The placed areas as the canvas draws them; emanations follow their token. */
@@ -67,5 +99,5 @@ export function useAreaTool() {
     id: a.id, cells: [...store.areaCells(a)], color: hexColorToNumber(a.color),
   })))
 
-  return { kind, sizeFt, color, getAreaDraft, onAreaClick, canvasAreas }
+  return { kind, sizeFt, color, pending, start, getAreaDraft, onAreaClick, canvasAreas }
 }

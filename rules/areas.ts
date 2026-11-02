@@ -162,3 +162,28 @@ export const AREA_SAVE_LABEL: Record<AreaSave, string> = { fort: 'Fortitude', re
 export const AREA_TRIGGER_LABEL: Record<AreaTrigger, string> = {
   enter: 'enters it', 'turn-start': 'starts its turn in it', 'turn-end': 'ends its turn in it',
 }
+
+const SAVE_BY_WORD: Record<string, AreaSave> = { reflex: 'ref', fortitude: 'fort', will: 'will' }
+
+/**
+ * The area effect an ability's text describes, e.g. "… in a 20-foot burst …
+ * DC 22 basic Reflex save … 6d6 fire damage": shape, save and damage. Null
+ * unless it names both an area and a save DC. Roll chips (::dice[…]) count
+ * as their text.
+ */
+export function parseAreaEffect(text: string): { kind: AreaKind; sizeFt: number; effect: AreaEffect } | null {
+  const plain = text.replace(/::(?:dice|button)\[([^\]|]+)(?:\|[^\]]*)?\]/g, '$1')
+  const area = parseAreaText(plain)
+  const save = plain.match(/DC\s*(\d+)\s+(basic\s+)?(reflex|fortitude|will)/i)
+  if (!area || !save) return null
+  const dmg = plain.match(/(\d+d\d+(?:\s*[+-]\s*\d+)?)\s+([a-z]+)(?:\s+damage)?/i)
+  return {
+    ...area,
+    effect: {
+      save: SAVE_BY_WORD[save[3].toLowerCase()],
+      dc: Number(save[1]),
+      basic: !!save[2],
+      damage: dmg ? { formula: dmg[1].replace(/\s/g, ''), type: dmg[2].toLowerCase() } : null,
+    },
+  }
+}

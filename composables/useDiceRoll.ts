@@ -3,6 +3,7 @@ import { rollCheck, rollStrikeDamage } from '~/rules/rolls'
 import { GAME_RULES } from '~/rules/registry'
 import type { GameId } from '~/types/game'
 import type { Strike } from '~/types/rules'
+import type { AreaEffect, AreaKind } from '~/rules/areas'
 
 /** A finished roll for the dice panel: a labeled total with its dice. */
 export interface ShownRoll {
@@ -28,7 +29,14 @@ export type StatRoll =
  * Who handles a stat block's rolls. The encounter's stat-block panel provides
  * one (targets, apply damage, combat log); elsewhere the dice panel shows them.
  */
-export interface RollContext { roll(r: StatRoll): void }
+export interface RollContext {
+  roll(r: StatRoll): void
+  /** Starts placing an area with this effect on the map (COMBAT_PLAN.md §5); only on the encounter map. */
+  placeArea?(spec: AreaSpec): void
+}
+
+/** An area an ability describes: "20-foot burst … DC 22 basic Reflex … 6d6 fire damage". */
+export interface AreaSpec { label: string; kind: AreaKind; sizeFt: number; effect: AreaEffect }
 export const ROLL_CONTEXT: InjectionKey<RollContext> = Symbol('roll-context')
 
 // Module-level so all components share the same instance
@@ -60,7 +68,11 @@ export function useStatRolls(game: () => GameId | undefined) {
     if (ctx) return ctx.roll(r)
     showRoll(resolveStatRoll(r, game() ?? 'pf2e'))
   }
-  return { roll }
+  const canPlaceArea = !!ctx?.placeArea
+  function placeArea(spec: AreaSpec) {
+    ctx?.placeArea?.(spec)
+  }
+  return { roll, canPlaceArea, placeArea }
 }
 
 /** A stat-block roll without a target, as the dice panel shows it. */

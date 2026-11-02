@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cellsInArea, edgeOrigin, gridSteps, parseAreaText, snapAngle45, tokensInArea } from '~/rules/areas'
+import { cellsInArea, edgeOrigin, gridSteps, parseAreaEffect, parseAreaText, snapAngle45, tokensInArea } from '~/rules/areas'
 
 const sorted = (s: Set<string>) => [...s].sort()
 
@@ -98,3 +98,20 @@ describe('helpers', () => {
     expect(edgeOrigin(t, 180)).toEqual({ x: 4, y: 4.5 })
   })
 })
+
+describe('ability text', () => {
+  it('gives the area, save and damage of an ability', () => {
+    expect(parseAreaEffect('The dragon breathes a blast of flame in a 30-foot cone that deals ::dice[8d6 fire] damage (DC 25 basic Reflex save).')).toEqual({
+      kind: 'cone', sizeFt: 30, effect: { save: 'ref', dc: 25, basic: true, damage: { formula: '8d6', type: 'fire' } },
+    })
+    expect(parseAreaEffect('Each creature in a 10-foot emanation must succeed at a DC 20 Will save or become frightened 1.')).toEqual({
+      kind: 'emanation', sizeFt: 10, effect: { save: 'will', dc: 20, basic: false, damage: null },
+    })
+  })
+
+  it('needs both an area and a save', () => {
+    expect(parseAreaEffect('Strike twice. DC 20 Reflex.')).toBeNull()
+    expect(parseAreaEffect('A 20-foot burst of light.')).toBeNull()
+  })
+})
+

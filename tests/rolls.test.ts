@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deadlyDice, mapPenalty, parseExpression, rollCheck, rollExpression, rollStrikeDamage, strikeModifier, traitDie } from '~/rules/rolls'
+import { basicSaveDamage, deadlyDice, mapPenalty, parseExpression, rollCheck, rollExpression, rollStrikeDamage, strikeModifier, traitDie } from '~/rules/rolls'
 import { resolveStatRoll } from '~/composables/useDiceRoll'
 import type { Strike } from '~/types/rules'
 
@@ -96,6 +96,13 @@ describe('stat-block rolls without a target (dice panel)', () => {
     expect(r.total).toBe(37 + 6)
     expect(r.breakdown).toBe('(2d8 [4, 6] + 5) × 2 + 1d10 [7] slashing + (1d6 [3]) × 2 fire')
     expect(r.outcome).toBe('Critical · deadly d10: +7')
+  })
+})
+
+describe('basic saves', () => {
+  it('take none, half (rounded down), full or double damage', () => {
+    expect((['critical-success', 'success', 'failure', 'critical-failure'] as const).map(d => basicSaveDamage(25, d))).toEqual([0, 12, 25, 50])
+    expect(basicSaveDamage(1, 'success')).toBe(0)
   })
 })
 

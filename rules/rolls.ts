@@ -164,3 +164,16 @@ export const ATTACK_LABEL: Record<Degree, string> = {
   failure: 'Miss',
   'critical-failure': 'Critical miss',
 }
+
+/**
+ * Damage a creature takes from a basic save: none on a critical success,
+ * half (rounded down) on a success, full on a failure, double on a
+ * critical failure (Player Core "Basic Saving Throws").
+ */
+export function basicSaveDamage(total: number, degree: Degree): number {
+  const t = Math.max(0, total)
+  if (degree === 'critical-success') return 0
+  if (degree === 'success') return Math.floor(t / 2)
+  if (degree === 'critical-failure') return t * 2
+  return t
+}

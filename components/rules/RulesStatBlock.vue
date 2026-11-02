@@ -80,6 +80,7 @@
       </p>
       <p v-for="a in actionsIn('interaction')" :key="a.name" class="rsb-line rsb-action">
         <b>{{ a.name }}</b> <span v-if="formatActionCost(a.cost)" class="rsb-glyph">{{ formatActionCost(a.cost) }}</span>
+        <button v-if="canPlaceArea && areaOf(a)" class="rsb-place" :title="`Place the ${areaOf(a)!.sizeFt}-foot ${areaOf(a)!.kind} on the map and roll saves`" @click.stop="placeAbilityArea(a)">Place area</button>
         <template v-if="a.traits.length"> ({{ a.traits.map(formatTrait).join(', ') }})</template>
         <template v-if="a.frequency"> <b>Frequency</b> {{ a.frequency }};</template>
         {{ ' ' }}<span class="rsb-md" v-html="md(a.text)" />
@@ -100,6 +101,7 @@
       </p>
       <p v-for="a in actionsIn('defensive')" :key="a.name" class="rsb-line rsb-action">
         <b>{{ a.name }}</b> <span v-if="formatActionCost(a.cost)" class="rsb-glyph">{{ formatActionCost(a.cost) }}</span>
+        <button v-if="canPlaceArea && areaOf(a)" class="rsb-place" :title="`Place the ${areaOf(a)!.sizeFt}-foot ${areaOf(a)!.kind} on the map and roll saves`" @click.stop="placeAbilityArea(a)">Place area</button>
         <template v-if="a.traits.length"> ({{ a.traits.map(formatTrait).join(', ') }})</template>
         <template v-if="a.frequency"> <b>Frequency</b> {{ a.frequency }};</template>
         {{ ' ' }}<span class="rsb-md" v-html="md(a.text)" />
@@ -122,6 +124,7 @@
       </p>
       <p v-for="a in actionsIn('offensive')" :key="a.name" class="rsb-line rsb-action">
         <b>{{ a.name }}</b> <span v-if="formatActionCost(a.cost)" class="rsb-glyph">{{ formatActionCost(a.cost) }}</span>
+        <button v-if="canPlaceArea && areaOf(a)" class="rsb-place" :title="`Place the ${areaOf(a)!.sizeFt}-foot ${areaOf(a)!.kind} on the map and roll saves`" @click.stop="placeAbilityArea(a)">Place area</button>
         <template v-if="a.traits.length"> ({{ a.traits.map(formatTrait).join(', ') }})</template>
         <template v-if="a.frequency"> <b>Frequency</b> {{ a.frequency }};</template>
         {{ ' ' }}<span class="rsb-md" v-html="md(a.text)" />
@@ -145,6 +148,7 @@
       </p>
       <p v-for="a in hazard.actions" :key="a.name" class="rsb-line rsb-action">
         <b>{{ a.name }}</b> <span v-if="formatActionCost(a.cost)" class="rsb-glyph">{{ formatActionCost(a.cost) }}</span>
+        <button v-if="canPlaceArea && areaOf(a)" class="rsb-place" :title="`Place the ${areaOf(a)!.sizeFt}-foot ${areaOf(a)!.kind} on the map and roll saves`" @click.stop="placeAbilityArea(a)">Place area</button>
         <template v-if="a.traits.length"> ({{ a.traits.map(formatTrait).join(', ') }})</template>
         <template v-if="a.frequency"> <b>Frequency</b> {{ a.frequency }};</template>
         {{ ' ' }}<span class="rsb-md" v-html="md(a.text)" />
@@ -236,6 +240,7 @@
 <script setup lang="ts">
 import { useDiceRoll, useStatRolls } from '~/composables/useDiceRoll'
 import { strikeModifier, type MapStep } from '~/rules/rolls'
+import { parseAreaEffect } from '~/rules/areas'
 import { useEntityMarkdown } from '~/composables/useEntityMarkdown'
 import { rulesClassFeats, rulesFindByName, useRulesRevision } from '~/composables/useRules'
 import { classOptionGroups, classTrait, featuresByLevel, type OptionGroup } from '~/rules/subclasses'
@@ -298,7 +303,7 @@ const skills = computed(() =>
 const MAP_STEPS: MapStep[] = [0, 1, 2]
 const MAP_TITLE: Record<MapStep, string> = { 0: 'First attack', 1: 'Second attack (multiple attack penalty)', 2: 'Third attack (multiple attack penalty)' }
 const MAP_SUFFIX: Record<MapStep, string> = { 0: '', 1: ' (2nd attack)', 2: ' (3rd attack)' }
-const { roll } = useStatRolls(() => props.game)
+const { roll, canPlaceArea, placeArea } = useStatRolls(() => props.game)
 
 function check(label: string, modifier: number) {
   roll({ kind: 'check', label: `${props.entity.name}: ${label}`, modifier })
@@ -308,6 +313,14 @@ function attack(strike: Strike, step: MapStep) {
 }
 function damage(strike: Strike) {
   roll({ kind: 'damage', label: `${props.entity.name}: ${strike.name} damage`, strike })
+}
+/** An ability with an area and a save DC can be put on the encounter map. */
+function areaOf(a: StatAction) {
+  return parseAreaEffect(a.text)
+}
+function placeAbilityArea(a: StatAction) {
+  const spec = areaOf(a)
+  if (spec) placeArea({ ...spec, label: `${a.name} (${props.entity.name})` })
 }
 function spellAttack(name: string, modifier: number) {
   roll({ kind: 'attack', label: `${props.entity.name}: ${name} spell attack`, modifier })
@@ -498,6 +511,11 @@ async function onClick(e: MouseEvent) {
   border-bottom: 1px dotted rgba(184, 134, 11, 0.7);
 }
 .rsb-roll:hover { background: rgba(184, 134, 11, 0.25); }
+.rsb-place {
+  margin: 0 4px; padding: 0 6px; border: 1px solid rgba(184, 134, 11, 0.5); border-radius: 3px; cursor: pointer;
+  background: rgba(184, 134, 11, 0.1); color: var(--gold, #d4b54a); font-size: 0.8em; font-family: var(--fh); letter-spacing: 0.04em; text-transform: uppercase;
+}
+.rsb-place:hover { background: rgba(184, 134, 11, 0.25); }
 .rsb-roll:focus-visible { outline: 2px solid var(--gold, #d4b54a); outline-offset: 1px; }
 .rsb-sub { margin: 10px 0 2px; font-family: var(--fh); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--kind-color); }
 .rsb-muted { color: var(--text3); }
