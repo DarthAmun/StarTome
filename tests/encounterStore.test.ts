@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { getDb } from '~/composables/useDb'
 import { useEncounterStore } from '~/stores/encounter'
 
-async function encounter(tokens: { label: string; initiative: number | null; visible?: boolean; actsWhileHidden?: boolean; dead?: boolean; timers?: unknown[]; conditions?: unknown[]; pc?: boolean; hp?: number }[]) {
+async function encounter(tokens: { label: string; initiative: number | null; visible?: boolean; actsWhileHidden?: boolean; dead?: boolean; timers?: unknown[]; conditions?: unknown[]; pc?: boolean; hp?: number; temp?: number }[]) {
   const db = getDb()
   const campaignId = await db.campaigns.add({ name: 'C', description: '', created_at: '', updated_at: '' }) as number
   const id = await db.encounters.add({
@@ -14,7 +14,7 @@ async function encounter(tokens: { label: string; initiative: number | null; vis
   for (const t of tokens) {
     await db.encounterTokens.add({
       encounter_id: id, token_id: null, grid_x: 0, grid_y: 0, size: 1, is_visible: t.visible === false ? 0 : 1, is_dead: t.dead ? 1 : 0,
-      label: t.label, conditions: JSON.stringify(t.conditions ?? []), hp_current: t.hp ?? 10, hp_max: 10, ac: 15, initiative: t.initiative, notes: null,
+      label: t.label, conditions: JSON.stringify(t.conditions ?? []), hp_current: t.hp ?? 10, hp_max: 10, temp_hp: t.temp, ac: 15, initiative: t.initiative, notes: null,
       vision_range: null, is_player_token: t.pc ? 1 : 0, image_source: null, image_type: 'file', elevation: null,
       timers: JSON.stringify(t.timers ?? []), acts_while_hidden: t.actsWhileHidden ? 1 : 0,
     })
@@ -156,5 +156,56 @@ describe('encounter store', () => {
     expect(a.hpCurrent).toBe(10)
     expect(a.conditions.map(c => c.name)).toEqual(['Persistent bleed'])
     expect(hero.conditions.map(c => [c.name, c.value])).toEqual([['Dying', 1], ['Unconscious', null]])
+  })
+
+  it('takes damage from temporary HP first and logs the part they soaked', async () => {
+    const { store, id } = await encounter([{ label: 'Goblin', initiative: 10, temp: 4 }])
+    const goblin = store.current!.tokens[0]
+    await store.applyDamage(goblin.id, 3)
+    expect([goblin.hpCurrent, goblin.tempHp]).toEqual([10, 1])
+    await store.applyDamage(goblin.id, 5)
+    expect([goblin.hpCurrent, goblin.tempHp]).toEqual([6, 0])
+    expect(store.current!.combatLog.map(e => [e.type, e.value, e.absorbed])).toEqual([['damage', 3, 3], ['damage', 5, 1]])
+    const row = await getDb().encounterTokens.where('encounter_id').equals(id).first()
+    expect([row?.hp_current, row?.temp_hp]).toEqual([6, 0])
+    // A negative amount still heals and leaves temp HP alone
+    await store.applyDamage(goblin.id, -2)
+    expect([goblin.hpCurrent, goblin.tempHp]).toEqual([8, 0])
+  })
+
+  it('grants temporary HP without stacking and reads old rows as none', async () => {
+    const { store } = await encounter([{ label: 'Hero', initiative: 10 }])
+    const hero = store.current!.tokens[0]
+    expect(hero.tempHp).toBe(0)
+    await store.grantTempHp(hero.id, 5)
+    await store.grantTempHp(hero.id, 3)
+    expect(hero.tempHp).toBe(5)
+    await store.setTempHp(hero.id, 2)
+    expect(hero.tempHp).toBe(2)
+    expect(store.current!.combatLog.map(e => [e.type, e.value])).toEqual([['temp-hp', 5]])
+  })
+
+  it("doesn't raise dying when temporary HP soak a hit at 0 HP", async () => {
+    const { store } = await encounter([{ label: 'Hero', initiative: 10, pc: true, hp: 0, temp: 5, conditions: [{ name: 'Dying', value: 1 }, { name: 'Unconscious', value: null }] }])
+    const hero = store.current!.tokens[0]
+    await store.applyDamage(hero.id, 3)
+    expect(hero.conditions.find(c => c.name === 'Dying')?.value).toBe(1)
+    await store.applyDamage(hero.id, 4)
+    expect(hero.conditions.find(c => c.name === 'Dying')?.value).toBe(2)
+  })
+
+  it('lets persistent damage eat temporary HP first and undoes both with the turn', async () => {
+    const { store } = await encounter([
+      { label: 'A', initiative: 20, temp: 3, conditions: [{ name: 'Persistent bleed', value: null, formula: '5' }] },
+      { label: 'B', initiative: 10 },
+    ])
+    store.nextTurn()
+    const [bleed] = store.turnPrompts
+    store.resolvePersistent(bleed.id, 5, false)
+    const a = store.current!.tokens[0]
+    expect([a.hpCurrent, a.tempHp]).toEqual([8, 0])
+    expect(store.current!.combatLog.find(e => e.type === 'damage')).toMatchObject({ value: 5, absorbed: 3 })
+    store.prevTurn()
+    expect([a.hpCurrent, a.tempHp]).toEqual([10, 3])
   })
 })

@@ -74,6 +74,12 @@
                 <label class="tem-label" style="margin-top:10px">HP Max</label>
                 <input v-model.number="localHpMax" type="number" class="tem-num-input" />
 
+                <label class="tem-label" style="margin-top:10px" title="Lost before HP; they don't stack, a new grant keeps the higher value">Temp HP</label>
+                <input v-model.number="localTempHp" type="number" min="0" class="tem-num-input" />
+                <button v-if="pbTempHp != null && pbTempHp !== localTempHp" class="tem-pb-hint" title="Temp HP the player's app reports" @click="localTempHp = pbTempHp">
+                  Play Buddy: {{ pbTempHp }} · use
+                </button>
+
                 <label class="tem-label" style="margin-top:12px">Quick HP Change</label>
                 <div class="tem-damage-row">
                   <input v-model.number="damageAmt" type="number" min="0" class="tem-num-input tem-damage-input" placeholder="Amt" />
@@ -232,12 +238,15 @@ import { rulesGet } from '~/composables/useRules'
 import { useCreatureSearch, otherGameTag, type CreatureOption } from '~/composables/useCreatureSearch'
 import { tokenStats, type Adjustment } from '~/rules/combat'
 import { SIZE_SQUARES } from '~/rules/format'
+import { damageWithTemp } from '~/rules/hp'
 import type { GameId } from '~/types/game'
 
 const props = defineProps<{
   token: EncounterToken | null
   game: GameId
   open: boolean
+  /** Temp HP the linked Play Buddy character reports, offered as a hint. */
+  pbTempHp?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -250,6 +259,9 @@ const emit = defineEmits<{
 const localLabel      = ref('')
 const localHpCurrent  = ref<number | null>(null)
 const localHpMax      = ref<number | null>(null)
+const localTempHp     = ref(0)
+/** Damage taken by temp HP in this edit, logged with the damage. */
+const absorbed        = ref(0)
 const localAc         = ref<number | null>(null)
 const localInitiative = ref<number | null>(null)
 const localSize       = ref(1)
@@ -298,6 +310,8 @@ watch(() => props.token, (tok) => {
   localLabel.value      = tok.label ?? ''
   localHpCurrent.value  = tok.hpCurrent
   localHpMax.value      = tok.hpMax
+  localTempHp.value     = tok.tempHp ?? 0
+  absorbed.value = 0
   localAc.value         = tok.ac
   localInitiative.value = tok.initiative
   localSize.value       = tok.size
@@ -355,8 +369,11 @@ const damageAmt = ref<number | null>(null)
 function applyDamage() {
   if (!damageAmt.value) return
   const current = localHpCurrent.value ?? 0
-  if (current <= 0 && damageAmt.value > 0) hitsAtZero.value++
-  localHpCurrent.value = Math.max(0, current - damageAmt.value)
+  const r = damageWithTemp({ hp: current, temp: localTempHp.value || 0 }, damageAmt.value)
+  if (current <= 0 && damageAmt.value > r.absorbed) hitsAtZero.value++
+  localHpCurrent.value = r.hp
+  localTempHp.value = r.temp
+  absorbed.value += r.absorbed
   damageAmt.value = null
 }
 
@@ -384,6 +401,8 @@ async function save() {
   if (localLabel.value !== (props.token.label ?? '')) changes.label = localLabel.value || null
   if (localHpCurrent.value !== props.token.hpCurrent) changes.hpCurrent = localHpCurrent.value
   if (localHpMax.value !== props.token.hpMax) changes.hpMax = localHpMax.value
+  const tempHp = Math.max(0, Math.floor(Number(localTempHp.value) || 0))
+  if (tempHp !== (props.token.tempHp ?? 0)) changes.tempHp = tempHp
   if (localAc.value !== props.token.ac) changes.ac = localAc.value
   if (localInitiative.value !== props.token.initiative) changes.initiative = localInitiative.value
   if (localSize.value !== props.token.size) changes.size = localSize.value
@@ -415,7 +434,7 @@ async function save() {
     changes.size = stats.size
   }
 
-  if (Object.keys(changes).length) emit('update', props.token.id, changes, { critical: localCritical.value, hitsAtZero: hitsAtZero.value })
+  if (Object.keys(changes).length) emit('update', props.token.id, changes, { critical: localCritical.value, hitsAtZero: hitsAtZero.value, absorbed: absorbed.value })
   emit('close')
 }
 </script>
@@ -487,6 +506,12 @@ async function save() {
   color: var(--ink-ghost);
   margin-bottom: 12px;
 }
+
+.tem-pb-hint {
+  display: block; margin-top: 4px; padding: 2px 6px; border: 1px dashed var(--border); border-radius: 4px;
+  background: none; color: var(--text2); font-size: 11px; cursor: pointer;
+}
+.tem-pb-hint:hover { color: var(--text); border-color: var(--border-hi, var(--border)); }
 
 /* Field */
 .tem-field { margin-bottom: 10px; }

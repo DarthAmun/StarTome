@@ -57,7 +57,7 @@
           <OhVueIcon name="gi-drop" scale="0.85" class="ctx-icon ctx-inline-icon" />
           <span class="ctx-inline-label">
             Damage
-            <span v-if="targetToken.hpMax" class="ctx-hp-hint">{{ targetToken.hpCurrent }}/{{ targetToken.hpMax }}</span>
+            <span v-if="targetToken.hpMax" class="ctx-hp-hint">{{ targetToken.hpCurrent }}/{{ targetToken.hpMax }}<template v-if="targetToken.tempHp"> +{{ targetToken.tempHp }}</template></span>
             <span v-if="linkedName" class="ctx-hp-hint" :title="`Damage goes to ${linkedName}'s Play Buddy, which applies it with their resistances`">→ Play Buddy</span>
           </span>
           <input
@@ -66,6 +66,25 @@
             class="ctx-inline-input"
             placeholder="0"
             @keyup.enter="commitDamage"
+            @keyup.esc="emit('close')"
+            @click.stop
+          />
+        </div>
+
+        <!-- Inline temp HP: keeps the higher value (they don't stack) -->
+        <div v-if="!linkedName" class="ctx-inline-row" title="Temporary HP don't stack: the higher value stays">
+          <OhVueIcon name="md-shield-outlined" scale="0.85" class="ctx-icon ctx-inline-icon" />
+          <span class="ctx-inline-label">
+            Temp HP
+            <span v-if="targetToken.tempHp" class="ctx-hp-hint">+{{ targetToken.tempHp }}</span>
+          </span>
+          <input
+            v-model.number="tempValue"
+            type="number"
+            min="0"
+            class="ctx-inline-input"
+            placeholder="0"
+            @keyup.enter="commitTemp"
             @keyup.esc="emit('close')"
             @click.stop
           />
@@ -177,6 +196,7 @@ const emit = defineEmits<{
   'quick-condition': [tokenId: number, name: string]
   'set-initiative': [tokenId: number, value: number | null]
   'apply-damage': [tokenId: number, amount: number]
+  'grant-temp-hp': [tokenId: number, amount: number]
   'view-record': [tokenId: number]
   'view-npc': [tokenId: number]
   'toggle-visibility': [tokenId: number]
@@ -198,11 +218,12 @@ const menuEl = ref<HTMLElement | null>(null)
 
 const initValue = ref<number | null>(null)
 const dmgValue = ref<number | null>(null)
+const tempValue = ref<number | null>(null)
 const timerName = ref('')
 const timerTurns = ref<number | null>(null)
 
 const MENU_W = 220
-const MENU_H = 420
+const MENU_H = 450
 
 const adjustedX = computed(() => {
   const max = window.innerWidth - MENU_W - 8
@@ -218,6 +239,7 @@ watch(() => props.open, (val) => {
   if (!val) return
   initValue.value = props.targetToken?.initiative ?? null
   dmgValue.value = null
+  tempValue.value = null
   timerName.value = ''
   timerTurns.value = null
 })
@@ -233,6 +255,13 @@ function commitTimer() {
   const turns = Math.floor(timerTurns.value ?? 0)
   if (props.targetToken && timerName.value.trim() && turns >= 1) {
     emit('add-timer', props.targetToken.id, timerName.value.trim(), turns)
+  }
+  emit('close')
+}
+
+function commitTemp() {
+  if (props.targetToken && tempValue.value && tempValue.value > 0) {
+    emit('grant-temp-hp', props.targetToken.id, tempValue.value)
   }
   emit('close')
 }

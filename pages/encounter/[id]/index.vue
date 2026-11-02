@@ -649,7 +649,7 @@
                             }"
                           />
                         </div>
-                        <span class="order-hp-text">{{ token.hpCurrent ?? 0 }}/{{ token.hpMax }}</span>
+                        <span class="order-hp-text">{{ token.hpCurrent ?? 0 }}/{{ token.hpMax }}<span v-if="token.tempHp" class="order-hp-temp" title="Temporary HP">+{{ token.tempHp }}</span></span>
                         <input
                           class="order-hp-quick-input"
                           type="number"
@@ -786,6 +786,7 @@
         :token="editingToken"
         :game="campaignGameId"
         :open="!!editingToken"
+        :pb-temp-hp="editingToken ? linkedCharOf(editingToken)?.pbStatus?.basic?.hp.temp ?? null : null"
         @close="editingToken = null; selectedToken = null"
         @update="onTokenEdit"
         @open-conditions="conditionToken = editingToken"
@@ -846,6 +847,7 @@
         @quick-condition="onCtxQuickCondition"
         @set-initiative="onCtxSetInitiative"
         @apply-damage="onCtxApplyDamage"
+        @grant-temp-hp="(id, amount) => store.grantTempHp(id, amount)"
         @view-record="onCtxViewRecord"
         @view-npc="onCtxViewNpc"
         @toggle-visibility="onCtxToggleVisibility"
@@ -3272,6 +3274,7 @@ function getImageUrl(token: any): string {
   border-radius: 2px;
   transition: width 0.3s ease, background 0.3s ease;
 }
+.order-hp-temp { margin-left: 3px; color: #4a90d9; font-weight: 600; }
 .order-hp-text {
   font-family: var(--font-mono);
   font-size: 9px;

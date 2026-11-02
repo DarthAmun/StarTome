@@ -9,6 +9,7 @@ import { rulesGet, rulesGetMany, rulesSetImage } from '~/composables/useRules'
 import { resolveImageDataUrl, storeInlineImage } from '~/rules/images'
 import { evaluateFormula } from '~/composables/useFormulaEvaluator'
 import { rollInitiative, rulesScope, tokenStats, type Adjustment } from '~/rules/combat'
+import { damageWithTemp, grantTemp } from '~/rules/hp'
 import type { Hazard, RulesEntity } from '~/types/rules'
 import { parseDefeated, type DefeatedEnemy } from '~/rules/advancement'
 import { healthState, type HealthState } from '~/composables/useConditions'
@@ -31,6 +32,7 @@ function buildTokenScope(token: EncounterToken, entry?: RulesEntity): Record<str
     ac: token.ac ?? 0,
     hp: token.hpCurrent ?? 0,
     hpmax: token.hpMax ?? 0,
+    temphp: token.tempHp ?? 0,
   }
 }
 
@@ -40,8 +42,10 @@ export interface CombatLogEntry {
   timestamp: number
   tokenId: number
   tokenName: string
-  type: 'damage' | 'healing' | 'condition-added' | 'condition-removed' | 'condition-changed' | 'death' | 'revival' | 'note' | 'timer-up'
+  type: 'damage' | 'healing' | 'temp-hp' | 'condition-added' | 'condition-removed' | 'condition-changed' | 'death' | 'revival' | 'note' | 'timer-up'
   value?: number
+  /** Part of a damage entry's value taken by temporary HP. */
+  absorbed?: number
   conditionName?: string
   note?: string
   /** Made by the condition automation, not by hand. */
@@ -52,7 +56,12 @@ export interface CombatLogEntry {
 export type TurnPrompt = TurnPromptSeed & { id: number; tokenId: number; tokenName: string }
 
 /** Options for an HP change: a critical hit, or hits taken while already at 0 HP. */
-export interface HpChangeOptions { critical?: boolean; hitsAtZero?: number }
+export interface HpChangeOptions {
+  critical?: boolean
+  hitsAtZero?: number
+  /** Damage taken by temporary HP in this change, logged as part of the damage. */
+  absorbed?: number
+}
 
 /** What one turn change did by itself, so prevTurn can take exactly that back (session-only). */
 interface TurnRecord {
@@ -60,7 +69,7 @@ interface TurnRecord {
   timerTokenId: number | null
   timerIds: string[]
   logIds: number[]
-  effects: { tokenId: number; changes: ConditionChange[]; hpDelta: number; died: boolean }[]
+  effects: { tokenId: number; changes: ConditionChange[]; hpDelta: number; tempDelta?: number; died: boolean }[]
   promptIds: number[]
 }
 
@@ -150,6 +159,7 @@ export interface EncounterToken {
   conditions: TokenCondition[]
   hpCurrent: number | null
   hpMax: number | null
+  tempHp: number              // temporary HP, 0 = none
   ac: number | null
   initiative: number | null
   notes: string | null
@@ -495,10 +505,15 @@ export const useEncounterStore = defineStore('encounter', () => {
 
     // ── Detect log-worthy changes before mutating ──────────────────────────
     const tokenName = token.label || token.name
-    if ('hpCurrent' in updates && updates.hpCurrent !== null && token.hpCurrent !== null && token.hpCurrent !== undefined) {
-      const diff = (updates.hpCurrent as number) - token.hpCurrent
-      if (diff < 0) appendLogEntry({ tokenId: instanceId, tokenName, type: 'damage', value: Math.abs(diff) })
-      else if (diff > 0) appendLogEntry({ tokenId: instanceId, tokenName, type: 'healing', value: diff })
+    const absorbed = hpOpts.absorbed ?? 0
+    const hpDiff = 'hpCurrent' in updates && updates.hpCurrent !== null && token.hpCurrent !== null && token.hpCurrent !== undefined
+      ? (updates.hpCurrent as number) - token.hpCurrent : 0
+    if (hpDiff < 0 || absorbed > 0) {
+      appendLogEntry({ tokenId: instanceId, tokenName, type: 'damage', value: Math.max(0, -hpDiff) + absorbed, ...(absorbed ? { absorbed } : {}) })
+    } else if (hpDiff > 0) appendLogEntry({ tokenId: instanceId, tokenName, type: 'healing', value: hpDiff })
+    // Temp HP set by hand (not lost to damage) is logged as a gain only
+    if ('tempHp' in updates && (updates.tempHp ?? 0) > token.tempHp) {
+      appendLogEntry({ tokenId: instanceId, tokenName, type: 'temp-hp', value: updates.tempHp ?? 0 })
     }
     if ('isDead' in updates) {
       if (updates.isDead && !token.isDead) appendLogEntry({ tokenId: instanceId, tokenName, type: 'death' })
@@ -519,6 +534,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     if ('size' in updates) dbUpdates.size = updates.size
     if ('hpCurrent' in updates) dbUpdates.hpCurrent = updates.hpCurrent
     if ('hpMax' in updates) dbUpdates.hpMax = updates.hpMax
+    if ('tempHp' in updates) dbUpdates.tempHp = Math.max(0, updates.tempHp ?? 0)
     if ('ac' in updates) dbUpdates.ac = updates.ac
     if ('initiative' in updates) dbUpdates.initiative = updates.initiative
     if ('label' in updates) dbUpdates.label = updates.label
@@ -822,7 +838,7 @@ export const useEncounterStore = defineStore('encounter', () => {
   }
 
   /** Applies a result to the token, logs it as automatic and records it for undo. */
-  function applyEffects(token: EncounterToken, fx: EffectResult, record: TurnRecord | null, hpDelta = 0) {
+  function applyEffects(token: EncounterToken, fx: EffectResult, record: TurnRecord | null, hpDelta = 0, tempDelta = 0) {
     if (fx.changes.length) {
       token.conditions = fx.conditions
       dbApi.encounterTokens.update({ id: token.id, conditions: plain(token.conditions) }).catch(err => reportError('Saving the conditions', err))
@@ -842,7 +858,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     }
     if (!record) return
     record.logIds.push(...logIds)
-    if (fx.changes.length || died || hpDelta) record.effects.push({ tokenId: token.id, changes: fx.changes, hpDelta, died })
+    if (fx.changes.length || died || hpDelta || tempDelta) record.effects.push({ tokenId: token.id, changes: fx.changes, hpDelta, tempDelta, died })
   }
 
   function revertEffect(fx: TurnRecord['effects'][number]) {
@@ -856,6 +872,10 @@ export const useEncounterStore = defineStore('encounter', () => {
     if (fx.hpDelta && token.hpCurrent !== null) {
       token.hpCurrent = Math.max(0, Math.min(token.hpMax ?? Infinity, token.hpCurrent - fx.hpDelta))
       dbUpdates.hpCurrent = token.hpCurrent
+    }
+    if (fx.tempDelta) {
+      token.tempHp = Math.max(0, token.tempHp - fx.tempDelta)
+      dbUpdates.tempHp = token.tempHp
     }
     if (fx.died) {
       token.isDead = false
@@ -903,14 +923,16 @@ export const useEncounterStore = defineStore('encounter', () => {
     let hpDelta = 0
     if (damage > 0 && token.hpCurrent !== null) {
       const from = token.hpCurrent
-      const to = Math.max(0, from - damage)
+      const r = damageWithTemp({ hp: from, temp: token.tempHp }, damage)
+      const to = r.hp
       hpDelta = to - from
-      const id = logNow({ tokenId: token.id, tokenName: token.label || token.name, type: 'damage', value: damage, auto: true, conditionName: prompt.condition })
+      const id = logNow({ tokenId: token.id, tokenName: token.label || token.name, type: 'damage', value: damage, auto: true, conditionName: prompt.condition, ...(r.absorbed ? { absorbed: r.absorbed } : {}) })
       if (id !== undefined) record?.logIds.push(id)
       token.hpCurrent = to
-      dbApi.encounterTokens.update({ id: token.id, hpCurrent: to }).catch(err => reportError('Saving the token', err))
-      const hpFx = hpChangeEffects(token.conditions, { from, to, hitsAtZero: from <= 0 ? 1 : 0 }, usesDying(token), automation.value)
-      applyEffects(token, hpFx, record, hpDelta)
+      token.tempHp = r.temp
+      dbApi.encounterTokens.update({ id: token.id, hpCurrent: to, tempHp: r.temp }).catch(err => reportError('Saving the token', err))
+      const hpFx = hpChangeEffects(token.conditions, { from, to, hitsAtZero: from <= 0 && damage > r.absorbed ? 1 : 0 }, usesDying(token), automation.value)
+      applyEffects(token, hpFx, record, hpDelta, -r.absorbed)
       if (hpFx.revived) token.isDead = false
     }
     applyEffects(token, persistentCheck(token.conditions, prompt.condition, recovered), record)
@@ -1127,6 +1149,7 @@ export const useEncounterStore = defineStore('encounter', () => {
       conditions: parseJson<TokenCondition[]>(raw.conditions, []),
       hpCurrent: raw.hp_current,
       hpMax: raw.hp_max,
+      tempHp: raw.temp_hp ?? 0,
       ac: raw.ac ?? null,
       initiative: raw.initiative,
       notes: raw.notes,
@@ -1146,11 +1169,30 @@ export const useEncounterStore = defineStore('encounter', () => {
     return current.value?.tokens.find(t => t.id === id)
   }
 
+  /** Damage through temporary HP first; only damage that reaches HP can raise dying. */
   function applyDamage(tokenId: number, amount: number, opts: HpChangeOptions = {}) {
     const token = getToken(tokenId)
-    if (!token || token.hpCurrent === null) return
-    const hitsAtZero = token.hpCurrent <= 0 && amount > 0 ? 1 : 0
-    updateToken(tokenId, { hpCurrent: Math.max(0, token.hpCurrent - amount) }, { ...opts, hitsAtZero })
+    if (!token || token.hpCurrent === null || !amount) return
+    // A negative amount heals; temporary HP stay as they are
+    if (amount < 0) return updateToken(tokenId, { hpCurrent: token.hpCurrent - amount }, opts)
+    const r = damageWithTemp({ hp: token.hpCurrent, temp: token.tempHp }, amount)
+    const hitsAtZero = token.hpCurrent <= 0 && amount > r.absorbed ? 1 : 0
+    const updates: Partial<EncounterToken> = { hpCurrent: r.hp }
+    if (r.absorbed) updates.tempHp = r.temp
+    return updateToken(tokenId, updates, { ...opts, hitsAtZero, absorbed: r.absorbed })
+  }
+
+  /** Sets a token's temporary HP directly (the edit field). */
+  function setTempHp(tokenId: number, value: number) {
+    return updateToken(tokenId, { tempHp: Math.max(0, Math.floor(value) || 0) })
+  }
+
+  /** Grants temporary HP; they don't stack, so the higher value stays. */
+  function grantTempHp(tokenId: number, amount: number) {
+    const token = getToken(tokenId)
+    if (!token) return
+    const next = grantTemp(token.tempHp, amount)
+    if (next !== token.tempHp) return updateToken(tokenId, { tempHp: next })
   }
 
   async function setPartyLevel(level: number | null) {
@@ -1272,7 +1314,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     openPlayerWindow, closePlayerWindow, setShapeOverlays,
     nextTurn, prevTurn,
     automation, turnPrompts, turnNotes, usesDying, resolveRecovery, resolvePersistent, dismissPrompt,
-    getToken, applyDamage, rollAllInitiative, setInitiativeFormula, setPartyLevel, bulkRemoveTokens, bulkSetTokenVisibility, toggleCondition,
+    getToken, applyDamage, setTempHp, grantTempHp, rollAllInitiative, setInitiativeFormula, setPartyLevel, bulkRemoveTokens, bulkSetTokenVisibility, toggleCondition,
     addLogNote, clearCombatLog,
     addTimer, resetTimer, removeTimer, setTimers,
     setPlayerViewPrefs, sendPing, playerTurnOrder,

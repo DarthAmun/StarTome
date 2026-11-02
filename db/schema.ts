@@ -102,6 +102,7 @@ export interface DbEncounterToken {
   conditions: unknown[] | string  // TokenCondition[]; a value since v12, see DbEncounter.fog_data
   hp_current: number | null
   hp_max: number | null
+  temp_hp?: number | null    // temporary HP (COMBAT_PLAN.md §1) — non-indexed, null = 0
   ac: number | null
   initiative: number | null
   notes: string | null

@@ -229,7 +229,7 @@ export const dbApi = {
         grid_x: data.gridX ?? 0, grid_y: data.gridY ?? 0,
         size: data.size ?? 1, is_visible: data.isVisible ?? 1, is_dead: 0,
         label: data.label ?? null, conditions: [],
-        hp_current: data.hpCurrent ?? null, hp_max: data.hpMax ?? null,
+        hp_current: data.hpCurrent ?? null, hp_max: data.hpMax ?? null, temp_hp: data.tempHp ?? 0,
         ac: data.ac ?? null,
         initiative: data.initiative ?? null, notes: null,
         linked_rules_id: data.linkedRulesId ?? null,

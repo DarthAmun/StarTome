@@ -31,6 +31,14 @@ describe('player payload', () => {
     expect([p.hpCurrent, p.hpMax, p.playerHealthState]).toEqual([3, 6, undefined])
   })
 
+  it('sends temporary HP for player characters only', () => {
+    const ch = new ImageChannel()
+    expect(toPlayerToken(token({ isPlayerToken: true, tempHp: 4 }), ch).tempHp).toBe(4)
+    const enemy = toPlayerToken(token({ tempHp: 4 }), ch)
+    expect(enemy.tempHp).toBe(0)
+    expect(enemy.playerHealthState).toBe('bloodied')
+  })
+
   it('sends a large image once per connection and a key afterwards', () => {
     const ch = new ImageChannel()
     const cache = new ImageCache()

@@ -15,8 +15,9 @@
           <span class="log-token-name">{{ entry.tokenName }}</span>
           <span class="log-event" :class="`log-event--${entry.type}`">
             <span v-if="entry.auto" class="log-auto" title="Made by the condition automation">auto</span>
-            <template v-if="entry.type === 'damage'">took {{ entry.value }} damage<template v-if="entry.conditionName"> ({{ entry.conditionName }})</template></template>
+            <template v-if="entry.type === 'damage'">took {{ entry.value }} damage<template v-if="entry.conditionName"> ({{ entry.conditionName }})</template><template v-if="entry.absorbed">, {{ entry.absorbed }} by temp HP</template></template>
             <template v-else-if="entry.type === 'healing'">healed {{ entry.value }} HP</template>
+            <template v-else-if="entry.type === 'temp-hp'">has {{ entry.value }} temp HP</template>
             <template v-else-if="entry.type === 'condition-added'">gained {{ entry.conditionName }}<template v-if="entry.value"> {{ entry.value }}</template></template>
             <template v-else-if="entry.type === 'condition-changed'">{{ entry.conditionName }} is now {{ entry.value }}</template>
             <template v-else-if="entry.type === 'condition-removed'">lost {{ entry.conditionName }}</template>
@@ -144,6 +145,7 @@ function submitLogNote() {
 .log-event { flex: 1; }
 .log-event--damage        { color: var(--blood); }
 .log-event--healing       { color: var(--grass); }
+.log-event--temp-hp       { color: var(--temp-hp, #4a90d9); }
 .log-auto { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); margin-right: 4px; }
 .log-event--condition-changed { color: var(--arcane-l, #9f7abf); }
 .log-event--condition-added  { color: var(--arcane-l, #9f7abf); }

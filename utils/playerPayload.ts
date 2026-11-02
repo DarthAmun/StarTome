@@ -26,6 +26,7 @@ export interface PlayerTokenSource {
   elevation: number | null
   hpCurrent: number | null
   hpMax: number | null
+  tempHp?: number
   conditions: { name: string; value: number | null; hidden?: boolean; color?: string; icon?: string }[]
   timers: { id: string; name: string; remaining: number; duration: number; visibleToPlayers?: boolean }[]
 }
@@ -79,6 +80,7 @@ export function toPlayerToken(t: PlayerTokenSource, images: ImageChannel): Playe
     isPlayerToken: t.isPlayerToken, visionRange: t.visionRange, elevation: t.elevation,
     hpCurrent: t.isPlayerToken ? t.hpCurrent : null,
     hpMax: t.isPlayerToken ? t.hpMax : null,
+    tempHp: t.isPlayerToken ? t.tempHp ?? 0 : 0,
     conditions: t.conditions.filter(c => !c.hidden).map(c => ({ name: c.name, value: c.value, color: c.color, icon: c.icon })),
     timers: t.timers.filter(x => x.visibleToPlayers).map(x => ({ id: x.id, name: x.name, remaining: x.remaining, duration: x.duration, visibleToPlayers: true })),
   }

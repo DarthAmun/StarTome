@@ -9,6 +9,9 @@ import { visibleConditions, getConditionColorHex, hpColorHex, hexColorToNumber, 
 
 export type ShapeType = "circle" | "square" | "cone";
 
+/** Temporary HP on the map and in the turn order. */
+const TEMP_HP_COLOR = 0x4a90d9;
+
 export interface ShapeOverlay {
   id: string;
   type: ShapeType;
@@ -1127,6 +1130,14 @@ export function useEncounterCanvas(options: CanvasOptions) {
           hpG.stroke({ color: hpColorHex(f), alpha: 0.95, width: 3, cap: "round" });
         }
         container.addChild(hpG);
+      }
+      // Temporary HP: a blue arc just inside the HP arc, as a share of max HP
+      if (token.tempHp > 0) {
+        const t = Math.min(1, token.tempHp / token.hpMax);
+        const tempG = new PIXI.Graphics();
+        tempG.arc(cx, cy, R - 8.5, toCanvasRad(1), toCanvasRad(1 + 358 * t));
+        tempG.stroke({ color: TEMP_HP_COLOR, alpha: 0.95, width: 3, cap: "round" });
+        container.addChild(tempG);
       }
     }
 
