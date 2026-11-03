@@ -27,8 +27,9 @@ export function kindOfFoundryType(type: string): RulesKind | null {
  * next sync re-converts every pack instead of skipping it by checksum.
  * 2: weapon/armor runes.
  * 3: class features by level, subclass choices/options.
+ * 4: 'class-archetype' is no subclass choice.
  */
-export const CONVERTER_VERSION = 3
+export const CONVERTER_VERSION = 4
 
 export interface ConvertResult { entity: RulesEntity | null; issues: ConvertIssue[] }
 

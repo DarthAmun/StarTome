@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { convertFoundryDoc, type FoundryDoc } from '~/converters/foundry'
+import { packGroup } from '~/converters/foundry/packs'
 import { checkHomebrewEntry } from '~/rules/homebrew'
 import { classOptionGroups, featuresByLevel, tagLabel } from '~/rules/subclasses'
 import type { Feat, ReferenceEntry } from '~/types/rules'
@@ -38,6 +39,22 @@ const feat = (name: string, extra: Partial<Feat>): Feat => ({
 })
 
 describe('subclasses', () => {
+  it('syncs the class and ancestry feature packs of both games', () => {
+    for (const name of ['classfeatures', 'ancestryfeatures', 'class-features', 'ancestry-features']) expect(packGroup(name)).toBe('core')
+  })
+
+  it("doesn't take PF2e's class-archetype filter for a subclass choice", () => {
+    // As in foundryvtt/pf2e packs/classfeatures/muses.json
+    const muses = convert<Feat>(doc({
+      name: 'Muses', type: 'feat',
+      system: {
+        category: 'classfeature', level: { value: 1 }, traits: { value: ['bard'], rarity: 'common' },
+        rules: [{ key: 'ChoiceSet', choices: { filter: ['item:tag:bard-muse', { or: [{ and: ['class:bard', 'item:tag:bard-muse'] }, { and: ['item:tag:bard-muse', { not: 'item:tag:class-archetype' }] }] }] } }],
+      },
+    }))
+    expect(muses.choices).toEqual(['bard-muse'])
+  })
+
   it('converts Foundry choices, options and a class\'s features', () => {
     expect(convert<Feat>(connection).choices).toEqual(['mystic-connection'])
     expect(convert<Feat>(elemental).optionOf).toEqual(['mystic-connection'])

@@ -147,7 +147,7 @@
             <div class="sett-row-text">
               <span class="sett-label">Your compendium entries</span>
               <span class="sett-desc">
-                Export packs as a homebrew file: to share, keep a copy, or give back to Claude for changes (it imports again with the same ids).
+                Export packs as a homebrew file: to share, keep a copy, or give back to Claude for changes (it imports again with the same ids). Delete removes a pack's entries from your compendium.
                 A pack is the entry's <em>Pack</em> field; Claude sets it as <code>publication.title</code>. Portraits stay here.
               </span>
               <div v-if="packs.length" class="data-packs">
@@ -156,6 +156,7 @@
                   <span :class="{ 'data-muted': p.title === NO_PACK }">{{ p.title || 'No pack' }}</span>
                   <span class="data-count">{{ p.count }}</span>
                   <button v-if="p.title !== NO_PACK" class="data-rename" title="Rename this pack" @click.prevent="renamePack(p.title)">rename</button>
+                  <button class="data-rename data-delete" :title="`Delete the ${p.count} entries ${p.title ? 'of this pack' : 'in no pack'}`" @click.prevent="deletePack(p)">delete</button>
                 </label>
               </div>
               <span v-else class="sett-desc">No homebrew entries yet.</span>
@@ -284,7 +285,7 @@ import { stripGmOnly } from '~/utils/gmContent'
 import JSZip from 'jszip'
 import { getDb, dbApi, now, parseJsonObject } from '~/composables/useDb'
 import { compressDataUrl } from '~/utils/image'
-import { notifyRulesChanged, rulesFindByName, rulesUserEntries } from '~/composables/useRules'
+import { notifyRulesChanged, rulesDelete, rulesFindByName, rulesUserEntries } from '~/composables/useRules'
 import { homebrewFile, NO_PACK, summarizePacks, withPack, type PackSummary } from '~/rules/packs'
 import { invalidateEntities } from '~/composables/useEntities'
 import { setPendingImport } from '~/composables/usePendingImport'
@@ -524,6 +525,16 @@ async function renamePack(title: string) {
   notifyRulesChanged()
   pickedPacks.value = pickedPacks.value.map(t => (t === title ? next : t))
   await loadPacks()
+}
+
+/** Deletes every own entry of a pack (or of no pack), with their portraits. Synced entries are never in a pack. */
+async function deletePack(p: PackSummary) {
+  const what = p.title ? `the pack "${p.title}"` : 'your entries in no pack'
+  if (!confirm(`Delete ${what}: ${p.count} entr${p.count === 1 ? 'y' : 'ies'}? This can't be undone; export it first if you might want it back. Links and inventory items that point to them show as missing.`)) return
+  for (const e of await rulesUserEntries([p.title])) await rulesDelete(e.id)
+  notifyRulesChanged()
+  pickedPacks.value = pickedPacks.value.filter(t => t !== p.title)
+  await Promise.all([loadPacks(), loadStats()])
 }
 
 function download(data: Record<string, unknown>, filename: string) {
@@ -865,6 +876,7 @@ async function runImport() {
 .data-rename { background: none; border: none; padding: 0 4px; font-size: 11px; color: var(--text3); cursor: pointer; opacity: 0; }
 .data-pack:hover .data-rename { opacity: 1; }
 .data-rename:hover { color: var(--accent); }
+.data-delete:hover { color: var(--danger); }
 @media (max-width: 640px) {
   .data-body { padding: 14px 16px 32px; grid-template-columns: 1fr; }
   .data-import-row { grid-template-columns: 1fr; }

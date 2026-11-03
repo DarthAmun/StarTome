@@ -52,7 +52,8 @@ export function convertFeat(doc: FoundryDoc, ctx: ConvertContext): Feat {
   const freq = frequencyOf(s.frequency)
   if (freq) feat.frequency = freq
   // Subclasses: a feature's ChoiceSet picks a class feature carrying one of these tags
-  const choices = [...new Set([...JSON.stringify(s.rules ?? []).matchAll(/item:tag:([a-z0-9-]+)/g)].map(m => m[1]))]
+  // ('class-archetype' in those filters only keeps archetype versions out, it isn't a choice)
+  const choices = [...new Set([...JSON.stringify(s.rules ?? []).matchAll(/item:tag:([a-z0-9-]+)/g)].map(m => m[1]))].filter(t => t !== 'class-archetype')
   if (choices.length) feat.choices = choices
   const tags: string[] = s.traits?.otherTags ?? []
   if (feat.category === 'classfeature' && tags.length) feat.optionOf = tags

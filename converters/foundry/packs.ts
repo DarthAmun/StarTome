@@ -10,7 +10,8 @@ export type PackGroup = 'core' | 'bestiary' | 'adventure' | 'skip'
 
 const CORE = new Set([
   'actions', 'conditions', 'equipment', 'spells', 'feats', 'ancestries', 'heritages', 'backgrounds',
-  'classes', 'class-features', 'ancestry-features', 'deities', 'hazards', 'bestiary-ability-glossary-srd',
+  // PF2e spells the feature packs without a dash, SF2e with one
+  'classes', 'classfeatures', 'class-features', 'ancestryfeatures', 'ancestry-features', 'deities', 'hazards', 'bestiary-ability-glossary-srd',
   'bestiary-family-ability-glossary', 'boons-and-curses', 'familiar-abilities', 'adventure-specific-actions',
 ])
 
