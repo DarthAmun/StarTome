@@ -213,7 +213,7 @@
       <div class="rsb-sub">Subclasses</div>
       <p v-for="g in optionGroups" :key="g.tag" class="rsb-line">
         <b>{{ g.label }}</b> <span class="rsb-muted">({{ ordinal(g.level) }})</span>
-        <template v-for="(o, i) in g.options" :key="o.id"><span class="rsb-link" @click.stop="openEntry(o)">{{ o.name }}</span><template v-if="i < g.options.length - 1">, </template></template>
+        <template v-for="(o, i) in g.options" :key="o.id"><span class="rsb-link" @click.stop="openEntry(o)">{{ o.name }}</span><span v-if="o.publication && !o.publication.remaster" class="rsb-muted" :title="`From ${o.publication.title}, a pre-Remaster book`"> (legacy)</span><template v-if="i < g.options.length - 1">, </template></template>
       </p>
     </template>
 
@@ -381,7 +381,8 @@ watch(() => [props.entity, rulesRevision.value] as const, async ([e]) => {
     feats = await rulesClassFeats(classTrait(e.name), e.game)
   } else if (e.kind === 'feat' && (e as Feat).optionOf?.length) {
     const tags = new Set((e as Feat).optionOf)
-    for (const t of e.traits) {
+    // Options without the class trait (Kineticist gates, Exemplar ikons) name the class in their tag: 'kineticist-kinetic-gate'
+    for (const t of new Set([...e.traits, ...[...tags].map(tag => tag.split('-')[0])])) {
       const c = await rulesFindByName('class', t.replace(/-/g, ' '), props.game)
       if (!c) continue
       cls = c

@@ -221,10 +221,16 @@ export async function rulesFindByName(kind: RulesKind, name: string, game?: Game
 
 /** Feats carrying a class's trait (its features and subclass options), for one game. */
 export async function rulesClassFeats(trait: string, game: GameId | 'both'): Promise<Feat[]> {
-  const rows = await getDb().rules.where('traits').equals(trait).toArray()
-  return rows
-    .filter(r => r.kind === 'feat' && !r.supersededBy && !r.upstream?.removed && (game === 'both' || r.game === 'both' || r.game === game))
-    .map(r => withLocalEdits(r) as Feat)
+  const db = getDb()
+  const keep = (r: RulesEntity) => r.kind === 'feat' && !r.supersededBy && !r.upstream?.removed && (game === 'both' || r.game === 'both' || r.game === game)
+  const own = (await db.rules.where('traits').equals(trait).toArray()).filter(keep)
+  // Some options don't carry the class trait (Kineticist gates, Exemplar ikons): find them by the tags the class's features choose from
+  const tags = new Set(own.flatMap(r => (r as Feat).choices ?? []))
+  const ids = new Set(own.map(r => r.id))
+  const tagged = tags.size
+    ? await db.rules.where('[kind+sortName]').between(['feat', ''], ['feat', '\uffff']).filter(r => !ids.has(r.id) && keep(r) && !!(r as Feat).optionOf?.some(t => tags.has(t))).toArray()
+    : []
+  return [...own, ...tagged].map(r => withLocalEdits(r) as Feat)
 }
 
 /** Your own (homebrew) entries, effective, optionally only those in the given packs (rules/packs.ts). */
