@@ -364,6 +364,24 @@ export async function rulesDuplicate(id: string): Promise<RulesEntity | undefine
 }
 
 /** Only user and legacy entries can be deleted; a synced entry would come back with the next sync. */
+/**
+ * Deletes many own entries in one transaction (a homebrew pack): all or none,
+ * with one index update instead of one per entry. Synced entries are skipped.
+ * Returns how many were deleted.
+ */
+export async function rulesDeleteMany(ids: string[]): Promise<number> {
+  const db = getDb()
+  const rows = (await db.rules.bulkGet(ids)).filter((r): r is RulesEntity => !!r && r.origin !== 'foundry')
+  if (!rows.length) return 0
+  await db.rules.bulkDelete(rows.map(r => r.id))
+  for (const r of rows) await Promise.all([releaseImage(r, r.img), releaseImage(r, (r as { tokenImg?: string | null }).tokenImg)])
+  queryCache.clear()
+  for (const r of rows) indexRemove(r, false)
+  nameIndex.value = new Map(nameCounts)
+  revision.value++
+  return rows.length
+}
+
 export async function rulesDelete(id: string): Promise<void> {
   const row = await getDb().rules.get(id)
   if (!row) return
@@ -395,10 +413,10 @@ function indexAdd(e: RulesEntity) {
   nameCounts.set(indexKey(e), (nameCounts.get(indexKey(e)) ?? 0) + 1)
   nameIndex.value = new Map(nameCounts)
 }
-function indexRemove(e: RulesEntity) {
+function indexRemove(e: RulesEntity, publish = true) {
   const n = (nameCounts.get(indexKey(e)) ?? 0) - 1
   if (n > 0) nameCounts.set(indexKey(e), n); else nameCounts.delete(indexKey(e))
-  nameIndex.value = new Map(nameCounts)
+  if (publish) nameIndex.value = new Map(nameCounts)
 }
 
 async function loadNameIndex() {

@@ -26,3 +26,15 @@ describe('class features of a class', () => {
     expect(classOptionGroups({ name: 'Kineticist' }, feats)).toMatchObject([{ tag: 'kineticist-kinetic-gate', label: 'Kinetic Gate', options: [{ name: 'Fire Gate' }, { name: 'Water Gate' }] }])
   })
 })
+
+describe('deleting many entries', () => {
+  beforeEach(() => getDb().rules.clear())
+
+  it('deletes own entries in one go and never synced ones', async () => {
+    const { rulesDeleteMany } = await import('~/composables/useRules')
+    const own = (name: string) => ({ ...(newRulesEntity('feat', { name, game: 'pf2e' }) as Feat), id: name })
+    await getDb().rules.bulkAdd([own('A'), own('B'), feat('Synced', [], {})])
+    expect(await rulesDeleteMany(['A', 'B', 'Synced', 'gone'])).toBe(2)
+    expect((await getDb().rules.toArray()).map(r => r.id)).toEqual(['Synced'])
+  })
+})

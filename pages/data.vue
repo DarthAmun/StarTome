@@ -156,10 +156,12 @@
                   <span :class="{ 'data-muted': p.title === NO_PACK }">{{ p.title || 'No pack' }}</span>
                   <span class="data-count">{{ p.count }}</span>
                   <button v-if="p.title !== NO_PACK" class="data-rename" title="Rename this pack" @click.prevent="renamePack(p.title)">rename</button>
-                  <button class="data-rename data-delete" :title="`Delete the ${p.count} entries ${p.title ? 'of this pack' : 'in no pack'}`" @click.prevent="deletePack(p)">delete</button>
+                  <button class="data-rename data-delete" :class="{ 'data-busy': deletingPack === p.title }" :disabled="deletingPack !== null"
+                    :title="`Delete the ${p.count} entries ${p.title ? 'of this pack' : 'in no pack'}`" @click.prevent="deletePack(p)">{{ deletingPack === p.title ? 'deleting…' : 'delete' }}</button>
                 </label>
               </div>
               <span v-else class="sett-desc">No homebrew entries yet.</span>
+              <span v-if="packNote" class="sett-desc" :class="{ 'data-error': packNote.error }">{{ packNote.text }}</span>
             </div>
             <div class="sett-btn-pair">
               <button class="sett-btn" :disabled="!pickedPacks.length" @click="exportHomebrew">↓ Export {{ pickedCount || '' }}</button>
@@ -285,7 +287,7 @@ import { stripGmOnly } from '~/utils/gmContent'
 import JSZip from 'jszip'
 import { getDb, dbApi, now, parseJsonObject } from '~/composables/useDb'
 import { compressDataUrl } from '~/utils/image'
-import { notifyRulesChanged, rulesDelete, rulesFindByName, rulesUserEntries } from '~/composables/useRules'
+import { notifyRulesChanged, rulesDeleteMany, rulesFindByName, rulesUserEntries } from '~/composables/useRules'
 import { homebrewFile, NO_PACK, summarizePacks, withPack, type PackSummary } from '~/rules/packs'
 import { invalidateEntities } from '~/composables/useEntities'
 import { setPendingImport } from '~/composables/usePendingImport'
@@ -527,14 +529,28 @@ async function renamePack(title: string) {
   await loadPacks()
 }
 
-/** Deletes every own entry of a pack (or of no pack), with their portraits. Synced entries are never in a pack. */
+const deletingPack = ref<string | null>(null)
+const packNote = ref<{ text: string; error: boolean } | null>(null)
+
+/** Deletes every own entry of a pack (or of no pack), with their portraits, in one go. Synced entries are never in a pack. */
 async function deletePack(p: PackSummary) {
   const what = p.title ? `the pack "${p.title}"` : 'your entries in no pack'
   if (!confirm(`Delete ${what}: ${p.count} entr${p.count === 1 ? 'y' : 'ies'}? This can't be undone; export it first if you might want it back. Links and inventory items that point to them show as missing.`)) return
-  for (const e of await rulesUserEntries([p.title])) await rulesDelete(e.id)
-  notifyRulesChanged()
-  pickedPacks.value = pickedPacks.value.filter(t => t !== p.title)
-  await Promise.all([loadPacks(), loadStats()])
+  deletingPack.value = p.title
+  packNote.value = null
+  try {
+    const ids = (await rulesUserEntries([p.title])).map(e => e.id)
+    const n = await rulesDeleteMany(ids)
+    notifyRulesChanged()
+    pickedPacks.value = pickedPacks.value.filter(t => t !== p.title)
+    packNote.value = { text: `Deleted ${what}: ${n} entr${n === 1 ? 'y' : 'ies'}.`, error: false }
+  } catch (err) {
+    console.error(err)
+    packNote.value = { text: `Couldn't delete ${what}: ${(err as Error).message}`, error: true }
+  } finally {
+    deletingPack.value = null
+    await Promise.all([loadPacks(), loadStats()])
+  }
 }
 
 function download(data: Record<string, unknown>, filename: string) {
@@ -877,6 +893,8 @@ async function runImport() {
 .data-pack:hover .data-rename { opacity: 1; }
 .data-rename:hover { color: var(--accent); }
 .data-delete:hover { color: var(--danger); }
+.data-busy { opacity: 1; color: var(--danger); }
+.data-error { color: var(--danger); }
 @media (max-width: 640px) {
   .data-body { padding: 14px 16px 32px; grid-template-columns: 1fr; }
   .data-import-row { grid-template-columns: 1fr; }
