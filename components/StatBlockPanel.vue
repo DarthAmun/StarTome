@@ -30,32 +30,6 @@
         </div>
       </header>
 
-      <ol v-if="rolls.length" class="sbp-rolls" aria-label="Rolls">
-        <li v-for="r in rolls" :key="r.id" class="sbp-roll" :class="r.degree ? `sbp-roll--${r.degree}` : ''">
-          <div class="sbp-roll-top">
-            <span class="sbp-roll-label">{{ r.label }}</span>
-            <span class="sbp-roll-total">{{ r.total }}</span>
-          </div>
-          <div class="sbp-roll-detail">
-            {{ r.breakdown }}
-            <template v-if="r.targetName"> · vs {{ r.targetName }}</template>
-            <b v-if="r.degree"> · {{ r.kind === 'attack' ? ATTACK_LABEL[r.degree] : DEGREE_LABEL[r.degree] }}</b>
-            <template v-if="r.notes?.length"> · {{ r.notes.join(', ') }}</template>
-          </div>
-          <div v-if="r.kind === 'attack' && r.strike" class="sbp-roll-actions">
-            <button @click="rollDamage(r)">{{ r.degree === 'critical-success' ? 'Roll critical damage' : 'Roll damage' }}</button>
-          </div>
-          <div v-else-if="r.kind === 'damage' && r.targetId !== null" class="sbp-roll-actions">
-            <template v-if="r.applied === null">
-              <button title="Apply the damage to the target" @click="apply(r, 1)">Apply {{ r.total }}</button>
-              <button title="Apply half (rounded down)" @click="apply(r, 0.5)">½</button>
-              <button title="Apply double" @click="apply(r, 2)">×2</button>
-            </template>
-            <span v-else class="sbp-applied">Applied {{ r.applied }} to {{ r.targetName }}</span>
-          </div>
-        </li>
-      </ol>
-
       <div class="sbp-body">
         <template v-if="kind === 'rules'">
           <RulesStatBlock v-if="entry" :entity="entry" :game="game" />
@@ -96,15 +70,14 @@
  * HP, AC and conditions. GM only.
  */
 import { computed, provide, ref, shallowRef, watch } from 'vue'
-import { ROLL_CONTEXT, type AreaSpec, type StatRoll } from '~/composables/useDiceRoll'
+import { ROLL_CONTEXT, useDiceRoll, type AreaSpec, type RollAction, type StatRoll } from '~/composables/useDiceRoll'
 import { getConditionColor, hpColor } from '~/composables/useConditions'
 import { rulesGet } from '~/composables/useRules'
 import type { CharacterMirror } from '~/partylink/port'
 import { ADJUSTMENT_LABEL, applyAdjustment } from '~/rules/combat'
 import { signed } from '~/rules/format'
 import { GAME_RULES } from '~/rules/registry'
-import { ATTACK_LABEL, DEGREE_LABEL, rollCheck, rollStrikeDamage } from '~/rules/rolls'
-import type { Degree } from '~/rules/dcs'
+import { ATTACK_LABEL, rollCheck, rollStrikeDamage, twoHandFormula } from '~/rules/rolls'
 import { useEncounterStore, type EncounterToken } from '~/stores/encounter'
 import type { GameId } from '~/types/game'
 import type { RulesEntity, Strike } from '~/types/rules'
@@ -152,27 +125,9 @@ watch(() => [props.token?.linkedRulesId, props.token?.adjustment] as const, asyn
   loaded.value = true
 }, { immediate: true })
 
-// ── Rolls (COMBAT_PLAN.md §4) ───────────────────────────────────────────────
-interface PanelRoll {
-  id: number
-  kind: StatRoll['kind']
-  label: string
-  total: number
-  breakdown: string
-  degree: Degree | null
-  targetId: number | null
-  targetName: string | null
-  strike?: Strike
-  notes?: string[]
-  /** Damage applied to the target, null while not yet. */
-  applied: number | null
-  /** Damage of a critical hit: dying 2 when it knocks the target out. */
-  critical?: boolean
-}
-
+// ── Rolls (COMBAT_PLAN.md §4): results go to the dice panel, with their buttons ──
+const { showRoll } = useDiceRoll()
 const targetId = ref<number | null>(null)
-const rolls = ref<PanelRoll[]>([])
-let nextRollId = 1
 
 const targetOptions = computed(() => (store.current?.tokens ?? [])
   .filter(t => t.id !== props.token?.id)
@@ -183,51 +138,69 @@ const target = computed(() => targetId.value === null ? null : store.getToken(ta
 watch([() => props.token?.id, targetOptions], () => {
   if (targetId.value !== null && !targetOptions.value.some(t => t.id === targetId.value)) targetId.value = null
 })
-// Each token's rolls stay with it
-watch(() => props.token?.id, () => { rolls.value = [] })
 
 function signedMod(n: number) {
   return `${n < 0 ? '−' : '+'} ${Math.abs(n)}`
 }
 
-function push(r: Omit<PanelRoll, 'id' | 'applied'>) {
-  rolls.value = [{ ...r, id: nextRollId++, applied: null }, ...rolls.value].slice(0, 6)
-  if (props.token) store.logRoll(props.token.id, { label: r.label, total: r.total, degree: r.kind === 'attack' ? r.degree : null, targetName: r.targetName, attack: r.kind === 'attack' })
-}
+const nameOf = (t: EncounterToken) => t.label || t.name
 
 function roll(r: StatRoll) {
   const t = target.value
-  if (r.kind === 'damage') return pushDamage(r.label, r.strike, !!r.critical, t)
-  const c = rollCheck(r.modifier, r.kind === 'attack' ? t?.ac ?? null : null)
-  push({
-    kind: r.kind, label: r.label, total: c.total, breakdown: `d20 [${c.d20}] ${signedMod(r.modifier)}`, degree: c.degree,
-    targetId: r.kind === 'attack' ? t?.id ?? null : null, targetName: r.kind === 'attack' && t ? t.label || t.name : null,
-    strike: r.kind === 'attack' ? r.strike : undefined,
+  if (r.kind === 'damage') { rollDamage(r.label, r.strike, !!r.critical, !!r.twoHand, t); return }
+  const attack = r.kind === 'attack'
+  const c = rollCheck(r.modifier, attack ? t?.ac ?? null : null)
+  const targetName = attack && t ? nameOf(t) : null
+  if (props.token) store.logRoll(props.token.id, { label: r.label, total: c.total, degree: c.degree, targetName, attack })
+  const actions: RollAction[] = []
+  // After an attack: its damage, doubled on a critical hit, against the same target
+  if (attack && r.strike) {
+    const strike = r.strike
+    const critical = c.degree === 'critical-success'
+    const base = `${r.label.replace(/ \((2nd|3rd) attack\)$/, '')} damage`
+    const hit = c.degree === 'success' || critical || c.degree === null
+    if (hit) {
+      actions.push({ label: critical ? 'Critical damage' : 'Damage', primary: true, run: () => rollDamage(base, strike, critical, false, t) })
+      if (twoHandFormula(strike)) {
+        actions.push({ label: critical ? 'Critical, two-handed' : 'Two-handed', title: 'Damage wielded in two hands', run: () => rollDamage(base, strike, critical, true, t) })
+      }
+    }
+  }
+  showRoll({
+    label: r.label, total: c.total, breakdown: `d20 [${c.d20}] ${signedMod(r.modifier)}`,
+    isCrit: c.d20 === 20, isFail: c.d20 === 1,
+    outcome: c.degree ? ATTACK_LABEL[c.degree] : undefined, tone: c.degree ?? undefined,
+    detail: t && attack ? `vs ${nameOf(t)}${t.ac !== null ? ` (AC ${t.ac})` : ''}` : undefined,
+    actions,
   })
 }
 
-function pushDamage(label: string, strike: Strike, critical: boolean, t: EncounterToken | null) {
-  const d = rollStrikeDamage(strike, critical, Math.random, GAME_RULES[props.game].critTraits)
-  push({
-    kind: 'damage', label: critical ? `${label} (critical)` : label, total: d.total, critical,
-    breakdown: d.parts.map(p => `${p.breakdown} ${p.type}`).join(' + '), degree: null,
-    targetId: t?.id ?? null, targetName: t ? t.label || t.name : null, notes: d.notes,
+function rollDamage(label: string, strike: Strike, critical: boolean, twoHand: boolean, t: EncounterToken | null): string {
+  const d = rollStrikeDamage(strike, critical, Math.random, GAME_RULES[props.game].critTraits, { twoHand })
+  const how = [twoHand ? 'two-handed' : '', critical ? 'critical' : ''].filter(Boolean).join(', ')
+  const fullLabel = how && !label.includes(`(${how})`) ? `${label} (${how})` : label
+  if (props.token) store.logRoll(props.token.id, { label: fullLabel, total: d.total, targetName: t ? nameOf(t) : null })
+  const actions: RollAction[] = t
+    ? [
+        { label: `Apply ${d.total}`, primary: true, title: `Damage ${nameOf(t)}`, run: () => apply(t.id, d.total, critical) },
+        { label: '½', title: 'Apply half (rounded down)', run: () => apply(t.id, Math.floor(d.total / 2), critical) },
+        { label: '×2', title: 'Apply double', run: () => apply(t.id, d.total * 2, critical) },
+      ]
+    : []
+  showRoll({
+    label: fullLabel, total: d.total,
+    breakdown: d.parts.map(p => `${p.breakdown} ${p.type}`).join(' + '),
+    outcome: critical ? 'Critical' : undefined, tone: critical ? 'critical-success' : undefined,
+    detail: [t ? `vs ${nameOf(t)}` : '', ...d.notes].filter(Boolean).join(' · ') || undefined,
+    actions,
   })
+  return `${how ? `${how.charAt(0).toUpperCase()}${how.slice(1)} damage` : 'Damage'}: ${d.total}`
 }
 
-/** Damage after an attack: doubled on a critical hit, against the attack's target. */
-function rollDamage(r: PanelRoll) {
-  if (!r.strike) return
-  const t = r.targetId !== null ? store.getToken(r.targetId) ?? null : target.value
-  pushDamage(`${r.label.replace(/ \((2nd|3rd) attack\)$/, '')} damage`, r.strike, r.degree === 'critical-success', t)
-}
-
-function apply(r: PanelRoll, factor: number) {
-  if (r.targetId === null) return
-  const amount = Math.floor(r.total * factor)
-  r.applied = amount
-  rolls.value = [...rolls.value]
-  if (amount > 0) emit('apply-damage', r.targetId, amount, !!r.critical)
+function apply(tokenId: number, amount: number, critical: boolean): string {
+  const t = store.getToken(tokenId)
+  if (amount > 0) emit('apply-damage', tokenId, amount, critical)
+  return `Applied ${amount} to ${t ? nameOf(t) : 'the target'}`
 }
 
 provide(ROLL_CONTEXT, { roll, placeArea: spec => emit('place-area', spec, props.token?.id ?? null) })
@@ -275,24 +248,6 @@ function formatAt(iso: string) {
   flex: 1; min-width: 0; font-family: var(--font-body); font-size: 12px; letter-spacing: 0; text-transform: none;
   padding: 2px 4px; border: 1px solid var(--parch-line); border-radius: 2px; background: transparent; color: var(--ink);
 }
-.sbp-rolls { list-style: none; margin: 0; padding: 8px 16px; border-bottom: 1px solid var(--parch-line); max-height: 40%; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
-.sbp-roll { border-left: 3px solid var(--parch-line); padding: 3px 0 3px 8px; }
-.sbp-roll--critical-success { border-left-color: var(--gold); }
-.sbp-roll--success { border-left-color: var(--grass, #4a8a3a); }
-.sbp-roll--failure { border-left-color: var(--ink-ghost); }
-.sbp-roll--critical-failure { border-left-color: var(--blood); }
-.sbp-roll-top { display: flex; align-items: baseline; gap: 8px; }
-.sbp-roll-label { flex: 1; min-width: 0; font-size: 12px; color: var(--ink-faded); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sbp-roll-total { font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--ink); }
-.sbp-roll-detail { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-ghost); }
-.sbp-roll-detail b { font-family: var(--font-body); color: var(--ink); }
-.sbp-roll-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-.sbp-roll-actions button {
-  font-family: var(--font-head); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
-  padding: 3px 8px; border: 1px solid var(--parch-line); border-radius: 2px; background: transparent; color: var(--ink); cursor: pointer;
-}
-.sbp-roll-actions button:hover { border-color: var(--gold); background: rgba(184,134,11,0.08); }
-.sbp-applied { font-size: 11px; font-style: italic; color: var(--ink-faded); }
 .sbp-slide-enter-active, .sbp-slide-leave-active { transition: transform 0.2s ease; }
 .sbp-slide-enter-from, .sbp-slide-leave-to { transform: translateX(100%); }
 </style>

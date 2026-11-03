@@ -60,22 +60,38 @@
 
         <!-- Result -->
         <Transition name="dp-res">
-          <div v-if="result" class="dp-result" :class="{ 'dp-result--crit': result.isCrit, 'dp-result--fail': result.isFail }">
+          <div v-if="result" class="dp-result" :class="[{ 'dp-result--crit': result.isCrit, 'dp-result--fail': result.isFail }, result.tone ? `dp-tone--${result.tone}` : '']">
             <div v-if="result.isCrit" class="dp-result-badge dp-result-badge--crit">NAT 20 ✦</div>
             <div v-else-if="result.isFail" class="dp-result-badge dp-result-badge--fail">NAT 1</div>
             <div v-if="result.title" class="dp-result-title">{{ result.title }}</div>
             <div class="dp-result-total">{{ result.total }}</div>
             <div v-if="result.outcome" class="dp-result-outcome">{{ result.outcome }}</div>
+            <div v-if="result.detail" class="dp-result-detail">{{ result.detail }}</div>
             <div class="dp-result-breakdown">{{ result.breakdown }}</div>
+            <div v-if="result.done" class="dp-done">{{ result.done }}</div>
+            <div v-else-if="result.actions?.length" class="dp-actions-row">
+              <button v-for="a in result.actions" :key="a.label" class="dp-act" :class="{ 'dp-act--main': a.primary }" :title="a.title" @click="runAction(result, a)">{{ a.label }}</button>
+            </div>
           </div>
         </Transition>
 
-        <!-- History -->
-        <div v-if="history.length > 0" class="dp-history">
-          <div class="dp-history-head">History</div>
-          <div v-for="h in history" :key="h.id" class="dp-history-row">
-            <span class="dp-history-dice">{{ h.label }}</span>
-            <span class="dp-history-total" :class="{ 'dp-his--crit': h.isCrit, 'dp-his--fail': h.isFail }">{{ h.total }}</span>
+        <!-- History: every roll with its dice, newest first -->
+        <div v-if="history.length > 1" class="dp-history">
+          <div class="dp-history-head">
+            History
+            <button class="dp-history-clear" title="Clear the history" @click="history = history.slice(0, 1)">Clear</button>
+          </div>
+          <div v-for="h in history.slice(1)" :key="h.id" class="dp-history-row" :class="h.tone ? `dp-tone--${h.tone}` : ''">
+            <div class="dp-history-top">
+              <span class="dp-history-label">{{ h.title ?? h.label }}</span>
+              <span v-if="h.outcome" class="dp-history-outcome">{{ h.outcome }}</span>
+              <span class="dp-history-total" :class="{ 'dp-his--crit': h.isCrit, 'dp-his--fail': h.isFail }">{{ h.total }}</span>
+            </div>
+            <div class="dp-history-dice">{{ h.breakdown }}<template v-if="h.detail"> · {{ h.detail }}</template></div>
+            <div v-if="h.done" class="dp-done">{{ h.done }}</div>
+            <div v-else-if="h.actions?.length" class="dp-actions-row">
+              <button v-for="a in h.actions" :key="a.label" class="dp-act dp-act--small" :class="{ 'dp-act--main': a.primary }" :title="a.title" @click="runAction(h, a)">{{ a.label }}</button>
+            </div>
           </div>
         </div>
       </div>
@@ -84,7 +100,7 @@
 </template>
 
 <script setup lang="ts">
-import { useDiceRoll } from '~/composables/useDiceRoll'
+import { useDiceRoll, type RollAction, type ShownRoll } from '~/composables/useDiceRoll'
 
 const DICE = [4, 6, 8, 10, 12, 20, 100] as const
 type DieSides = typeof DICE[number]
@@ -118,12 +134,31 @@ interface RollResult {
   /** Set for rolls from a stat block: what was rolled. */
   title?: string
   outcome?: string
+  tone?: ShownRoll['tone']
+  detail?: string
+  /** Buttons for what comes next (damage, apply); gone once one ran. */
+  actions?: RollAction[]
+  /** What the button that ran did. */
+  done?: string
   isCrit: boolean
   isFail: boolean
   id: number
 }
-const result = ref<RollResult | null>(null)
+const HISTORY_SIZE = 30
 const history = ref<RollResult[]>([])
+/** The newest roll, shown large; the history lists the ones before it. */
+const result = computed(() => history.value[0] ?? null)
+
+function pushResult(r: RollResult) {
+  history.value = [r, ...history.value].slice(0, HISTORY_SIZE)
+}
+
+function runAction(r: RollResult, a: RollAction) {
+  const what = a.run()
+  // The roll may have added a new one in front; mark this one wherever it is
+  const entry = history.value.find(h => h.id === r.id)
+  if (entry) entry.done = what || `${a.label} ✓`
+}
 let nextId = 0
 
 const hasDice = computed(() => DICE.some(d => pool[d] > 0))
@@ -147,11 +182,10 @@ function removeDie(sides: DieSides) {
 function clearAll() {
   DICE.forEach(d => { pool[d] = 0 })
   modifier.value = 0
-  result.value = null
 }
 
 // ── External roll trigger ─────────────────────────────────────
-const { pendingRoll, clearPendingRoll, shownRoll, clearShownRoll } = useDiceRoll()
+const { pendingRoll, clearPendingRoll, shownRolls, takeShownRolls } = useDiceRoll()
 
 function parseDiceExpression(expr: string): boolean {
   // Normalise: remove spaces, uppercase D → d
@@ -191,17 +225,17 @@ watch(pendingRoll, (expr) => {
 })
 
 // A finished roll from a stat block (useDiceRoll().showRoll)
-watch(shownRoll, (r) => {
-  if (!r) return
-  clearShownRoll()
-  const shown: RollResult = {
-    total: r.total, breakdown: r.breakdown, label: r.label, title: r.label, outcome: r.outcome,
-    isCrit: !!r.isCrit, isFail: !!r.isFail, id: ++nextId,
+watch(shownRolls, (list) => {
+  if (!list.length) return
+  for (const r of takeShownRolls()) {
+    pushResult({
+      total: r.total, breakdown: r.breakdown, label: r.label, title: r.label, outcome: r.outcome,
+      tone: r.tone, detail: r.detail, actions: r.actions,
+      isCrit: !!r.isCrit, isFail: !!r.isFail, id: ++nextId,
+    })
   }
-  result.value = shown
-  history.value = [shown, ...history.value].slice(0, 8)
   panelOpen.value = true
-})
+}, { immediate: true })
 
 function rollDice() {
   const rolls: { sides: number; values: number[] }[] = []
@@ -224,9 +258,7 @@ function rollDice() {
     ...(modifier.value ? [`${modifier.value > 0 ? '+' : ''}${modifier.value}`] : []),
   ].join('  ·  ')
 
-  const r: RollResult = { total, breakdown, label: poolLabel.value, isCrit, isFail, id: ++nextId }
-  result.value = r
-  history.value = [r, ...history.value].slice(0, 8)
+  pushResult({ total, breakdown, label: poolLabel.value, isCrit, isFail, id: ++nextId })
 }
 
 </script>
@@ -268,8 +300,9 @@ function rollDice() {
   bottom: 164px;
   right: 20px;
   z-index: 198;
-  width: 300px;
-  max-height: calc(100vh - 140px);
+  width: 320px;
+  /* Sits 164px above the bottom: never taller than what's left above it */
+  max-height: calc(100vh - 184px);
   overflow-y: auto;
   background: var(--surface-solid);
   border: 1px solid var(--border);
@@ -557,7 +590,12 @@ function rollDice() {
   border-top: 1px solid var(--dp-hist-border);
   padding: 8px 12px 12px;
 }
+/* The floating panel keeps its dice and newest roll in view; older rolls scroll */
+.dice-panel:not(.dice-panel--inline) .dp-history { max-height: 30vh; overflow-y: auto; }
 .dp-history-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -565,17 +603,41 @@ function rollDice() {
   color: var(--dp-hist-head);
   margin-bottom: 6px;
 }
+.dp-history-clear {
+  background: none; border: none; cursor: pointer; padding: 0;
+  font: inherit; letter-spacing: inherit; text-transform: inherit; color: var(--text3, var(--dp-hist-head));
+}
+.dp-history-clear:hover { color: var(--danger); }
 .dp-history-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding: 3px 0;
+  padding: 5px 0 5px 6px;
   border-bottom: 1px solid var(--dp-row-border);
+  border-left: 2px solid transparent;
   font-size: 11px;
 }
 .dp-history-row:last-child { border-bottom: none; }
-.dp-history-dice { color: var(--dp-hist-dice); font-family: monospace; }
+.dp-history-top { display: flex; align-items: baseline; gap: 6px; }
+.dp-history-label { flex: 1; min-width: 0; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-history-outcome { font-size: 10px; color: var(--text); white-space: nowrap; }
+.dp-history-dice { color: var(--dp-hist-dice); font-family: monospace; font-size: 10px; margin-top: 1px; overflow-wrap: anywhere; }
 .dp-history-total { font-weight: 700; color: var(--dp-hist-total); }
+/* Degree of success: a colored edge, gold for criticals */
+.dp-tone--critical-success { border-left-color: var(--accent-l); }
+.dp-tone--success { border-left-color: var(--success, #4a8a3a); }
+.dp-tone--failure { border-left-color: var(--text3, #777); }
+.dp-tone--critical-failure { border-left-color: var(--danger); }
+.dp-result.dp-tone--critical-success, .dp-result.dp-tone--success,
+.dp-result.dp-tone--failure, .dp-result.dp-tone--critical-failure { border-left-width: 3px; }
+.dp-result-detail { font-size: 11px; color: var(--text2); margin-bottom: 4px; }
+.dp-actions-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: 8px; }
+.dp-history .dp-actions-row { justify-content: flex-start; margin-top: 4px; }
+.dp-act {
+  font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--text);
+}
+.dp-act:hover { border-color: var(--border-hi, var(--border)); background: var(--surface); }
+.dp-act--main { border-color: var(--accent-l); color: var(--accent-l); }
+.dp-act--small { font-size: 10px; padding: 2px 7px; }
+.dp-done { font-size: 11px; font-style: italic; color: var(--text2); margin-top: 6px; }
 .dp-his--crit { color: var(--accent-l); }
 .dp-his--fail { color: var(--danger); }
 

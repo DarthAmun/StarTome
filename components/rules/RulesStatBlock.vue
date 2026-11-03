@@ -112,7 +112,7 @@
         <b>{{ s.range === 'melee' ? 'Melee' : 'Ranged' }}</b> <span class="rsb-glyph">◆</span> {{ s.name }}
         <template v-for="step in MAP_STEPS" :key="step"><button class="rsb-roll" :title="MAP_TITLE[step]" @click.stop="attack(s, step)">{{ signed(strikeModifier(s, step)) }}</button><template v-if="step < 2">/</template></template>
         <template v-if="s.traits.length"> ({{ s.traits.map(formatTrait).join(', ') }})</template>,
-        <b>Damage</b> <button class="rsb-roll" title="Roll damage" @click.stop="damage(s)">{{ s.damage.map(d => `${d.formula} ${d.type}`).join(' plus ') }}</button><template v-if="s.effects?.length"> plus {{ s.effects.join(', ') }}</template>
+        <b>Damage</b> <button class="rsb-roll" title="Roll damage" @click.stop="damage(s)">{{ damageText(s) }}</button>{{ ' ' }}<button class="rsb-roll rsb-roll--crit" title="Roll critical damage: doubled, with deadly and fatal" @click.stop="damage(s, true)">crit</button><template v-if="twoHandFormula(s)">; two-handed <button class="rsb-roll" title="Roll damage wielded in two hands" @click.stop="damage(s, false, true)">{{ damageText(s, true) }}</button>{{ ' ' }}<button class="rsb-roll rsb-roll--crit" title="Roll critical damage in two hands" @click.stop="damage(s, true, true)">crit</button></template><template v-if="s.effects?.length"> plus {{ s.effects.join(', ') }}</template>
       </p>
       <p v-for="(sc, i) in creature.spellcasting" :key="'sc' + i" class="rsb-line">
         <b>{{ sc.name }}</b> DC {{ sc.dc }}<template v-if="sc.attack !== undefined">, attack <button class="rsb-roll" title="Roll a spell attack" @click.stop="spellAttack(sc.name, sc.attack)">{{ signed(sc.attack) }}</button></template>;
@@ -144,7 +144,7 @@
         <b>{{ st.range === 'melee' ? 'Melee' : 'Ranged' }}</b> <span class="rsb-glyph">◆</span> {{ st.name }}
         <template v-for="step in MAP_STEPS" :key="step"><button class="rsb-roll" :title="MAP_TITLE[step]" @click.stop="attack(st, step)">{{ signed(strikeModifier(st, step)) }}</button><template v-if="step < 2">/</template></template>
         <template v-if="st.traits.length"> ({{ st.traits.map(formatTrait).join(', ') }})</template>,
-        <b>Damage</b> <button class="rsb-roll" title="Roll damage" @click.stop="damage(st)">{{ st.damage.map(d => `${d.formula} ${d.type}`).join(' plus ') }}</button><template v-if="st.effects?.length"> plus {{ st.effects.join(', ') }}</template>
+        <b>Damage</b> <button class="rsb-roll" title="Roll damage" @click.stop="damage(st)">{{ damageText(st) }}</button>{{ ' ' }}<button class="rsb-roll rsb-roll--crit" title="Roll critical damage: doubled, with deadly and fatal" @click.stop="damage(st, true)">crit</button><template v-if="twoHandFormula(st)">; two-handed <button class="rsb-roll" title="Roll damage wielded in two hands" @click.stop="damage(st, false, true)">{{ damageText(st, true) }}</button>{{ ' ' }}<button class="rsb-roll rsb-roll--crit" title="Roll critical damage in two hands" @click.stop="damage(st, true, true)">crit</button></template><template v-if="st.effects?.length"> plus {{ st.effects.join(', ') }}</template>
       </p>
       <p v-for="a in hazard.actions" :key="a.name" class="rsb-line rsb-action">
         <b>{{ a.name }}</b> <span v-if="formatActionCost(a.cost)" class="rsb-glyph">{{ formatActionCost(a.cost) }}</span>
@@ -239,7 +239,7 @@
 
 <script setup lang="ts">
 import { useDiceRoll, useStatRolls } from '~/composables/useDiceRoll'
-import { strikeModifier, type MapStep } from '~/rules/rolls'
+import { strikeModifier, twoHandFormula, type MapStep } from '~/rules/rolls'
 import { parseAreaEffect } from '~/rules/areas'
 import { useEntityMarkdown } from '~/composables/useEntityMarkdown'
 import { rulesClassFeats, rulesFindByName, useRulesRevision } from '~/composables/useRules'
@@ -311,8 +311,13 @@ function check(label: string, modifier: number) {
 function attack(strike: Strike, step: MapStep) {
   roll({ kind: 'attack', label: `${props.entity.name}: ${strike.name}${MAP_SUFFIX[step]}`, modifier: strikeModifier(strike, step), strike })
 }
-function damage(strike: Strike) {
-  roll({ kind: 'damage', label: `${props.entity.name}: ${strike.name} damage`, strike })
+function damage(strike: Strike, critical = false, twoHand = false) {
+  const how = [twoHand ? 'two-handed' : '', critical ? 'critical' : ''].filter(Boolean).join(', ')
+  roll({ kind: 'damage', label: `${props.entity.name}: ${strike.name} damage${how ? ` (${how})` : ''}`, strike, critical, twoHand })
+}
+/** "1d8+10 slashing plus 1d6 fire"; in two hands the weapon's dice take the trait's size. */
+function damageText(strike: Strike, twoHand = false) {
+  return strike.damage.map((d, i) => `${i === 0 && twoHand ? twoHandFormula(strike) ?? d.formula : d.formula} ${d.type}`).join(' plus ')
 }
 /** An ability with an area and a save DC can be put on the encounter map. */
 function areaOf(a: StatAction) {
@@ -511,6 +516,7 @@ async function onClick(e: MouseEvent) {
   border-bottom: 1px dotted rgba(184, 134, 11, 0.7);
 }
 .rsb-roll:hover { background: rgba(184, 134, 11, 0.25); }
+.rsb-roll--crit { font-size: 0.78em; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.85; }
 .rsb-place {
   margin: 0 4px; padding: 0 6px; border: 1px solid rgba(184, 134, 11, 0.5); border-radius: 3px; cursor: pointer;
   background: rgba(184, 134, 11, 0.1); color: var(--gold, #d4b54a); font-size: 0.8em; font-family: var(--fh); letter-spacing: 0.04em; text-transform: uppercase;

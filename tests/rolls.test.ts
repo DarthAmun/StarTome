@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { basicSaveDamage, deadlyDice, mapPenalty, parseExpression, rollCheck, rollExpression, rollStrikeDamage, strikeModifier, traitDie } from '~/rules/rolls'
+import { basicSaveDamage, deadlyDice, twoHandFormula, mapPenalty, parseExpression, rollCheck, rollExpression, rollStrikeDamage, strikeModifier, traitDie } from '~/rules/rolls'
 import { resolveStatRoll } from '~/composables/useDiceRoll'
 import type { Strike } from '~/types/rules'
 
@@ -95,7 +95,8 @@ describe('stat-block rolls without a target (dice panel)', () => {
     const r = resolveStatRoll({ kind: 'damage', label: 'Longsword damage', strike: sword(['deadly-d10']), critical: true }, 'pf2e', seq([4, 8], [6, 8], [3, 6], [7, 10]))
     expect(r.total).toBe(37 + 6)
     expect(r.breakdown).toBe('(2d8 [4, 6] + 5) × 2 + 1d10 [7] slashing + (1d6 [3]) × 2 fire')
-    expect(r.outcome).toBe('Critical · deadly d10: +7')
+    expect(r.outcome).toBe('Critical')
+    expect(r.detail).toBe('deadly d10: +7')
   })
 })
 
@@ -103,6 +104,29 @@ describe('basic saves', () => {
   it('take none, half (rounded down), full or double damage', () => {
     expect((['critical-success', 'success', 'failure', 'critical-failure'] as const).map(d => basicSaveDamage(25, d))).toEqual([0, 12, 25, 50])
     expect(basicSaveDamage(1, 'success')).toBe(0)
+  })
+})
+
+describe('two-hand', () => {
+  const bastard: Strike = { name: 'Bastard Sword', range: 'melee', bonus: 18, traits: ['magical', 'two-hand-d12'], damage: [{ formula: '1d8+10', type: 'slashing' }] }
+
+  it('changes the weapon dice when wielded in two hands', () => {
+    expect(twoHandFormula(bastard)).toBe('1d12+10')
+    expect(twoHandFormula({ ...bastard, traits: ['magical'] })).toBeNull()
+    const r = rollStrikeDamage(bastard, false, seq([11, 12]), ['deadly', 'fatal'], { twoHand: true })
+    expect(r.total).toBe(21)
+    expect(r.parts[0].breakdown).toBe('1d12 [11] + 10')
+    // One-handed it stays a d8
+    expect(rollStrikeDamage(bastard, false, seq([8, 8])).parts[0].breakdown).toBe('1d8 [8] + 10')
+  })
+
+  it('doubles in two hands on a crit, and fatal still sets the die', () => {
+    expect(rollStrikeDamage(bastard, true, seq([12, 12]), ['deadly', 'fatal'], { twoHand: true }).total).toBe(44)
+    const both: Strike = { ...bastard, traits: ['two-hand-d10', 'fatal-d12'] }
+    const r = rollStrikeDamage(both, true, seq([12, 12], [5, 12]), ['deadly', 'fatal'], { twoHand: true })
+    // (12 + 10) × 2 + fatal 5
+    expect(r.total).toBe(49)
+    expect(r.notes).toEqual(['two-handed d10', 'fatal d12: +5'])
   })
 })
 

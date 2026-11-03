@@ -5,7 +5,8 @@
  *
  * Rules: Player Core "Multiple Attack Penalty" (−5/−10, agile −4/−8),
  * "Critical Hits" (double the damage), and the deadly and fatal weapon
- * traits. Deadly's die is rolled after doubling (its trait text says so);
+ * traits, and two-hand (wielded in two hands, the weapon's dice change
+ * size). Deadly's die is rolled after doubling (its trait text says so);
  * fatal's extra die is treated the same way, which its text leaves open.
  * Same in SF2e.
  */
@@ -113,24 +114,41 @@ export function deadlyDice(weaponDice: number): number {
   return weaponDice >= 4 ? 3 : weaponDice === 3 ? 2 : 1
 }
 
+/** The weapon's damage dice wielded in two hands ("two-hand-d12"); null without the trait. */
+export function twoHandFormula(strike: Pick<Strike, 'damage' | 'traits'>): string | null {
+  const die = traitDie(strike.traits, 'two-hand')
+  const first = strike.damage[0]?.formula
+  if (!die || !first) return null
+  return first.replace(/(\d*)d\d+/gi, (_m, n: string) => `${n}d${die}`)
+}
+
+export interface StrikeDamageOptions {
+  /** Wielded in two hands: the two-hand trait's die size for the weapon's dice. */
+  twoHand?: boolean
+}
+
 /**
  * A Strike's damage. On a critical hit the total of every part doubles;
  * fatal first raises the weapon's dice to its size, then fatal and deadly add
- * their extra die after doubling (when the game has those traits).
+ * their extra die after doubling (when the game has those traits). In two
+ * hands the weapon's dice take the two-hand size (fatal's still wins on a crit).
  */
-export function rollStrikeDamage(strike: Pick<Strike, 'damage' | 'traits'>, critical: boolean, rng: Rng = Math.random, critTraits: readonly string[] = ['deadly', 'fatal']): DamageRoll {
+export function rollStrikeDamage(strike: Pick<Strike, 'damage' | 'traits'>, critical: boolean, rng: Rng = Math.random, critTraits: readonly string[] = ['deadly', 'fatal'], opts: StrikeDamageOptions = {}): DamageRoll {
   const notes: string[] = []
+  const twoHand = opts.twoHand ? traitDie(strike.traits, 'two-hand') : null
   const fatal = critical && critTraits.includes('fatal') ? traitDie(strike.traits, 'fatal') : null
   const deadly = critical && critTraits.includes('deadly') ? traitDie(strike.traits, 'deadly') : null
   const parts = strike.damage.map((d, i): DamagePartRoll => {
     const parsed = parseExpression(d.formula)
     if (!parsed) return { type: d.type, total: 0, breakdown: d.formula }
-    // Fatal changes the weapon's own dice: the first damage roll's
-    if (fatal && i === 0) parsed.dice = parsed.dice.map(t => ({ ...t, sides: fatal }))
+    // Two-hand and fatal change the weapon's own dice: the first damage roll's
+    const sides = i === 0 ? fatal ?? twoHand : null
+    if (sides) parsed.dice = parsed.dice.map(t => ({ ...t, sides }))
     const r = rollExpression(parsed, rng)!
     const total = Math.max(0, critical ? r.total * 2 : r.total)
     return { type: d.type, total, breakdown: critical ? `(${r.breakdown}) × 2` : r.breakdown }
   })
+  if (twoHand) notes.push(`two-handed d${twoHand}`)
   const weapon = parts[0]
   const weaponDice = parseExpression(strike.damage[0]?.formula ?? '')?.dice.reduce((n, t) => n + t.count, 0) ?? 0
   if (weapon && fatal) {
