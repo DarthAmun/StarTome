@@ -704,7 +704,6 @@ function addTyped() {
 textarea.inv-input { height: auto; padding: 6px 8px; resize: vertical; font-family: inherit; }
 .inv-coin-input { width: 150px; }
 .inv-select { max-width: 180px; }
-.inv-select option, .inv-details select option { background: var(--surface); }
 .inv-qty { width: 56px; text-align: center; font-family: var(--fm); }
 
 .inv-item { border-top: 1px solid var(--border); }

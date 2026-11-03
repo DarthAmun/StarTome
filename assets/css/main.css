@@ -1769,6 +1769,14 @@ html[data-theme="dark"] .entry:hover {
     color: var(--text);
 }
 
+/* Every native dropdown list: most selects have a transparent background,
+   which the open list shows as white, under the theme's light text */
+select option,
+select optgroup {
+    background-color: var(--surface-solid);
+    color: var(--text);
+}
+
 .dlg-field {
     margin-bottom: 16px;
 }
