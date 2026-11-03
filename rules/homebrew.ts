@@ -11,10 +11,11 @@
  * Pure functions; the homebrew page does the IO.
  */
 import { newRulesEntity } from '~/rules/factory'
+import { convertPf2oolsRelicGifts, isPf2oolsRelicGifts } from '~/converters/pf2ools/relicGifts'
 import { parseActionCost, parseBulk, parseMoney } from '~/rules/format'
 import { GAME_IDS, type GameId } from '~/types/game'
 import {
-  isRulesKind, ITEM_CATEGORIES, kindForSegment, RARITIES, RULES_KIND_CONFIG, SIZES,
+  GIFT_TIERS, isRulesKind, ITEM_CATEGORIES, kindForSegment, RARITIES, RULES_KIND_CONFIG, RULES_KINDS, SIZES,
   type ActionCost, type RulesEntity, type RulesKind,
 } from '~/types/rules'
 
@@ -41,6 +42,8 @@ export function readHomebrewText(text: string): { entries: unknown[] } | { error
   let data: unknown
   try { data = JSON.parse((fenced ? fenced[1] : text).trim()) }
   catch (err) { return { error: `Not valid JSON: ${(err as Error).message}` } }
+  // Pf2ools relic gifts (converters/pf2ools): converted here, then checked like any homebrew
+  if (isPf2oolsRelicGifts(data)) return { entries: convertPf2oolsRelicGifts(data) }
   if (Array.isArray(data)) return { entries: data }
   if (isObj(data)) {
     if (Array.isArray(data.rules)) return { entries: data.rules }
@@ -461,6 +464,13 @@ const KIND_SHAPES: Record<RulesKind, Shape> = {
     features: opt(arrOf(shape({ level: req(num, 1), name: req(str) }))),
   },
   deity: { facts: req(record(either(num, str, strArr))) },
+  relicGift: {
+    tier: req(oneOf(GIFT_TIERS)),
+    aspects: req(strArr, []),
+    prerequisites: opt(strArr),
+    activation: opt(arrOf(shape({ cost: req(actionCost, null), traits: opt(traits), frequency: opt(str), trigger: opt(str), text: opt(str) }))),
+    grantsRune: opt(str),
+  },
 }
 
 // ── Entry ──────────────────────────────────────────────────────────────────
@@ -469,7 +479,8 @@ const KIND_SHAPES: Record<RulesKind, Shape> = {
 function readKind(v: unknown, ctx: Ctx): RulesKind | null {
   if (typeof v !== 'string') { fail(ctx, 'kind', `missing; should be one of ${Object.keys(RULES_KIND_CONFIG).join(', ')}`); return null }
   const t = v.trim().toLowerCase()
-  if (isRulesKind(t)) return t
+  const exact = RULES_KINDS.find(kind => kind.toLowerCase() === t)
+  if (exact) return exact
   const k = kindForSegment(t)
   if (k) { warn(ctx, 'kind', `${show(v)} read as ${show(k)}`); return k }
   fail(ctx, 'kind', `unknown kind ${show(v)}; should be one of ${Object.keys(RULES_KIND_CONFIG).join(', ')}`)

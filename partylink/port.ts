@@ -8,7 +8,8 @@
  * shape, compendium ids). `PlayBuddyLink` maps Play Buddy's wire format
  * (wire/v1.ts) onto it through the pure converters in convert/.
  */
-import type { Runes } from '~/types/rules'
+import type { AttachKind } from '~/rules/attachments'
+import type { GiftTier } from '~/types/rules'
 
 export type LinkId = 'none' | 'playbuddy'
 
@@ -59,8 +60,21 @@ export interface MirrorItem {
   bulk: number
   identified: boolean
   invested: boolean
-  runes: Runes | null
+  attachments: MirrorAttachment[]
+  relic: { aspects: string[] } | null
   containerEntryId: string | null
+}
+
+/** A rune, talisman, upgrade, accessory or relic gift on a player's item. */
+export interface MirrorAttachment {
+  entryId: string
+  rulesId: string | null
+  kind: AttachKind
+  name: string
+  level: number
+  /** cp; 0 when Play Buddy doesn't say. */
+  price: number
+  identified: boolean
 }
 
 /** One player's shared character, merged from the levels they share. */
@@ -106,7 +120,9 @@ export interface OfferStack {
   identified: boolean
   playerName: string | null
   playerDescription: string | null
-  runes: Runes | null
+  /** What's attached to the item: runes, talismans, upgrades, relic gifts. */
+  attachments: OfferAttachment[]
+  relic: { aspects: string[] } | null
   /** For items Play Buddy's catalog doesn't know (homebrew, free text). */
   custom: {
     level: number
@@ -120,6 +136,17 @@ export interface OfferStack {
     armor: boolean
     summary: string
   }
+}
+
+/** One attachment of an offered item. */
+export interface OfferAttachment {
+  rulesId: string | null
+  kind: AttachKind
+  name: string
+  /** false: an unidentified rune, or a relic gift that hasn't awakened. */
+  identified: boolean
+  tier?: GiftTier
+  custom: OfferStack['custom']
 }
 
 export type LinkOffer =

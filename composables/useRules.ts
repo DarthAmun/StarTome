@@ -13,7 +13,7 @@ import { isOverlayPath, setPath, withLocalEdits } from '~/rules/edits'
 import { packOf } from '~/rules/packs'
 import { dataUrlToBlob, deleteImage, imageRefId, isImageRef, storeImage } from '~/rules/images'
 import type { GameId } from '~/types/game'
-import { isRulesKind, RULES_KIND_CONFIG, RULES_KINDS, type Feat, type Item, type Rarity, type RulesEntity, type RulesKind, type RulesOrigin } from '~/types/rules'
+import { kindForSegment, RULES_KIND_CONFIG, RULES_KINDS, type Feat, type Item, type Rarity, type RulesEntity, type RulesKind, type RulesOrigin } from '~/types/rules'
 
 export interface RulesQuery {
   kind: RulesKind
@@ -237,8 +237,9 @@ export async function rulesUserEntries(packs?: string[]): Promise<RulesEntity[]>
 
 /** Route of the compendium entry a {{kind: Name}} ref points to, or null if there is none. */
 export async function rulesRefRoute(type: string, name: string, game?: GameId): Promise<string | null> {
-  const kind = type.toLowerCase()
-  if (!isRulesKind(kind)) return null
+  // {{relicGift: …}} and {{relicgift: …}} alike
+  const kind = RULES_KINDS.find(k => k.toLowerCase() === type.toLowerCase()) ?? kindForSegment(type.toLowerCase())
+  if (!kind) return null
   const e = await rulesFindByName(kind, name, game)
   return e ? `/compendium/${RULES_KIND_CONFIG[kind].segment}?id=${e.id}` : null
 }

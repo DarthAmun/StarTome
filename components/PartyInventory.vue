@@ -73,18 +73,25 @@
 
       <!-- Items -->
       <div v-if="!ownerEntries.length" class="party-empty">No items.</div>
-      <div v-for="e in ownerEntries" :key="e.id" class="inv-item" :class="{ 'inv-item--unid': !e.identified, 'inv-item--inside': insideOf(e) }">
+      <div v-for="e in ownerEntries" :key="e.id" class="inv-item"
+        :class="{ 'inv-item--unid': !e.identified, 'inv-item--inside': insideOf(e) || hostOf(e), 'inv-item--attached': hostOf(e), 'inv-item--deep': hostOf(e) && insideOf(hostOf(e)!) }">
         <div class="inv-row">
-          <span v-if="e.pbEntryId || e.pbOfferId" class="inv-qty inv-qty--fixed">{{ e.quantity }}</span>
+          <span v-if="hostOf(e)" class="inv-qty inv-qty--fixed inv-branch" aria-hidden="true">{{ lastAttached(e) ? '└' : '├' }}</span>
+          <span v-else-if="e.pbEntryId || e.pbOfferId" class="inv-qty inv-qty--fixed">{{ e.quantity }}</span>
           <input v-else class="inv-input inv-qty" type="number" min="0" :value="e.quantity" title="Quantity (0 removes)"
             @change="updateEntry(e.id, { quantity: Number(($event.target as HTMLInputElement).value) })" />
           <div class="inv-name">
+            <span v-if="e.attachKind" class="inv-kind" :class="`inv-kind--${e.attachKind}`">{{ kindLabel(e) }}</span>
+            <span v-if="e.relic" class="inv-kind inv-kind--relic" :title="e.relic.aspects.length ? `Aspects: ${e.relic.aspects.join(', ')}` : 'Relic'">relic{{ e.relic.aspects.length ? ` · ${e.relic.aspects.join(', ')}` : '' }}</span>
             <template v-if="view === 'gm'">
-              <NuxtLink v-if="e.itemId && items.get(e.itemId)" :to="`/compendium/items?id=${encodeURIComponent(e.itemId)}`">{{ eff(e).name }}</NuxtLink>
-              <span v-else>{{ eff(e).name }}</span>
-              <span v-if="e.itemId && !items.get(e.itemId)" class="inv-warn" title="The compendium entry is missing; sync or import it">missing entry</span>
-              <span v-if="!e.identified" class="inv-unid" :title="`Players see: ${playerOf(e).name}`">unidentified · “{{ playerOf(e).name }}”</span>
+              <NuxtLink v-if="linkOf(e)" :to="linkOf(e)!">{{ nameOf(e) }}</NuxtLink>
+              <span v-else>{{ nameOf(e) }}</span>
+              <span v-if="e.itemId && !linkOf(e)" class="inv-warn" title="The compendium entry is missing; sync or import it">missing entry</span>
+              <span v-if="dormantGift(e)" class="inv-unid" title="Planned: players don't see it and it doesn't count as treasure until it awakens">dormant</span>
+              <span v-else-if="!e.identified" class="inv-unid" :title="`Players see: ${playerOf(e).name}`">unidentified · “{{ playerOf(e).name }}”</span>
               <span v-if="runeLabel(e)" class="inv-dim">{{ runeLabel(e) }}</span>
+              <span v-if="attachedOf(e).length" class="inv-dim" :title="`${nameOf(e)} with everything attached`">· {{ money(withAttached(e)) }} in all</span>
+              <span v-for="w in warningsOf(e)" :key="w" class="inv-warn">{{ w }}</span>
               <span v-if="e.pbOfferId" class="inv-offered" :title="offerTitle(e)">offered</span>
             </template>
             <template v-else>
@@ -99,7 +106,25 @@
           <span class="inv-level" title="Level">{{ shownLevel(e) }}</span>
           <span class="inv-price" :title="priceTitle(e)">{{ shownPrice(e) }}</span>
           <span class="inv-bulk-cell" title="Bulk">{{ formatBulkTotal(entryBulk(e, item(e))) }}</span>
-          <div v-if="e.pbEntryId" class="inv-actions">
+          <div v-if="hostOf(e) && !e.pbEntryId" class="inv-actions">
+            <button v-if="e.attachKind === 'gift'" class="party-icon-btn" :class="{ active: e.identified }"
+              :title="e.identified ? 'Awakened: counts as treasure. Click to make it dormant (planned)' : 'Dormant: awaken it'" @click="setIdentified(e.id, !e.identified)">
+              <OhVueIcon name="md-autoawesome" scale="0.75" />
+            </button>
+            <button v-else class="party-icon-btn" :title="e.identified ? 'Mark as unidentified' : 'Identify'" @click="setIdentified(e.id, !e.identified)">
+              <OhVueIcon :name="e.identified ? 'md-visibility' : 'md-visibilityoff'" scale="0.75" />
+            </button>
+            <button v-if="e.attachKind !== 'gift'" class="party-icon-btn" :title="`Take off: back into ${ownerName(e.owner)}`" @click="detach(e.id)">
+              <OhVueIcon name="md-fileupload" scale="0.75" />
+            </button>
+            <button class="party-icon-btn" title="Details" :class="{ active: open === e.id }" @click="open = open === e.id ? null : e.id">
+              <OhVueIcon name="md-edit" scale="0.7" />
+            </button>
+            <button class="party-icon-btn party-icon-btn--danger" title="Delete" @click="removeEntry(e.id)">
+              <OhVueIcon name="md-close" scale="0.75" />
+            </button>
+          </div>
+          <div v-else-if="e.pbEntryId" class="inv-actions">
             <button v-if="!e.identified" class="party-icon-btn" title="Identify: Play Buddy reveals it to the player" @click="identifyMirrored(e)">
               <OhVueIcon name="md-visibilityoff" scale="0.75" />
             </button>
@@ -109,15 +134,41 @@
             <button class="party-icon-btn" :title="e.identified ? 'Mark as unidentified' : 'Identify'" @click="setIdentified(e.id, !e.identified)">
               <OhVueIcon :name="e.identified ? 'md-visibility' : 'md-visibilityoff'" scale="0.75" />
             </button>
+            <button v-if="canHost(e)" class="party-icon-btn" :title="attachTitle(e)" :class="{ active: attaching === e.id }" @click="startAttach(e)">
+              <OhVueIcon name="md-addcircleoutline" scale="0.75" />
+            </button>
             <button class="party-icon-btn" title="Move to…" :class="{ active: moving === e.id }" @click="startMove(e)">
               <OhVueIcon name="md-arrowforward" scale="0.75" />
             </button>
             <button class="party-icon-btn" title="Details" :class="{ active: open === e.id }" @click="open = open === e.id ? null : e.id">
               <OhVueIcon name="md-edit" scale="0.7" />
             </button>
-            <button class="party-icon-btn party-icon-btn--danger" title="Delete" @click="removeEntry(e.id)">
+            <button class="party-icon-btn party-icon-btn--danger" :title="attachedOf(e).length ? 'Delete, with everything attached' : 'Delete'" @click="removeEntry(e.id)">
               <OhVueIcon name="md-close" scale="0.75" />
             </button>
+          </div>
+        </div>
+
+        <!-- Attach: below the item's last attachment -->
+        <div v-if="attachHost && panelAfter(e)" class="inv-attach" :class="{ 'inv-attach--attached': e.id !== attachHost.id }">
+          <div class="inv-attach-bar">
+            <input v-model="attachQuery" class="inv-input inv-add-input" :placeholder="attachPlaceholder(attachHost)" />
+            <button class="ghost-btn inv-small" @click="attaching = null">Close</button>
+          </div>
+          <div class="party-add-results">
+            <div v-for="l in looseAttachables(attachHost)" :key="`e${l.id}`" class="party-add-row">
+              <span class="party-add-name">{{ nameOf(l) }} <span class="party-add-hint">· from this inventory{{ l.quantity > 1 ? ` (${l.quantity})` : '' }} · {{ money(eff(l).unitPrice) }}</span></span>
+              <button class="ghost-btn party-add-btn" @click="doAttach(attachHost, { entryId: l.id })">Attach</button>
+            </div>
+            <div v-for="r in attachResults" :key="r.id" class="party-add-row">
+              <span class="party-add-name">{{ r.name }}
+                <span class="party-add-hint">· {{ r.kind === 'relicGift' ? `${r.tier} gift · ${r.aspects.join(', ')}` : `${r.level} · ${money(r.price?.cp ?? null)}` }}</span>
+              </span>
+              <button class="ghost-btn party-add-btn" @click="doAttach(attachHost, { itemId: r.id })">{{ r.kind === 'relicGift' ? 'Add gift' : 'Attach' }}</button>
+            </div>
+            <div v-if="!attachResults.length && !looseAttachables(attachHost).length" class="party-add-row">
+              <span class="party-add-name party-add-hint">{{ attachQuery.trim() ? 'Nothing that fits.' : 'Type to search.' }}</span>
+            </div>
           </div>
         </div>
 
@@ -153,19 +204,6 @@
               @change="setBulk(e, val($event))" />
           </label>
           <template v-if="gearKind(e)">
-            <label v-if="game === 'pf2e'">
-              <span>Potency</span>
-              <select class="inv-input" :value="e.runes?.potency ?? 0" @change="setRune(e, 'potency', num($event))">
-                <option v-for="n in 4" :key="n" :value="n - 1">{{ n === 1 ? '—' : `+${n - 1}` }}</option>
-              </select>
-            </label>
-            <label v-if="game === 'pf2e'">
-              <span>{{ gearKind(e) === 'weapon' ? 'Striking' : 'Resilient' }}</span>
-              <select class="inv-input" :value="(gearKind(e) === 'weapon' ? e.runes?.striking : e.runes?.resilient) ?? 0"
-                @change="setRune(e, gearKind(e) === 'weapon' ? 'striking' : 'resilient', num($event))">
-                <option :value="0">—</option><option :value="1">base</option><option :value="2">greater</option><option :value="3">major</option>
-              </select>
-            </label>
             <label v-if="game === 'sf2e'">
               <span>Grade</span>
               <select class="inv-input" :value="e.grade ?? ''" @change="updateEntry(e.id, { grade: val($event) })">
@@ -174,7 +212,17 @@
               </select>
             </label>
           </template>
-          <label v-if="!lockOwner && (containersFor(e).length || e.containerId != null)">
+          <template v-if="!hostOf(e) && game === 'pf2e'">
+            <label class="inv-check inv-relic-check" title="A relic (GMG p. 94): it grows with its bearer through gifts, attached like runes">
+              <input type="checkbox" :checked="!!e.relic" @change="setRelic(e.id, ($event.target as HTMLInputElement).checked ? { aspects: [] } : null)" /> Relic
+            </label>
+            <label v-if="e.relic">
+              <span>Aspects</span>
+              <input class="inv-input" :value="e.relic.aspects.join(', ')" placeholder="e.g. fire, mind"
+                @change="setRelic(e.id, { aspects: val($event).split(',').map(a => a.trim().toLowerCase()).filter(Boolean) })" />
+            </label>
+          </template>
+          <label v-if="!lockOwner && !hostOf(e) && (containersFor(e).length || e.containerId != null)">
             <span>Stored in</span>
             <select class="inv-input" :value="insideOf(e)?.id ?? ''" @change="store(e.id, val($event) ? Number(val($event)) : null)">
               <option value="">Carried loose</option>
@@ -237,11 +285,12 @@ import { usePlayBuddy } from '~/composables/usePlayBuddy'
 import { useWealth } from '~/composables/useWealth'
 import { lootValue } from '~/rules/wealth'
 import { SF2E_GRADES } from '~/rules/registry'
-import { characterOwner, containerLoad, containerOf, effective, encumbrance, entryBulk, parseOwner, partyTotals, STASH, toPlayerView, unidentifiedName, type Encumbrance, type InventoryEntry, type OwnerKey } from '~/rules/inventory'
+import { characterOwner, containerLoad, containerOf, dormantGift, effective, encumbrance, entryBulk, entryValue, parseOwner, partyTotals, STASH, toPlayerView, unidentifiedName, type Encumbrance, type InventoryEntry, type OwnerKey } from '~/rules/inventory'
+import { ATTACH_LABEL, attachedLabel, attachKindOf, attachmentWarnings, canAttach, fundamentalOf, hostKindOf } from '~/rules/attachments'
 import { formatBulk, formatMoney, parseBulk, parseMoney } from '~/rules/format'
 import { isPartyMember } from '~/rules/party'
 import { campaignRules, type CampaignRules, type GameId } from '~/types/game'
-import type { Item, Runes } from '~/types/rules'
+import { RULES_KIND_CONFIG, type Item, type RelicGift } from '~/types/rules'
 import { stripGmOnly } from '~/utils/gmContent'
 
 const props = defineProps<{
@@ -256,7 +305,7 @@ const props = defineProps<{
 const AWARD_HINT = 'Treasure the party was given: counts toward the wealth readout. Leave it off for corrections, such as a forgotten item from before.'
 
 const inv = useInventory()
-const { entries, purses, items, purseList, load, addEntry, updateEntry, removeEntry, setIdentified, move, store, adjustPurse, transferCoins, splitPurse } = inv
+const { entries, purses, items, gifts, purseList, load, addEntry, updateEntry, removeEntry, setIdentified, move, store, attach, detach, setRelic, adjustPurse, transferCoins, splitPurse } = inv
 const { formatDate } = useFormatters()
 
 const view = ref<'gm' | 'player'>('gm')
@@ -270,10 +319,23 @@ onMounted(async () => {
 
 const money = (cp: number | null) => formatMoney(cp == null ? null : { cp }, props.game)
 const item = (e: InventoryEntry): Item | undefined => (e.itemId ? items.value.get(e.itemId) : undefined)
-const eff = (e: InventoryEntry) => effective(e, item(e))
-const playerOf = (e: InventoryEntry) => toPlayerView(e, item(e), stripGmOnly)
+/** The linked item, or a relic gift seen as one (name, text, traits; its value comes from `giftValue`). */
+const linked = (e: InventoryEntry): Item | undefined => {
+  const g = e.itemId && !item(e) ? gifts.value.get(e.itemId) : undefined
+  // Gifts have no item level of their own
+  return g ? ({ ...g, kind: 'item', category: 'equipment', price: null, bulk: 0, level: null } as unknown as Item) : item(e)
+}
+const eff = (e: InventoryEntry) => effective(e, linked(e))
+const playerOf = (e: InventoryEntry) => toPlayerView(e, linked(e), stripGmOnly)
 const val = (ev: Event) => (ev.target as HTMLInputElement).value
-const num = (ev: Event) => Number((ev.target as HTMLSelectElement).value)
+const gift = (e: InventoryEntry): RelicGift | undefined => (e.itemId ? gifts.value.get(e.itemId) : undefined)
+const nameOf = (e: InventoryEntry) => eff(e).name
+function linkOf(e: InventoryEntry): string | null {
+  if (!e.itemId) return null
+  const kind = items.value.has(e.itemId) ? 'item' : gifts.value.has(e.itemId) ? 'relicGift' : null
+  return kind ? `/compendium/${RULES_KIND_CONFIG[kind].segment}?id=${encodeURIComponent(e.itemId)}` : null
+}
+const ownerName = (owner: OwnerKey) => (owner === STASH ? 'the party stash' : `${owners.value.find(o => o.key === owner)?.name ?? 'the owner'}'s inventory`)
 
 const totals = computed(() => partyTotals(entries.value, items.value, purseList.value, view.value, props.game !== 'sf2e'))
 const unknownCount = computed(() => Object.values(totals.value.byOwner).reduce((a, t) => a + t.unknownPrices, 0))
@@ -291,13 +353,111 @@ const selectedCharacter = computed(() => props.characters.find(c => characterOwn
 const selectedLoad = computed(() => owners.value.find(o => o.key === selected.value)?.load ?? null)
 watch(owners, list => { if (!props.lockOwner && !list.some(o => o.key === selected.value)) selected.value = STASH })
 
-/** The owner's stacks, each container followed by what's stored in it. */
+/** The owner's stacks, each container followed by what's stored in it, each item followed by what's attached to it. */
 const ownerEntries = computed(() => {
   const own = entries.value.filter(e => e.owner === selected.value)
-  const byName = (a: InventoryEntry, b: InventoryEntry) => eff(a).name.localeCompare(eff(b).name)
-  const loose = own.filter(e => !containerOf(e, own, items.value)).sort(byName)
-  return loose.flatMap(e => [e, ...own.filter(c => containerOf(c, own, items.value)?.id === e.id).sort(byName)])
+  const byName = (a: InventoryEntry, b: InventoryEntry) => nameOf(a).localeCompare(nameOf(b))
+  const withAttached = (e: InventoryEntry) => [e, ...shownAttached(e)]
+  const top = own.filter(e => e.attachedTo == null)
+  const loose = top.filter(e => !containerOf(e, own, items.value)).sort(byName)
+  return loose.flatMap(e => [...withAttached(e), ...top.filter(c => containerOf(c, own, items.value)?.id === e.id).sort(byName).flatMap(withAttached)])
 })
+
+// ── Attachments (rules/attachments.ts) ──
+const hostOf = (e: InventoryEntry) => (e.attachedTo == null ? null : entries.value.find(h => h.id === e.attachedTo) ?? null)
+/** Fundamental runes first, then the rest by name. */
+function attachedOf(host: InventoryEntry) {
+  const rank = (e: InventoryEntry) => (fundamentalOf(nameOf(e)) ? 0 : e.attachKind === 'gift' ? 2 : 1)
+  return entries.value.filter(a => a.attachedTo === host.id).sort((a, b) => rank(a) - rank(b) || a.id - b.id)
+}
+/** Players see nothing attached to an item they haven't identified, and no dormant gift. */
+function shownAttached(host: InventoryEntry) {
+  const all = attachedOf(host)
+  return view.value === 'gm' ? all : host.identified ? all.filter(a => !dormantGift(a)) : []
+}
+function lastAttached(e: InventoryEntry) {
+  const host = hostOf(e)
+  const list = host ? shownAttached(host) : []
+  return list[list.length - 1]?.id === e.id
+}
+const attachedInfo = (host: InventoryEntry) => attachedOf(host).map(a => ({ name: nameOf(a), kind: a.attachKind ?? 'accessory' }))
+function kindLabel(e: InventoryEntry) {
+  return e.attachKind === 'gift' ? `${gift(e)?.tier ?? ''} gift`.trim() : ATTACH_LABEL[e.attachKind ?? 'accessory']
+}
+function warningsOf(e: InventoryEntry) {
+  return e.attachedTo == null ? attachmentWarnings(attachedInfo(e), { kind: hostKindOf(item(e)), relic: !!e.relic }) : []
+}
+const withAttached = (host: InventoryEntry) =>
+  [host, ...attachedOf(host)].reduce((n, x) => n + entryValue(x, item(x)), 0)
+/** Things that take attachments: weapons, armor, shields, relics and free-text items. */
+const canHost = (e: InventoryEntry) => !e.pbOfferId && (!!e.relic || !!hostKindOf(item(e)) || !e.itemId)
+function attachTitle(e: InventoryEntry) {
+  if (e.relic) return 'Add a gift or rune…'
+  return game.value === 'sf2e' ? 'Install an upgrade…' : 'Add a rune or talisman…'
+}
+function attachPlaceholder(e: InventoryEntry) {
+  if (e.relic) return 'Search relic gifts and runes…'
+  return game.value === 'sf2e' ? 'Search upgrades…' : 'Search runes, talismans, accessories…'
+}
+const game = computed(() => props.game)
+
+const attaching = ref<number | null>(null)
+const attachHost = computed(() => entries.value.find(h => h.id === attaching.value) ?? null)
+/** The panel goes under the host's last attachment, or the host itself. */
+function panelAfter(e: InventoryEntry) {
+  const host = attachHost.value
+  if (!host) return false
+  const list = shownAttached(host)
+  return list.length ? list[list.length - 1].id === e.id : e.id === host.id
+}
+const attachQuery = ref('')
+const attachResults = ref<(Item | RelicGift)[]>([])
+function startAttach(e: InventoryEntry) {
+  attaching.value = attaching.value === e.id ? null : e.id
+  attachQuery.value = ''
+}
+/** Loose entries of the same owner that fit the host. */
+function looseAttachables(host: InventoryEntry) {
+  const q = attachQuery.value.trim().toLowerCase()
+  return entries.value.filter(l => l.owner === host.owner && l.id !== host.id && l.attachedTo == null && !l.pbOfferId
+    && !entries.value.some(x => x.attachedTo === l.id)
+    && !!attachKindOf(item(l)) && canAttach(item(l), item(host), !!host.relic)
+    && (!q || nameOf(l).toLowerCase().includes(q)))
+}
+let attachSeq = 0
+watch([attachQuery, attaching], async () => {
+  const seq = ++attachSeq
+  const host = entries.value.find(h => h.id === attaching.value)
+  if (!host) { attachResults.value = []; return }
+  const q = attachQuery.value.trim().toLowerCase()
+  const hostKind = hostKindOf(item(host))
+  // Without a search: the fundamental runes for this kind of item, so +1 or striking is two clicks
+  const texts = q ? [q] : props.game === 'sf2e' ? [] : hostKind === 'armor' ? ['armor potency', 'resilient'] : hostKind === 'shield' ? ['reinforcing'] : hostKind === 'weapon' ? ['weapon potency', 'striking'] : []
+  const found: (Item | RelicGift)[] = []
+  if (host.relic) {
+    const page = await rulesQuery({ kind: 'relicGift', text: q, limit: 1000 })
+    const aspects = host.relic.aspects
+    found.push(...(page.items as RelicGift[]).filter(g => !aspects.length || g.aspects.includes('any') || g.aspects.some(a => aspects.includes(a))))
+  }
+  for (const text of texts) {
+    // Most matches don't attach to anything: fetch plenty, keep what fits
+    const page = await rulesQuery({ kind: 'item', games: [props.game], text, limit: 300 })
+    found.push(...(page.items as Item[]).filter(r => !!attachKindOf(r) && canAttach(r, item(host), !!host.relic)))
+  }
+  // Fundamental runes in order (potency, then striking/resilient, weakest first), then by name
+  const rank = (r: Item | RelicGift) => {
+    const f = fundamentalOf(r.name)
+    return f ? (f.slot.endsWith('Potency') ? 0 : 10) + f.value : 100
+  }
+  const unique = [...new Map(found.map(r => [r.id, r])).values()].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
+  if (seq === attachSeq) attachResults.value = unique.slice(0, 20)
+})
+async function doAttach(host: InventoryEntry, source: { entryId: number } | { itemId: string }) {
+  const id = await attach(host.id, source)
+  // The host may have split off a stack: keep the panel on the item that got the rune
+  const attached = entries.value.find(x => x.id === id)
+  if (attached?.attachedTo != null) attaching.value = attached.attachedTo
+}
 const insideOf = (e: InventoryEntry) => containerOf(e, entries.value, items.value)
 const loadOf = (e: InventoryEntry) => containerLoad(e, entries.value, items.value)
 /** Containers of the same owner this entry can go into; containers holding something don't nest. */
@@ -317,7 +477,9 @@ function formatBulkTotal(tenths: number) {
 // ── Row display ──
 function shownLevel(e: InventoryEntry) {
   const l = view.value === 'gm' ? eff(e).level : playerOf(e).level
-  return l == null ? '' : String(l)
+  // An item is as high-level as its highest rune
+  const levels = [l, ...shownAttached(e).map(a => (view.value === 'gm' ? eff(a).level : playerOf(a).level))].filter((x): x is number => x != null)
+  return levels.length ? String(Math.max(...levels)) : ''
 }
 function shownPrice(e: InventoryEntry) {
   if (view.value === 'player') {
@@ -341,6 +503,8 @@ function itemGrade(e: InventoryEntry) {
 }
 function runeLabel(e: InventoryEntry) {
   if (e.grade) return e.grade
+  if (attachedOf(e).length) return attachedLabel(attachedInfo(e))
+  // Runes from before attachments, not yet matched to compendium runes
   const r = e.runes
   if (!r) return ''
   const fund = r.striking ? ['striking', 'greater striking', 'major striking'][r.striking - 1] : r.resilient ? ['resilient', 'greater resilient', 'major resilient'][r.resilient - 1] : ''
@@ -357,13 +521,6 @@ function setBulk(e: InventoryEntry, raw: string) {
   if (!raw.trim()) return updateEntry(e.id, { bulkOverride: null })
   const b = parseBulk(raw)
   if (b !== undefined) updateEntry(e.id, { bulkOverride: b })
-}
-function setRune(e: InventoryEntry, key: 'potency' | 'striking' | 'resilient', value: number) {
-  const base: Runes = e.runes ?? { potency: 0, property: [] }
-  // Plain copy: e.runes is a reactive proxy, and IndexedDB can't clone proxies (the property array)
-  const next: Runes = { ...base, property: [...base.property], [key]: value || undefined, potency: key === 'potency' ? value : base.potency }
-  const empty = !next.potency && !next.striking && !next.resilient && !next.property.length
-  updateEntry(e.id, { runes: empty ? null : next })
 }
 
 const open = ref<number | null>(null)
@@ -552,6 +709,18 @@ textarea.inv-input { height: auto; padding: 6px 8px; resize: vertical; font-fami
 
 .inv-item { border-top: 1px solid var(--border); }
 .inv-item--inside { margin-left: 24px; border-top-style: dashed; }
+.inv-item--attached { border-top-color: transparent; }
+.inv-item--deep { margin-left: 48px; }
+.inv-branch { color: var(--text3); font-family: var(--fm); }
+.inv-kind { padding: 0 5px; border-radius: 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text2); border: 1px solid var(--border); }
+.inv-kind--rune { color: #6b9fe8; border-color: #6b9fe866; }
+.inv-kind--talisman { color: #5fc98a; border-color: #5fc98a66; }
+.inv-kind--upgrade { color: #4ab8e8; border-color: #4ab8e866; }
+.inv-kind--gift, .inv-kind--relic { color: #e0a35a; border-color: #e0a35a66; }
+.inv-attach { padding: 4px 0 10px 66px; }
+.inv-attach--attached { margin-left: -24px; }
+.inv-attach-bar { display: flex; gap: 8px; align-items: center; }
+.inv-details .inv-relic-check { flex-direction: row; align-items: center; align-self: end; height: 28px; }
 .inv-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
 .inv-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--text); }
 .inv-name a { color: inherit; text-decoration: none; }
@@ -576,7 +745,7 @@ textarea.inv-input { height: auto; padding: 6px 8px; resize: vertical; font-fami
 .inv-check { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text2); white-space: nowrap; }
 
 @media (max-width: 640px) {
-  .inv-move, .inv-details { padding-left: 0; }
+  .inv-move, .inv-details, .inv-attach { padding-left: 0; }
   .inv-price { width: 80px; }
   .inv-level { display: none; }
 }

@@ -294,7 +294,11 @@ async function settle(row: DbLinkOffer, state: DeliveryState, reason: string | n
 }
 
 async function offerItems(campaignId: number, c: Character, picks: { entry: InventoryEntry; item: Item | undefined; quantity: number }[]) {
-  const stacks = picks.map(p => stackFromEntry({ ...p.entry, quantity: p.quantity }, p.item))
+  // Runes, talismans and relic gifts go along with their item
+  const inv = useInventory()
+  const linked = (e: InventoryEntry) => (e.itemId ? inv.items.value.get(e.itemId) ?? inv.gifts.value.get(e.itemId) : undefined)
+  const stacks = picks.map(p => stackFromEntry({ ...p.entry, quantity: p.quantity }, p.item,
+    inv.entries.value.filter(a => a.attachedTo === p.entry.id).map(a => ({ entry: a, item: linked(a) }))))
   const summary = stacks.map(s => `${s.quantity > 1 ? `${s.quantity}× ` : ''}${s.identified ? s.name : (s.playerName ?? 'Unidentified item')}`).join(', ')
   const row = await create(campaignId, c, 'items', { kind: 'items', stacks }, `${summary} → ${c.name}`, {
     stacks: picks.map(p => ({ inventoryId: p.entry.id, quantity: p.quantity })),

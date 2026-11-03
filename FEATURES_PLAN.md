@@ -467,3 +467,22 @@ All answered 2026-10-29:
 4. **P11, treasure filters:** ✅ common only by default; uncommon and rare can be ticked per roll.
 5. **P12:** ✅ **dropped.** Travel doesn't matter enough at the table; in-world dates stay free text.
 6. **P8, player side:** ✅ not now. Recall Knowledge stays GM-only; a player-side reveal can come later through the existing reveal path.
+
+## 11. Attachments and relics (2026-11-03)
+
+Runes added to an item didn't change its value: the GM had to add a rune entry to the inventory as well. Relics and their gifts had no place at all.
+
+### Decided design
+
+- **Attachments are inventory entries** with `attachedTo` (the host entry) and `attachKind`: `rune`, `talisman`, `upgrade` (SF2e), `accessory` (anything else etched, affixed or installed) or `gift`. Each has its own compendium link, price, level and identification, so the host's value is the sum and the party totals, the wealth readout and loot hand-out need no special case. `rules/attachments.ts` holds the rules; `useInventory` does the IO (`attach`, `detach`, `setRelic`).
+- **Tree view** in the inventory: attachments are indented under their item. "Add a rune…" offers loose runes of the same owner first, then compendium runes, talismans and accessories that fit (from the item's usage text); with no search it lists the fundamental runes for that kind of item. The old Potency/Striking dropdowns are gone; entries that used them are converted to attached runes once the compendium has those runes.
+- **Rules:** a fundamental rune replaces the one in its slot (striking → greater striking); attaching to a stack splits one item off; attached items weigh nothing extra, never stack, move with their item and are deleted with it. Warnings only (never blocks): property runes beyond potency, more than one talisman, property runes on a relic (GMG p. 95).
+- **The host keeps `runes`** as a summary (fundamental runes plus property rune names) for the gear check (§3).
+- **Relics:** any item can be marked a relic with its aspects. Gifts are their own compendium kind, `relicGift` (tier, aspects, prerequisites, activations, `grantsRune`), and attach to the relic. **Value:** each awakened gift counts as its slot's Gold Piece Equivalent from GMG Table 2–22 (20 gp, 160 gp, 700 gp, 3,000 gp, 15,000 gp, in the order the gifts were added), because GMG says to take that much off treasure. A gift that hasn't awakened (planned, shown as dormant) is worth 0 and players don't see it.
+- **Gift data:** pf2ools-data (MIT) relic gifts, read by the normal homebrew import (`converters/pf2ools/relicGifts.ts`). Its 5etools-style tags become our links and rolls; pre-Remaster school traits are dropped.
+- **Play Buddy:** items carry `attachments` (with refs or definitions, price and identification) instead of `runes` (PLAYBUDDY_API.md §6.3).
+
+### Open
+
+- **SF2e upgrade slots** by grade aren't checked yet: the rules weren't readable on Archives of Nethys when this was built. Upgrades attach without a limit.
+- **SF2e relics:** pf2ools-data has none.

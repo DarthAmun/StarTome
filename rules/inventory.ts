@@ -7,6 +7,7 @@
  * a VTT encounter (its planned loot). A linked entry inherits name, price,
  * Bulk, level, rarity and traits from its compendium item unless overridden.
  */
+import type { AttachKind } from '~/rules/attachments'
 import type { BulkTenths, Item, Rarity, Runes } from '~/types/rules'
 
 // ── Owners ────────────────────────────────────────────────────────────────
@@ -49,6 +50,13 @@ export interface InventoryEntry {
   grade: string | null
   /** The container entry (same owner) this stack is stored in; null = carried loose. */
   containerId: number | null
+  /** The host entry (same owner) this rune, talisman, upgrade or gift is attached to (rules/attachments.ts). */
+  attachedTo?: number | null
+  attachKind?: AttachKind | null
+  /** The entry is a relic (GMG p. 94); its gifts are attachments of kind 'gift'. */
+  relic?: { aspects: string[] } | null
+  /** A relic gift's value in cp, set by `giftValues` when entries load; never stored. */
+  giftValue?: number
   /** Mirrored from Play Buddy: read-only here (PLAYBUDDY_API.md). */
   pbEntryId?: string | null
   /** Offered to a Play Buddy player and waiting for the answer (a linkOffers row). */
@@ -72,7 +80,7 @@ export interface EffectiveEntry {
 export function effective(entry: InventoryEntry, item?: ItemLike | null): EffectiveEntry {
   return {
     name: entry.nameOverride?.trim() || item?.name || 'Unnamed item',
-    unitPrice: entry.priceOverride ?? item?.price?.cp ?? null,
+    unitPrice: dormantGift(entry) ? 0 : entry.priceOverride ?? entry.giftValue ?? item?.price?.cp ?? null,
     per: Math.max(1, item?.priceFor ?? 1),
     bulk: entry.bulkOverride ?? item?.bulk ?? 0,
     level: item?.level ?? null,
@@ -80,6 +88,11 @@ export function effective(entry: InventoryEntry, item?: ItemLike | null): Effect
     traits: item?.traits ?? [],
     consumable: item?.category === 'consumable' || item?.category === 'ammunition' || !!item?.traits.includes('consumable'),
   }
+}
+
+/** A relic gift that hasn't awakened yet: planned, not the party's treasure yet. */
+export function dormantGift(entry: Pick<InventoryEntry, 'attachKind' | 'identified'>): boolean {
+  return entry.attachKind === 'gift' && !entry.identified
 }
 
 /** Value of the whole stack in cp. Batched items (ammunition) price per batch. */
@@ -91,6 +104,8 @@ export function entryValue(entry: InventoryEntry, item?: ItemLike | null): numbe
 
 /** Bulk of the whole stack in tenths; batched items count per batch, rounded up. */
 export function entryBulk(entry: InventoryEntry, item?: ItemLike | null): number {
+  // Etched, affixed or installed: part of the host's Bulk
+  if (entry.attachedTo != null) return 0
   const e = effective(entry, item)
   if (!e.bulk) return 0
   return e.bulk * Math.ceil(entry.quantity / e.per)
@@ -113,8 +128,9 @@ export function planMove(entry: Pick<InventoryEntry, 'id' | 'owner' | 'quantity'
   return { type: 'split', entryId: entry.id, to, quantity: qty, remaining: entry.quantity - qty }
 }
 
-/** Two entries are the same thing when everything but owner, quantity and id matches. */
+/** Two entries are the same thing when everything but owner, quantity and id matches. Attachments and relics never stack. */
 export function sameStack(a: InventoryEntry, b: InventoryEntry): boolean {
+  if (a.attachedTo != null || b.attachedTo != null || a.relic || b.relic) return false
   return a.itemId === b.itemId && a.nameOverride === b.nameOverride && a.priceOverride === b.priceOverride
     && a.bulkOverride === b.bulkOverride && a.notes === b.notes && a.identified === b.identified
     && a.playerName === b.playerName && a.playerDescription === b.playerDescription

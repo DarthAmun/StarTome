@@ -45,5 +45,7 @@ export function newRulesEntity(kind: RulesKind, init: { name: string; game: Game
       return { ...base, kind, valued: false, overrides: [] }
     case 'ancestry': case 'heritage': case 'background': case 'class': case 'deity':
       return { ...base, kind, facts: {} }
+    case 'relicGift':
+      return { ...base, kind, game: 'pf2e', tier: 'minor', aspects: [] }
   }
 }

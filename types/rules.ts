@@ -38,7 +38,7 @@ export type RulesOrigin = 'foundry' | 'user' | 'legacy'
 
 export type RulesKind =
   | 'item' | 'creature' | 'hazard' | 'spell' | 'feat' | 'action' | 'condition'
-  | 'ancestry' | 'heritage' | 'background' | 'class' | 'deity'
+  | 'ancestry' | 'heritage' | 'background' | 'class' | 'deity' | 'relicGift'
 
 export interface Publication { title: string; remaster: boolean; license?: string }
 
@@ -253,7 +253,22 @@ export interface ReferenceEntry extends RulesEntityBase {
 
 export interface ClassFeatureRef { level: number; name: string }
 
-export type RulesEntity = Item | Creature | Hazard | Spell | Feat | Action | Condition | ReferenceEntry
+export type GiftTier = 'minor' | 'major' | 'grand'
+export const GIFT_TIERS: GiftTier[] = ['minor', 'major', 'grand']
+
+/** A relic gift (GMG p. 96): attached to a relic in the inventory as it awakens. */
+export interface RelicGift extends RulesEntityBase {
+  kind: 'relicGift'
+  tier: GiftTier
+  /** Relic aspects it belongs to (air, fiend, …), lower case. */
+  aspects: string[]
+  prerequisites?: string[]
+  activation?: { cost: ActionCost; traits?: string[]; frequency?: string; trigger?: string; text?: string }[]
+  /** Name of the rune the gift grants ("the relic gains the flaming rune"). */
+  grantsRune?: string
+}
+
+export type RulesEntity = Item | Creature | Hazard | Spell | Feat | Action | Condition | ReferenceEntry | RelicGift
 
 export type RulesEntityOf<K extends RulesKind> = Extract<RulesEntity, { kind: K }>
 
@@ -282,6 +297,7 @@ export const RULES_KIND_CONFIG: Record<RulesKind, RulesKindConfig> = {
   background: { label: 'Background', plural: 'Backgrounds', segment: 'backgrounds', icon: 'gi-scroll-unfurled',     color: '#b5a07a', levelLabel: 'Level', hasLevel: false },
   class:      { label: 'Class',      plural: 'Classes',     segment: 'classes',     icon: 'gi-swords-emblem',       color: '#6b9fe8', levelLabel: 'Level', hasLevel: false },
   deity:      { label: 'Deity',      plural: 'Deities',     segment: 'deities',     icon: 'gi-angel-outfit',        color: '#d4b54a', levelLabel: 'Level', hasLevel: false },
+  relicGift:  { label: 'Relic gift', plural: 'Relic gifts', segment: 'relic-gifts', icon: 'gi-gem-pendant',         color: '#e0a35a', levelLabel: 'Level', hasLevel: false },
 }
 
 export const RULES_KINDS = Object.keys(RULES_KIND_CONFIG) as RulesKind[]

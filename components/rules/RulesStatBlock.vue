@@ -186,6 +186,13 @@
       </p>
     </template>
 
+    <!-- ── Relic gift ────────────────────────────────────────── -->
+    <template v-if="gift">
+      <p class="rsb-line"><b>Gift</b> {{ titleCase(gift.tier) }}<template v-if="gift.aspects.length">; <b>Aspects</b> {{ gift.aspects.join(', ') }}</template></p>
+      <p v-if="gift.prerequisites?.length" class="rsb-line"><b>Prerequisites</b> {{ gift.prerequisites.join('; ') }}</p>
+      <p v-if="gift.grantsRune" class="rsb-line"><b>Grants rune</b> <span class="rsb-link" @click.stop="openRune(gift.grantsRune)">{{ gift.grantsRune }}</span></p>
+    </template>
+
     <!-- ── Condition ─────────────────────────────────────────── -->
     <p v-if="condition?.overrides.length" class="rsb-line"><b>Overrides</b> {{ condition.overrides.join(', ') }}</p>
 
@@ -252,7 +259,7 @@ import { GAME_CONFIG, type GameId } from '~/types/game'
 import {
   isRulesKind, RULES_KIND_CONFIG, RULES_KINDS,
   type AbilityKey, type Action, type Condition, type Creature, type Feat, type Hazard, type Item,
-  type ReferenceEntry, type Resistance, type RulesEntity, type Sense, type Spell, type Spellcasting, type StatAction, type Strike, type Weakness,
+  type ReferenceEntry, type RelicGift, type Resistance, type RulesEntity, type Sense, type Spell, type Spellcasting, type StatAction, type Strike, type Weakness,
 } from '~/types/rules'
 
 const props = defineProps<{ entity: RulesEntity; game?: GameId }>()
@@ -274,6 +281,11 @@ const spell = computed(() => props.entity.kind === 'spell' ? props.entity as Spe
 const feat = computed(() => props.entity.kind === 'feat' ? props.entity as Feat : null)
 const action = computed(() => props.entity.kind === 'action' ? props.entity as Action : null)
 const condition = computed(() => props.entity.kind === 'condition' ? props.entity as Condition : null)
+const gift = computed(() => props.entity.kind === 'relicGift' ? props.entity as RelicGift : null)
+async function openRune(name: string) {
+  const rune = await rulesFindByName('item', name, props.game)
+  if (rune) openEntry(rune)
+}
 const reference = computed(() => 'facts' in props.entity ? props.entity as ReferenceEntry : null)
 
 const headLabel = computed(() => {

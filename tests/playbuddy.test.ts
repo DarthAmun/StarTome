@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createMockServer } from '../scripts/playbuddy-mock.mjs'
 import {
-  coinsToCp, cpToCoins, itemRefOf, offerItemToWire, readShareFile, runesFromWire, runesToWire, slugify, stackFromEntry, statusFromWire,
+  coinsToCp, cpToCoins, itemFromWire, itemRefOf, offerItemToWire, readShareFile, slugify, stackFromEntry, statusFromWire,
 } from '~/partylink/convert'
 import { LinkError, type LinkEvent, type PartyLink } from '~/partylink/port'
 import { createPlayBuddyLink, pair } from '~/partylink/playbuddy'
@@ -19,13 +19,25 @@ describe('Play Buddy converters', () => {
     expect(itemRefOf('hb-uuid', 'Arc Rifle')).toEqual({ slug: 'arc-rifle' })
   })
 
-  it('converts coins and runes both ways', () => {
+  it('converts coins both ways', () => {
     expect(coinsToCp({ pp: 1, gp: 2, sp: 3, cp: 4 })).toBe(1234)
     expect(cpToCoins(1234)).toEqual({ pp: 0, gp: 12, sp: 3, cp: 4 })
-    const wire = [{ runeId: 'weapon-potency-2' }, { runeId: 'striking-greater' }, { runeId: 'ghost-touch' }]
-    expect(runesFromWire(wire)).toEqual({ potency: 2, striking: 2, property: ['ghostTouch'] })
-    expect(runesToWire({ potency: 2, striking: 2, property: ['ghostTouch'] }, false)).toEqual(wire)
-    expect(runesToWire({ potency: 1, resilient: 1, property: [] }, true)).toEqual([{ runeId: 'armor-potency-1' }, { runeId: 'resilient' }])
+  })
+
+  it('reads attachments of a player item, gifts unmatched', () => {
+    const m = itemFromWire({
+      entryId: 'i1', ref: { slug: 'longsword', foundryId: 'X', pack: 'equipment-srd' }, custom: false, name: 'Longsword', quantity: 1, level: 0,
+      rarity: 'common', type: 'weapon', price: 100, priceFor: 1, bulk: 1, location: 'held', identified: true, relic: { aspects: ['fire'] },
+      attachments: [
+        { entryId: 'r1', kind: 'rune', ref: { slug: 'striking', foundryId: 'S', pack: 'equipment-srd' }, name: 'Striking', price: 6500, level: 4 },
+        { kind: 'gift', name: 'Blazing Soul', identified: false, tier: 'grand' },
+      ],
+    }, resolve)
+    expect(m.relic).toEqual({ aspects: ['fire'] })
+    expect(m.attachments).toEqual([
+      { entryId: 'r1', rulesId: 'fvtt:pf2e:equipment-srd:S', kind: 'rune', name: 'Striking', level: 4, price: 6500, identified: true },
+      { entryId: 'i1:1', rulesId: null, kind: 'gift', name: 'Blazing Soul', level: 0, price: 0, identified: false },
+    ])
   })
 
   it('reads a status into our vocabulary', () => {
@@ -47,10 +59,14 @@ describe('Play Buddy converters', () => {
       id: 1, owner: 'stash', itemId: 'fvtt:pf2e:equipment-srd:abc', quantity: 1, nameOverride: null, priceOverride: null, bulkOverride: null,
       notes: 'GM only', identified: false, playerName: 'Glowing Blade', playerDescription: null, runes: { potency: 1, property: [] }, grade: null, containerId: null,
     }
+    const rune: InventoryEntry = { ...entry, id: 2, itemId: 'fvtt:pf2e:equipment-srd:pot1', identified: true, notes: '', playerName: null, runes: null, attachedTo: 1, attachKind: 'rune' }
+    const potency = { id: 'fvtt:pf2e:equipment-srd:pot1', kind: 'item', name: 'Weapon Potency (+1)', category: 'equipment', level: 2, price: { cp: 3500 }, bulk: 0, rarity: 'common', traits: [] } as unknown as Item
     const item = { id: 'fvtt:pf2e:equipment-srd:abc', name: 'Flaming Longsword', category: 'weapon', level: 8, price: { cp: 50000 }, priceFor: 1, bulk: 10, rarity: 'common', traits: [] } as unknown as Item
-    expect(offerItemToWire(stackFromEntry(entry, item))).toEqual({
+    expect(offerItemToWire(stackFromEntry(entry, item, [{ entry: rune, item: potency }]))).toEqual({
       quantity: 1, ref: { slug: 'flaming-longsword', foundryId: 'abc', pack: 'equipment-srd' },
-      runes: [{ runeId: 'weapon-potency-1' }], identified: false, unidentifiedName: 'Glowing Blade',
+      // Hidden with the item until it's identified
+      attachments: [{ kind: 'rune', name: 'Weapon Potency (+1)', ref: { slug: 'weapon-potency-1', foundryId: 'pot1', pack: 'equipment-srd' }, identified: false }],
+      identified: false, unidentifiedName: 'Glowing Blade',
     })
     const brew = offerItemToWire(stackFromEntry({ ...entry, itemId: null, identified: true, nameOverride: 'Lucky Coin', runes: null }, undefined))
     expect(brew.definition).toMatchObject({ id: 'lucky-coin', name: 'Lucky Coin', type: 'gear', source: 'StarTome homebrew' })
@@ -82,7 +98,8 @@ describe('PlayBuddyLink against the mock server', () => {
     const game = await link.game()
     expect(game.players.map(p => [p.name, p.characterName, p.className])).toEqual([['Carl', 'Groknar', 'Magus / Psychic'], ['Lena', 'Mirelle', 'Cleric']])
     const [groknar, mirelle] = await link.status('all', ['basic', 'inventory'])
-    expect(groknar.inventory?.items[0]).toMatchObject({ name: 'Longsword', rulesId: 'fvtt:pf2e:equipment-srd:X9Ps5cz8oIRRo4zv', runes: { potency: 1, striking: 1, property: [] } })
+    expect(groknar.inventory?.items[0]).toMatchObject({ name: 'Longsword', rulesId: 'fvtt:pf2e:equipment-srd:X9Ps5cz8oIRRo4zv' })
+    expect(groknar.inventory?.items[0].attachments.map(a => [a.kind, a.name, a.price])).toEqual([['rune', 'Weapon Potency (+1)', 3500], ['rune', 'Striking', 6500]])
     expect(mirelle.notShared).toEqual(['inventory'])
     expect((await link.status(['p_lena'], ['skills']))[0].notShared).toEqual(['skills'])
   })

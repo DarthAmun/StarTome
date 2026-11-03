@@ -4,11 +4,11 @@
  * builds from the compendium (see composables/usePlayBuddy.ts).
  */
 import type {
-  CharacterMirror, DeliveryResult, LinkedGame, LinkEvent, LinkOffer, LinkRequest, MirrorItem, OfferStack, RollEntry,
+  CharacterMirror, DeliveryResult, LinkedGame, LinkEvent, LinkOffer, LinkRequest, MirrorAttachment, MirrorItem, OfferAttachment, OfferStack, RollEntry,
 } from '~/partylink/port'
 import type * as W from '~/partylink/wire/v1'
 import type { InventoryEntry } from '~/rules/inventory'
-import type { Item, ItemCategory, Runes } from '~/types/rules'
+import type { Item, ItemCategory, RelicGift } from '~/types/rules'
 
 /** Our compendium id for a Play Buddy item, or null. Called with the ref and the item's name. */
 export type ItemResolver = (ref: W.ItemRef, name: string) => string | null
@@ -41,42 +41,6 @@ export function itemRefOf(rulesId: string | null, name: string): W.ItemRef {
   return m ? { slug: slugify(name), foundryId: m[2], pack: m[1] } : { slug: slugify(name) }
 }
 
-const FUNDAMENTAL: Record<string, { track: 'potency' | 'striking' | 'resilient'; rank: number }> = {
-  'weapon-potency-1': { track: 'potency', rank: 1 }, 'weapon-potency-2': { track: 'potency', rank: 2 }, 'weapon-potency-3': { track: 'potency', rank: 3 },
-  'armor-potency-1': { track: 'potency', rank: 1 }, 'armor-potency-2': { track: 'potency', rank: 2 }, 'armor-potency-3': { track: 'potency', rank: 3 },
-  striking: { track: 'striking', rank: 1 }, 'striking-greater': { track: 'striking', rank: 2 }, 'striking-major': { track: 'striking', rank: 3 },
-  resilient: { track: 'resilient', rank: 1 }, 'resilient-greater': { track: 'resilient', rank: 2 }, 'resilient-major': { track: 'resilient', rank: 3 },
-}
-const STRIKING = ['', 'striking', 'striking-greater', 'striking-major']
-const RESILIENT = ['', 'resilient', 'resilient-greater', 'resilient-major']
-
-const camel = (s: string) => s.replace(/-([a-z0-9])/g, (_m, c: string) => c.toUpperCase())
-const kebab = (s: string) => s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
-
-/** Play Buddy rune ids → our rune shape (property runes in Foundry's camelCase). Shield runes are left out. */
-export function runesFromWire(list: W.WireRune[] | undefined): Runes | null {
-  if (!list?.length) return null
-  const out: Runes = { potency: 0, property: [] }
-  for (const r of list) {
-    const f = FUNDAMENTAL[r.runeId]
-    if (f?.track === 'potency') out.potency = f.rank
-    else if (f?.track === 'striking') out.striking = f.rank
-    else if (f?.track === 'resilient') out.resilient = f.rank
-    else if (!r.runeId.startsWith('reinforcing')) out.property.push(camel(r.runeId))
-  }
-  return out
-}
-
-export function runesToWire(runes: Runes | null, armor: boolean): W.WireRune[] | undefined {
-  if (!runes) return undefined
-  const out: W.WireRune[] = []
-  if (runes.potency) out.push({ runeId: `${armor ? 'armor' : 'weapon'}-potency-${runes.potency}` })
-  if (!armor && runes.striking) out.push({ runeId: STRIKING[runes.striking] })
-  if (armor && runes.resilient) out.push({ runeId: RESILIENT[runes.resilient] })
-  for (const p of runes.property) out.push({ runeId: kebab(p) })
-  return out.length ? out : undefined
-}
-
 // ── Play Buddy → StarTome ──────────────────────────────────────────────────
 
 export function gameFromWire(g: W.Game): LinkedGame {
@@ -99,7 +63,17 @@ export function itemFromWire(i: W.InventoryItem, resolve: ItemResolver): MirrorI
     slug: i.ref.slug, foundryId: i.ref.foundryId ?? null, custom: i.custom,
     name: i.name, quantity: i.quantity, level: i.level, price: i.price, priceFor: i.priceFor || 1,
     bulk: bulkToTenths(i.bulk), identified: i.identified !== false, invested: !!i.invested,
-    runes: runesFromWire(i.runes), containerEntryId: i.container ?? null,
+    attachments: (i.attachments ?? []).map((a, n) => attachmentFromWire(a, `${i.entryId}:${n}`, resolve)),
+    relic: i.relic ? { aspects: [...i.relic.aspects] } : null,
+    containerEntryId: i.container ?? null,
+  }
+}
+
+function attachmentFromWire(a: W.WireAttachment, fallbackId: string, resolve: ItemResolver): MirrorAttachment {
+  return {
+    entryId: a.entryId ?? fallbackId,
+    rulesId: a.ref && a.kind !== 'gift' ? resolve(a.ref, a.name) : null,
+    kind: a.kind, name: a.name, level: a.level ?? 0, price: a.price ?? 0, identified: a.identified !== false,
   }
 }
 
@@ -181,8 +155,30 @@ const PB_TYPE: Record<ItemCategory, string> = {
   treasure: 'treasure', container: 'container', ammunition: 'ammo', kit: 'kit',
 }
 
-/** An inventory stack (and its compendium item, if linked) as an offer stack. */
-export function stackFromEntry(entry: InventoryEntry, item: Item | undefined): OfferStack {
+type Linked = Item | RelicGift | undefined
+
+/** The parts of an offer Play Buddy needs for items its catalog doesn't know. */
+function customOf(entry: InventoryEntry, item: Linked): OfferStack['custom'] {
+  const it = item?.kind === 'item' ? item : undefined
+  return {
+    level: item?.level ?? 0,
+    priceCp: entry.priceOverride ?? entry.giftValue ?? it?.price?.cp ?? 0,
+    priceFor: it?.priceFor ?? 1,
+    bulkTenths: entry.bulkOverride ?? it?.bulk ?? 0,
+    rarity: item?.rarity ?? 'common',
+    traits: item?.traits ?? [],
+    category: item?.kind === 'relicGift' ? 'relic-gift' : it?.category ?? 'equipment',
+    weapon: it?.category === 'weapon',
+    armor: it?.category === 'armor',
+    summary: '',
+  }
+}
+
+/**
+ * An inventory stack (and its compendium item, if linked) as an offer stack,
+ * with what's attached to it.
+ */
+export function stackFromEntry(entry: InventoryEntry, item: Item | undefined, attached: { entry: InventoryEntry; item: Linked }[] = []): OfferStack {
   return {
     rulesId: item?.id ?? null,
     name: entry.nameOverride ?? item?.name ?? 'Unnamed item',
@@ -190,36 +186,44 @@ export function stackFromEntry(entry: InventoryEntry, item: Item | undefined): O
     identified: entry.identified,
     playerName: entry.identified ? null : (entry.playerName ?? item?.unidentified?.name ?? null),
     playerDescription: entry.identified ? null : (entry.playerDescription ?? item?.unidentified?.description ?? null),
-    runes: entry.runes,
-    custom: {
-      level: item?.level ?? 0,
-      priceCp: entry.priceOverride ?? item?.price?.cp ?? 0,
-      priceFor: item?.priceFor ?? 1,
-      bulkTenths: entry.bulkOverride ?? item?.bulk ?? 0,
-      rarity: item?.rarity ?? 'common',
-      traits: item?.traits ?? [],
-      category: item?.category ?? 'equipment',
-      weapon: item?.category === 'weapon',
-      armor: item?.category === 'armor',
-      summary: '',
+    attachments: attached.map(a => ({
+      rulesId: a.item?.id ?? null,
+      kind: a.entry.attachKind ?? 'accessory',
+      name: a.entry.nameOverride ?? a.item?.name ?? 'Unnamed item',
+      identified: a.entry.identified,
+      ...(a.item?.kind === 'relicGift' ? { tier: a.item.tier } : {}),
+      custom: customOf(a.entry, a.item),
+    } satisfies OfferAttachment)),
+    relic: entry.relic ? { aspects: [...entry.relic.aspects] } : null,
+    custom: customOf(entry, item),
+  }
+}
+
+/** Synced Foundry items by ref; relic gifts, homebrew and free text with a definition. */
+function definitionOf(rulesId: string | null, name: string, custom: OfferStack['custom']): Pick<W.OfferItem, 'ref' | 'definition'> {
+  if (rulesId?.startsWith('fvtt:pf2e:')) return { ref: itemRefOf(rulesId, name) }
+  return {
+    definition: {
+      id: slugify(name) || 'custom-item', name, type: PB_TYPE[custom.category as ItemCategory] ?? (custom.category === 'relic-gift' ? 'relic-gift' : 'gear'),
+      level: custom.level, price: custom.priceCp, priceFor: custom.priceFor, bulk: tenthsToBulk(custom.bulkTenths),
+      rarity: custom.rarity, traits: custom.traits, source: 'StarTome homebrew', summary: custom.summary,
     },
+  }
+}
+
+function attachmentToWire(a: OfferAttachment): W.WireAttachment {
+  return {
+    kind: a.kind, name: a.name, ...definitionOf(a.rulesId, a.name, a.custom),
+    ...(a.identified ? {} : { identified: false }), ...(a.tier ? { tier: a.tier } : {}),
   }
 }
 
 /** Synced items go by catalog ref; homebrew and free-text items carry a definition. */
 export function offerItemToWire(s: OfferStack): W.OfferItem {
-  const synced = !!s.rulesId?.startsWith('fvtt:pf2e:')
-  const item: W.OfferItem = { quantity: s.quantity }
-  if (synced) item.ref = itemRefOf(s.rulesId, s.name)
-  else {
-    item.definition = {
-      id: slugify(s.name) || 'custom-item', name: s.name, type: PB_TYPE[s.custom.category as ItemCategory] ?? 'gear',
-      level: s.custom.level, price: s.custom.priceCp, priceFor: s.custom.priceFor, bulk: tenthsToBulk(s.custom.bulkTenths),
-      rarity: s.custom.rarity, traits: s.custom.traits, source: 'StarTome homebrew', summary: s.custom.summary,
-    }
-  }
-  const runes = runesToWire(s.runes, s.custom.armor)
-  if (runes) item.runes = runes
+  const item: W.OfferItem = { quantity: s.quantity, ...definitionOf(s.rulesId, s.name, s.custom) }
+  // On an unidentified item everything attached is unidentified too: it's revealed with the item
+  if (s.attachments?.length) item.attachments = s.attachments.map(a => attachmentToWire(s.identified ? a : { ...a, identified: false }))
+  if (s.relic) item.relic = { aspects: [...s.relic.aspects] }
   if (!s.identified) {
     item.identified = false
     item.unidentifiedName = s.playerName ?? 'Unidentified item'
@@ -228,9 +232,9 @@ export function offerItemToWire(s: OfferStack): W.OfferItem {
   return item
 }
 
-/** Same stack without its catalog ref: what to send when Play Buddy answers `unknownItem`. */
+/** Same stack without its catalog refs: what to send when Play Buddy answers `unknownItem`. */
 export function asCustomStack(s: OfferStack): OfferStack {
-  return { ...s, rulesId: null }
+  return { ...s, rulesId: null, attachments: (s.attachments ?? []).map(a => ({ ...a, rulesId: null })) }
 }
 
 export function offerToWire(o: LinkOffer): W.OfferPayload {

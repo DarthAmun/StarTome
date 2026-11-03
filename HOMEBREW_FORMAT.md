@@ -24,7 +24,7 @@ Only `rules` is needed. (A bare array of entries also works.)
 |---|---|---|
 | `id` | string | A random UUID v4. **Keep the same id** when I ask you to revise an entry: re-importing replaces the row with that id. New entry → new UUID. |
 | `origin` | `"user"` | Always `"user"`. |
-| `kind` | string | `item`, `creature`, `hazard`, `spell`, `feat`, `action`, `condition`, `ancestry`, `heritage`, `background`, `class`, `deity` |
+| `kind` | string | `item`, `creature`, `hazard`, `spell`, `feat`, `action`, `condition`, `ancestry`, `heritage`, `background`, `class`, `deity`, `relicGift` |
 | `game` | `"sf2e"` \| `"pf2e"` \| `"both"` | `"sf2e"` unless I say otherwise. |
 | `name` | string | Title Case. |
 | `sortName` | string | `name` lower-cased. |
@@ -186,6 +186,21 @@ Optional for class features: `choices` and `optionOf` (see "Classes and subclass
 ```json
 { "kind": "condition", "valued": true, "overrides": [], "group": "detection", "aliases": [] }
 ```
+
+### relicGift
+
+A relic gift (GMG p. 96), PF2e only. In the party inventory it attaches to an item marked as a relic, like a rune. Put its activations in `description` too (as `**Activate** ◆◆ …` lines); `activation` keeps them structured.
+
+```json
+{ "kind": "relicGift", "game": "pf2e", "tier": "minor", "aspects": ["fire"], "prerequisites": [], "grantsRune": "Flaming",
+  "activation": [{ "cost": 2, "traits": ["manipulate"], "frequency": "once per day", "trigger": "…", "text": "…" }] }
+```
+
+- `tier`: `minor`, `major` or `grand`.
+- `aspects`: the relic aspects it belongs to, lower case (`any` for every aspect).
+- `grantsRune`: for gifts that give the relic a rune, the rune's name.
+
+The import page also reads [pf2ools-data](https://github.com/Pf2ools/pf2ools-data)'s relic gifts as they are (MIT): the bundle `bundles/byDatatype/core/relicGift.json` or single files from `data/core/<book>/relicGift/`. They land in the pack "Relic Gifts (pf2ools)", and importing a newer bundle updates them.
 
 ### ancestry, heritage, background, class, deity
 

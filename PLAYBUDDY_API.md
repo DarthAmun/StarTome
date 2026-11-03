@@ -180,10 +180,28 @@ interface InventoryItem {
   location: 'held' | 'worn' | 'stowed'
   container?: string                    // entryId of the container
   invested?: boolean
-  runes?: { runeId: string; choice?: string }[]
+  attachments?: Attachment[]            // runes, talismans, upgrades, accessories, relic gifts on this item
+  relic?: { aspects: string[] }         // a relic (GMG p. 94); its gifts are attachments of kind 'gift'
   identified: boolean                   // false: only `name` (the unidentified name) is shown to the player
 }
+
+/** Something etched onto, affixed to or installed in an item, or a relic's gift. */
+interface Attachment {
+  entryId?: string                      // in a status: Play Buddy's id for it, what an `identify` offer reveals
+  kind: 'rune' | 'talisman' | 'upgrade' | 'accessory' | 'gift'
+  ref?: ItemRef                         // catalog item (runes, talismans, upgrades)
+  definition?: CustomItemDefinition     // otherwise: relic gifts (type "relic-gift") and homebrew
+  name: string
+  level?: number
+  price?: Cp
+  identified?: boolean                  // false: an unidentified rune, or a relic gift that hasn't awakened
+  tier?: 'minor' | 'major' | 'grand'    // relic gifts
+}
 ```
+
+- **Attachments replace the earlier `runes` list.** They cover property runes beyond potency/striking, shield runes, talismans, SF2e upgrades and relic gifts, and each carries its own price, so both apps count an item's value the same way.
+- A talisman that was spent, or a rune the player moved to another item, simply shows up differently in the next status: StarTome mirrors what it reads, so no event is needed.
+- **Unidentified items:** everything attached to them is sent with `identified: false` and stays hidden with the item. An `identify` offer for the item reveals it with its attachments; an `identify` offer naming an attachment's `entryId` reveals that one only (a relic gift awakening).
 
 **`GET /v1/status?levels=…`** — the same for every player in one call: `{ "players": StatusResponse[] }` (players who share none of the levels appear with only `notShared`).
 
@@ -210,7 +228,8 @@ interface OfferItem {
   ref?: ItemRef                         // catalog item (preferred)
   definition?: CustomItemDefinition     // a homebrew item; Play Buddy's custom-item shape (ItemEntry)
   quantity: number
-  runes?: { runeId: string; choice?: string }[]
+  attachments?: Attachment[]            // §6.3; StarTome sends them with the item they're on
+  relic?: { aspects: string[] }
   identified?: boolean                  // default true
   unidentifiedName?: string             // shown while unidentified, e.g. "Glowing Longsword"
   unidentifiedDescription?: string

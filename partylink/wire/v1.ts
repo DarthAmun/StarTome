@@ -87,7 +87,27 @@ export interface StatusSkills {
   spellcasting?: { source: string; tradition: string; dc: number; attack: number }[]
 }
 
-export interface WireRune { runeId: string; choice?: string }
+/**
+ * Something attached to an item: a rune, talisman, SF2e upgrade, other
+ * affixed accessory, or a relic gift. Each is a catalog item (`ref`) or,
+ * when Play Buddy's catalog doesn't have it (relic gifts, homebrew), a `definition`.
+ */
+export interface WireAttachment {
+  /** Play Buddy's id for it, in a status: what `identify` reveals (an unidentified rune, a gift that awakens). */
+  entryId?: string
+  kind: 'rune' | 'talisman' | 'upgrade' | 'accessory' | 'gift'
+  ref?: ItemRef
+  definition?: CustomItemDefinition
+  name: string
+  level?: number
+  price?: Cp
+  /** false: an unidentified rune, or a relic gift that hasn't awakened yet. */
+  identified?: boolean
+  tier?: 'minor' | 'major' | 'grand'
+}
+
+/** A relic (GMG p. 94): its gifts are attachments of kind `gift`. */
+export interface WireRelic { aspects: string[] }
 
 export interface InventoryItem {
   entryId: string
@@ -104,7 +124,8 @@ export interface InventoryItem {
   location: 'held' | 'worn' | 'stowed'
   container?: string
   invested?: boolean
-  runes?: WireRune[]
+  attachments?: WireAttachment[]
+  relic?: WireRelic
   identified: boolean
 }
 
@@ -149,7 +170,8 @@ export interface OfferItem {
   ref?: ItemRef
   definition?: CustomItemDefinition
   quantity: number
-  runes?: WireRune[]
+  attachments?: WireAttachment[]
+  relic?: WireRelic
   identified?: boolean
   unidentifiedName?: string
   unidentifiedDescription?: string

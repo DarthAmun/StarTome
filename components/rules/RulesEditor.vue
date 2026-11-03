@@ -262,6 +262,21 @@
       </div>
     </section>
 
+    <!-- ── Relic gift ────────────────────────────────────────── -->
+    <section v-if="L.kind === 'relicGift'" class="red-section">
+      <h4>Relic gift</h4>
+      <div class="red-grid">
+        <label class="red-field"><span>Tier</span>
+          <select class="red-input" :value="L.tier" @change="set('tier', str($event))">
+            <option v-for="t in GIFT_TIERS" :key="t" :value="t">{{ t }}</option>
+          </select>
+        </label>
+        <label class="red-field"><span>Aspects</span><input class="red-input" :value="formatList(L.aspects)" placeholder="fire, mind" @change="set('aspects', parseTraits(str($event)))" /></label>
+        <label class="red-field"><span>Grants rune</span><input class="red-input" :value="L.grantsRune ?? ''" placeholder="Flaming" @change="set('grantsRune', opt($event))" /></label>
+        <label class="red-field red-span-3"><span>Prerequisites <em>separate with ;</em></span><input class="red-input" :value="(L.prerequisites ?? []).join('; ')" @change="set('prerequisites', splitList(str($event), ';'))" /></label>
+      </div>
+    </section>
+
     <!-- ── Condition ─────────────────────────────────────────── -->
     <section v-if="L.kind === 'condition'" class="red-section">
       <h4>Condition</h4>
@@ -307,7 +322,7 @@ import {
   parseFacts, parseFeatures, parseIwr, parseList, parseNumberMap, parseSenses, parseSpeeds, parseSpellList, parseTraits, splitList,
 } from '~/rules/parse'
 import {
-  ITEM_CATEGORIES, RARITIES, RULES_KIND_CONFIG, SIZES,
+  GIFT_TIERS, ITEM_CATEGORIES, RARITIES, RULES_KIND_CONFIG, SIZES,
   type AbilityKey, type ActionCost, type DamageRoll, type RulesEntity, type Spell, type StatAction,
 } from '~/types/rules'
 

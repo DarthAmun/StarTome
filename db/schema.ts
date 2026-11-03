@@ -25,6 +25,7 @@ import { parseJson } from '~/utils/json'
 import type { CampaignRules, GameId } from '~/types/game'
 import type { RulesEntity, Runes } from '~/types/rules'
 import type { Adjustment } from '~/rules/combat'
+import type { AttachKind } from '~/rules/attachments'
 import type { CharacterMirror, DeliveryState, LinkOffer, LinkRequest } from '~/partylink/port'
 import { dataUrlToBlob } from '~/rules/images'
 
@@ -239,6 +240,9 @@ export interface DbInventory {
   runes: Runes | null
   grade: string | null
   container_id?: number | null     // a container entry of the same owner (P5 follow-up); non-indexed
+  attached_to?: number | null      // the host entry a rune/talisman/upgrade/gift is attached to; non-indexed
+  attach_kind?: AttachKind | null
+  relic?: { aspects: string[] } | null
   /** Mirror of a Play Buddy inventory entry: read-only here, replaced on every status read. */
   pb_entry_id?: string | null
   /** Stash stack offered to a Play Buddy player; cleared when the offer is answered. */

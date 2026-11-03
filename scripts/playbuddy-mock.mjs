@@ -32,7 +32,10 @@ function seedPlayers() {
         skills: { attributes: { str: 4, dex: 1, con: 2, int: 3, wis: 1, cha: 0 }, skills: { athletics: 16, arcana: 14, stealth: 8, 'warfare-lore': 12 }, classDc: 24, spellcasting: [{ source: 'magus', tradition: 'arcane', dc: 24, attack: 14 }] },
         coins: { pp: 0, gp: 412, sp: 6, cp: 0 },
         items: [
-          { entryId: 'i1', ref: { slug: 'longsword', foundryId: 'X9Ps5cz8oIRRo4zv', pack: 'equipment-srd' }, custom: false, name: 'Longsword', quantity: 1, level: 0, rarity: 'common', type: 'weapon', price: 100, priceFor: 1, bulk: 1, location: 'held', runes: [{ runeId: 'weapon-potency-1' }, { runeId: 'striking' }], identified: true },
+          { entryId: 'i1', ref: { slug: 'longsword', foundryId: 'X9Ps5cz8oIRRo4zv', pack: 'equipment-srd' }, custom: false, name: 'Longsword', quantity: 1, level: 0, rarity: 'common', type: 'weapon', price: 100, priceFor: 1, bulk: 1, location: 'held', attachments: [
+            { entryId: 'i1r1', kind: 'rune', ref: { slug: 'weapon-potency-1' }, name: 'Weapon Potency (+1)', level: 2, price: 3500 },
+            { entryId: 'i1r2', kind: 'rune', ref: { slug: 'striking' }, name: 'Striking', level: 4, price: 6500 },
+          ], identified: true },
           { entryId: 'i2', ref: { slug: 'healing-potion-minor' }, custom: false, name: 'Healing Potion (Minor)', quantity: 2, level: 1, rarity: 'common', type: 'consumable', price: 400, priceFor: 1, bulk: 0.1, location: 'stowed', identified: true },
         ],
         nextEntry: 3,
