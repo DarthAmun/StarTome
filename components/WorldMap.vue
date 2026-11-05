@@ -324,7 +324,7 @@
           </div>
           <h3 class="pin-preview-name">{{ previewEntity?.name }}</h3>
           <div v-if="previewAttrs.title" class="pin-preview-sub">{{ previewAttrs.title }}</div>
-          <div v-if="previewAttrs.role" class="pin-preview-sub">{{ previewAttrs.role }}</div>
+          <div v-if="npcClassLine(previewAttrs)" class="pin-preview-sub">{{ npcClassLine(previewAttrs) }}</div>
           <div v-if="previewAttrs.locationType" class="pin-preview-sub capitalize">{{ previewAttrs.locationType }}</div>
           <div v-if="previewAttrs.status" class="pin-preview-status">{{ previewAttrs.status }}</div>
           <div v-if="previewLinks.length > 0" class="pin-preview-links">
@@ -381,7 +381,7 @@ import { useEntities } from '~/composables/useEntities'
 import { ENTITY_TYPE_CONFIG } from '~/types/entities'
 import { extractLinks } from '~/composables/useEntityParser'
 import type { MapPin, RegionAttributes } from '~/types/entities'
-import { REGION_COLORS, normalizePolygon } from '~/types/entities'
+import { REGION_COLORS, normalizePolygon, npcClassLine } from '~/types/entities'
 
 const props = defineProps<{
   campaignId: number

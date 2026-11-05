@@ -16,10 +16,10 @@
       </div>
       <div v-if="hasMeta" class="meta">
         <span v-if="attrs.title" class="meta-primary">{{ attrs.title }}</span>
-        <span v-if="attrs.title && (attrs.race || attrs.role)" class="sep">·</span>
+        <span v-if="attrs.title && (attrs.race || classLine)" class="sep">·</span>
         <span v-if="attrs.race" class="meta-dim">{{ attrs.race }}</span>
-        <span v-if="attrs.race && attrs.role" class="sep">·</span>
-        <span v-if="attrs.role" class="meta-dim">{{ attrs.role }}</span>
+        <span v-if="attrs.race && classLine" class="sep">·</span>
+        <span v-if="classLine" class="meta-dim">{{ classLine }}</span>
         <span v-if="attrs.status" class="status-badge"
           :class="attrs.status?.toLowerCase() === 'hostile' ? 'status-badge--hostile'
                 : attrs.status?.toLowerCase() === 'friendly' ? 'status-badge--friendly' : ''">
@@ -39,14 +39,15 @@
 
 <script setup lang="ts">
 import type { Entity } from '~/composables/useEntities'
-import type { NpcAttributes } from '~/types/entities'
+import { npcClassLine, type NpcAttributes } from '~/types/entities'
 
 const props = defineProps<{ entry: Entity; deletable?: boolean }>()
 defineEmits<{ open: []; delete: [id: number] }>()
 const attrs = computed(() => (props.entry.attributes ?? {}) as NpcAttributes)
+const classLine = computed(() => npcClassLine(attrs.value))
 const hasMeta = computed(() => {
   const a = attrs.value
-  return !!(a.title || a.race || a.role || a.status)
+  return !!(a.title || a.race || classLine.value || a.status)
 })
 </script>
 

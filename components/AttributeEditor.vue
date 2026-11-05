@@ -44,21 +44,32 @@
             </div>
             <div class="field-row">
                 <div class="field">
-                    <label class="f-label">Race / Ancestry</label>
-                    <InputText
-                        :model-value="attrs.race || ''"
+                    <label class="f-label">Ancestry</label>
+                    <RulesNamePicker
+                        :model-value="attrs.race"
+                        kind="ancestry"
                         placeholder="Human, Elf…"
                         @update:model-value="(v) => set('race', v)"
                     />
                 </div>
                 <div class="field">
                     <label class="f-label">Class / Role</label>
-                    <InputText
-                        :model-value="attrs.role || ''"
-                        placeholder="Guard, Merchant…"
+                    <RulesNamePicker
+                        :model-value="attrs.role"
+                        kind="class"
+                        placeholder="Fighter, Merchant…"
                         @update:model-value="(v) => set('role', v)"
                     />
                 </div>
+            </div>
+            <div class="field">
+                <label class="f-label" title="Dual-class variant rule: both classes' features and a class feat from each">Second class (dual-class)</label>
+                <RulesNamePicker
+                    :model-value="attrs.role2"
+                    kind="class"
+                    placeholder="None"
+                    @update:model-value="(v) => set('role2', v)"
+                />
             </div>
             <div class="field">
                 <label class="f-label">Current Status</label>

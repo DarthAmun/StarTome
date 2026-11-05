@@ -23,6 +23,7 @@
 <script setup lang="ts">
 import type { Entity } from '~/composables/useEntities'
 import { useEntities } from '~/composables/useEntities'
+import { npcClassLine } from '~/types/entities'
 
 const props = defineProps<{ entity: Entity }>()
 const store = useEntities()
@@ -44,7 +45,7 @@ const attrs = computed(() => props.entity.attributes as any)
 const portraitSrc = computed(() => attrs.value?.portraitSource || attrs.value?.imageSource || null)
 const status = computed(() => attrs.value?.status ?? null)
 const subLine = computed(() => {
-  const parts = [attrs.value?.race, attrs.value?.role].filter(Boolean)
+  const parts = [attrs.value?.race, npcClassLine(attrs.value)].filter(Boolean)
   return parts.join(' · ')
 })
 const notes = computed(() => props.entity.content ?? '')

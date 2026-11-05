@@ -2,7 +2,7 @@ import { useEntities } from '~/composables/useEntities'
 import type { Entity } from '~/composables/useEntities'
 import type { EntityType } from '~/types/entities'
 import {
-  ENTITY_TYPE_CONFIG, normalizePolygon,
+  ENTITY_TYPE_CONFIG, normalizePolygon, npcClassLine,
   QUEST_STATUS_COLORS, SESSION_MODE_COLORS, RUMOR_STATUS_COLORS, EVENT_SIGNIFICANCE_COLORS,
 } from '~/types/entities'
 import { ENTITY_REGEX } from '~/composables/useEntityParser'
@@ -136,14 +136,14 @@ export const BROWSE_TYPES: Record<EntityType, TypeDef> = {
       const dead = a.isAlive === false
       const level = str(a.level)
       return {
-        meta: [a.title, a.race, a.role].map(str).filter(Boolean).join(' · '),
+        meta: [a.title, a.race, npcClassLine(a)].map(str).filter(Boolean).join(' · '),
         chip: dead ? 'Dead' : status, chipKind: dead ? 'mute' : statusKind(status),
         badge: level ? `Lv ${level}` : '', image: a.portraitSource || null, swatch: null, polygon: null, bandText: '',
         archived: dead, progress: null,
         sub: rel.lastSession != null ? `seen S${rel.lastSession}` : '',
         peekFacts: [F('Faction', rel.factions.join(', ')), F('Location', rel.locations.join(', ')), F('Last seen', rel.lastSession != null ? `Session ${rel.lastSession}` : 'Not yet met')],
         values: {
-          status, race: str(a.race), role: str(a.role), level, title: str(a.title),
+          status, race: str(a.race), role: npcClassLine(a), level, title: str(a.title),
           faction: rel.factions, location: rel.locations,
           kind: a.isPlayerCharacter ? 'Player Character' : 'NPC',
         },

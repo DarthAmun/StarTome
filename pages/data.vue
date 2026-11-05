@@ -662,6 +662,7 @@ const META_FIELDS: Partial<Record<EntityType, MetaField[]>> = {
     { key: 'title',  label: 'Title' },
     { key: 'race',   label: 'Race' },
     { key: 'role',   label: 'Role' },
+    { key: 'role2',  label: 'Second class' },
     { key: 'level',  label: 'Level' },
     { key: 'isAlive', label: 'Vital', transform: v => v === false ? 'Dead' : 'Alive', alwaysEmit: true },
     { key: 'status', label: 'Status' },

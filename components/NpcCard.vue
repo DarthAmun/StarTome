@@ -87,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import type { NpcAttributes } from "~/types/entities";
+import { npcClassLine, type NpcAttributes } from "~/types/entities";
 
 const props = defineProps<{
     name: string;
@@ -104,7 +104,7 @@ const identityLine = computed(() => {
     const parts: string[] = [];
     if (props.attrs.title) parts.push(props.attrs.title);
     if (props.attrs.race) parts.push(props.attrs.race);
-    if (props.attrs.role) parts.push(props.attrs.role);
+    if (npcClassLine(props.attrs)) parts.push(npcClassLine(props.attrs));
     return parts.join("  ·  ");
 });
 

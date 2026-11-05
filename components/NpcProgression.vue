@@ -1,44 +1,16 @@
 <template>
     <div class="npp">
-        <div class="npp-pickers">
-            <div class="field">
-                <label class="f-label">Ancestry</label>
-                <RulesNamePicker
-                    :options="ancestries"
-                    :id="attrs.ancestryId"
-                    :name="attrs.ancestryName"
-                    placeholder="Compendium or your own"
-                    @pick="(v) => pick('ancestry', v)"
-                />
-            </div>
-            <div class="field">
-                <label class="f-label">Class</label>
-                <RulesNamePicker
-                    :options="classes"
-                    :id="attrs.classId"
-                    :name="attrs.className"
-                    placeholder="Compendium or your own"
-                    @pick="(v) => pick('class', v)"
-                />
-            </div>
-            <div class="field">
-                <label class="f-label" title="Dual-class variant rule: both classes' features and a class feat from each">Second class (dual-class)</label>
-                <RulesNamePicker
-                    :options="classes"
-                    :id="attrs.classId2"
-                    :name="attrs.className2"
-                    placeholder="None"
-                    @pick="(v) => pick('class2', v)"
-                />
-            </div>
-            <div class="npp-level">
-                <span class="f-label">Level</span>
-                <b>{{ level ?? "—" }}</b>
-            </div>
+        <div class="npp-head">
+            <span><span class="f-label">Ancestry</span> {{ attrs.race || "—" }}<span v-if="customAncestry" class="npp-custom">custom</span></span>
+            <span v-for="c in classEntries" :key="c.name">
+                <span class="f-label">Class</span> {{ c.name }}<span v-if="!('id' in c)" class="npp-custom">custom</span>
+            </span>
+            <span><span class="f-label">Level</span> {{ level ?? "—" }}</span>
+            <button class="npp-edit" @click="emit('edit')">Edit in Attributes</button>
         </div>
 
         <p v-if="!classEntries.length" class="npp-hint">
-            Pick a class, or type one of your own, to see the feat slots level by level. The level comes from Attributes.
+            Set a class in Attributes (from the compendium or your own) to see the feat slots level by level.
         </p>
 
         <p v-else-if="customClasses.length" class="npp-hint">
@@ -108,7 +80,7 @@
                 </header>
                 <input v-model="search" class="npp-search" placeholder="Filter…" />
                 <p v-if="loadingOptions" class="npp-muted">Loading…</p>
-                <p v-else-if="open.slot.kind === 'ancestryFeat' && !ancestryName" class="npp-muted">Pick an ancestry first.</p>
+                <p v-else-if="open.slot.kind === 'ancestryFeat' && !ancestryName" class="npp-muted">Set an ancestry in Attributes first.</p>
                 <template v-else>
                     <p class="npp-muted">{{ filteredOptions.length }} {{ filteredOptions.length === 1 ? "feat" : "feats" }}</p>
                     <ul class="npp-option-list">
@@ -126,7 +98,7 @@
 
 <script setup lang="ts">
 import { getDb } from "~/composables/useDb";
-import { rulesClassFeats, rulesFindByName, rulesGetMany, rulesNameList, rulesQuery, useRulesRevision } from "~/composables/useRules";
+import { rulesClassFeats, rulesFindByName, rulesQuery, useRulesRevision } from "~/composables/useRules";
 import { parseLevel } from "~/rules/party";
 import { FEAT_SLOTS, levelPlan, SLOT_LABEL, slotOptions, slotTotals, type Slot } from "~/rules/progression";
 import { classTrait } from "~/rules/subclasses";
@@ -135,50 +107,39 @@ import type { NpcAttributes } from "~/types/entities";
 import { RULES_KIND_CONFIG, type Feat, type ReferenceEntry, type RulesEntity } from "~/types/rules";
 
 const props = defineProps<{ attrs: NpcAttributes; campaignId: number }>();
-const emit = defineEmits<{ update: [patch: Partial<NpcAttributes>] }>();
+const emit = defineEmits<{ edit: [] }>();
 
 const router = useRouter();
 const rulesRevision = useRulesRevision();
 
 const game = ref<GameId>("pf2e");
-const classes = ref<{ id: string; name: string }[]>([]);
-const ancestries = ref<{ id: string; name: string }[]>([]);
-const entries = ref<Record<string, RulesEntity>>({});
+watch(() => props.campaignId, async (id) => { game.value = campaignGame(await getDb().campaigns.get(id)); }, { immediate: true });
 
+// The ancestry and class are names (Attributes); the compendium entry of that name, if there is one, adds features and feat levels
+const names = computed(() => ({ race: props.attrs.race?.trim() ?? "", role: props.attrs.role?.trim() ?? "", role2: props.attrs.role2?.trim() ?? "" }));
+const found = ref<{ ancestry?: ReferenceEntry; classes: (ReferenceEntry | undefined)[] }>({ classes: [] });
+let resolveToken = 0;
 watch(
-    () => [props.campaignId, rulesRevision.value] as const,
-    async ([id]) => {
-        game.value = campaignGame(await getDb().campaigns.get(id));
-        [classes.value, ancestries.value] = await Promise.all([
-            rulesNameList("class", [game.value]),
-            rulesNameList("ancestry", [game.value]),
-        ]);
+    () => [names.value.race, names.value.role, names.value.role2, game.value, rulesRevision.value] as const,
+    async ([race, role, role2, g]) => {
+        const token = ++resolveToken;
+        const find = (kind: "ancestry" | "class", name: string) =>
+            name ? rulesFindByName(kind, name, g).then((e) => e as ReferenceEntry | undefined) : Promise.resolve(undefined);
+        const [ancestry, c1, c2] = await Promise.all([find("ancestry", race), find("class", role), find("class", role2)]);
+        if (token === resolveToken) found.value = { ancestry, classes: [c1, c2] };
     },
     { immediate: true },
 );
 
-const pickedIds = computed(() => [props.attrs.ancestryId, props.attrs.classId, props.attrs.classId2].filter((x): x is string => !!x));
-watch(
-    () => [pickedIds.value.join(","), rulesRevision.value] as const,
-    async () => {
-        const rows = await rulesGetMany(pickedIds.value);
-        entries.value = Object.fromEntries(rows.map((r) => [r.id, r]));
-    },
-    { immediate: true },
-);
-
-const entry = (id?: string) => (id ? (entries.value[id] as ReferenceEntry | undefined) : undefined);
-/** The ancestry's name, from the compendium or made up; ancestry feats carry it as a trait. */
-const ancestryName = computed(() => entry(props.attrs.ancestryId)?.name ?? props.attrs.ancestryName);
+/** Ancestry feats carry the ancestry's name as a trait, made up or not. */
+const ancestryName = computed(() => found.value.ancestry?.name ?? (names.value.race || undefined));
+const customAncestry = computed(() => !!names.value.race && !found.value.ancestry);
 type PlanClass = Pick<ReferenceEntry, "name" | "features" | "progression">;
 /** A made-up class has no features and the usual feat levels. */
-function planClass(id?: string, name?: string): PlanClass | null {
-    const e = entry(id);
-    if (e?.kind === "class") return e;
-    return !id && name ? { name } : null;
-}
 const classEntries = computed(() =>
-    [planClass(props.attrs.classId, props.attrs.className), planClass(props.attrs.classId2, props.attrs.className2)].filter((c): c is PlanClass => !!c),
+    [names.value.role, names.value.role2]
+        .map((name, i): PlanClass | null => (name ? (found.value.classes[i] ?? { name }) : null))
+        .filter((c): c is PlanClass => !!c),
 );
 const customClasses = computed(() => classEntries.value.filter((c) => !("id" in c)).map((c) => c.name));
 const dual = computed(() => classEntries.value.length > 1);
@@ -189,21 +150,6 @@ const shownLevel = computed(() => level.value ?? 20);
 const plan = computed(() => levelPlan(classEntries.value));
 const rows = computed(() => (showAll.value || level.value === null ? plan.value : plan.value.filter((r) => r.level <= level.value!)));
 const totals = computed(() => slotTotals(plan.value, shownLevel.value));
-
-/** Picking a class or ancestry also fills the free-text fields the card shows, when they're empty. */
-function pick(which: "ancestry" | "class" | "class2", v: { id?: string; name?: string }) {
-    const [idKey, nameKey] = ({ ancestry: ["ancestryId", "ancestryName"], class: ["classId", "className"], class2: ["classId2", "className2"] } as const)[which];
-    // A compendium pick keeps only its id; a made-up one only its name
-    const patch: Partial<NpcAttributes> = { [idKey]: v.id, [nameKey]: v.id ? undefined : v.name };
-    if (which === "ancestry" && v.name && !props.attrs.race) patch.race = v.name;
-    if (which !== "ancestry" && v.name && !props.attrs.role) {
-        const cur = (id?: string, name?: string) => classes.value.find((c) => c.id === id)?.name ?? name;
-        const first = which === "class" ? v.name : cur(props.attrs.classId, props.attrs.className);
-        const second = which === "class2" ? v.name : cur(props.attrs.classId2, props.attrs.className2);
-        patch.role = [first, second].filter(Boolean).join(" / ");
-    }
-    emit("update", patch);
-}
 
 // ── Slots and their feats ─────────────────────────────────────────────────────
 const slotKey = (s: Slot) => `${s.kind}:${s.className ?? ""}`;
@@ -283,10 +229,16 @@ async function openFeature(name: string) {
 
 <style scoped>
 .npp { display: flex; flex-direction: column; gap: 10px; }
-.npp-pickers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 10px; align-items: end; }
-.npp-pickers .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.npp-level { display: flex; flex-direction: column; gap: 4px; align-items: center; padding: 0 6px 6px; }
-.npp-level b { font-family: var(--fh); font-size: 18px; color: var(--accent-l, var(--accent)); }
+.npp-head { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; font-size: 13px; }
+.npp-head .f-label { margin-right: 4px; }
+.npp-custom {
+    margin-left: 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text2);
+    border: 1px dashed var(--border-hi); border-radius: 3px; padding: 0 4px;
+}
+.npp-edit {
+    margin-left: auto; font-size: 11.5px; background: none; border: none; color: var(--text2);
+    cursor: pointer; text-decoration: underline dotted; padding: 0;
+}
 .npp-hint { margin: 0; color: var(--text2); font-size: 12.5px; }
 
 .npp-body { display: flex; gap: 14px; align-items: flex-start; }
@@ -343,7 +295,6 @@ async function openFeature(name: string) {
 .npp-option-name { flex: 1; }
 
 @media (max-width: 760px) {
-    .npp-pickers { grid-template-columns: 1fr; }
     .npp-body { flex-direction: column; }
     .npp-options { width: 100%; position: static; }
 }

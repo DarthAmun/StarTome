@@ -1,58 +1,55 @@
 <template>
     <div class="rnp">
         <AutoComplete
-            v-model="text"
+            :model-value="modelValue ?? ''"
             :suggestions="suggestions"
-            option-label="name"
             complete-on-focus
             :show-empty-message="false"
             :placeholder="placeholder"
             @complete="onComplete"
-            @option-select="onSelect"
-            @blur="commit"
-            @keydown.enter="commit"
+            @update:model-value="(v) => emit('update:modelValue', typeof v === 'string' ? v : String(v ?? ''))"
         />
-        <span v-if="custom" class="rnp-custom" title="Not in the compendium: kept on this entry only">custom</span>
+        <span
+            v-if="custom"
+            class="rnp-custom"
+            :title="`No ${kindLabel} of this name in the compendium`"
+        >custom</span>
     </div>
 </template>
 
 <script setup lang="ts">
 /**
- * A compendium entry or a made-up name: suggestions come from `options`, and
- * text that matches none of them is kept as a custom name.
+ * Free text with compendium names as suggestions: an NPC's ancestry or class
+ * can be one the compendium doesn't have.
  */
-const props = defineProps<{
-    options: { id: string; name: string }[];
-    id?: string;
-    name?: string;
-    placeholder?: string;
-}>();
-const emit = defineEmits<{ pick: [value: { id?: string; name?: string }] }>();
+import { rulesNameList, useRulesRevision } from "~/composables/useRules";
+import { RULES_KIND_CONFIG, type RulesKind } from "~/types/rules";
 
-const label = () => props.options.find((o) => o.id === props.id)?.name ?? props.name ?? "";
-const text = ref<string | { id: string; name: string }>(label());
-watch(() => [props.id, props.name, props.options], () => { text.value = label(); });
+const props = defineProps<{ modelValue?: string; kind: RulesKind; placeholder?: string }>();
+const emit = defineEmits<{ "update:modelValue": [value: string] }>();
 
-const custom = computed(() => !props.id && !!props.name);
-const suggestions = ref<{ id: string; name: string }[]>([]);
+const kindLabel = computed(() => RULES_KIND_CONFIG[props.kind].label.toLowerCase());
+const names = ref<string[]>([]);
+const rulesRevision = useRulesRevision();
+watch(
+    () => [props.kind, rulesRevision.value] as const,
+    async ([kind]) => {
+        // Both games: the same name in each is one suggestion
+        const rows = await rulesNameList(kind);
+        names.value = [...new Set(rows.map((r) => r.name))].sort((a, b) => a.localeCompare(b));
+    },
+    { immediate: true },
+);
 
+const custom = computed(() => {
+    const v = props.modelValue?.trim().toLowerCase();
+    return !!v && names.value.length > 0 && !names.value.some((n) => n.toLowerCase() === v);
+});
+
+const suggestions = ref<string[]>([]);
 function onComplete(e: { query: string }) {
     const q = e.query.trim().toLowerCase();
-    suggestions.value = (q ? props.options.filter((o) => o.name.toLowerCase().includes(q)) : props.options).slice(0, 50);
-}
-
-function onSelect(e: { value: { id: string; name: string } }) {
-    if (e.value.id !== props.id) emit("pick", { id: e.value.id, name: e.value.name });
-}
-
-function commit() {
-    // A suggestion was picked: onSelect handled it
-    if (typeof text.value !== "string") return;
-    const typed = text.value.trim();
-    if (typed === label()) return;
-    if (!typed) { emit("pick", {}); return; }
-    const hit = props.options.find((o) => o.name.toLowerCase() === typed.toLowerCase());
-    emit("pick", hit ? { id: hit.id, name: hit.name } : { name: typed });
+    suggestions.value = (q ? names.value.filter((n) => n.toLowerCase().includes(q)) : names.value).slice(0, 50);
 }
 </script>
 

@@ -11,14 +11,13 @@ export interface NpcAttributes {
   isAlive?: boolean
   isPlayerCharacter?: boolean
   status?: string
-  /** Level overview (NpcProgression.vue): a compendium entry's id, or only a name for one made up for this NPC.
-   *  The second class is the dual-class one. */
-  ancestryId?: string
-  ancestryName?: string
-  classId?: string
-  className?: string
-  classId2?: string
-  className2?: string
+  /** Dual-class variant: the second class, next to `role`. */
+  role2?: string
+}
+
+/** An NPC's class, both with dual-class: "Fighter / Rogue". */
+export function npcClassLine(a: { role?: unknown; role2?: unknown } | null | undefined): string {
+  return [a?.role, a?.role2].filter((v): v is string => typeof v === 'string' && !!v.trim()).join(' / ')
 }
 
 export interface MapPin {

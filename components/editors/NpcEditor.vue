@@ -49,7 +49,7 @@
             <NpcProgression
                 :attrs="displayAttrs"
                 :campaign-id="props.campaignId"
-                @update="(patch) => onAttributesChange({ ...draftAttributes, ...patch } as EntityAttributes)"
+                @edit="showAttributes = true"
             />
         </div>
 

@@ -290,7 +290,7 @@ import type { RandomTableAttributes } from "~/types/entities";
 import { useEntityRendering, typeColorMap, typeIconHtml, ENCOUNTER_COLOR } from "~/composables/useEntityRendering";
 import { useDiceRoll } from "~/composables/useDiceRoll";
 import { getDb, dbApi } from "~/composables/useDb";
-import { ENTITY_TYPE_CONFIG, ENTITY_TYPE_ROUTE } from "~/types/entities";
+import { ENTITY_TYPE_CONFIG, ENTITY_TYPE_ROUTE, npcClassLine } from "~/types/entities";
 import type { EntityType } from "~/types/entities";
 
 const { renderMarkdown } = useEntityMarkdown();
@@ -510,7 +510,7 @@ function buildEntryHtml(
     if (type === "npc") {
         if (attrs.title) metaParts.push(attrs.title);
         if (attrs.race) metaParts.push(attrs.race);
-        if (attrs.role) metaParts.push(attrs.role);
+        if (npcClassLine(attrs)) metaParts.push(npcClassLine(attrs));
     } else if (type === "location") {
         if (attrs.locationType) metaParts.push(attrs.locationType);
     } else if (type === "faction") {
@@ -578,7 +578,7 @@ function buildSnapshotEntryHtml(
     if (type === "npc") {
         if (attrs.title) metaParts.push(attrs.title);
         if (attrs.race) metaParts.push(attrs.race);
-        if (attrs.role) metaParts.push(attrs.role);
+        if (npcClassLine(attrs)) metaParts.push(npcClassLine(attrs));
     } else if (type === "location") {
         if (attrs.locationType) metaParts.push(attrs.locationType);
     } else if (type === "faction") {
