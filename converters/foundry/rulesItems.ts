@@ -105,6 +105,7 @@ export function convertReference(doc: FoundryDoc, ctx: ConvertContext): Referenc
   const s = doc.system ?? {}
   const facts: ReferenceEntry['facts'] = {}
   let features: ReferenceEntry['features']
+  let progression: ReferenceEntry['progression']
   const set = (k: string, v: string | number | string[] | undefined | null) => {
     if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) return
     facts[k] = v
@@ -140,6 +141,10 @@ export function convertReference(doc: FoundryDoc, ctx: ConvertContext): Referenc
         .filter(f => f?.name)
         .map(f => ({ level: Number(f.level) || 1, name: String(f.name) }))
         .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name))
+      progression = levelLists(s, {
+        classFeats: 'classFeatLevels', skillFeats: 'skillFeatLevels', generalFeats: 'generalFeatLevels',
+        ancestryFeats: 'ancestryFeatLevels', skillIncreases: 'skillIncreaseLevels',
+      })
       break
     case 'deity': {
       set('Category', s.category)
@@ -164,5 +169,16 @@ export function convertReference(doc: FoundryDoc, ctx: ConvertContext): Referenc
     description: text(s.description?.value, ctx),
     facts,
     ...(features?.length ? { features } : {}),
+    ...(progression ? { progression } : {}),
   }
+}
+
+/** A class's `{ value: [1, 2, 4 …] }` level lists; undefined when it has none. */
+function levelLists<K extends string>(s: any, keys: Record<K, string>): Partial<Record<K, number[]>> | undefined {
+  const out: Partial<Record<K, number[]>> = {}
+  for (const [k, src] of Object.entries<string>(keys)) {
+    const v = s[src]?.value
+    if (Array.isArray(v)) out[k as K] = v.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 20).sort((a, b) => a - b)
+  }
+  return Object.keys(out).length ? out : undefined
 }

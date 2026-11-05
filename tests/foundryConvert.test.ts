@@ -153,6 +153,7 @@ describe('Foundry converter — reference kinds', () => {
     expect(as<ReferenceEntry>(convert('Skilled Human')).facts).toEqual({ Ancestry: 'Human' })
     expect(as<ReferenceEntry>(convert('Acolyte')).facts).toMatchObject({ 'Trained skills': ['religion', 'Scribing Lore'], Feat: ['Student of the Canon'] })
     expect(as<ReferenceEntry>(convert('Fighter')).facts).toMatchObject({ 'HP per level': 10, Perception: 'expert', Will: 'trained' })
+    expect(as<ReferenceEntry>(convert('Fighter')).progression).toMatchObject({ classFeats: [1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20], generalFeats: [3, 7, 11, 15, 19] })
     expect(as<ReferenceEntry>(convert('Pharasma')).facts).toMatchObject({ 'Favored weapon': ['dagger'], 'Cleric spells': ['1: Mindlink', '3: Ghostly Weapon', '4: Vision of Death'] })
   })
 })

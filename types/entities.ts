@@ -11,6 +11,14 @@ export interface NpcAttributes {
   isAlive?: boolean
   isPlayerCharacter?: boolean
   status?: string
+  /** Level overview (NpcProgression.vue): a compendium entry's id, or only a name for one made up for this NPC.
+   *  The second class is the dual-class one. */
+  ancestryId?: string
+  ancestryName?: string
+  classId?: string
+  className?: string
+  classId2?: string
+  className2?: string
 }
 
 export interface MapPin {

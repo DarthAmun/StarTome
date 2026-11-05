@@ -214,6 +214,8 @@ Reference entries: rules text in `description`, quick facts in `facts` (string, 
 
 Class only, optional: `features`, the class features by level: `[{ "level": 1, "name": "Domain" }, { "level": 7, "name": "Expert Spellcaster" }]`. Each name should match a `classfeature` feat in the file.
 
+Class only, optional: `progression`, the levels the class gets its feats and skill increases at. Leave out what follows the usual table: class feats at 1 and every even level, skill feats at every even level, general feats at 3, 7, 11, 15, 19, ancestry feats at 1, 5, 9, 13, 17, skill increases at 3, 5 … 19. A class with a skill feat every level: `"progression": { "skillFeats": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20] }`.
+
 ```json
 { "kind": "ancestry", "facts": { "HP": 8, "Size": "Medium", "Speed": "25 feet", "Attribute boosts": ["Constitution", "Wisdom", "Free"], "Languages": ["Common", "Ysoki"] } }
 ```

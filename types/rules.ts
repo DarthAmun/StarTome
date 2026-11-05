@@ -249,9 +249,19 @@ export interface ReferenceEntry extends RulesEntityBase {
   facts: Record<string, string | number | string[]>
   /** Class: its class features by level (names of feat entries). */
   features?: ClassFeatureRef[]
+  /** Class: the levels its feat slots and skill increases come at (rules/progression.ts has the defaults). */
+  progression?: Partial<ClassProgression>
 }
 
 export interface ClassFeatureRef { level: number; name: string }
+
+export interface ClassProgression {
+  classFeats: number[]
+  skillFeats: number[]
+  generalFeats: number[]
+  ancestryFeats: number[]
+  skillIncreases: number[]
+}
 
 export type GiftTier = 'minor' | 'major' | 'grand'
 export const GIFT_TIERS: GiftTier[] = ['minor', 'major', 'grand']

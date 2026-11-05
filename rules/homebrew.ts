@@ -462,6 +462,10 @@ const KIND_SHAPES: Record<RulesKind, Shape> = {
   class: {
     facts: req(record(either(num, str, strArr))),
     features: opt(arrOf(shape({ level: req(num, 1), name: req(str) }))),
+    progression: opt(shape({
+      classFeats: opt(arrOf(num)), skillFeats: opt(arrOf(num)), generalFeats: opt(arrOf(num)),
+      ancestryFeats: opt(arrOf(num)), skillIncreases: opt(arrOf(num)),
+    })),
   },
   deity: { facts: req(record(either(num, str, strArr))) },
   relicGift: {

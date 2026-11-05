@@ -18,6 +18,15 @@
                 </button>
                 <button
                     class="hdr-btn"
+                    :class="{ active: showProgression }"
+                    title="What the class and ancestry give at each level"
+                    @click="showProgression = !showProgression"
+                >
+                    <OhVueIcon name="gi-upgrade" scale="0.8" />
+                    <span>Progression</span>
+                </button>
+                <button
+                    class="hdr-btn"
                     title="Record Historical State"
                     @click="showCreateDialog = true"
                 >
@@ -33,6 +42,14 @@
                 :model-value="draftAttributes"
                 @update:model-value="onAttributesChange"
                 @toggle-pc="onTogglePc"
+            />
+        </div>
+
+        <div v-if="showProgression && entity" class="attributes-pane progression-pane">
+            <NpcProgression
+                :attrs="displayAttrs"
+                :campaign-id="props.campaignId"
+                @update="(patch) => onAttributesChange({ ...draftAttributes, ...patch } as EntityAttributes)"
             />
         </div>
 
@@ -123,6 +140,7 @@ const attrSave = useDebouncedSave(500);
 
 // ── Attributes panel ──────────────────────────────────────────────────────────
 const showAttributes = ref(false);
+const showProgression = ref(false);
 
 // ── Snapshot state ────────────────────────────────────────────────────────────
 const viewingSnapshot = ref<EntitySnapshot | null>(null);
@@ -285,6 +303,10 @@ function onSnapshotSaved() {}
     padding: 18px 20px;
     border-bottom: 1px solid var(--border);
     max-height: 40vh;
+}
+
+.progression-pane {
+    max-height: 60vh;
 }
 
 .npc-card-editor {
