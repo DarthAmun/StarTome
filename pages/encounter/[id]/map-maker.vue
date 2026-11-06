@@ -78,17 +78,20 @@
           </template>
           <div v-if="shownAssets.length" class="mm-assets">
             <div
-              v-for="a in shownAssets" :key="a.id"
+              v-for="a in visibleAssets" :key="a.id"
               class="mm-asset" :class="{ active: placing?.id === a.id }" :title="`${a.name}: click, then click the map`"
               @click="startPlacing(a)"
             >
-              <img v-if="assetUrls[a.image]" :src="assetUrls[a.image]" :alt="a.name" />
+              <img v-if="assetUrls[a.image]" :src="assetUrls[a.image]" :alt="a.name" decoding="async" />
               <span>{{ a.name }}</span>
               <button class="mm-asset-del" title="Remove from the library (placed copies stay)" @click.stop="deleteAsset(a)">×</button>
             </div>
           </div>
-          <p v-else-if="assets.length" class="mm-hint">No assets match.</p>
-          <p v-else class="mm-hint">
+          <button v-if="shownAssets.length > visibleAssets.length" class="mm-btn mm-small mm-more" @click="assetLimit += LIBRARY_PAGE">
+            Show more ({{ shownAssets.length - visibleAssets.length }} left)
+          </button>
+          <p v-else-if="assets.length && !shownAssets.length" class="mm-hint">No assets match.</p>
+          <p v-else-if="!assets.length" class="mm-hint">
             Import PNG, WebP or SVG images with transparent backgrounds: furniture, trees, rugs, statues.
             Pick single files or a whole folder, or drop them on the page. Subfolders become folders here.
           </p>
@@ -156,7 +159,7 @@ import {
   paintCells, paintRoom, propAt, readBattleMap, rectCells, resizeMap, restackProp, snap, tileByChar, tileChar, toPropFrame, updateProp,
   type BattleMap, type MapProp, type TileId,
 } from '~/rules/battlemap'
-import { resolveImage } from '~/rules/images'
+import { imageRefId, isImageRef, resolveImage, resolveThumb } from '~/rules/images'
 import { battleMapPng, drawBattleMap, drawProp } from '~/utils/battlemapDraw'
 import { droppedImageFiles, fileToAssetImage, pickImageFiles, pickImageFolder } from '~/utils/image'
 import { assetFolder, assetFolders, assetKey, assetName, filterAssets, type AssetSource } from '~/rules/mapAssets'
@@ -204,7 +207,7 @@ let dragStart: [number, number] | null = null
 let strokeStart: BattleMap | null = null
 
 // ── Assets ──────────────────────────────────────────────────────────────────
-const assets = ref<DbMapAsset[]>([])
+const assets = shallowRef<DbMapAsset[]>([])
 const assetUrls = ref<Record<string, string>>({})
 const importing = ref(false)
 const importDone = ref(0)
@@ -215,6 +218,12 @@ const folderFilter = ref<string | null>(null)
 const assetQuery = ref('')
 const folders = computed(() => assetFolders(assets.value))
 const shownAssets = computed(() => filterAssets(assets.value, folderFilter.value, assetQuery.value))
+/** Libraries run to thousands of assets: render (and load thumbnails for) a page at a time. */
+const LIBRARY_PAGE = 120
+const assetLimit = ref(LIBRARY_PAGE)
+const visibleAssets = computed(() => shownAssets.value.slice(0, assetLimit.value))
+watch([folderFilter, assetQuery], () => { assetLimit.value = LIBRARY_PAGE })
+watch(visibleAssets, list => { for (const a of list) loadThumb(a.image) }, { immediate: true })
 /** The library asset the next click places. */
 const placing = shallowRef<DbMapAsset | null>(null)
 const selectedId = ref<string | null>(null)
@@ -232,7 +241,6 @@ function loadImage(ref: string): Promise<void> {
   if (!p) {
     p = resolveImage(ref).then(async url => {
       if (!url) return
-      assetUrls.value = { ...assetUrls.value, [ref]: url }
       const img = new Image()
       img.src = url
       await img.decode()
@@ -244,9 +252,16 @@ function loadImage(ref: string): Promise<void> {
   return p
 }
 
+/** A small WebP thumbnail (made once, kept on the image row); the full image is decoded only when placed (loadImage). */
+function loadThumb(ref: string) {
+  if (ref in assetUrls.value) return
+  assetUrls.value[ref] = ''
+  const thumb = isImageRef(ref) ? resolveThumb(imageRefId(ref)) : resolveImage(ref)
+  thumb.then((url) => { if (url) assetUrls.value[ref] = url }).catch(() => {})
+}
+
 async function loadAssets() {
   assets.value = await dbApi.mapAssets.list()
-  for (const a of assets.value) loadImage(a.image)
 }
 
 async function importFiles() {
@@ -344,6 +359,7 @@ async function deleteAsset(a: DbMapAsset) {
 
 function startPlacing(a: DbMapAsset) {
   placing.value = placing.value?.id === a.id ? null : a
+  if (placing.value) loadImage(a.image)
   selectedId.value = null
   scheduleDraw()
 }
@@ -941,6 +957,7 @@ async function save() {
   font-size: 12px;
 }
 .mm-folder-del { width: 100%; margin-bottom: 6px; }
+.mm-more { width: 100%; margin-top: 6px; }
 .mm-page.mm-dropping { outline: 3px dashed var(--accent); outline-offset: -3px; }
 .mm-assets {
   max-height: 360px;

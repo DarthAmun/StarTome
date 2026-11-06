@@ -32,9 +32,14 @@ export function assetKey(folder: string | undefined, name: string): string {
   return `${(folder ?? '').toLowerCase()}\n${name.toLowerCase()}`
 }
 
-/** The folders in the library, sorted; '' (loose files) is left out. */
+/** The folders in the library with their parents ("Pack / Trees" brings "Pack"), in natural order ("Set 2" before "Set 10"); '' (loose files) is left out. */
 export function assetFolders(assets: { folder?: string }[]): string[] {
-  return [...new Set(assets.map(a => a.folder ?? '').filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  const all = new Set<string>()
+  for (const a of assets) {
+    const parts = (a.folder ?? '').split(' / ').filter(Boolean)
+    for (let i = 1; i <= parts.length; i++) all.add(parts.slice(0, i).join(' / '))
+  }
+  return [...all].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
 }
 
 /** Folder filter: null = everything, '' = loose files, otherwise that folder and its subfolders. Search matches name or folder. */

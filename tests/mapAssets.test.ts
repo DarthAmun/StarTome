@@ -25,6 +25,7 @@ describe('map asset folders', () => {
       { name: 'barrel' },
     ]
     expect(assetFolders(lib)).toEqual(['Forest', 'Forest / Trees', 'Forester'])
+    expect(assetFolders([{ folder: 'Pack / Set 10' }, { folder: 'Pack / Set 2' }])).toEqual(['Pack', 'Pack / Set 2', 'Pack / Set 10'])
     expect(filterAssets(lib, 'Forest', '').map(a => a.name)).toEqual(['oak', 'fern'])
     expect(filterAssets(lib, '', '').map(a => a.name)).toEqual(['barrel'])
     expect(filterAssets(lib, null, 'trees').map(a => a.name)).toEqual(['oak'])
