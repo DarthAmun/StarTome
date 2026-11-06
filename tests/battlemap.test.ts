@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
 import { dbApi, getDb } from '~/composables/useDb'
 import {
-  blankMap, EXPORT_CELL_PX, floodFill, getTile, mapWalls, paintRoom, readBattleMap, resizeMap, type BattleMap,
+  blankMap, EXPORT_CELL_PX, floodFill, TILES, getTile, mapWalls, paintRoom, readBattleMap, resizeMap, type BattleMap,
 } from '~/rules/battlemap'
 
 /** A map from rows of tile characters. */
@@ -31,6 +31,11 @@ describe('battle map tiles', () => {
     const m = resizeMap(grid('ssss', 'ssss', 'ssss', 'ssss'), 5, 4)
     expect(getTile(m, 3, 3)).toBe('s')
     expect(getTile(m, 4, 0)).toBe('.')
+  })
+
+  it('gives every tile its own character and id', () => {
+    expect(new Set(TILES.map(t => t.char)).size).toBe(TILES.length)
+    expect(new Set(TILES.map(t => t.id)).size).toBe(TILES.length)
   })
 
   it('reads only well-formed maps', () => {

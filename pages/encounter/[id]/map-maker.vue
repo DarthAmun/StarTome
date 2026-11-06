@@ -445,16 +445,23 @@ async function save() {
   background: var(--accent-bg);
 }
 .mm-tiles {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 3px;
 }
 .mm-tile {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 3px 6px;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 5px;
+  font-size: 11px;
   text-align: left;
+}
+.mm-tile span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .mm-swatch {
   width: 28px;

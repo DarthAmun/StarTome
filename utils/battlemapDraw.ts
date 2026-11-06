@@ -118,6 +118,109 @@ function drawCell(ctx: CanvasRenderingContext2D, map: BattleMap, c: number, r: n
       ctx.stroke()
       break
     }
+    case 'carpet': {
+      // Woven border and a faint pattern
+      ctx.strokeStyle = 'rgba(214,170,90,0.35)'
+      ctx.lineWidth = Math.max(1, px / 30)
+      ctx.strokeRect(x + px * 0.12, y + px * 0.12, px * 0.76, px * 0.76)
+      ctx.beginPath()
+      ctx.moveTo(x + px / 2, y + px * 0.3); ctx.lineTo(x + px * 0.7, y + px / 2)
+      ctx.lineTo(x + px / 2, y + px * 0.7); ctx.lineTo(x + px * 0.3, y + px / 2); ctx.closePath()
+      ctx.stroke()
+      break
+    }
+    case 'sand': {
+      ctx.strokeStyle = 'rgba(140,105,50,0.3)'
+      ctx.lineWidth = Math.max(1, px / 45)
+      ctx.beginPath()
+      for (let i = 0; i < 2; i++) {
+        const sy = y + (0.3 + i * 0.4 + (hash(c, r, 170 + i) - 0.5) * 0.15) * px
+        ctx.moveTo(x, sy)
+        ctx.bezierCurveTo(x + px * 0.33, sy - px * 0.08, x + px * 0.66, sy + px * 0.08, x + px, sy)
+      }
+      ctx.stroke()
+      speckle(ctx, c, r, x, y, px, 'rgba(120,90,40,0.25)', 8)
+      break
+    }
+    case 'snow':
+      speckle(ctx, c, r, x, y, px, 'rgba(150,170,190,0.35)', 7)
+      speckle(ctx, c, r + 777, x, y, px, 'rgba(255,255,255,0.9)', 6)
+      break
+    case 'ice': {
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)'
+      ctx.lineWidth = Math.max(1, px / 50)
+      ctx.beginPath()
+      for (let i = 0; i < 3; i++) {
+        const ix = x + hash(c, r, 180 + i) * px
+        const iy = y + hash(c, r, 190 + i) * px
+        ctx.moveTo(ix, iy)
+        ctx.lineTo(ix + (hash(c, r, 200 + i) - 0.5) * px * 0.6, iy + (hash(c, r, 210 + i) - 0.5) * px * 0.6)
+      }
+      ctx.stroke()
+      ctx.fillStyle = 'rgba(255,255,255,0.12)'
+      ctx.fillRect(x, y, px, px * 0.35)
+      break
+    }
+    case 'swamp': {
+      // Murky pools with reeds
+      for (let i = 0; i < 2; i++) {
+        const sx = x + (0.25 + hash(c, r, 220 + i) * 0.5) * px
+        const sy = y + (0.25 + hash(c, r, 230 + i) * 0.5) * px
+        ctx.fillStyle = 'rgba(40,60,45,0.75)'
+        ctx.beginPath(); ctx.ellipse(sx, sy, px * 0.22, px * 0.13, 0, 0, Math.PI * 2); ctx.fill()
+      }
+      ctx.strokeStyle = 'rgba(150,160,80,0.6)'
+      ctx.lineWidth = Math.max(1, px / 45)
+      ctx.beginPath()
+      for (let i = 0; i < 5; i++) {
+        const rx = x + hash(c, r, 240 + i) * px
+        const ry = y + hash(c, r, 250 + i) * px
+        ctx.moveTo(rx, ry); ctx.lineTo(rx + px * 0.02, ry - px * 0.16)
+      }
+      ctx.stroke()
+      break
+    }
+    case 'deepwater': {
+      const g = ctx.createRadialGradient(x + px / 2, y + px / 2, 0, x + px / 2, y + px / 2, px * 0.7)
+      g.addColorStop(0, 'rgba(5,20,35,0.45)')
+      g.addColorStop(1, 'rgba(5,20,35,0)')
+      ctx.fillStyle = g
+      ctx.fillRect(x, y, px, px)
+      ctx.strokeStyle = 'rgba(160,200,230,0.18)'
+      ctx.lineWidth = Math.max(1, px / 40)
+      ctx.beginPath()
+      const wy = y + (0.4 + (hash(c, r, 260) - 0.5) * 0.3) * px
+      ctx.moveTo(x + px * 0.2, wy); ctx.quadraticCurveTo(x + px * 0.5, wy - px * 0.08, x + px * 0.8, wy)
+      ctx.stroke()
+      break
+    }
+    case 'fire': {
+      // Charred ground with flames
+      speckle(ctx, c, r, x, y, px, 'rgba(0,0,0,0.4)', 8)
+      for (let i = 0; i < 3; i++) {
+        const fx = x + (0.2 + hash(c, r, 270 + i) * 0.6) * px
+        const fy = y + (0.45 + hash(c, r, 280 + i) * 0.4) * px
+        const h = px * (0.3 + hash(c, r, 290 + i) * 0.2)
+        flame(ctx, fx, fy, h * 0.45, h, 'rgba(230,80,20,0.9)')
+        flame(ctx, fx, fy, h * 0.25, h * 0.6, 'rgba(255,200,60,0.95)')
+      }
+      break
+    }
+    case 'magma': {
+      // Dark crust cracked over glowing rock
+      const g = ctx.createRadialGradient(x + px / 2, y + px / 2, px * 0.1, x + px / 2, y + px / 2, px * 0.75)
+      g.addColorStop(0, 'rgba(255,120,20,0.85)')
+      g.addColorStop(1, 'rgba(160,30,10,0.6)')
+      ctx.fillStyle = g
+      ctx.fillRect(x, y, px, px)
+      ctx.fillStyle = 'rgba(35,18,14,0.92)'
+      for (let i = 0; i < 4; i++) {
+        const cx = x + (i % 2 ? 0.7 : 0.28) * px + (hash(c, r, 300 + i) - 0.5) * px * 0.12
+        const cy = y + (i < 2 ? 0.28 : 0.72) * px + (hash(c, r, 310 + i) - 0.5) * px * 0.12
+        ctx.beginPath(); ctx.ellipse(cx, cy, px * 0.2, px * 0.17, hash(c, r, 320 + i) * Math.PI, 0, Math.PI * 2); ctx.fill()
+      }
+      break
+    }
     case 'wall': {
       // Brick courses with a lighter top edge
       ctx.strokeStyle = 'rgba(0,0,0,0.45)'
@@ -150,6 +253,16 @@ function drawCell(ctx: CanvasRenderingContext2D, map: BattleMap, c: number, r: n
     case 'void':
       break
   }
+}
+
+function flame(ctx: CanvasRenderingContext2D, x: number, base: number, w: number, h: number, color: string) {
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.moveTo(x - w / 2, base)
+  ctx.quadraticCurveTo(x - w / 2, base - h * 0.55, x, base - h)
+  ctx.quadraticCurveTo(x + w / 2, base - h * 0.55, x + w / 2, base)
+  ctx.closePath()
+  ctx.fill()
 }
 
 function speckle(ctx: CanvasRenderingContext2D, c: number, r: number, x: number, y: number, px: number, color: string, n: number) {

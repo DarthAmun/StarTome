@@ -7,7 +7,9 @@
  */
 import type { DbEncounterWall } from '~/db/schema'
 
-export type TileId = 'void' | 'stone' | 'wood' | 'dirt' | 'grass' | 'rubble' | 'water' | 'wall' | 'door'
+export type TileId =
+  | 'void' | 'stone' | 'wood' | 'carpet' | 'dirt' | 'grass' | 'sand' | 'snow' | 'ice' | 'rubble'
+  | 'swamp' | 'water' | 'deepwater' | 'fire' | 'magma' | 'wall' | 'door'
 
 export interface TileDef {
   id: TileId
@@ -24,8 +26,16 @@ export const TILES: TileDef[] = [
   { id: 'wood',   char: 'w', label: 'Wood floor',  color: '#9a6b3f', solid: false },
   { id: 'dirt',   char: 'd', label: 'Dirt',        color: '#7b6247', solid: false },
   { id: 'grass',  char: 'g', label: 'Grass',       color: '#5d7d3a', solid: false },
+  { id: 'carpet', char: 'c', label: 'Carpet',      color: '#7a2630', solid: false },
+  { id: 'sand',   char: 'n', label: 'Sand',        color: '#c9b07a', solid: false },
+  { id: 'snow',   char: 'o', label: 'Snow',        color: '#dfe6ec', solid: false },
+  { id: 'ice',    char: 'i', label: 'Ice',         color: '#9cc9dc', solid: false },
   { id: 'rubble', char: 'r', label: 'Rubble (difficult)', color: '#6f6a60', solid: false },
+  { id: 'swamp',  char: 'm', label: 'Swamp',       color: '#4a5530', solid: false },
   { id: 'water',  char: 'a', label: 'Water',       color: '#3b6e8f', solid: false },
+  { id: 'deepwater', char: 'q', label: 'Deep water', color: '#1f4563', solid: false },
+  { id: 'fire',   char: 'f', label: 'Fire',        color: '#3a2418', solid: false },
+  { id: 'magma',  char: 'l', label: 'Magma',       color: '#2b1410', solid: false },
   { id: 'wall',   char: '#', label: 'Wall',        color: '#3a3631', solid: true },
   { id: 'door',   char: '+', label: 'Door',        color: '#8a8478', solid: false },
   { id: 'void',   char: '.', label: 'Void',        color: '#121212', solid: true },
