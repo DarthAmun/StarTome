@@ -63,6 +63,16 @@ describe('battle map walls', () => {
     expect(upright).toEqual([{ points: [{ x: 0.5, y: 1 }, { x: 0.5, y: 2 }], coverType: 'door' }])
   })
 
+  it('turns every square of a wide door along its wall', () => {
+    const across = mapWalls(grid('#++#', 'ssss')).filter(w => w.coverType === 'door')
+    expect(across.map(w => w.points[0].y === w.points[1].y)).toEqual([true, true])
+    const upright = mapWalls(grid('#s', '+s', '+s', '#s')).filter(w => w.coverType === 'door')
+    expect(upright).toEqual([
+      { points: [{ x: 0.5, y: 1 }, { x: 0.5, y: 2 }], coverType: 'door' },
+      { points: [{ x: 0.5, y: 2 }, { x: 0.5, y: 3 }], coverType: 'door' },
+    ])
+  })
+
   it('makes no walls between two solid tiles or along the map border', () => {
     expect(mapWalls(grid('#.', '.#'))).toEqual([])
     expect(mapWalls(grid('ss', 'ss'))).toEqual([])

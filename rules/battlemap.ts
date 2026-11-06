@@ -192,11 +192,17 @@ export function mapWalls(map: BattleMap): GeneratedWall[] {
   return walls
 }
 
-/** Whether a door tile runs across the cell left to right (walls left and right of it). */
+/**
+ * Whether a door tile runs across the cell left to right: it follows the wall
+ * it sits in, the axis with more wall (or door, for doors wider than one
+ * square) next to it. Left to right when that's even.
+ */
 export function doorIsHorizontal(map: BattleMap, col: number, row: number): boolean {
-  const sides = isSolid(map, col - 1, row) && isSolid(map, col + 1, row)
-  const ends = isSolid(map, col, row - 1) && isSolid(map, col, row + 1)
-  return sides || !ends
+  const door = tileChar('door')
+  const inWall = (c: number, r: number) => isSolid(map, c, r) || getTile(map, c, r) === door
+  const across = Number(inWall(col - 1, row)) + Number(inWall(col + 1, row))
+  const upright = Number(inWall(col, row - 1)) + Number(inWall(col, row + 1))
+  return across >= upright
 }
 
 function doorLine(map: BattleMap, c: number, r: number): { x: number; y: number }[] {
