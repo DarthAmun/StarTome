@@ -57,7 +57,32 @@ export interface BattleMap {
   rows: number
   /** cols × rows characters, row by row (TILES[].char). */
   tiles: string
+  /** Placed assets, drawn in array order within their layer. */
+  props?: MapProp[]
 }
+
+/**
+ * An asset placed on the map. The floor layer lies on the tiles, under the
+ * walls' shadows (rugs, cracks); the object layer stands on top (tables, trees).
+ */
+export type PropLayer = 'floor' | 'object'
+
+export interface MapProp {
+  id: string
+  image: string          // "img:<id>"
+  /** Centre, in squares from the map's top-left. */
+  x: number
+  y: number
+  /** Size in squares, before rotation. */
+  w: number
+  h: number
+  /** Degrees clockwise. */
+  rotation: number
+  layer: PropLayer
+  flip?: boolean
+}
+
+export const PROP_MIN_SIZE = 0.25
 
 export const MIN_SIZE = 4
 export const MAX_SIZE = 80
@@ -74,13 +99,82 @@ export function blankMap(cols: number, rows: number, fill: TileId = 'stone'): Ba
   return { cols, rows, tiles: tileChar(fill).repeat(cols * rows) }
 }
 
-/** A map read from an encounter row: anything malformed becomes null. */
+/** A map read from an encounter row: anything malformed becomes null, malformed props are dropped. */
 export function readBattleMap(v: unknown): BattleMap | null {
   if (!v || typeof v !== 'object') return null
-  const { cols, rows, tiles } = v as Partial<BattleMap>
+  const { cols, rows, tiles, props } = v as Partial<BattleMap>
   if (typeof cols !== 'number' || typeof rows !== 'number' || typeof tiles !== 'string') return null
   if (cols !== clampSize(cols) || rows !== clampSize(rows) || tiles.length !== cols * rows) return null
-  return { cols, rows, tiles }
+  const placed = Array.isArray(props) ? props.filter(isProp) : []
+  return placed.length ? { cols, rows, tiles, props: placed } : { cols, rows, tiles }
+}
+
+function isProp(p: unknown): p is MapProp {
+  if (!p || typeof p !== 'object') return false
+  const q = p as Partial<MapProp>
+  const num = (n: unknown) => typeof n === 'number' && Number.isFinite(n)
+  return typeof q.id === 'string' && typeof q.image === 'string' && num(q.x) && num(q.y)
+    && num(q.w) && num(q.h) && q.w! > 0 && q.h! > 0 && num(q.rotation) && (q.layer === 'floor' || q.layer === 'object')
+}
+
+/** Image refs the map's props show (backups and image cleanup keep them). */
+export function propImages(map: unknown): string[] {
+  return readBattleMap(map)?.props?.map(p => p.image) ?? []
+}
+
+/** Props in drawing order: the floor layer, then objects. */
+export function propsInOrder(map: BattleMap): MapProp[] {
+  const props = map.props ?? []
+  return [...props.filter(p => p.layer === 'floor'), ...props.filter(p => p.layer === 'object')]
+}
+
+/** A point in squares, in the prop's own frame (centre at 0,0, not rotated). */
+export function toPropFrame(p: MapProp, x: number, y: number): { x: number; y: number } {
+  const a = (-p.rotation * Math.PI) / 180
+  const dx = x - p.x
+  const dy = y - p.y
+  return { x: dx * Math.cos(a) - dy * Math.sin(a), y: dx * Math.sin(a) + dy * Math.cos(a) }
+}
+
+/** A point in the prop's own frame back in map squares. */
+export function fromPropFrame(p: MapProp, x: number, y: number): { x: number; y: number } {
+  const a = (p.rotation * Math.PI) / 180
+  return { x: p.x + x * Math.cos(a) - y * Math.sin(a), y: p.y + x * Math.sin(a) + y * Math.cos(a) }
+}
+
+/** The topmost prop under a point (squares), objects before floor. */
+export function propAt(map: BattleMap, x: number, y: number): MapProp | null {
+  const order = propsInOrder(map)
+  for (let i = order.length - 1; i >= 0; i--) {
+    const local = toPropFrame(order[i], x, y)
+    if (Math.abs(local.x) <= order[i].w / 2 && Math.abs(local.y) <= order[i].h / 2) return order[i]
+  }
+  return null
+}
+
+/** The map with one prop changed (by id); `null` removes it. */
+export function updateProp(map: BattleMap, id: string, next: MapProp | null): BattleMap {
+  const props = (map.props ?? []).flatMap(p => (p.id !== id ? [p] : next ? [next] : []))
+  return { ...map, props }
+}
+
+/** The prop moved one step up (+1) or down (-1) within its layer. */
+export function restackProp(map: BattleMap, id: string, step: 1 | -1): BattleMap {
+  const props = [...(map.props ?? [])]
+  const i = props.findIndex(p => p.id === id)
+  if (i < 0) return map
+  // Swap with the nearest prop of the same layer in that direction
+  for (let j = i + step; j >= 0 && j < props.length; j += step) {
+    if (props[j].layer !== props[i].layer) continue
+    ;[props[i], props[j]] = [props[j], props[i]]
+    return { ...map, props }
+  }
+  return map
+}
+
+/** Rounds to a step (0.5 squares for positions, 15° for angles). */
+export function snap(v: number, step: number): number {
+  return Math.round(v / step) * step
 }
 
 export function getTile(map: BattleMap, col: number, row: number): string {
@@ -88,7 +182,7 @@ export function getTile(map: BattleMap, col: number, row: number): string {
   return map.tiles[row * map.cols + col]
 }
 
-/** The map grown or cut to a new size, keeping the top-left; new cells are void. */
+/** The map grown or cut to a new size, keeping the top-left; new cells are void. Props stay where they are. */
 export function resizeMap(map: BattleMap, cols: number, rows: number): BattleMap {
   cols = clampSize(cols)
   rows = clampSize(rows)
@@ -96,7 +190,7 @@ export function resizeMap(map: BattleMap, cols: number, rows: number): BattleMap
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) tiles += getTile(map, c, r)
   }
-  return { cols, rows, tiles }
+  return { ...map, cols, rows, tiles }
 }
 
 /** The map with the given cells set to `char` (cells outside the map are skipped). */

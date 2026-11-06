@@ -3,7 +3,7 @@
  * and for the image the encounter gets. Textures are drawn from a hash of the
  * cell, so a map looks the same every time it is drawn.
  */
-import { doorIsHorizontal, getTile, tileByChar, type BattleMap } from '~/rules/battlemap'
+import { doorIsHorizontal, getTile, tileByChar, type BattleMap, type MapProp } from '~/rules/battlemap'
 
 /** 0…1, the same for the same cell and salt. */
 function hash(c: number, r: number, salt: number): number {
@@ -21,6 +21,8 @@ function shade(hex: string, amount: number): string {
 export interface DrawOptions {
   /** Grid lines between cells (the editor; the VTT draws its own). */
   grid?: boolean
+  /** Loaded images of the props, by image ref; props whose image is missing are skipped. */
+  images?: Map<string, CanvasImageSource>
 }
 
 export function drawBattleMap(ctx: CanvasRenderingContext2D, map: BattleMap, px: number, opts: DrawOptions = {}) {
@@ -29,7 +31,10 @@ export function drawBattleMap(ctx: CanvasRenderingContext2D, map: BattleMap, px:
   for (let r = 0; r < map.rows; r++) {
     for (let c = 0; c < map.cols; c++) drawCell(ctx, map, c, r, px)
   }
+  const props = map.props ?? []
+  for (const p of props) if (p.layer === 'floor') drawProp(ctx, p, px, opts.images)
   drawWallShadows(ctx, map, px)
+  for (const p of props) if (p.layer === 'object') drawProp(ctx, p, px, opts.images)
   if (opts.grid) {
     ctx.strokeStyle = 'rgba(0,0,0,0.28)'
     ctx.lineWidth = 1
@@ -298,11 +303,23 @@ function drawWallShadows(ctx: CanvasRenderingContext2D, map: BattleMap, px: numb
   }
 }
 
+/** One prop at its place, rotation and flip (skipped while its image isn't loaded). */
+export function drawProp(ctx: CanvasRenderingContext2D, p: MapProp, px: number, images?: Map<string, CanvasImageSource>) {
+  const img = images?.get(p.image)
+  if (!img) return
+  ctx.save()
+  ctx.translate(p.x * px, p.y * px)
+  ctx.rotate((p.rotation * Math.PI) / 180)
+  if (p.flip) ctx.scale(-1, 1)
+  ctx.drawImage(img, (-p.w / 2) * px, (-p.h / 2) * px, p.w * px, p.h * px)
+  ctx.restore()
+}
+
 /** The map as a PNG, `px` pixels per cell. */
-export function battleMapPng(map: BattleMap, px: number): Promise<Blob> {
+export function battleMapPng(map: BattleMap, px: number, images?: Map<string, CanvasImageSource>): Promise<Blob> {
   const canvas = document.createElement('canvas')
   canvas.width = map.cols * px
   canvas.height = map.rows * px
-  drawBattleMap(canvas.getContext('2d')!, map, px)
+  drawBattleMap(canvas.getContext('2d')!, map, px, { images })
   return new Promise((resolve, reject) => canvas.toBlob(b => (b ? resolve(b) : reject(new Error('The map image could not be made'))), 'image/png'))
 }

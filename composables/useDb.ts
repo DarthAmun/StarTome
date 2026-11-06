@@ -7,7 +7,7 @@
  * Row types, the schema and `getDb` are in db/schema.ts and re-exported here,
  * so existing imports from this module keep working.
  */
-import { getDb, now, parseJsonObject, type DbEncounterToken, type DbEncounterWall, type DbEntity, type DbEntitySnapshot, type DbEntityConnection, type DbGraphLayout, type DbToken } from '~/db/schema'
+import { getDb, now, parseJsonObject, type DbEncounterToken, type DbEncounterWall, type DbEntity, type DbEntitySnapshot, type DbEntityConnection, type DbGraphLayout, type DbMapAsset, type DbToken } from '~/db/schema'
 import type { CampaignRules, GameId } from '~/types/game'
 import type { RulesEntity } from '~/types/rules'
 import type { Adjustment } from '~/rules/combat'
@@ -288,6 +288,25 @@ export const dbApi = {
     async setPlayerFlagForLibraryToken(tokenId: number, isPlayer: boolean) {
       const db = getDb()
       await db.encounterTokens.where('token_id').equals(tokenId).modify({ is_player_token: isPlayer ? 1 : 0 })
+    },
+  },
+
+  // ── Map assets (map maker library) ────────────────────────────────────
+  mapAssets: {
+    async list(): Promise<DbMapAsset[]> {
+      return getDb().mapAssets.orderBy('name').toArray()
+    },
+    async add(name: string, image: Blob, pxWidth: number, pxHeight: number): Promise<DbMapAsset> {
+      const row: DbMapAsset = { name, image: await storeImage(image), px_width: pxWidth, px_height: pxHeight, created_at: now() }
+      row.id = await getDb().mapAssets.add(row)
+      return row
+    },
+    async rename(id: number, name: string): Promise<void> {
+      await getDb().mapAssets.update(id, { name })
+    },
+    /** Removes it from the library; maps it's placed on keep it (Settings › clean up drops unused images). */
+    async delete(id: number): Promise<void> {
+      await getDb().mapAssets.delete(id)
     },
   },
 

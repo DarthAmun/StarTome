@@ -8,6 +8,7 @@
  */
 import { onScopeDispose, ref, watch, type Ref } from 'vue'
 import { getDb } from '~/composables/useDb'
+import { propImages } from '~/rules/battlemap'
 
 const PREFIX = 'img:'
 
@@ -69,15 +70,19 @@ export async function deleteImage(ref: string): Promise<void> {
   dataUrls.delete(id)
 }
 
-/** Deletes every stored image that no compendium entry or encounter map points at. Returns how many. */
+/** Deletes every stored image that no compendium entry, encounter map or map asset points at. Returns how many. */
 export async function cleanUpUnusedImages(): Promise<number> {
   const db = getDb()
   const used = new Set<string>()
   await db.rules.each(r => {
     for (const v of [r.img, (r as { tokenImg?: string | null }).tokenImg]) if (isImageRef(v)) used.add(imageRefId(v))
   })
-  // Encounter maps live in the store too (and clones share them)
-  await db.encounters.each(e => { if (isImageRef(e.map_source)) used.add(imageRefId(e.map_source)) })
+  // Encounter maps live in the store too (and clones share them), as do the
+  // map maker's assets: in its library and placed on maps
+  await db.encounters.each(e => {
+    for (const v of [e.map_source, ...propImages(e.battlemap)]) if (isImageRef(v)) used.add(imageRefId(v))
+  })
+  await db.mapAssets.each(a => { if (isImageRef(a.image)) used.add(imageRefId(a.image)) })
   const unused = (await db.images.toCollection().primaryKeys()).filter(id => !used.has(id))
   await db.images.bulkDelete(unused)
   for (const id of unused) { urls.delete(id); dataUrls.delete(id) }

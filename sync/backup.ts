@@ -23,8 +23,9 @@ import {
   getDb, now, parseJsonObject, rowValues,
   type DbCampaign, type DbCharacter, type DbEncounter, type DbEncounterToken, type DbEncounterWall, type DbEntity,
   type DbEntityConnection, type DbEntityLink, type DbEntitySnapshot, type DbGraphLayout, type DbInventory, type DbLevelUp,
-  type DbPurse, type DbToken, type DbTreasureAward, type DbXpAward,
+  type DbMapAsset, type DbPurse, type DbToken, type DbTreasureAward, type DbXpAward,
 } from '~/composables/useDb'
+import { propImages } from '~/rules/battlemap'
 import { extractLinks } from '~/composables/useEntityParser'
 import { imageIdsOf, planRulesImport, rulesForExport, type ExportedImage, type RulesOverlay } from '~/converters/export'
 import { blobToDataUrl, dataUrlToBlob, imageRefId, isImageRef } from '~/rules/images'
@@ -43,6 +44,7 @@ export interface CampaignRows {
   entityConnections: DbEntityConnection[]
   graphLayouts: DbGraphLayout[]
   tokens: DbToken[]
+  mapAssets: DbMapAsset[]
   characters: DbCharacter[]
   levelUps: DbLevelUp[]
   xpAwards: DbXpAward[]
@@ -54,7 +56,7 @@ export type CampaignTable = keyof CampaignRows
 
 /** Write order: every table comes after the tables its references point to. */
 export const CAMPAIGN_TABLES: CampaignTable[] = [
-  'campaigns', 'entities', 'tokens', 'encounters', 'encounterTokens', 'encounterWalls',
+  'campaigns', 'entities', 'tokens', 'mapAssets', 'encounters', 'encounterTokens', 'encounterWalls',
   'entityLinks', 'entitySnapshots', 'entityConnections', 'graphLayouts',
   'characters', 'levelUps', 'xpAwards', 'treasureAwards', 'inventory', 'purses',
 ]
@@ -62,7 +64,7 @@ export const CAMPAIGN_TABLES: CampaignTable[] = [
 export const TABLE_LABELS: Record<CampaignTable | 'rules' | 'rulesOverlays', string> = {
   campaigns: 'Campaigns', encounters: 'Encounters', encounterTokens: 'Encounter Tokens', encounterWalls: 'Encounter Walls',
   entities: 'Notes & Entities', entityLinks: 'Entity Links', entitySnapshots: 'Entity Snapshots', entityConnections: 'Entity Connections',
-  graphLayouts: 'Graphs', tokens: 'Tokens', characters: 'Party members', levelUps: 'Level-ups', xpAwards: 'XP awards',
+  graphLayouts: 'Graphs', tokens: 'Tokens', mapAssets: 'Map assets', characters: 'Party members', levelUps: 'Level-ups', xpAwards: 'XP awards',
   treasureAwards: 'Treasure awards', inventory: 'Inventory', purses: 'Purses',
   rules: 'Own compendium entries', rulesOverlays: 'Portraits, notes & edits on synced entries',
 }
@@ -110,13 +112,14 @@ export async function exportAllPayload(): Promise<BackupPayload> {
   const db = getDb()
   const rows = Object.fromEntries(await Promise.all(CAMPAIGN_TABLES.map(async t => [t, await db.table(t).toArray()] as const))) as unknown as CampaignRows
   const { entries: rules, overlays: rulesOverlays } = rulesForExport(await db.rules.toArray())
-  const images = await exportImages([...imageIdsOf([...rules, ...rulesOverlays] as unknown as Record<string, unknown>[]), ...mapImageIds(rows.encounters)])
+  const images = await exportImages([...imageIdsOf([...rules, ...rulesOverlays] as unknown as Record<string, unknown>[]), ...mapImageIds(rows.encounters, rows.mapAssets)])
   return { ...header('all'), ...rows, rules, rulesOverlays, images, syncState: await db.syncState.toArray() }
 }
 
-/** Image-store ids of encounter maps. */
-function mapImageIds(encounters: DbEncounter[]): string[] {
-  return encounters.map(e => e.map_source).filter(isImageRef).map(imageRefId)
+/** Image-store ids of encounter maps, the assets placed on them and the map asset library. */
+function mapImageIds(encounters: DbEncounter[], assets: DbMapAsset[] = []): string[] {
+  return [...encounters.flatMap(e => [e.map_source, ...propImages(e.battlemap)]), ...assets.map(a => a.image)]
+    .filter(isImageRef).map(imageRefId)
 }
 
 async function exportImages(ids: string[]): Promise<ExportedImage[]> {
@@ -147,15 +150,18 @@ export async function collectCampaignRows(campaignIds?: number[]): Promise<Campa
   // Library tokens the placements and party members stand on (BUG-03)
   const tokenIds = [...new Set([...encounterTokens.map(t => t.token_id), ...characters.map(c => c.token_id)].filter((id): id is number => id != null))]
   const tokens = (await db.tokens.bulkGet(tokenIds)).filter((t): t is DbToken => !!t)
+  // Library assets placed on the maps, so they can be placed again after an import
+  const placed = new Set(encounters.flatMap(e => propImages(e.battlemap)))
+  const mapAssets = placed.size ? await db.mapAssets.filter(a => placed.has(a.image)).toArray() : []
   return {
     campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots,
-    entityConnections, graphLayouts, tokens, characters, levelUps, xpAwards, treasureAwards, inventory, purses,
+    entityConnections, graphLayouts, tokens, mapAssets, characters, levelUps, xpAwards, treasureAwards, inventory, purses,
   }
 }
 
 export async function exportCampaignsPayload(campaignIds?: number[]): Promise<BackupPayload> {
   const rows = await collectCampaignRows(campaignIds)
-  return { ...header('campaigns'), ...rows, images: await exportImages(mapImageIds(rows.encounters)) }
+  return { ...header('campaigns'), ...rows, images: await exportImages(mapImageIds(rows.encounters, rows.mapAssets)) }
 }
 
 export async function exportTokensPayload(): Promise<BackupPayload> {
@@ -239,6 +245,17 @@ async function writeMerged(rows: Partial<CampaignRows>, opts: MergeOptions, coun
     for (const t of rows.tokens ?? []) {
       const linked = t.linked_entity_id != null ? ent.get(t.linked_entity_id) ?? (keepLinks ? t.linked_entity_id : null) : null
       tok.set(t.id!, await add('tokens', { ...withoutId(t), linked_entity_id: linked }))
+    }
+  }
+
+  // Library assets: placed copies point at the image, not the row, so only
+  // assets whose image this browser's library doesn't have yet are added
+  if (opts.tokens === 'copy' && rows.mapAssets?.length) {
+    const have = new Set((await db.mapAssets.toArray()).map(a => a.image))
+    for (const a of rows.mapAssets) {
+      if (have.has(a.image)) continue
+      have.add(a.image)
+      await add('mapAssets', withoutId(a))
     }
   }
 
@@ -401,7 +418,7 @@ export async function importPayload(payload: BackupPayload, opts: ImportOptions)
   // Compendium: entries by their string id, overlays onto synced rows
   const rulesEntries: RulesEntity[] = opts.sections.has('rules') ? payload.rules ?? [] : []
   const rulesOverlays: RulesOverlay[] = opts.sections.has('rulesOverlays') ? payload.rulesOverlays ?? [] : []
-  const wanted = new Set([...imageIdsOf([...rulesEntries, ...rulesOverlays] as unknown as Record<string, unknown>[]), ...mapImageIds(rows.encounters ?? [])])
+  const wanted = new Set([...imageIdsOf([...rulesEntries, ...rulesOverlays] as unknown as Record<string, unknown>[]), ...mapImageIds(rows.encounters ?? [], rows.mapAssets ?? [])])
   const images = (payload.images ?? []).filter(img => wanted.has(img.id)).map(img => {
     const blob = dataUrlToBlob(img.data)
     return { id: img.id, blob, mime: img.mime || blob.type, createdAt: now() }

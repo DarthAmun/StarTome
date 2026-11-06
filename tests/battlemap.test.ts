@@ -2,8 +2,11 @@ import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
 import { dbApi, getDb } from '~/composables/useDb'
 import {
-  blankMap, EXPORT_CELL_PX, floodFill, TILES, getTile, mapWalls, paintRoom, readBattleMap, resizeMap, type BattleMap,
+  blankMap, EXPORT_CELL_PX, floodFill, TILES, getTile, mapWalls, paintRoom, propAt, propImages, readBattleMap, resizeMap,
+  restackProp, toPropFrame, fromPropFrame, type BattleMap, type MapProp,
 } from '~/rules/battlemap'
+import { cleanUpUnusedImages, storeImage } from '~/rules/images'
+import { CAMPAIGN_TABLES, exportCampaignsPayload, importPayload } from '~/sync/backup'
 
 /** A map from rows of tile characters. */
 function grid(...rows: string[]): BattleMap {
@@ -103,5 +106,72 @@ describe('applying a battle map to an encounter', () => {
     const walls = await dbApi.walls.list(id)
     expect(walls.filter(w => !w.generated)).toHaveLength(1)
     expect(walls.filter(w => w.generated)).toHaveLength(mapWalls(map).length)
+  })
+})
+
+function prop(id: string, extra: Partial<MapProp> = {}): MapProp {
+  return { id, image: `img:${id}`, x: 2, y: 2, w: 2, h: 1, rotation: 0, layer: 'object', ...extra }
+}
+
+describe('battle map assets', () => {
+  it('finds the topmost asset under a point, objects above the floor, rotation included', () => {
+    const map: BattleMap = { ...blankMap(6, 6), props: [prop('table'), prop('rug', { layer: 'floor', w: 4, h: 4 })] }
+    expect(propAt(map, 2.9, 2.2)?.id).toBe('table')
+    expect(propAt(map, 2, 3.5)?.id).toBe('rug')
+    // Turned upright, the 2×1 table covers (2, 2.9) but no longer (2.9, 2)
+    const turned: BattleMap = { ...blankMap(6, 6), props: [prop('table', { rotation: 90 })] }
+    expect(propAt(turned, 2, 2.9)?.id).toBe('table')
+    expect(propAt(turned, 2.9, 2)).toBeNull()
+  })
+
+  it('converts points to and from an asset\'s own frame', () => {
+    const p = prop('a', { rotation: 37, x: 3.2, y: 1.7 })
+    const local = toPropFrame(p, 4, 2.5)
+    const back = fromPropFrame(p, local.x, local.y)
+    expect(back.x).toBeCloseTo(4)
+    expect(back.y).toBeCloseTo(2.5)
+  })
+
+  it('restacks within a layer only', () => {
+    const map: BattleMap = { ...blankMap(4, 4), props: [prop('a'), prop('rug', { layer: 'floor' }), prop('b')] }
+    expect(restackProp(map, 'a', 1).props!.map(p => p.id)).toEqual(['b', 'rug', 'a'])
+    expect(restackProp(map, 'b', 1).props!.map(p => p.id)).toEqual(['a', 'rug', 'b'])
+  })
+
+  it('keeps assets when resizing and drops malformed ones when reading', () => {
+    const map: BattleMap = { ...blankMap(4, 4), props: [prop('a')] }
+    expect(resizeMap(map, 6, 6).props).toHaveLength(1)
+    const read = readBattleMap({ ...map, props: [prop('a'), { id: 'x', image: 'img:x', x: 1 }] })
+    expect(read?.props?.map(p => p.id)).toEqual(['a'])
+    expect(propImages(read)).toEqual(['img:a'])
+  })
+
+  it('keeps the images of placed and library assets in cleanup and campaign files', async () => {
+    const db = getDb()
+    await Promise.all([...CAMPAIGN_TABLES.map(t => db.table(t).clear()), db.images.clear()])
+    const png = new Blob(['png'], { type: 'image/png' })
+    const libraryOnly = await dbApi.mapAssets.add('Statue', png, 64, 64)
+    const placedAsset = await dbApi.mapAssets.add('Table', png, 128, 64)
+    const orphan = await storeImage(png)
+    const campaignId = await db.campaigns.add({ name: 'Keep', description: '', created_at: 'x', updated_at: 'x' })
+    const enc = await dbApi.encounters.create({ campaignId, name: 'Hall' })
+    const map: BattleMap = { ...blankMap(4, 4), props: [prop('t', { image: placedAsset.image })] }
+    await db.encounters.update(enc!.id!, { battlemap: map })
+
+    expect(await cleanUpUnusedImages()).toBe(1)
+    expect(await db.images.get(orphan.slice(4))).toBeUndefined()
+
+    const file = await exportCampaignsPayload([campaignId])
+    expect(file.mapAssets?.map(a => a.name)).toEqual(['Table'])
+    expect(file.images?.map(i => i.id)).toEqual([placedAsset.image.slice(4)])
+
+    // Into another browser: the asset comes along once, even when imported twice
+    await Promise.all([...CAMPAIGN_TABLES.map(t => db.table(t).clear()), db.images.clear()])
+    const all = new Set([...CAMPAIGN_TABLES, 'rules', 'rulesOverlays'])
+    await importPayload(file, { mode: 'merge', sections: all })
+    await importPayload(file, { mode: 'merge', sections: all })
+    expect((await dbApi.mapAssets.list()).map(a => a.image)).toEqual([placedAsset.image])
+    expect(await db.images.get(placedAsset.image.slice(4))).toBeDefined()
+    expect(libraryOnly.image).not.toBe(placedAsset.image)
   })
 })

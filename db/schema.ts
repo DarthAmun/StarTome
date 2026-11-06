@@ -339,6 +339,17 @@ export interface DbSoundPlaylist {
   updatedAt: string
 }
 
+/** An image in the map maker's asset library (furniture, trees, decals …), for every campaign. */
+export interface DbMapAsset {
+  id?: number
+  name: string
+  image: string               // "img:<id>"; placed copies keep the ref, so deleting the asset leaves maps alone
+  /** Natural size of the image, for the default size and aspect when placed. */
+  px_width: number
+  px_height: number
+  created_at: string
+}
+
 /** User-owned image blobs (portraits, token art) referenced from rules entities. */
 export interface DbImage {
   id: string
@@ -381,6 +392,7 @@ class StarTomeDb extends Dexie {
   xpAwards!:          Table<DbXpAward>
   treasureAwards!:    Table<DbTreasureAward>
   linkOffers!:        Table<DbLinkOffer>
+  mapAssets!:         Table<DbMapAsset>
 
   constructor() {
     super(DB_NAME)
@@ -494,6 +506,10 @@ class StarTomeDb extends Dexie {
     // v15: Play Buddy offers and requests (PLAYBUDDY_API.md), outbox included
     this.version(15).stores({
       linkOffers:         '++id, campaign_id, key, remote_id, state',
+    })
+    // v16: the map maker's asset library (rules/battlemap.ts props place them)
+    this.version(16).stores({
+      mapAssets:          '++id, name',
     })
   }
 }
