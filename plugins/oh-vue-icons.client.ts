@@ -19,6 +19,7 @@ import {
   MdBookmark, MdBookmarkborder, MdBookmarkadded, MdOpeninnew, MdPushpin,
   MdLink, MdFitscreen, MdOpeninfull,
   MdLock, MdPrint, MdTune, MdImportexport,
+  MdBrush, MdCropsquare, MdBorderouter, MdFormatpaint, MdNearme, MdPantool, MdUndo, MdRedo, MdZoomin, MdZoomout, MdPhotolibrary, MdRotateright, MdFlip, MdFliptofront, MdFliptoback, MdGridon, MdFolder, MdImage,
 } from 'oh-vue-icons/icons/md'
 
 import {
@@ -47,6 +48,7 @@ addIcons(
   MdBookmark, MdBookmarkborder, MdBookmarkadded, MdOpeninnew, MdPushpin,
   MdLink, MdFitscreen, MdOpeninfull,
   MdLock, MdPrint, MdTune, MdImportexport,
+  MdBrush, MdCropsquare, MdBorderouter, MdFormatpaint, MdNearme, MdPantool, MdUndo, MdRedo, MdZoomin, MdZoomout, MdPhotolibrary, MdRotateright, MdFlip, MdFliptofront, MdFliptoback, MdGridon, MdFolder, MdImage,
   FaEye, FaEyeSlash,
   FaSkull, FaSkullCrossbones,
   FaDesktop, FaSearch, FaFolderOpen,

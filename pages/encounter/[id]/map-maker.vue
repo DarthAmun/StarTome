@@ -1,152 +1,175 @@
 <template>
   <div class="mm-page" :class="{ 'mm-dropping': dropping }" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
     <header class="mm-toolbar">
-      <NuxtLink :to="`/encounter/${encounterId}`" class="mm-btn">
-        <OhVueIcon name="md-arrowback" scale="0.75" /> Encounter
+      <NuxtLink :to="`/encounter/${encounterId}`" class="mm-btn" title="Back to the encounter">
+        <OhVueIcon name="md-arrowback" scale="0.75" /> <span class="mm-hide-narrow">Encounter</span>
       </NuxtLink>
-      <span class="mm-title">Map Maker<span v-if="encounterName"> · {{ encounterName }}</span></span>
+      <span class="mm-title">Map Maker<span v-if="encounterName" class="mm-hide-narrow"> · {{ encounterName }}</span></span>
       <div class="mm-gap" />
-      <button class="mm-btn" :disabled="!undoStack.length" title="Undo (Ctrl+Z)" @click="undo">Undo</button>
-      <button class="mm-btn" :disabled="!redoStack.length" title="Redo (Ctrl+Y)" @click="redo">Redo</button>
-      <label class="mm-check" title="Make line-of-sight walls and doors from the wall and door tiles">
+      <div class="mm-group">
+        <button class="mm-icon-btn" :disabled="!undoStack.length" title="Undo (Ctrl+Z)" aria-label="Undo" @click="undo">
+          <OhVueIcon name="md-undo" scale="0.85" />
+        </button>
+        <button class="mm-icon-btn" :disabled="!redoStack.length" title="Redo (Ctrl+Y)" aria-label="Redo" @click="redo">
+          <OhVueIcon name="md-redo" scale="0.85" />
+        </button>
+      </div>
+      <div ref="mapMenuEl" class="mm-menu-wrap">
+        <button class="mm-btn" :class="{ active: mapMenuOpen }" :aria-expanded="mapMenuOpen" @click="mapMenuOpen = !mapMenuOpen">
+          <OhVueIcon name="md-gridon" scale="0.75" /> {{ map ? `${map.cols} × ${map.rows}` : 'Map' }}
+          <OhVueIcon name="md-arrowdropdown" scale="0.8" />
+        </button>
+        <div v-if="mapMenuOpen" class="mm-popover" role="dialog" aria-label="Map size">
+          <span class="mm-label">Size in squares</span>
+          <div class="mm-size">
+            <input v-model.number="sizeCols" type="number" :min="MIN_SIZE" :max="MAX_SIZE" aria-label="Columns" @keydown.enter="applySize" />
+            <span>×</span>
+            <input v-model.number="sizeRows" type="number" :min="MIN_SIZE" :max="MAX_SIZE" aria-label="Rows" @keydown.enter="applySize" />
+            <button class="mm-btn" :disabled="!map || (sizeCols === map.cols && sizeRows === map.rows)" @click="applySize">Resize</button>
+          </div>
+          <p class="mm-hint">Growing adds empty squares on the right and bottom; shrinking cuts them off there.</p>
+          <div class="mm-divider" />
+          <button class="mm-btn mm-danger mm-wide" @click="clearMap(); mapMenuOpen = false">Start over</button>
+          <p class="mm-hint">Clears every tile and asset. Undo brings it back.</p>
+        </div>
+      </div>
+      <button class="mm-btn" :class="{ active: assetsOpen }" title="Asset library" :aria-pressed="assetsOpen" @click="assetsOpen = !assetsOpen">
+        <OhVueIcon name="md-photolibrary" scale="0.75" /> <span class="mm-hide-narrow">Assets</span>
+      </button>
+      <label class="mm-check" title="Make line-of-sight walls and doors from the wall and door tiles, and turn FOV on">
         <input v-model="makeWalls" type="checkbox" /> Make walls
       </label>
-      <Button size="small" class="mm-save" :loading="saving" :disabled="!map" @click="save">
+      <Button
+        size="small" class="mm-save" :loading="saving" :disabled="!map"
+        :title="`Draws the map at ${EXPORT_CELL_PX} px per square and sets the encounter's grid to match. Walls you drew by hand on the encounter stay; walls made here are replaced. Assets don't block sight.`"
+        @click="save"
+      >
         <OhVueIcon name="md-check" scale="0.8" /> Use as encounter map
       </Button>
     </header>
 
-    <div class="mm-body">
-      <aside class="mm-side">
-        <section class="mm-section">
-          <span class="mm-label">Tool</span>
-          <div class="mm-tools">
-            <button
-              v-for="t in TOOLS" :key="t.id"
-              class="mm-tool" :class="{ active: tool === t.id && !placing }" :title="t.hint"
-              @click="setTool(t.id)"
-            >{{ t.label }}</button>
-          </div>
-          <p class="mm-hint">
-            <template v-if="placing">Click the map to place {{ placing.name }}. Shift places it off the grid; Esc stops.</template>
-            <template v-else>{{ TOOLS.find(t => t.id === tool)?.hint }}<template v-if="tool !== 'select'"> Right-click picks a tile.</template></template>
-          </p>
-        </section>
-
-        <section v-if="selected" class="mm-section">
-          <span class="mm-label">Selected asset</span>
-          <div class="mm-seg">
-            <button :class="{ active: selected.layer === 'floor' }" title="On the floor, under walls' shadows" @click="patchSelected({ layer: 'floor' })">Floor</button>
-            <button :class="{ active: selected.layer === 'object' }" title="On top of everything" @click="patchSelected({ layer: 'object' })">Objects</button>
-          </div>
-          <div class="mm-fields">
-            <label>W <input type="number" :value="selected.w" :min="PROP_MIN_SIZE" step="0.25" @change="patchSize('w', $event)" /></label>
-            <label>H <input type="number" :value="selected.h" :min="PROP_MIN_SIZE" step="0.25" @change="patchSize('h', $event)" /></label>
-            <label>° <input type="number" :value="selected.rotation" step="15" @change="patchRotation($event)" /></label>
-          </div>
-          <div class="mm-actions">
-            <button class="mm-btn" title="Rotate 90° (R)" @click="rotateSelected(90)">Rotate 90°</button>
-            <button class="mm-btn" title="Mirror (F)" @click="patchSelected({ flip: !selected.flip })">Flip</button>
-            <button class="mm-btn" title="Bring forward (])" @click="restack(1)">Forward</button>
-            <button class="mm-btn" title="Send backward ([)" @click="restack(-1)">Backward</button>
-            <button class="mm-btn" title="Duplicate (Ctrl+D)" @click="duplicateSelected">Duplicate</button>
-            <button class="mm-btn mm-danger" title="Remove (Delete)" @click="removeSelected">Remove</button>
-          </div>
-        </section>
-
-        <section class="mm-section">
-          <div class="mm-label-row">
-            <span class="mm-label">Assets</span>
-            <span v-if="importing" class="mm-progress">Importing {{ importDone }}/{{ importTotal }}…</span>
-            <span v-else class="mm-import">
-              <button class="mm-btn mm-small" title="Import image files" @click="importFiles">Files</button>
-              <button class="mm-btn mm-small" title="Import a folder with all its subfolders" @click="importFolder">Folder</button>
-            </span>
-          </div>
-          <template v-if="assets.length">
-            <div class="mm-filter">
-              <select v-if="folders.length" v-model="folderFilter" class="mm-input" title="Show one folder">
-                <option :value="null">All folders ({{ assets.length }})</option>
-                <option v-if="assets.some(a => !a.folder)" value="">Loose files</option>
-                <option v-for="f in folders" :key="f" :value="f">{{ f }}</option>
-              </select>
-              <input v-model="assetQuery" class="mm-input" type="search" placeholder="Search assets" />
-            </div>
-            <button v-if="folderFilter" class="mm-btn mm-small mm-danger mm-folder-del" @click="deleteFolder">
-              Remove this folder ({{ shownAssets.length }})
-            </button>
-          </template>
-          <div v-if="shownAssets.length" class="mm-assets">
-            <div
-              v-for="a in visibleAssets" :key="a.id"
-              class="mm-asset" :class="{ active: placing?.id === a.id }" :title="`${a.name}: click, then click the map`"
-              @click="startPlacing(a)"
-            >
-              <img v-if="assetUrls[a.image]" :src="assetUrls[a.image]" :alt="a.name" decoding="async" />
-              <span>{{ a.name }}</span>
-              <button class="mm-asset-del" title="Remove from the library (placed copies stay)" @click.stop="deleteAsset(a)">×</button>
-            </div>
-          </div>
-          <button v-if="shownAssets.length > visibleAssets.length" class="mm-btn mm-small mm-more" @click="assetLimit += LIBRARY_PAGE">
-            Show more ({{ shownAssets.length - visibleAssets.length }} left)
+    <div class="mm-body" :class="{ 'mm-drawer-open': assetsOpen }">
+      <nav class="mm-rail" aria-label="Tools and tiles">
+        <div class="mm-rail-grid">
+          <button
+            v-for="t in TOOLS" :key="t.id"
+            class="mm-rail-btn" :class="{ active: tool === t.id && !placing }"
+            :title="`${t.label} (${t.key.toUpperCase()}): ${t.hint}`" :aria-label="t.label"
+            @click="setTool(t.id)"
+          >
+            <OhVueIcon :name="t.icon" scale="0.9" />
           </button>
-          <p v-else-if="assets.length && !shownAssets.length" class="mm-hint">No assets match.</p>
-          <p v-else-if="!assets.length" class="mm-hint">
-            Import PNG, WebP or SVG images with transparent backgrounds: furniture, trees, rugs, statues.
-            Pick single files or a whole folder, or drop them on the page. Subfolders become folders here.
-          </p>
-        </section>
+        </div>
+        <div class="mm-rail-sep" />
+        <div class="mm-rail-grid">
+          <button
+            v-for="t in TILES" :key="t.id"
+            class="mm-rail-btn mm-rail-tile" :class="{ active: tileId === t.id }" :title="t.label" :aria-label="t.label"
+            @click="pickTile(t.id)"
+          >
+            <canvas :ref="el => swatchRefs[t.id] = el as HTMLCanvasElement | null" width="28" height="28" class="mm-swatch" />
+          </button>
+        </div>
+      </nav>
 
-        <section class="mm-section">
-          <span class="mm-label">Tile</span>
-          <div class="mm-tiles">
-            <button
-              v-for="t in TILES" :key="t.id"
-              class="mm-tile" :class="{ active: tileId === t.id }" :title="t.label"
-              @click="pickTile(t.id)"
-            >
-              <canvas :ref="el => swatchRefs[t.id] = el as HTMLCanvasElement | null" width="28" height="28" class="mm-swatch" />
-              <span>{{ t.label }}</span>
-            </button>
-          </div>
-        </section>
-
-        <section class="mm-section">
-          <span class="mm-label">Size (squares)</span>
-          <div class="mm-size">
-            <input v-model.number="sizeCols" type="number" :min="MIN_SIZE" :max="MAX_SIZE" aria-label="Columns" />
-            <span>×</span>
-            <input v-model.number="sizeRows" type="number" :min="MIN_SIZE" :max="MAX_SIZE" aria-label="Rows" />
-            <button class="mm-btn" :disabled="!map || (sizeCols === map.cols && sizeRows === map.rows)" @click="applySize">Resize</button>
-          </div>
-          <button class="mm-btn mm-wide" @click="clearMap">Start over</button>
-        </section>
-
-        <section class="mm-section">
-          <span class="mm-label">Zoom</span>
-          <input v-model.number="zoom" type="range" min="12" max="72" step="2" class="mm-range" />
-        </section>
-
-        <p class="mm-hint mm-foot">
-          Saving draws the map at {{ EXPORT_CELL_PX }} px per square and sets the encounter's grid to match.
-          With Make walls, FOV is turned on for the encounter. Walls you drew by hand
-          on the encounter stay; walls made here are replaced. Assets don't block sight.
-        </p>
-      </aside>
-
-      <div ref="scrollEl" class="mm-canvas-wrap">
+      <main ref="viewEl" class="mm-view" @wheel.prevent="onWheel">
         <canvas
           ref="canvasEl"
           class="mm-canvas"
-          :class="{ 'mm-canvas--select': tool === 'select' && !placing }"
+          :class="canvasCursor"
           @pointerdown="onPointerDown"
           @pointermove="onPointerMove"
           @pointerup="onPointerUp"
           @pointercancel="onPointerUp"
           @pointerleave="hover = null; pointer = null; scheduleDraw()"
           @contextmenu.prevent
+          @auxclick.prevent
         />
-      </div>
+
+        <div v-if="selected" class="mm-float mm-propbar" role="toolbar" aria-label="Selected asset">
+          <div class="mm-seg">
+            <button :class="{ active: selected.layer === 'floor' }" title="On the floor, under walls' shadows" @click="patchSelected({ layer: 'floor' })">Floor</button>
+            <button :class="{ active: selected.layer === 'object' }" title="On top of everything" @click="patchSelected({ layer: 'object' })">Object</button>
+          </div>
+          <div class="mm-fields">
+            <label title="Width in squares">W <input type="number" :value="selected.w" :min="PROP_MIN_SIZE" step="0.25" @change="patchSize('w', $event)" /></label>
+            <label title="Height in squares">H <input type="number" :value="selected.h" :min="PROP_MIN_SIZE" step="0.25" @change="patchSize('h', $event)" /></label>
+            <label title="Rotation in degrees">° <input type="number" :value="selected.rotation" step="15" @change="patchRotation($event)" /></label>
+          </div>
+          <div class="mm-group">
+            <button class="mm-icon-btn" title="Rotate 90° (R)" aria-label="Rotate 90°" @click="rotateSelected(90)"><OhVueIcon name="md-rotateright" scale="0.8" /></button>
+            <button class="mm-icon-btn" title="Mirror (F)" aria-label="Mirror" @click="patchSelected({ flip: !selected.flip })"><OhVueIcon name="md-flip" scale="0.8" /></button>
+            <button class="mm-icon-btn" title="Bring forward (])" aria-label="Bring forward" @click="restack(1)"><OhVueIcon name="md-fliptofront" scale="0.8" /></button>
+            <button class="mm-icon-btn" title="Send backward ([)" aria-label="Send backward" @click="restack(-1)"><OhVueIcon name="md-fliptoback" scale="0.8" /></button>
+            <button class="mm-icon-btn" title="Duplicate (Ctrl+D)" aria-label="Duplicate" @click="duplicateSelected"><OhVueIcon name="md-contentcopy" scale="0.75" /></button>
+            <button class="mm-icon-btn mm-danger" title="Remove (Delete)" aria-label="Remove" @click="removeSelected"><OhVueIcon name="md-delete" scale="0.8" /></button>
+          </div>
+        </div>
+
+        <div class="mm-float mm-bottom">
+          <div class="mm-zoom" role="group" aria-label="Zoom">
+            <button class="mm-icon-btn" title="Zoom out (-)" aria-label="Zoom out" @click="zoomBy(1 / 1.25)"><OhVueIcon name="md-zoomout" scale="0.8" /></button>
+            <button class="mm-zoom-pct" title="Fit the map (0)" @click="fitView">{{ zoomPct }}%</button>
+            <button class="mm-icon-btn" title="Zoom in (+)" aria-label="Zoom in" @click="zoomBy(1.25)"><OhVueIcon name="md-zoomin" scale="0.8" /></button>
+            <button class="mm-icon-btn" title="Fit the map (0)" aria-label="Fit the map" @click="fitView"><OhVueIcon name="md-fitscreen" scale="0.8" /></button>
+          </div>
+          <p class="mm-status">
+            <template v-if="placing">Click to place <b>{{ placing.name }}</b>. Shift: off the grid. Esc: stop.</template>
+            <template v-else>
+              <b>{{ TOOLS.find(t => t.id === tool)?.label }}</b>
+              <template v-if="tool !== 'select' && tool !== 'pan'"> · {{ TILES.find(t => t.id === tileId)?.label }}</template>
+              — {{ TOOLS.find(t => t.id === tool)?.hint }}
+              <span class="mm-status-pan">Wheel zooms; middle-drag, Alt-drag or Space-drag pans.</span>
+            </template>
+          </p>
+        </div>
+      </main>
+
+      <aside v-if="assetsOpen" class="mm-drawer" aria-label="Asset library">
+        <div class="mm-drawer-head">
+          <span class="mm-label">Assets<span v-if="assets.length" class="mm-count">{{ assets.length }}</span></span>
+          <span v-if="importing" class="mm-progress">Importing {{ importDone }}/{{ importTotal }}…</span>
+          <span v-else class="mm-group">
+            <button class="mm-btn mm-small" title="Import image files" @click="importFiles"><OhVueIcon name="md-image" scale="0.65" /> Files</button>
+            <button class="mm-btn mm-small" title="Import a folder with all its subfolders" @click="importFolder"><OhVueIcon name="md-folder" scale="0.65" /> Folder</button>
+          </span>
+          <button class="mm-icon-btn" title="Close" aria-label="Close the asset library" @click="assetsOpen = false"><OhVueIcon name="md-close" scale="0.75" /></button>
+        </div>
+        <div v-if="assets.length" class="mm-filter">
+          <select v-if="folders.length" v-model="folderFilter" class="mm-input" title="Show one folder">
+            <option :value="null">All folders</option>
+            <option v-if="assets.some(a => !a.folder)" value="">Loose files</option>
+            <option v-for="f in folders" :key="f" :value="f">{{ f }}</option>
+          </select>
+          <input v-model="assetQuery" class="mm-input" type="search" placeholder="Search assets" aria-label="Search assets" />
+          <div v-if="folderFilter !== null || assetQuery" class="mm-filter-info">
+            <span>{{ shownAssets.length }} shown</span>
+            <button v-if="folderFilter" class="mm-link mm-danger" @click="deleteFolder">Remove this folder</button>
+          </div>
+        </div>
+        <div class="mm-drawer-body">
+          <div v-if="shownAssets.length" class="mm-assets">
+            <div
+              v-for="a in visibleAssets" :key="a.id"
+              class="mm-asset" :class="{ active: placing?.id === a.id }" :title="`${a.name}${a.folder ? ` (${a.folder})` : ''}: click, then click the map`"
+              @click="startPlacing(a)"
+            >
+              <img v-if="assetUrls[a.image]" :src="assetUrls[a.image]" :alt="a.name" decoding="async" />
+              <span>{{ a.name }}</span>
+              <button class="mm-asset-del" title="Remove from the library (placed copies stay)" aria-label="Remove from the library" @click.stop="deleteAsset(a)">×</button>
+            </div>
+          </div>
+          <button v-if="shownAssets.length > visibleAssets.length" class="mm-btn mm-small mm-wide" @click="assetLimit += LIBRARY_PAGE">
+            Show more ({{ shownAssets.length - visibleAssets.length }} left)
+          </button>
+          <p v-else-if="assets.length && !shownAssets.length" class="mm-hint">No assets match.</p>
+          <div v-else-if="!assets.length" class="mm-empty">
+            <OhVueIcon name="md-photolibrary" scale="1.6" />
+            <p>Import PNG, WebP or SVG images with transparent backgrounds: furniture, trees, rugs, statues.</p>
+            <p>Pick single files or a whole folder, or drop them anywhere on the map maker. Subfolders become folders here.</p>
+          </div>
+        </div>
+      </aside>
     </div>
   </div>
 </template>
@@ -164,14 +187,21 @@ import { battleMapPng, drawBattleMap, drawProp } from '~/utils/battlemapDraw'
 import { droppedImageFiles, fileToAssetImage, pickImageFiles, pickImageFolder } from '~/utils/image'
 import { assetFolder, assetFolders, assetKey, assetName, filterAssets, type AssetSource } from '~/rules/mapAssets'
 
-type Tool = 'select' | 'brush' | 'rect' | 'room' | 'fill'
-const TOOLS: { id: Tool; label: string; hint: string }[] = [
-  { id: 'brush', label: 'Brush', hint: 'Click or drag to paint squares.' },
-  { id: 'rect', label: 'Rectangle', hint: 'Drag to fill a rectangle.' },
-  { id: 'room', label: 'Room', hint: 'Drag for a room: the tile inside, walls around it.' },
-  { id: 'fill', label: 'Fill', hint: 'Click to fill an area of the same tile.' },
-  { id: 'select', label: 'Select', hint: 'Click an asset to select it, drag to move it. Drag the corner to resize, the top handle to rotate. Hold Shift for no snapping (and free stretching).' },
+type Tool = 'select' | 'pan' | 'brush' | 'rect' | 'room' | 'fill'
+const TOOLS: { id: Tool; label: string; key: string; icon: string; hint: string }[] = [
+  { id: 'select', label: 'Select', key: 'v', icon: 'md-nearme', hint: 'Click an asset to select it, drag to move it. Drag the corner to resize, the top handle to rotate; Shift turns snapping off. Drag empty space to pan.' },
+  { id: 'pan', label: 'Pan', key: 'h', icon: 'md-pantool', hint: 'Drag to move the view.' },
+  { id: 'brush', label: 'Brush', key: 'b', icon: 'md-brush', hint: 'Click or drag to paint squares. Right-click picks a tile.' },
+  { id: 'rect', label: 'Rectangle', key: 'm', icon: 'md-cropsquare', hint: 'Drag to fill a rectangle. Right-click picks a tile.' },
+  { id: 'room', label: 'Room', key: 'w', icon: 'md-borderouter', hint: 'Drag for a room: the tile inside, walls around it. Right-click picks a tile.' },
+  { id: 'fill', label: 'Fill', key: 'g', icon: 'md-formatpaint', hint: 'Click to fill an area of the same tile. Right-click picks a tile.' },
 ]
+/** Zoom in screen pixels per square; 100% is ZOOM_BASE. */
+const ZOOM_MIN = 6
+const ZOOM_MAX = 140
+const ZOOM_BASE = 40
+/** How much of the map stays on screen when panning off, in pixels. */
+const PAN_KEEP_PX = 80
 const UNDO_LIMIT = 100
 /** Largest side of a newly placed asset, in squares. */
 const PLACE_MAX = 6
@@ -197,7 +227,105 @@ const undoStack = shallowRef<BattleMap[]>([])
 const redoStack = shallowRef<BattleMap[]>([])
 
 const canvasEl = ref<HTMLCanvasElement | null>(null)
-const scrollEl = ref<HTMLDivElement | null>(null)
+const viewEl = ref<HTMLElement | null>(null)
+const mapMenuEl = ref<HTMLElement | null>(null)
+const mapMenuOpen = ref(false)
+const assetsOpen = ref(readPref('mm-assets-open', 'true') === 'true')
+watch(assetsOpen, (v) => { writePref('mm-assets-open', String(v)); nextTick(onViewResize) })
+
+// ── View: pan and zoom ──────────────────────────────────────────────────────
+/** Where the map's top-left corner sits in the view, in screen pixels. */
+const view = { x: 24, y: 24 }
+let viewW = 0
+let viewH = 0
+let panDrag: { sx: number; sy: number; vx: number; vy: number } | null = null
+const panning = ref(false)
+const spaceDown = ref(false)
+const zoomPct = computed(() => Math.round((zoom.value / ZOOM_BASE) * 100))
+const canvasCursor = computed(() => {
+  if (panning.value) return 'mm-cursor-grabbing'
+  if (spaceDown.value || (tool.value === 'pan' && !placing.value)) return 'mm-cursor-grab'
+  if (tool.value === 'select' && !placing.value) return 'mm-cursor-default'
+  return ''
+})
+
+function readPref(key: string, fallback: string): string {
+  try { return localStorage.getItem(key) ?? fallback } catch { return fallback }
+}
+function writePref(key: string, value: string) {
+  try { localStorage.setItem(key, value) } catch { /* private mode: not remembered */ }
+}
+
+function clampZoom(z: number) {
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z))
+}
+
+/** Keeps part of the map on screen. */
+function clampView() {
+  const m = map.value
+  if (!m) return
+  const w = m.cols * zoom.value
+  const h = m.rows * zoom.value
+  const keepX = Math.min(PAN_KEEP_PX, w)
+  const keepY = Math.min(PAN_KEEP_PX, h)
+  view.x = Math.min(viewW - keepX, Math.max(keepX - w, view.x))
+  view.y = Math.min(viewH - keepY, Math.max(keepY - h, view.y))
+}
+
+/** Zooms keeping the point (cx, cy) of the view, in screen pixels, where it is. */
+function zoomAt(next: number, cx: number, cy: number) {
+  const z = clampZoom(next)
+  const k = z / zoom.value
+  view.x = cx - (cx - view.x) * k
+  view.y = cy - (cy - view.y) * k
+  zoom.value = z
+  clampView()
+  scheduleDraw()
+}
+
+function zoomBy(factor: number) {
+  zoomAt(zoom.value * factor, viewW / 2, viewH / 2)
+}
+
+function fitView() {
+  const m = map.value
+  if (!m || !viewW) return
+  const pad = 32
+  zoom.value = clampZoom(Math.min((viewW - pad * 2) / m.cols, (viewH - pad * 2) / m.rows))
+  view.x = (viewW - m.cols * zoom.value) / 2
+  view.y = (viewH - m.rows * zoom.value) / 2
+  scheduleDraw()
+}
+
+function onWheel(e: WheelEvent) {
+  const box = viewEl.value!.getBoundingClientRect()
+  // Lines (old mice) and pixels (trackpads, pinch) both end up as a smooth factor
+  const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY
+  zoomAt(zoom.value * Math.exp(-delta * (e.ctrlKey ? 0.01 : 0.0015)), e.clientX - box.left, e.clientY - box.top)
+}
+
+function onViewResize() {
+  const el = viewEl.value
+  if (!el) return
+  viewW = el.clientWidth
+  viewH = el.clientHeight
+  clampView()
+  scheduleDraw()
+}
+
+function startPan(e: PointerEvent) {
+  panDrag = { sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y }
+  panning.value = true
+  canvasEl.value?.setPointerCapture(e.pointerId)
+}
+
+function onDocPointerDown(e: PointerEvent) {
+  if (mapMenuOpen.value && !mapMenuEl.value?.contains(e.target as Node)) mapMenuOpen.value = false
+}
+
+function onKeyUp(e: KeyboardEvent) {
+  if (e.key === ' ') spaceDown.value = false
+}
 const swatchRefs: Partial<Record<TileId, HTMLCanvasElement | null>> = {}
 
 /** Hovered cell, and the drag start for the rectangle and room tools. */
@@ -381,7 +509,7 @@ function round2(v: number) {
 function setTool(t: Tool) {
   tool.value = t
   placing.value = null
-  if (t !== 'select') selectedId.value = null
+  if (t !== 'select' && t !== 'pan') selectedId.value = null
   scheduleDraw()
 }
 
@@ -440,13 +568,31 @@ onMounted(async () => {
   for (const p of map.value.props ?? []) loadImage(p.image)
   loadAssets()
   drawSwatches()
-  scheduleDraw()
+  await nextTick()
+  onViewResize()
+  fitView()
+  if (viewEl.value) {
+    resizeObserver = new ResizeObserver(onViewResize)
+    resizeObserver.observe(viewEl.value)
+  }
   window.addEventListener('keydown', onKey)
+  window.addEventListener('keyup', onKeyUp)
+  window.addEventListener('blur', onWindowBlur)
+  document.addEventListener('pointerdown', onDocPointerDown)
   window.addEventListener('beforeunload', onBeforeUnload)
 })
 
+let resizeObserver: ResizeObserver | null = null
+function onWindowBlur() {
+  spaceDown.value = false
+}
+
 onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
   window.removeEventListener('keydown', onKey)
+  window.removeEventListener('keyup', onKeyUp)
+  window.removeEventListener('blur', onWindowBlur)
+  document.removeEventListener('pointerdown', onDocPointerDown)
   window.removeEventListener('beforeunload', onBeforeUnload)
 })
 
@@ -459,6 +605,7 @@ function onBeforeUnload(e: BeforeUnloadEvent) {
 }
 
 watch(zoom, () => scheduleDraw())
+watch(() => map.value && `${map.value.cols}x${map.value.rows}`, () => { clampView(); scheduleDraw() })
 
 // ── Drawing ─────────────────────────────────────────────────────────────────
 let frame = 0
@@ -473,13 +620,32 @@ function draw() {
   if (!canvas || !m) return
   const px = zoom.value
   const dpr = window.devicePixelRatio || 1
-  canvas.width = Math.round(m.cols * px * dpr)
-  canvas.height = Math.round(m.rows * px * dpr)
-  canvas.style.width = `${m.cols * px}px`
-  canvas.style.height = `${m.rows * px}px`
+  // The canvas covers the view; the map is drawn into it at the pan offset
+  const w = Math.max(1, Math.round(viewW * dpr))
+  const h = Math.max(1, Math.round(viewH * dpr))
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w
+    canvas.height = h
+  }
   const ctx = canvas.getContext('2d')!
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.clearRect(0, 0, w, h)
+  ctx.setTransform(dpr, 0, 0, dpr, view.x * dpr, view.y * dpr)
+  const mw = m.cols * px
+  const mh = m.rows * px
+  ctx.save()
+  ctx.shadowColor = 'rgba(0,0,0,0.5)'
+  ctx.shadowBlur = 24
+  ctx.shadowOffsetY = 6
+  ctx.fillStyle = '#000'
+  ctx.fillRect(0, 0, mw, mh)
+  ctx.restore()
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(0, 0, mw, mh)
+  ctx.clip()
   drawBattleMap(ctx, previewMap() ?? m, px, { grid: true, images })
+  ctx.restore()
   if (placing.value && pointer.value) {
     ctx.globalAlpha = 0.6
     drawProp(ctx, newProp(placing.value, pointer.value.x, pointer.value.y), px, images)
@@ -595,7 +761,7 @@ function clearMap() {
 /** The pointer in squares (fractional), relative to the map's top-left. */
 function pointAt(e: PointerEvent): { x: number; y: number } {
   const box = canvasEl.value!.getBoundingClientRect()
-  return { x: (e.clientX - box.left) / zoom.value, y: (e.clientY - box.top) / zoom.value }
+  return { x: (e.clientX - box.left - view.x) / zoom.value, y: (e.clientY - box.top - view.y) / zoom.value }
 }
 
 function cellAt(e: PointerEvent): [number, number] | null {
@@ -620,6 +786,11 @@ function handleAt(p: MapProp, x: number, y: number): 'resize' | 'rotate' | null 
 function onPointerDown(e: PointerEvent) {
   const m = map.value
   if (!m) return
+  if (e.button === 1 || (e.button === 0 && (e.altKey || spaceDown.value || (tool.value === 'pan' && !placing.value)))) {
+    e.preventDefault()
+    startPan(e)
+    return
+  }
   const pt = pointAt(e)
   if (placing.value) {
     if (e.button !== 0) { placing.value = null; scheduleDraw(); return }
@@ -643,6 +814,8 @@ function onPointerDown(e: PointerEvent) {
       canvasEl.value?.setPointerCapture(e.pointerId)
       strokeStart = m
       propDrag = { kind: handle ?? 'move', prop: hit, dx: pt.x - hit.x, dy: pt.y - hit.y }
+    } else {
+      startPan(e)
     }
     scheduleDraw()
     return
@@ -695,6 +868,13 @@ function draggedProp(d: NonNullable<typeof propDrag>, x: number, y: number, free
 }
 
 function onPointerMove(e: PointerEvent) {
+  if (panDrag) {
+    view.x = panDrag.vx + e.clientX - panDrag.sx
+    view.y = panDrag.vy + e.clientY - panDrag.sy
+    clampView()
+    scheduleDraw()
+    return
+  }
   const pt = pointAt(e)
   if (placing.value) {
     pointer.value = { x: e.shiftKey ? pt.x : snap(pt.x, 0.5), y: e.shiftKey ? pt.y : snap(pt.y, 0.5) }
@@ -716,6 +896,11 @@ function onPointerMove(e: PointerEvent) {
 }
 
 function onPointerUp() {
+  if (panDrag) {
+    panDrag = null
+    panning.value = false
+    return
+  }
   if (dragStart && hover.value && map.value) commit(applyShape(map.value, dragStart, hover.value))
   if (strokeStart && map.value) {
     const painted = map.value
@@ -729,8 +914,15 @@ function onPointerUp() {
 }
 
 function onKey(e: KeyboardEvent) {
-  if ((e.target as HTMLElement)?.tagName === 'INPUT') return
+  const tag = (e.target as HTMLElement)?.tagName
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
   const key = e.key.toLowerCase()
+  if (key === ' ') {
+    // Hold to pan; stops the page scrolling or a focused button clicking
+    e.preventDefault()
+    spaceDown.value = true
+    return
+  }
   if (e.ctrlKey || e.metaKey) {
     if (key === 'z' && !e.shiftKey) { e.preventDefault(); undo() }
     else if (key === 'y' || (key === 'z' && e.shiftKey)) { e.preventDefault(); redo() }
@@ -738,11 +930,18 @@ function onKey(e: KeyboardEvent) {
     return
   }
   if (key === 'escape') {
+    if (mapMenuOpen.value) { mapMenuOpen.value = false; return }
     placing.value = null
     selectedId.value = null
     scheduleDraw()
     return
   }
+  if (e.altKey) return
+  if (key === '0') { fitView(); return }
+  if (key === '+' || key === '=') { zoomBy(1.25); return }
+  if (key === '-') { zoomBy(1 / 1.25); return }
+  const t = TOOLS.find(t => t.key === key)
+  if (t) { setTool(t.id); return }
   const p = selected.value
   if (!p) return
   const step = e.shiftKey ? 0.1 : 0.5
@@ -780,6 +979,7 @@ async function save() {
 
 <style scoped>
 .mm-page {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -787,17 +987,35 @@ async function save() {
   overflow: hidden;
   background: var(--bg);
 }
+.mm-page.mm-dropping::after {
+  content: 'Drop images or folders to add them to the asset library';
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  border: 3px dashed var(--accent);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  color: var(--ink);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
 .mm-toolbar {
+  position: relative;
+  z-index: 20;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 16px;
+  gap: 8px;
+  padding: 0 12px;
   height: 52px;
   flex-shrink: 0;
   background: var(--parch-dark);
   border-bottom: 1px solid var(--parch-line);
 }
 .mm-title {
+  min-width: 0;
   font-family: var(--font-head);
   font-size: 12px;
   font-weight: 600;
@@ -810,10 +1028,12 @@ async function save() {
 }
 .mm-gap { flex: 1; }
 .mm-save { white-space: nowrap; flex-shrink: 0; }
+.mm-group { display: inline-flex; gap: 2px; flex-shrink: 0; }
 .mm-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  flex-shrink: 0;
   padding: 5px 10px;
   border: 1px solid var(--border-hi);
   border-radius: var(--r);
@@ -821,36 +1041,38 @@ async function save() {
   color: var(--ink);
   font-family: var(--font-ui);
   font-size: 12px;
+  white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
 }
-.mm-btn:hover:not(:disabled) { border-color: var(--accent); }
-.mm-btn:disabled { opacity: 0.4; cursor: default; }
-.mm-wide { width: 100%; justify-content: center; margin-top: 8px; }
+.mm-btn:hover:not(:disabled), .mm-icon-btn:hover:not(:disabled) { border-color: var(--accent); }
+.mm-btn:disabled, .mm-icon-btn:disabled { opacity: 0.4; cursor: default; }
+.mm-btn.active { border-color: var(--accent); background: var(--accent-bg); }
+.mm-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.mm-small { padding: 3px 8px; font-size: 11px; }
+.mm-wide { width: 100%; justify-content: center; }
+.mm-danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
 .mm-check {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
   font-size: 12px;
+  white-space: nowrap;
   color: var(--ink-faded);
   cursor: pointer;
-}
-
-.mm-body {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-}
-.mm-side {
-  width: 250px;
-  flex-shrink: 0;
-  overflow-y: auto;
-  background: var(--parch);
-  border-right: 1px solid var(--parch-line);
-}
-.mm-section {
-  padding: 12px 14px;
-  border-bottom: 1px dashed var(--parch-line);
 }
 .mm-label {
   display: block;
@@ -868,121 +1090,274 @@ async function save() {
   line-height: 1.45;
   color: var(--ink-faded);
 }
-.mm-foot { padding: 0 14px 14px; }
-.mm-tools {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-}
-.mm-tool, .mm-tile {
-  border: 1px solid var(--border);
+
+/* Map size popover */
+.mm-menu-wrap { position: relative; flex-shrink: 0; }
+.mm-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 260px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-hi);
   border-radius: var(--r);
-  background: var(--surface);
-  color: var(--ink);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  cursor: pointer;
+  background: var(--surface-solid);
+  box-shadow: var(--sh-md);
 }
-.mm-tool { padding: 6px 4px; }
-.mm-tool.active, .mm-tile.active {
-  border-color: var(--accent);
-  background: var(--accent-bg);
-}
-.mm-tiles {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 3px;
-}
-.mm-tile {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  padding: 3px 5px;
-  font-size: 11px;
-  text-align: left;
-}
-.mm-tile span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.mm-swatch {
-  width: 28px;
-  height: 28px;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
+.mm-divider { height: 1px; margin: 12px 0; background: var(--parch-line); }
 .mm-size {
   display: flex;
   align-items: center;
   gap: 6px;
   color: var(--ink-faded);
 }
-.mm-size input {
-  width: 52px;
+.mm-size input, .mm-fields input, .mm-input {
   padding: 4px 6px;
   border: 1px solid var(--border-hi);
   border-radius: var(--r);
   background: var(--surface-solid);
   color: var(--ink);
-  font-family: var(--font-mono);
   font-size: 12px;
 }
-.mm-range { width: 100%; accent-color: var(--accent); }
-.mm-label-row {
+.mm-size input { width: 56px; font-family: var(--font-mono); }
+
+/* ── Body: rail, view, drawer ────────────────────────────────────────────── */
+.mm-body {
+  position: relative;
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.mm-rail {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 8px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  background: var(--parch);
+  border-right: 1px solid var(--parch-line);
+}
+.mm-rail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 34px);
+  gap: 4px;
+}
+.mm-rail-sep { height: 1px; background: var(--parch-line); }
+.mm-rail-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.mm-rail-btn:hover { border-color: var(--border-hi); }
+.mm-rail-btn.active { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 1px var(--accent); }
+.mm-rail-tile { padding: 2px; }
+.mm-swatch { width: 28px; height: 28px; border-radius: 3px; display: block; }
+
+.mm-view {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--leather);
+}
+.mm-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+  touch-action: none;
+}
+.mm-cursor-default { cursor: default; }
+.mm-cursor-grab { cursor: grab; }
+.mm-cursor-grabbing { cursor: grabbing; }
+
+/* Floating controls over the map */
+.mm-float {
+  position: absolute;
+  z-index: 5;
+}
+.mm-propbar {
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  width: fit-content;
+  margin-inline: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-hi);
+  border-radius: var(--r);
+  background: var(--surface-solid);
+  box-shadow: var(--sh-md);
+}
+.mm-seg {
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid var(--border-hi);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.mm-seg button {
+  padding: 4px 10px;
+  border: none;
+  background: var(--surface);
+  color: var(--ink-faded);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  cursor: pointer;
+}
+.mm-seg button.active { background: var(--accent-bg); color: var(--ink); }
+.mm-fields { display: inline-flex; gap: 6px; }
+.mm-fields label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--ink-faded);
+}
+.mm-fields input { width: 54px; padding: 3px 4px; font-family: var(--font-mono); font-size: 11px; }
+
+.mm-bottom {
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: none;
+}
+.mm-bottom > * { pointer-events: auto; }
+.mm-zoom {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 2px;
+  border: 1px solid var(--border-hi);
+  border-radius: var(--r);
+  background: var(--surface-solid);
+  box-shadow: var(--sh-md);
+}
+.mm-zoom-pct {
+  min-width: 48px;
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+.mm-status {
+  min-width: 0;
+  max-width: 560px;
+  margin: 0;
+  padding: 5px 10px;
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink-faded);
+}
+.mm-status b { color: var(--ink); font-weight: 600; }
+.mm-status-pan { display: block; opacity: 0.8; }
+
+/* ── Asset drawer ────────────────────────────────────────────────────────── */
+.mm-drawer {
+  flex-shrink: 0;
+  width: 290px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--parch);
+  border-left: 1px solid var(--parch-line);
+}
+.mm-drawer-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
+  gap: 6px;
+  padding: 8px 8px 8px 14px;
+  border-bottom: 1px solid var(--parch-line);
 }
-.mm-label-row .mm-label { margin-bottom: 0; }
-.mm-small { padding: 3px 8px; font-size: 11px; }
-.mm-danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
-.mm-import { display: flex; gap: 4px; }
-.mm-progress { font-size: 11px; color: var(--ink-faded); }
+.mm-drawer-head .mm-label { flex: 1; margin: 0; }
+.mm-count {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--surface);
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+}
+.mm-progress { font-size: 11px; color: var(--ink-faded); white-space: nowrap; }
 .mm-filter {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 6px;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--parch-line);
 }
-.mm-input {
-  width: 100%;
-  padding: 4px 6px;
-  border: 1px solid var(--border-hi);
-  border-radius: var(--r);
-  background: var(--surface-solid);
-  color: var(--ink);
-  font-size: 12px;
+.mm-input { width: 100%; }
+.mm-filter-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--ink-faded);
 }
-.mm-folder-del { width: 100%; margin-bottom: 6px; }
-.mm-more { width: 100%; margin-top: 6px; }
-.mm-page.mm-dropping { outline: 3px dashed var(--accent); outline-offset: -3px; }
-.mm-assets {
-  max-height: 360px;
+.mm-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ink-faded);
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.mm-link.mm-danger:hover { color: var(--danger); }
+.mm-drawer-body {
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  padding: 10px 14px 72px; /* room for the app's floating buttons */
+  scrollbar-width: thin;
+}
+.mm-drawer-body .mm-wide { margin-top: 8px; }
+.mm-assets {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 6px;
 }
 .mm-asset {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 4px;
+  gap: 3px;
+  padding: 5px 4px 4px;
   border: 1px solid var(--border);
   border-radius: var(--r);
   background: var(--surface);
   cursor: pointer;
   min-width: 0;
 }
+.mm-asset:hover { border-color: var(--border-hi); }
 .mm-asset.active { border-color: var(--accent); background: var(--accent-bg); }
 .mm-asset img {
   width: 100%;
-  height: 48px;
+  height: 56px;
   object-fit: contain;
 }
 .mm-asset span {
@@ -997,77 +1372,51 @@ async function save() {
 .mm-asset-del {
   position: absolute;
   top: 1px;
-  right: 2px;
+  right: 3px;
   display: none;
   border: none;
   background: none;
   color: var(--ink-faded);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1;
   cursor: pointer;
 }
 .mm-asset:hover .mm-asset-del { display: block; }
 .mm-asset-del:hover { color: var(--danger); }
-.mm-seg {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  border: 1px solid var(--border-hi);
-  border-radius: var(--r);
-  overflow: hidden;
-}
-.mm-seg button {
-  padding: 5px;
-  border: none;
-  background: var(--surface);
-  color: var(--ink-faded);
-  font-family: var(--font-ui);
-  font-size: 12px;
-  cursor: pointer;
-}
-.mm-seg button.active { background: var(--accent-bg); color: var(--ink); }
-.mm-fields {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  margin: 8px 0;
-}
-.mm-fields label {
+.mm-empty {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  padding: 24px 6px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
   color: var(--ink-faded);
 }
-.mm-fields input {
-  width: 100%;
-  min-width: 0;
-  padding: 3px 4px;
-  border: 1px solid var(--border-hi);
-  border-radius: var(--r);
-  background: var(--surface-solid);
-  color: var(--ink);
-  font-family: var(--font-mono);
-  font-size: 11px;
-}
-.mm-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-}
-.mm-actions .mm-btn { justify-content: center; }
+.mm-empty p { margin: 0; }
 
-.mm-canvas-wrap {
-  flex: 1;
-  overflow: auto;
-  padding: 24px;
-  background: var(--leather);
+/* ── Narrow screens ──────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .mm-hide-narrow { display: none; }
+  .mm-status-pan { display: none; }
+  /* The drawer floats over the map instead of squeezing it */
+  .mm-drawer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    box-shadow: var(--sh-md);
+  }
+  /* …so the floating bars keep clear of it */
+  .mm-drawer-open .mm-propbar, .mm-drawer-open .mm-bottom { right: 302px; }
+  .mm-status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
-.mm-canvas {
-  display: block;
-  margin: auto;
-  box-shadow: var(--sh-md);
-  cursor: crosshair;
-  touch-action: none;
+@media (max-width: 760px) {
+  .mm-check { font-size: 0; gap: 0; }
+  .mm-drawer { width: min(290px, 100%); }
+  .mm-drawer-open .mm-propbar, .mm-drawer-open .mm-bottom { right: 12px; }
+  .mm-status { display: none; }
 }
-.mm-canvas--select { cursor: default; }
 </style>
