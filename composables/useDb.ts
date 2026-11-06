@@ -11,7 +11,8 @@ import { getDb, now, parseJsonObject, type DbEncounterToken, type DbEncounterWal
 import type { CampaignRules, GameId } from '~/types/game'
 import type { RulesEntity } from '~/types/rules'
 import type { Adjustment } from '~/rules/combat'
-import { resolveImageDataUrl, storeInlineImage } from '~/rules/images'
+import { resolveImageDataUrl, storeImage, storeInlineImage } from '~/rules/images'
+import { EXPORT_CELL_PX, type BattleMap, type GeneratedWall } from '~/rules/battlemap'
 import { imageTypeOf } from '~/utils/image'
 
 export * from '~/db/schema'
@@ -153,6 +154,24 @@ export const dbApi = {
       if (typeof rest.map_source === 'string') rest.map_source = await storeInlineImage(rest.map_source)
       await db.encounters.update(id, { ...rest, updated_at: now() })
       return db.encounters.get(id)
+    },
+    /**
+     * Makes a map maker map the encounter's map: its image, a grid that fits it
+     * and, with `walls`, its walls in place of the ones made from it before.
+     * Walls drawn by hand stay.
+     */
+    async applyBattleMap(id: number, map: BattleMap, image: Blob, walls: GeneratedWall[] | null) {
+      const db = getDb()
+      const mapRef = await storeImage(image)
+      await db.transaction('rw', [db.encounters, db.encounterWalls], async () => {
+        await db.encounters.update(id, {
+          battlemap: map, map_source: mapRef, map_type: 'file',
+          grid_size: EXPORT_CELL_PX, grid_offset_x: 0, grid_offset_y: 0, updated_at: now(),
+        })
+        if (!walls) return
+        await db.encounterWalls.where('encounter_id').equals(id).filter(w => !!w.generated).delete()
+        await db.encounterWalls.bulkAdd(walls.map(w => ({ encounter_id: id, ...w, isOpen: false, generated: true })))
+      })
     },
     /** Deletes an encounter with its tokens, walls and planned loot. */
     async delete(id: number) {

@@ -183,6 +183,14 @@
               <OhVueIcon name="md-map" scale="0.85" />
               {{ encounter?.mapSource ? 'Change Map' : 'Load Map' }}
             </Button>
+            <Button
+              severity="secondary"
+              style="width:100%;justify-content:center;margin-top:6px"
+              @click="navigateTo(`/encounter/${route.params.id}/map-maker`)"
+            >
+              <OhVueIcon name="md-edit" scale="0.85" />
+              {{ hasBattleMap ? 'Edit in Map Maker' : 'Build a Map' }}
+            </Button>
           </div>
 
           <!-- Grid Settings -->
@@ -1045,7 +1053,7 @@ import { useEncounterCanvas, type ShapeType, type ShapeOverlay } from "../../../
 import { useAreaTool } from "~/composables/useAreaTool";
 import { AREA_KINDS, type AreaKind, type AreaOverlay } from "~/rules/areas";
 import type { AreaSpec } from "~/composables/useDiceRoll";
-import { dbApi, parseJsonObject, type DbEncounterWall } from "~/composables/useDb";
+import { dbApi, getDb, parseJsonObject, type DbEncounterWall } from "~/composables/useDb";
 import { imageTypeOf, pickImageFile } from "~/utils/image";
 import { hexColorToNumber } from "~/composables/useConditions";
 import { useConditionPanel } from "~/composables/useConditionPanel";
@@ -1072,6 +1080,8 @@ const ADJUSTMENT_OPTIONS: { value: Adjustment | null; label: string }[] = [
 ];
 
 const route = useRoute();
+/** The map was made in the map maker (pages/encounter/[id]/map-maker.vue). */
+const hasBattleMap = ref(false);
 const store = useEncounterStore();
 const entitiesStore = useEntities();
 const canvasContainer = ref<HTMLElement | null>(null);
@@ -1850,6 +1860,7 @@ const currentTurnTokenId = computed(
 onMounted(async () => {
   const id = Number(route.params.id);
   await Promise.all([store.loadEncounter(id), store.loadTokenLibrary(), loadSounds()]);
+  getDb().encounters.get(id).then(e => { hasBattleMap.value = !!e?.battlemap; });
 
   mode.value = (localStorage.getItem(MODE_KEY.value) as any) ?? 'prepare';
 

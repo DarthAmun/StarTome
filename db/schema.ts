@@ -26,6 +26,7 @@ import type { CampaignRules, GameId } from '~/types/game'
 import type { RulesEntity, Runes } from '~/types/rules'
 import type { Adjustment } from '~/rules/combat'
 import type { AttachKind } from '~/rules/attachments'
+import type { BattleMap } from '~/rules/battlemap'
 import type { CharacterMirror, DeliveryState, LinkOffer, LinkRequest } from '~/partylink/port'
 import { dataUrlToBlob } from '~/rules/images'
 
@@ -73,6 +74,8 @@ export interface DbEncounter {
   party_level_at_resolve?: number | null
   resolution?: Record<string, unknown> | string | null   // ResolutionRecord, for the undo
   areas?: unknown[] | string   // AreaOverlay[] (COMBAT_PLAN.md §5); non-indexed, no version bump
+  /** The map maker's tiles this encounter's map was made from (rules/battlemap.ts); non-indexed */
+  battlemap?: BattleMap | null
   created_at: string
   updated_at: string
 }
@@ -130,6 +133,8 @@ export interface DbEncounterWall {
    *  half, quarter) become greater, standard, lesser on upgrade and import. */
   coverType: 'full' | 'greater' | 'standard' | 'lesser' | 'door'
   isOpen: boolean
+  /** Made by the map maker from the map's tiles; replaced when the map is saved again. Non-indexed */
+  generated?: boolean
 }
 
 export interface DbEntity {
