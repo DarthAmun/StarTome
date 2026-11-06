@@ -185,6 +185,7 @@
 </template>
 
 <script setup lang="ts">
+import { imageSrc } from '~/rules/images'
 import { resolveImage } from "~/rules/images";
 import { useEntities } from "~/composables/useEntities";
 import { isRulesKind, RULES_KIND_CONFIG } from "~/types/rules";
@@ -251,7 +252,7 @@ function linkAvatar(type: string, name: string) {
     const ent = store.findByTypeAndName(typeKey, name);
     if (ent) {
         const attrs = ent.attributes as any;
-        const imageUrl = attrs.portraitSource || attrs.logoSource || attrs.imageSource || null;
+        const imageUrl = imageSrc(attrs.portraitSource || attrs.logoSource || attrs.imageSource, 'thumb');
         const cfg = ENTITY_TYPE_CONFIG[ent.type as keyof typeof ENTITY_TYPE_CONFIG];
         return { imageUrl, iconName: cfg?.defaultIcon ?? "gi-scroll-unfurled", color: typeColorMap[ent.type] ?? "#888" };
     }

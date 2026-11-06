@@ -2,7 +2,7 @@
   <div class="entry" @click="$emit('open')">
 
     <div class="media">
-      <img v-if="attrs.imageSource" :src="attrs.imageSource" class="logo" />
+      <img v-if="attrs.imageSource" :src="imageSrc(attrs.imageSource) ?? undefined" class="logo" />
       <div v-else class="icon-wrap">
         <OhVueIcon name="gi-american-shield" scale="0.9" style="color: #e05555" />
       </div>
@@ -30,6 +30,7 @@
 
 
 <script setup lang="ts">
+import { imageSrc } from '~/rules/images'
 import type { Entity } from '~/composables/useEntities'
 import type { FactionAttributes } from '~/types/entities'
 

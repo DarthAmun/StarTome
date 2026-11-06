@@ -20,6 +20,7 @@
 </template>
 
 <script setup lang="ts">
+import { imageSrc } from '~/rules/images'
 import type { Entity } from '~/composables/useEntities'
 import { useEntities } from '~/composables/useEntities'
 
@@ -27,7 +28,7 @@ const props = defineProps<{ entity: Entity }>()
 const store = useEntities()
 
 const attrs = computed(() => props.entity.attributes as any)
-const bannerSrc = computed(() => attrs.value?.imageSource || null)
+const bannerSrc = computed(() => imageSrc(attrs.value?.imageSource, 'thumb'))
 const notes = computed(() => props.entity.content ?? '')
 
 function saveContent(value: string) {

@@ -6,7 +6,7 @@ import { useEntities } from '~/composables/useEntities'
 import type { DbEncounterWall, DbToken } from '~/composables/useDb'
 import type { ShapeOverlay } from '~/composables/useEncounterCanvas'
 import { rulesGet, rulesGetMany, rulesSetImage } from '~/composables/useRules'
-import { resolveImageDataUrl, storeInlineImage } from '~/rules/images'
+import { isImageRef, resolveImageDataUrl, storeInlineImage } from '~/rules/images'
 import { evaluateFormula } from '~/composables/useFormulaEvaluator'
 import { freeSpots, rollInitiative, rulesScope, tokenStats, type Adjustment } from '~/rules/combat'
 import { damageWithTemp, grantTemp } from '~/rules/hp'
@@ -746,7 +746,9 @@ export const useEncounterStore = defineStore('encounter', () => {
       const entities = useEntities()
       const ent = entities.entities.find(e => e.id === data.linkedEntityId)
       const attrs = (ent?.attributes ?? parseJsonObject((await dbApi.entities.get(data.linkedEntityId))?.attributes)) as Record<string, any>
-      if (attrs.portraitSource !== own) {
+      // A stored portrait is a ref: compare the image itself, or every save would store it again
+      const current = isImageRef(attrs.portraitSource) ? await resolveImageDataUrl(attrs.portraitSource) : attrs.portraitSource
+      if (current !== own) {
         await entities.updateEntity(data.linkedEntityId, { attributes: { ...attrs, portraitSource: own, portraitType: imageTypeOf(own) } as any })
       }
     } else if (data.linkedRulesId) {

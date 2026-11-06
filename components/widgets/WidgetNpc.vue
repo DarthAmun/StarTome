@@ -21,6 +21,7 @@
 </template>
 
 <script setup lang="ts">
+import { imageSrc } from '~/rules/images'
 import type { Entity } from '~/composables/useEntities'
 import { useEntities } from '~/composables/useEntities'
 import { npcClassLine } from '~/types/entities'
@@ -42,7 +43,7 @@ const initials = computed(() =>
   props.entity.name.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase()
 )
 const attrs = computed(() => props.entity.attributes as any)
-const portraitSrc = computed(() => attrs.value?.portraitSource || attrs.value?.imageSource || null)
+const portraitSrc = computed(() => imageSrc(attrs.value?.portraitSource || attrs.value?.imageSource, 'thumb'))
 const status = computed(() => attrs.value?.status ?? null)
 const subLine = computed(() => {
   const parts = [attrs.value?.race, npcClassLine(attrs.value)].filter(Boolean)

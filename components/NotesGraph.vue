@@ -128,6 +128,7 @@
 </template>
 
 <script setup lang="ts">
+import { imageRefId, isImageRef, resolveThumb } from '~/rules/images'
 import { parseJson, toPlain } from "~/utils/json";
 import type { Ref } from "vue";
 import {
@@ -246,10 +247,12 @@ async function getNodeImage(entity: Entity): Promise<string> {
         const url = makeOhIconDataUrl((attrs as any).icon, color);
         if (url) return url;
     }
-    const imageSrc =
+    const src =
         (attrs as any).portraitSource || (attrs as any).imageSource;
-    if (imageSrc) return imageSrc;
-    return '';
+    if (!src) return '';
+    // Stored images: the thumbnail; a node is a small circle
+    if (isImageRef(src)) return (await resolveThumb(imageRefId(src))) ?? '';
+    return src;
 }
 
 function imageCacheKey(entity: Entity): string {

@@ -30,13 +30,14 @@
 
 
 <script setup lang="ts">
+import { imageSrc } from '~/rules/images'
 import type { Entity } from '~/composables/useEntities'
 import type { LocationAttributes } from '~/types/entities'
 
 const props = defineProps<{ entry: Entity; deletable?: boolean }>()
 defineEmits<{ open: []; delete: [id: number] }>()
 const attrs = computed(() => (props.entry.attributes ?? {}) as LocationAttributes)
-const imgSrc = computed(() => attrs.value.logoSource || attrs.value.imageSource || null)
+const imgSrc = computed(() => imageSrc(attrs.value.logoSource || attrs.value.imageSource))
 const hasMeta = computed(() => !!(attrs.value.locationType || attrs.value.status))
 </script>
 

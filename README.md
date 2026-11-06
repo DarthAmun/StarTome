@@ -88,7 +88,7 @@ Every entity supports:
 - Player-facing read-only graph view in a separate tab
 
 ### World Map
-- Load any image as a world map (stored as base64 or URL)
+- Load any image as a world map (kept in the image store, or a URL)
 - Pin any entity — NPC, faction, location, note — to a point on the map
 - Click pins for an inline preview panel; drill into sub-maps (world → city → dungeon)
 - Location entities each carry their own map with their own pins
@@ -188,6 +188,8 @@ All data lives in browser IndexedDB in the database `startome`. Every localStora
 
 Exports from DM's Tome (`dmstome-*.json`) come in through Compendium › DM's Tome import.
 
-The Import & Export page (sidebar) takes any StarTome file, a DM's Tome export or a Foundry `json-assets.zip` in one drop zone and opens the right importer. It backs up campaigns, encounters, tokens, your own compendium entries and your portraits/notes/edits on synced ones (the synced content itself is re-synced, not exported). A quest board export gives players a GM-text-free quest list.
+The Import & Export page (sidebar) takes any StarTome file, a DM's Tome export or a Foundry `json-assets.zip` in one drop zone and opens the right importer. It backs up campaigns, encounters, tokens, your own compendium entries and your portraits/notes/edits on synced ones (the synced content itself is re-synced, not exported). A quest board export gives players a GM-text-free quest list. Files bigger than the browser's ~512 MB string limit (backups with many images) are read as a stream.
+
+Images — portraits, location maps, banners, encounter maps, compendium art — live in the `images` table; rows keep an `img:<id>` ref, and lists show cached thumbnails.
 
 Manual export: DevTools → Application → IndexedDB → right-click → Export

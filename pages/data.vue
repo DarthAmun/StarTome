@@ -294,7 +294,8 @@ import { setPendingImport } from '~/composables/usePendingImport'
 import { cleanUpUnusedImages, dataUrlToBlob, imageRefId, isImageRef, resolveImageDataUrl } from '~/rules/images'
 import { buildQuestBoard, itemRefNames } from '~/converters/export'
 import { CAMPAIGN_TABLES, TABLE_LABELS, exportAllPayload, exportCampaignsPayload, exportTokensPayload, importPayload, jsonBlob, type BackupPayload, type ImportMode } from '~/sync/backup'
-import { detectImport, isZip } from '~/sync/importDetect'
+import { detectImport, detectObject, isZip } from '~/sync/importDetect'
+import { parseJsonStream, STREAM_JSON_ABOVE } from '~/utils/jsonStream'
 import { campaignGame } from '~/types/game'
 import type { Item } from '~/types/rules'
 import { ENTITY_TYPE_CONFIG } from '~/types/entities'
@@ -318,6 +319,17 @@ async function importFile(f: File) {
   if (isZip(f.name, head)) {
     setPendingImport({ file: f, label: f.name })
     router.push('/compendium/sync')
+    return
+  }
+  // Backups with their images and DM's Tome exports can pass V8's ~512 MB
+  // string cap, where f.text() comes back empty: those are parsed as a stream
+  if (f.size > STREAM_JSON_ABOVE) {
+    let raw: unknown
+    try { raw = await parseJsonStream(f) } catch (err) { importError.value = `${f.name}: ${(err as Error).message}`; return }
+    const target = detectObject(raw)
+    if (target?.kind === 'backup') openBackup(target.payload)
+    else if (target?.kind === 'legacy') { setPendingImport({ file: f, label: f.name }); router.push('/compendium/legacy') }
+    else importError.value = `${f.name}: StarTome doesn't recognise this file: it has no campaigns, tokens or compendium entries.`
     return
   }
   // DM's Tome exports run to hundreds of MB: hand the file itself on, don't keep the text

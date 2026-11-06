@@ -280,6 +280,7 @@ const WIDGET_ICONS = {
 </script>
 
 <script setup lang="ts">
+import { imageSrc } from '~/rules/images'
 import { rulesQuery, rulesRefRoute } from '~/composables/useRules'
 import { RULES_KINDS } from '~/types/rules'
 import { lsKey } from '~/utils/appNamespace'
@@ -495,13 +496,13 @@ function buildEntryHtml(
             "mapSource",
         ];
         if (imgKeys.includes(attrKey)) {
-            return `<img class="ie-attr-img" src="${esc(val)}" alt="${esc(name)}" data-entity-type="${type}" data-entity-name="${esc(name)}" />`;
+            return `<img class="ie-attr-img" src="${esc(imageSrc(val) ?? "")}" alt="${esc(name)}" data-entity-type="${type}" data-entity-name="${esc(name)}" />`;
         }
         return `<span class="ie-attr-text">${esc(String(val))}</span>`;
     }
 
-    const imgSrc: string | undefined =
-        attrs.portraitSource || attrs.logoSource || attrs.imageSource;
+    const imgSrc: string | null = imageSrc(
+        attrs.portraitSource || attrs.logoSource || attrs.imageSource, "thumb");
     const portraitHtml = imgSrc
         ? `<img class="ie-portrait-img" src="${esc(imgSrc)}" alt="${esc(name)}" />`
         : `<div class="ie-portrait-icon" style="background:${color}18;color:${color}">${esc(name.charAt(0).toUpperCase())}</div>`;
@@ -563,13 +564,13 @@ function buildSnapshotEntryHtml(
             "mapSource",
         ];
         if (imgKeys.includes(attrKey)) {
-            return `<img class="ie-attr-img" src="${esc(val)}" alt="${esc(entityName)}" data-entity-type="${type}" data-entity-name="${esc(name)}" data-snapshot-label="${esc(snapshotLabel)}" />`;
+            return `<img class="ie-attr-img" src="${esc(imageSrc(val) ?? "")}" alt="${esc(entityName)}" data-entity-type="${type}" data-entity-name="${esc(name)}" data-snapshot-label="${esc(snapshotLabel)}" />`;
         }
         return `<span class="ie-attr-text" data-entity-type="${type}" data-entity-name="${esc(name)}" data-snapshot-label="${esc(snapshotLabel)}">${esc(String(val))}</span>`;
     }
 
-    const imgSrc: string | undefined =
-        attrs.portraitSource || attrs.logoSource || attrs.imageSource;
+    const imgSrc: string | null = imageSrc(
+        attrs.portraitSource || attrs.logoSource || attrs.imageSource, "thumb");
     const portraitHtml = imgSrc
         ? `<img class="ie-portrait-img" src="${esc(imgSrc)}" alt="${esc(entityName)}" />`
         : `<div class="ie-portrait-icon" style="background:${color}18;color:${color}">${esc(entityName.charAt(0).toUpperCase())}</div>`;

@@ -145,6 +145,7 @@
 </template>
 
 <script setup lang="ts">
+import { imageSrc } from '~/rules/images'
 import { dbApi } from '~/composables/useDb'
 import { takePendingImport } from '~/composables/usePendingImport'
 import { readShareFile } from '~/partylink/convert'
@@ -206,7 +207,7 @@ const npcs = computed(() => entitiesStore.entities.filter(e => e.campaignId === 
 
 function portrait(c: Character): string | null {
   if (!c.npcEntityId) return null
-  return (npcs.value.find(n => n.id === c.npcEntityId)?.attributes as { portraitSource?: string })?.portraitSource ?? null
+  return imageSrc((npcs.value.find(n => n.id === c.npcEntityId)?.attributes as { portraitSource?: string })?.portraitSource, 'thumb')
 }
 
 function setLevel(c: Character, level: number) {

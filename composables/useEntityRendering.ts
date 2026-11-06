@@ -14,6 +14,7 @@ import { useRulesIndex } from '~/composables/useRules'
 import { resolveImage } from '~/rules/images'
 import { campaignGame, type GameId } from '~/types/game'
 import { isRulesKind, RULES_KIND_CONFIG, RULES_KINDS } from '~/types/rules'
+import { imageSrc } from '~/rules/images'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -83,7 +84,7 @@ export function useEntityRendering(campaignId: MaybeRefOrGetter<number>) {
     const ent = store.findByTypeAndName(typeKey, name)
     if (ent) {
       const attrs = ent.attributes as any
-      const imageUrl = attrs.portraitSource || attrs.logoSource || attrs.imageSource || undefined
+      const imageUrl = imageSrc(attrs.portraitSource || attrs.logoSource || attrs.imageSource, 'thumb') ?? undefined
       const color = typeColorMap[ent.type] ?? '#888'
       return { imageUrl, iconHtml: imageUrl ? undefined : typeIconHtml(ent.type, color), color }
     }

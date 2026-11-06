@@ -19,7 +19,8 @@ import Dexie from 'dexie'
 import { getDb, structureColumns } from '~/composables/useDb'
 import { LEGACY_DB_NAME } from '~/utils/appNamespace'
 import { recordLabel, remapLore, LORE_TABLES, monsterTokenIds, type LegacyLoreTables, type LoreTable, type RemapIssue } from '~/converters/legacy/lore'
-import { moveInlineMaps } from '~/rules/images'
+import { moveInlineEntityImages, moveInlineMaps } from '~/rules/images'
+import { readJsonFile } from '~/utils/jsonStream'
 
 // ── Reading ────────────────────────────────────────────────────────────────
 
@@ -41,7 +42,7 @@ function bundleOf(raw: Record<string, unknown>, from: LegacyBundle['from']): Leg
 /** A DM's Tome "Everything" or "Campaigns" export. */
 export async function readLegacyFile(file: Blob): Promise<LegacyBundle> {
   let raw: any
-  try { raw = JSON.parse(await file.text()) } catch { throw new Error('This file is not valid JSON.') }
+  try { raw = await readJsonFile(file) } catch { throw new Error('This file is not valid JSON.') }
   if (!raw || typeof raw !== 'object' || raw.version !== 1 || !Array.isArray(raw.campaigns)) {
     throw new Error('This is not a DM\'s Tome export with campaigns. Use "Settings → Full Backup → Export" or "Campaigns → Export" in DM\'s Tome.')
   }
@@ -139,5 +140,7 @@ export async function applyLegacy(bundle: LegacyBundle, opts: { onProgress?: (p:
   await moveInlineMaps()
   // Anything the converter still left as JSON text becomes a value, 5e cover becomes PF2e cover
   await structureColumns()
+  // …and so do portraits, location maps and banners inside the entries' attributes
+  await moveInlineEntityImages()
   return { written, monsterTokens: res.monsterTokens, issues: res.issues, durationMs: Date.now() - t0 }
 }

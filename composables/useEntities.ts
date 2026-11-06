@@ -8,6 +8,7 @@ import type { DbEntitySnapshot } from '~/composables/useDb'
 import type { EntityType, EntityAttributes } from '~/types/entities'
 import { emitDomainEvent } from '~/composables/useDomainEvents'
 import { reportError } from '~/composables/useNotices'
+import { ENTITY_IMAGE_KEYS } from '~/rules/images'
 
 export interface Entity {
   id: number
@@ -143,7 +144,17 @@ async function updateEntity(id: number, updates: { name?: string; content?: stri
     if (updates.content !== undefined) payload.content = updates.content
     if (updates.attributes !== undefined) payload.attributes = toPlain(updates.attributes)
 
-    await dbApi.entities.update(payload)
+    const saved = await dbApi.entities.update(payload)
+    // An inline image went to the image store: keep its ref here, not the data URL
+    if (saved && updates.attributes) {
+      const stored = parseJsonObject(saved.attributes)
+      for (const key of ENTITY_IMAGE_KEYS) {
+        if (stored[key] === (updates.attributes as Record<string, unknown>)[key]) continue
+        for (const target of [entity, currentEntity.value?.id === id ? currentEntity.value : null]) {
+          if (target?.attributes) (target.attributes as Record<string, unknown>)[key] = stored[key]
+        }
+      }
+    }
 
     if (updates.content !== undefined) await syncLinks(id, updates.content)
 

@@ -28,7 +28,7 @@ import type { Adjustment } from '~/rules/combat'
 import type { AttachKind } from '~/rules/attachments'
 import type { BattleMap } from '~/rules/battlemap'
 import type { CharacterMirror, DeliveryState, LinkOffer, LinkRequest } from '~/partylink/port'
-import { dataUrlToBlob } from '~/rules/images'
+import { dataUrlToBlob, ENTITY_IMAGE_KEYS, splitInlineImages } from '~/rules/images'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export interface DbCampaign {
@@ -356,6 +356,8 @@ export interface DbImage {
   blob: Blob
   mime: string
   createdAt: string
+  /** Small WebP for lists (rules/images.ts resolveThumb), made on first use; not exported. */
+  thumb?: Blob
 }
 
 /** Compendium sync bookkeeping, one row per game (phase 3). */
@@ -511,7 +513,27 @@ class StarTomeDb extends Dexie {
     this.version(16).stores({
       mapAssets:          '++id, name',
     })
+    // v17: portraits, location maps and banners move out of lore entries into
+    // `images`, like the encounter maps in v10: every campaign list read them
+    // all (a world map alone ran to 23 MB), and lists put them in the page
+    this.version(17).stores({}).upgrade(async (tx) => {
+      for (const t of ['entities', 'entitySnapshots']) {
+        const ids = await tx.table(t).filter((r: { attributes?: unknown }) => hasInlineImage(r.attributes)).primaryKeys()
+        for (const id of ids) {
+          const row = await tx.table(t).get(id) as { attributes: Record<string, any> }
+          const { attrs, images } = splitInlineImages(row.attributes)
+          if (images.length) await tx.table('images').bulkPut(images)
+          await tx.table(t).update(id, { attributes: attrs })
+        }
+      }
+    })
   }
+}
+
+function hasInlineImage(attrs: unknown): boolean {
+  if (!attrs || typeof attrs !== 'object') return false
+  const a = attrs as Record<string, unknown>
+  return ENTITY_IMAGE_KEYS.some(k => typeof a[k] === 'string' && (a[k] as string).startsWith('data:'))
 }
 
 // Singleton

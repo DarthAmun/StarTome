@@ -2,7 +2,7 @@
   <div class="entry" @click="$emit('open')">
 
     <div class="media">
-      <img v-if="attrs.portraitSource" :src="attrs.portraitSource" class="portrait" />
+      <img v-if="attrs.portraitSource" :src="imageSrc(attrs.portraitSource) ?? undefined" class="portrait" />
       <div v-else class="icon-wrap">
         <OhVueIcon name="gi-person" scale="0.9" style="color: #7cc44e" />
       </div>
@@ -38,6 +38,7 @@
 
 
 <script setup lang="ts">
+import { imageSrc } from '~/rules/images'
 import type { Entity } from '~/composables/useEntities'
 import { npcClassLine, type NpcAttributes } from '~/types/entities'
 

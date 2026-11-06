@@ -7,7 +7,7 @@
         <div class="npc-card-portrait">
             <img
                 v-if="attrs.portraitSource"
-                :src="attrs.portraitSource"
+                :src="imageSrc(attrs.portraitSource, 'thumb') ?? undefined"
                 class="npc-card-portrait-img"
             />
             <div
@@ -87,6 +87,7 @@
 </template>
 
 <script setup lang="ts">
+import { imageSrc } from '~/rules/images'
 import { npcClassLine, type NpcAttributes } from "~/types/entities";
 
 const props = defineProps<{

@@ -376,6 +376,7 @@
 <script setup lang="ts">
 import { dbApi } from '~/composables/useDb'
 import { pickImageFile } from '~/utils/image'
+import { imageSrc, storeInlineImage } from '~/rules/images'
 import { mapWindow } from '~/utils/windowChannel'
 import { useEntities } from '~/composables/useEntities'
 import { ENTITY_TYPE_CONFIG } from '~/types/entities'
@@ -446,8 +447,7 @@ async function togglePinVisibility(entityId: number) {
 
 const mapImageUrl = computed(() => {
   const attrs = currentMap.value?.attributes as any
-  if (!attrs?.imageSource) return ''
-  return attrs.imageType === 'url' ? attrs.imageSource : `${attrs.imageSource}`
+  return imageSrc(attrs?.imageSource) ?? ''
 })
 
 const imgNaturalW = ref(800)
@@ -686,8 +686,7 @@ const pinPreviewImageUrl = computed(() => {
   const attrs = previewAttrs.value
   // Locations: prefer logo banner; NPCs: portrait; others: imageSource
   const src = attrs.logoSource || attrs.portraitSource || (previewEntity.value?.type !== 'location' ? attrs.imageSource : null)
-  if (!src) return null
-  return src
+  return imageSrc(src)
 })
 const previewLinks = computed(() => {
   const content = previewEntity.value?.content ?? ''
@@ -733,7 +732,7 @@ async function openLoadMap() {
   if (!currentMap.value) return
   const dataUrl = await pickImageFile()
   if (!dataUrl) return
-  const attrs = { ...(currentMap.value.attributes as any), imageSource: dataUrl, imageType: 'file' }
+  const attrs = { ...(currentMap.value.attributes as any), imageSource: await storeInlineImage(dataUrl), imageType: 'file' }
   await store.updateEntity(currentMap.value.id, { attributes: attrs })
 }
 
@@ -747,8 +746,7 @@ function pinImage(entityId: number): string | null {
   if (!e) return null
   const attrs = e.attributes as any
   const src = attrs.logoSource || attrs.portraitSource || attrs.imageSource
-  if (!src) return null
-  return src
+  return imageSrc(src, 'thumb')
 }
 
 function entityColor(type: string) {

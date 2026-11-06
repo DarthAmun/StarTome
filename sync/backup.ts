@@ -28,7 +28,7 @@ import {
 import { propImages } from '~/rules/battlemap'
 import { extractLinks } from '~/composables/useEntityParser'
 import { imageIdsOf, planRulesImport, rulesForExport, type ExportedImage, type RulesOverlay } from '~/converters/export'
-import { blobToDataUrl, dataUrlToBlob, imageRefId, isImageRef } from '~/rules/images'
+import { blobToDataUrl, dataUrlToBlob, entityImageIds, imageRefId, isImageRef, splitInlineImages, type NewImageRow } from '~/rules/images'
 import type { RulesEntity } from '~/types/rules'
 import { APP_NS } from '~/utils/appNamespace'
 import { parseJson } from '~/utils/json'
@@ -112,7 +112,10 @@ export async function exportAllPayload(): Promise<BackupPayload> {
   const db = getDb()
   const rows = Object.fromEntries(await Promise.all(CAMPAIGN_TABLES.map(async t => [t, await db.table(t).toArray()] as const))) as unknown as CampaignRows
   const { entries: rules, overlays: rulesOverlays } = rulesForExport(await db.rules.toArray())
-  const images = await exportImages([...imageIdsOf([...rules, ...rulesOverlays] as unknown as Record<string, unknown>[]), ...mapImageIds(rows.encounters, rows.mapAssets)])
+  const images = await exportImages([
+    ...imageIdsOf([...rules, ...rulesOverlays] as unknown as Record<string, unknown>[]),
+    ...mapImageIds(rows.encounters, rows.mapAssets), ...entityImageIds([...rows.entities, ...rows.entitySnapshots]),
+  ])
   return { ...header('all'), ...rows, rules, rulesOverlays, images, syncState: await db.syncState.toArray() }
 }
 
@@ -161,7 +164,8 @@ export async function collectCampaignRows(campaignIds?: number[]): Promise<Campa
 
 export async function exportCampaignsPayload(campaignIds?: number[]): Promise<BackupPayload> {
   const rows = await collectCampaignRows(campaignIds)
-  return { ...header('campaigns'), ...rows, images: await exportImages(mapImageIds(rows.encounters, rows.mapAssets)) }
+  const ids = [...mapImageIds(rows.encounters, rows.mapAssets), ...entityImageIds([...rows.entities, ...rows.entitySnapshots])]
+  return { ...header('campaigns'), ...rows, images: await exportImages(ids) }
 }
 
 export async function exportTokensPayload(): Promise<BackupPayload> {
@@ -404,7 +408,7 @@ export async function importPayload(payload: BackupPayload, opts: ImportOptions)
     if (list) (rows as Record<string, object[]>)[t] = list.map(r => rowValues(t, r))
   }
   // Inline maps (DM's Tome, v1 files) go to the image store; the rows keep a ref
-  const mapImages: { id: string; blob: Blob; mime: string; createdAt: string }[] = []
+  const mapImages: NewImageRow[] = []
   if (rows.encounters) {
     rows.encounters = rows.encounters.map(e => {
       if (!e.map_source?.startsWith('data:')) return e
@@ -415,10 +419,28 @@ export async function importPayload(payload: BackupPayload, opts: ImportOptions)
     })
   }
 
+  // So do portraits, location maps and banners of lore entries (files from
+  // before v17, campaign files written by hand or by Claude)
+  for (const t of ['entities', 'entitySnapshots'] as const) {
+    const list = rows[t] as { attributes?: unknown }[] | undefined
+    if (!list) continue
+    ;(rows as Record<string, unknown[]>)[t] = list.map(r => {
+      if (!r.attributes || typeof r.attributes !== 'object') return r
+      const { attrs, images } = splitInlineImages(r.attributes as Record<string, any>)
+      if (!images.length) return r
+      mapImages.push(...images)
+      return { ...r, attributes: attrs }
+    })
+  }
+
   // Compendium: entries by their string id, overlays onto synced rows
   const rulesEntries: RulesEntity[] = opts.sections.has('rules') ? payload.rules ?? [] : []
   const rulesOverlays: RulesOverlay[] = opts.sections.has('rulesOverlays') ? payload.rulesOverlays ?? [] : []
-  const wanted = new Set([...imageIdsOf([...rulesEntries, ...rulesOverlays] as unknown as Record<string, unknown>[]), ...mapImageIds(rows.encounters ?? [], rows.mapAssets ?? [])])
+  const wanted = new Set([
+    ...imageIdsOf([...rulesEntries, ...rulesOverlays] as unknown as Record<string, unknown>[]),
+    ...mapImageIds(rows.encounters ?? [], rows.mapAssets ?? []),
+    ...entityImageIds([...rows.entities ?? [], ...rows.entitySnapshots ?? []]),
+  ])
   const images = (payload.images ?? []).filter(img => wanted.has(img.id)).map(img => {
     const blob = dataUrlToBlob(img.data)
     return { id: img.id, blob, mime: img.mime || blob.type, createdAt: now() }

@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getDb } from '~/composables/useDb'
+import { blobToDataUrl, imageRefId } from '~/rules/images'
 import { monsterTokenIds, remapLore } from '~/converters/legacy/lore'
 import { applyLegacy, readLegacyFile, summarizeLegacy, type LegacyBundle } from '~/sync/legacyImport'
 
@@ -117,9 +118,12 @@ describe('DM\'s Tome import', () => {
 
     const ents = await db.entities.toArray()
     const byName = (n: string) => ents.find(e => e.name === n)!.attributes as Record<string, any>
-    expect(byName('Tibbin').portraitSource).toBe(PIXEL)
-    expect(byName('Guild').logoSource).toBe(PIXEL)
-    expect(byName('Valoria').imageSource).toBe(PIXEL)
+    // Inline images go to the image store (v17); the entries keep refs to the same picture
+    for (const [name, key] of [['Tibbin', 'portraitSource'], ['Guild', 'logoSource'], ['Valoria', 'imageSource']]) {
+      const ref = byName(name)[key]
+      expect(ref).toMatch(/^img:/)
+      expect(await blobToDataUrl((await db.images.get(imageRefId(ref)))!.blob)).toBe(PIXEL)
+    }
 
     const enc = (await db.encounters.toArray())[0]
     expect(enc.map_source).toMatch(/^img:/)

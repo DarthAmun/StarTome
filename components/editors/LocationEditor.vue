@@ -95,6 +95,7 @@
 </template>
 
 <script setup lang="ts">
+import { imageSrc } from '~/rules/images'
 import { useAttributeDraft } from "~/composables/useAttributeDraft";
 import { useEntities } from "~/composables/useEntities";
 import type { EntitySnapshot } from "~/composables/useEntities";
@@ -139,7 +140,7 @@ const displayName = computed(() =>
 
 const bannerUrl = computed(() => {
     const attrs = (isHistoryMode.value ? draftAttributes.value : entity.value?.attributes) as any;
-    return attrs?.logoSource ?? null;
+    return imageSrc(attrs?.logoSource);
 });
 
 watch(

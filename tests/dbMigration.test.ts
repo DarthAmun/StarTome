@@ -25,6 +25,8 @@ const V3_STORES = {
   syncState: 'game',
 }
 
+const PNG = 'data:image/png;base64,iVBORw=='
+
 describe('v4 upgrade', () => {
   it('drops the old library with its record links and system ids', async () => {
     const old = new Dexie(DB_NAME)
@@ -34,11 +36,15 @@ describe('v4 upgrade', () => {
     await old.table('records').bulkAdd([{ systemId: 1, entityTypeId: 'creature', name: 'Goblin', data: '{}' }, { systemId: 1, entityTypeId: 'item', name: 'Rope', data: '{}' }])
     await old.table('campaigns').add({ name: 'The Codex', description: '', system_id: 1, created_at: '', updated_at: '' })
     await old.table('tokens').add({ name: 'Goblin', linked_record_id: 1, linked_rules_id: 'fvtt:g', is_template: 1 })
+    // Lore entries kept their images inline (and as JSON text back then)
+    await old.table('entities').add({ campaign_id: 1, type: 'npc', name: 'Kib', content: '', attributes: JSON.stringify({ portraitSource: PNG, title: 'Scout' }) })
+    await old.table('entities').add({ campaign_id: 1, type: 'location', name: 'Keep', content: '', attributes: JSON.stringify({ imageSource: 'https://example.com/map.png' }) })
+    await old.table('entitySnapshots').add({ entity_id: 1, label: 'Before', attributes: JSON.stringify({ portraitSource: PNG }), created_at: '' })
     old.close()
 
     const db = getDb()
     await db.open()
-    expect(db.verno).toBe(16)
+    expect(db.verno).toBe(17)
     // DM's Tome system data isn't kept (v14 also drops the old backup table)
     expect(db.tables.map(t => t.name)).not.toContain('records')
     expect(db.tables.map(t => t.name)).not.toContain('systems')
@@ -47,5 +53,16 @@ describe('v4 upgrade', () => {
     const [token] = await db.tokens.toArray()
     expect(token).not.toHaveProperty('linked_record_id')
     expect(token.linked_rules_id).toBe('fvtt:g')
+
+    // v17: inline images moved into the image store, URLs left alone
+    const [npc, keep] = await db.entities.toArray()
+    expect(npc.attributes).toEqual({ portraitSource: expect.stringMatching(/^img:/), title: 'Scout' })
+    expect(keep.attributes).toEqual({ imageSource: 'https://example.com/map.png' })
+    const [snap] = await db.entitySnapshots.toArray()
+    expect((snap.attributes as any).portraitSource).toMatch(/^img:/)
+    expect(await db.images.count()).toBe(2)
+    const img = await db.images.get((npc.attributes as any).portraitSource.slice(4))
+    expect(img?.mime).toBe('image/png')
+    expect(img?.blob.size).toBe(4)
   })
 })

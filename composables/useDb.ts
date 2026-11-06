@@ -11,7 +11,7 @@ import { getDb, now, parseJsonObject, type DbEncounterToken, type DbEncounterWal
 import type { CampaignRules, GameId } from '~/types/game'
 import type { RulesEntity } from '~/types/rules'
 import type { Adjustment } from '~/rules/combat'
-import { resolveImageDataUrl, storeImage, storeInlineImage } from '~/rules/images'
+import { resolveImageDataUrl, storeImage, storeInlineAttributes, storeInlineImage } from '~/rules/images'
 import { EXPORT_CELL_PX, type BattleMap, type GeneratedWall } from '~/rules/battlemap'
 import { imageTypeOf } from '~/utils/image'
 
@@ -115,7 +115,9 @@ export const dbApi = {
       if (entityId) {
         const ent = await db.entities.get(entityId)
         const attrs = parseJsonObject(ent?.attributes)
-        if (attrs.portraitSource) return { source: attrs.portraitSource, type: attrs.portraitType ?? 'file' }
+        // Stored portraits come back as data URLs too: tokens keep their image inline
+        const src = await resolveImageDataUrl(attrs.portraitSource)
+        if (src) return { source: src, type: attrs.portraitType ?? 'file' }
       }
       if (rulesId) {
         const entry = await db.rules.get(rulesId) as (RulesEntity & { tokenImg?: string | null }) | undefined
@@ -376,12 +378,15 @@ export const dbApi = {
     async create(data: { campaignId: number; type: string; name: string; content?: string; attributes?: Record<string, any> }) {
       const db = getDb()
       const ts = now()
-      const id = await db.entities.add({ campaign_id: data.campaignId, type: data.type, name: data.name, content: data.content ?? '', attributes: data.attributes ?? {}, created_at: ts, updated_at: ts })
+      // Inline images go to the image store; the entry keeps a ref (v17)
+      const attributes = await storeInlineAttributes(data.attributes ?? {})
+      const id = await db.entities.add({ campaign_id: data.campaignId, type: data.type, name: data.name, content: data.content ?? '', attributes, created_at: ts, updated_at: ts })
       return db.entities.get(id)
     },
     async update(data: { id: number; [key: string]: any }) {
       const db = getDb()
       const { id, ...rest } = data
+      if (rest.attributes) rest.attributes = await storeInlineAttributes(rest.attributes)
       await db.entities.update(id, { ...rest, updated_at: now() })
       return db.entities.get(id)
     },
@@ -468,8 +473,9 @@ export const dbApi = {
     },
 
     async create(snapshot: Omit<DbEntitySnapshot, 'id'>): Promise<DbEntitySnapshot> {
-      const id = await getDb().entitySnapshots.add(snapshot)
-      return { ...snapshot, id }
+      const row = { ...snapshot, attributes: await storeInlineAttributes(parseJsonObject(snapshot.attributes)) }
+      const id = await getDb().entitySnapshots.add(row)
+      return { ...row, id }
     },
 
     async update(id: number, changes: Partial<Pick<DbEntitySnapshot, 'label' | 'note' | 'event_id' | 'event_name'>>): Promise<void> {

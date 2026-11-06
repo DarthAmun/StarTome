@@ -18,19 +18,26 @@ export function isZip(name: string, head?: Uint8Array): boolean {
   return /\.zip$/i.test(name)
 }
 
+/** What a parsed JSON object is, when it's one of StarTome's own files (else null). */
+export function detectObject(raw: unknown): ImportTarget | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const o = raw as Record<string, any>
+  // DM's Tome writes version 1 with campaigns; StarTome writes version 2
+  if (o.version === 1 && Array.isArray(o.campaigns)) return { kind: 'legacy' }
+  if (o.format === 'playbuddy-share') return { kind: 'playbuddy', name: o.status?.basic?.name ?? 'a character' }
+  const hasData = [...CAMPAIGN_TABLES, 'rulesOverlays'].some(k => Array.isArray(o[k]) && o[k].length)
+  if (hasData) return { kind: 'backup', payload: o }
+  return null
+}
+
 export function detectImport(text: string): ImportTarget {
   // A ```json block pasted from a chat counts as its content
   const fenced = text.match(/```(?:json)?\s*\n([\s\S]*?)```/)
   let raw: any
   try { raw = JSON.parse((fenced ? fenced[1] : text).trim()) } catch { raw = undefined }
 
-  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    // DM's Tome writes version 1 with campaigns; StarTome writes version 2
-    if (raw.version === 1 && Array.isArray(raw.campaigns)) return { kind: 'legacy' }
-    if (raw.format === 'playbuddy-share') return { kind: 'playbuddy', name: raw.status?.basic?.name ?? 'a character' }
-    const hasData = [...CAMPAIGN_TABLES, 'rulesOverlays'].some(k => Array.isArray(raw[k]) && raw[k].length)
-    if (hasData) return { kind: 'backup', payload: raw }
-  }
+  const own = detectObject(raw)
+  if (own) return own
 
   // Anything else that holds compendium entries (an export with only `rules`, a list, one entry, a ```json block)
   const read = readHomebrewText(text)

@@ -9,6 +9,7 @@ import { ENTITY_REGEX } from '~/composables/useEntityParser'
 import { useFormatters } from '~/composables/useFormatters'
 import { cap as capRaw } from '~/composables/useNameGenerator'
 import { lsKey } from '~/utils/appNamespace'
+import { imageSrc } from '~/rules/images'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Entity browsing — one shared query per entity type, read by both the
@@ -138,7 +139,7 @@ export const BROWSE_TYPES: Record<EntityType, TypeDef> = {
       return {
         meta: [a.title, a.race, npcClassLine(a)].map(str).filter(Boolean).join(' · '),
         chip: dead ? 'Dead' : status, chipKind: dead ? 'mute' : statusKind(status),
-        badge: level ? `Lv ${level}` : '', image: a.portraitSource || null, swatch: null, polygon: null, bandText: '',
+        badge: level ? `Lv ${level}` : '', image: imageSrc(a.portraitSource, 'thumb'), swatch: null, polygon: null, bandText: '',
         archived: dead, progress: null,
         sub: rel.lastSession != null ? `seen S${rel.lastSession}` : '',
         peekFacts: [F('Faction', rel.factions.join(', ')), F('Location', rel.locations.join(', ')), F('Last seen', rel.lastSession != null ? `Session ${rel.lastSession}` : 'Not yet met')],
@@ -166,7 +167,7 @@ export const BROWSE_TYPES: Record<EntityType, TypeDef> = {
       return {
         meta: [type, a.imageSource ? 'has map' : ''].filter(Boolean).join(' · '),
         chip: status || 'Unknown', chipKind: status === 'Discovered' ? 'good' : status === 'Destroyed' ? 'bad' : 'ghost',
-        badge: '', image: a.logoSource || a.imageSource || null, swatch: null, polygon: null, bandText: '',
+        badge: '', image: imageSrc(a.logoSource || a.imageSource, 'thumb'), swatch: null, polygon: null, bandText: '',
         archived: a.status === 'destroyed', progress: null,
         sub: pins ? `${pins} pin${pins === 1 ? '' : 's'}` : type,
         peekFacts: [F('Type', type), F('Map pins', pins), F('Regions', regions)],
@@ -188,7 +189,7 @@ export const BROWSE_TYPES: Record<EntityType, TypeDef> = {
       return {
         meta: [size, a.headquartersName ? `@ ${a.headquartersName}` : ''].filter(Boolean).join(' · '),
         chip: type || 'Faction', chipKind: 'mute',
-        badge: a.isSecret ? 'Secret' : '', image: a.imageSource || null, swatch: null, polygon: null, bandText: '',
+        badge: a.isSecret ? 'Secret' : '', image: imageSrc(a.imageSource, 'thumb'), swatch: null, polygon: null, bandText: '',
         archived: false, progress: null,
         sub: rel.members ? `${rel.members} member${rel.members === 1 ? '' : 's'}` : '',
         peekFacts: [F('Headquarters', a.headquartersName), F('Size', size), F('Members', rel.members)],

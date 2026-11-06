@@ -6,8 +6,8 @@
                 <label class="f-label">Portrait</label>
                 <div class="input-row">
                     <InputText
-                        :model-value="attrs.portraitSource || ''"
-                        placeholder="URL or file path"
+                        :model-value="urlText(attrs.portraitSource)"
+                        :placeholder="sourcePlaceholder(attrs.portraitSource)"
                         class="flex-1"
                         @update:model-value="
                             (v) => {
@@ -115,8 +115,8 @@
                 <label class="f-label">Logo / Banner</label>
                 <div class="input-row">
                     <InputText
-                        :model-value="attrs.logoSource || ''"
-                        placeholder="URL or file path"
+                        :model-value="urlText(attrs.logoSource)"
+                        :placeholder="sourcePlaceholder(attrs.logoSource)"
                         class="flex-1"
                         @update:model-value="
                             (v) => {
@@ -137,8 +137,8 @@
                 <label class="f-label">Map Image</label>
                 <div class="input-row">
                     <InputText
-                        :model-value="attrs.imageSource || ''"
-                        placeholder="URL or file path"
+                        :model-value="urlText(attrs.imageSource)"
+                        :placeholder="sourcePlaceholder(attrs.imageSource)"
                         class="flex-1"
                         @update:model-value="
                             (v) => {
@@ -187,8 +187,8 @@
                 <label class="f-label">Symbol / Banner</label>
                 <div class="input-row">
                     <InputText
-                        :model-value="attrs.imageSource || ''"
-                        placeholder="URL or file path"
+                        :model-value="urlText(attrs.imageSource)"
+                        :placeholder="sourcePlaceholder(attrs.imageSource)"
                         class="flex-1"
                         @update:model-value="
                             (v) => {
@@ -424,6 +424,7 @@ import { NOTE_ICONS } from "~/types/entities";
 import { useEntities } from "~/composables/useEntities";
 import { dbApi } from "~/composables/useDb";
 import { pickImageFile } from "~/utils/image";
+import { isImageRef, storeInlineImage } from "~/rules/images";
 
 const props = defineProps<{ type: EntityType; modelValue: EntityAttributes }>();
 // toggle-pc: "player character" belongs to the party, so the NPC editor asks it instead of setting the attribute
@@ -574,12 +575,23 @@ function removeTag(i: number) {
 }
 async function browseImage(sourceKey: string, typeKey: string) {
     const dataUrl = await pickImageFile();
-    if (dataUrl)
-        emit("update:modelValue", {
-            ...props.modelValue,
-            [sourceKey]: dataUrl,
-            [typeKey]: "file",
-        });
+    if (!dataUrl) return;
+    // Stored once, here: the entry (and every autosave of the draft) keeps the ref
+    const ref = await storeInlineImage(dataUrl);
+    emit("update:modelValue", {
+        ...props.modelValue,
+        [sourceKey]: ref,
+        [typeKey]: "file",
+    });
+}
+
+/** The URL field shows typed URLs only; an uploaded image isn't text to edit. */
+function urlText(src: string | undefined): string {
+    if (!src || src.startsWith("data:")) return "";
+    return isImageRef(src) ? "" : src;
+}
+function sourcePlaceholder(src: string | undefined): string {
+    return src && !urlText(src) ? "Uploaded image · paste a URL to replace" : "URL or file path";
 }
 </script>
 
