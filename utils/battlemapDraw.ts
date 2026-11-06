@@ -23,6 +23,8 @@ export interface DrawOptions {
   grid?: boolean
   /** Loaded images of the props, by image ref; props whose image is missing are skipped. */
   images?: Map<string, CanvasImageSource>
+  /** GM-only marks, such as where hidden doors are (the editor; never in the encounter's image). */
+  marks?: boolean
 }
 
 export function drawBattleMap(ctx: CanvasRenderingContext2D, map: BattleMap, px: number, opts: DrawOptions = {}) {
@@ -31,6 +33,7 @@ export function drawBattleMap(ctx: CanvasRenderingContext2D, map: BattleMap, px:
   for (let r = 0; r < map.rows; r++) {
     for (let c = 0; c < map.cols; c++) drawCell(ctx, map, c, r, px)
   }
+  if (opts.marks) drawHiddenDoorMarks(ctx, map, px)
   const props = map.props ?? []
   for (const p of props) if (p.layer === 'floor') drawProp(ctx, p, px, opts.images)
   drawWallShadows(ctx, map, px)
@@ -50,8 +53,8 @@ function drawCell(ctx: CanvasRenderingContext2D, map: BattleMap, c: number, r: n
   const tile = tileByChar(getTile(map, c, r))
   const x = c * px
   const y = r * px
-  // Doors stand on stone floor
-  const base = tile.id === 'door' ? tileByChar('s').color : tile.color
+  // Doors and windows stand on stone floor
+  const base = tile.id === 'door' || tile.id === 'window' ? tileByChar('s').color : tile.color
   ctx.fillStyle = tile.id === 'void' ? base : shade(base, (hash(c, r, 1) - 0.5) * 0.06)
   ctx.fillRect(x, y, px, px)
 
@@ -226,8 +229,9 @@ function drawCell(ctx: CanvasRenderingContext2D, map: BattleMap, c: number, r: n
       }
       break
     }
-    case 'wall': {
-      // Brick courses with a lighter top edge
+    case 'wall':
+    case 'secret': {
+      // Brick courses (a hidden door looks just like the wall around it) with a lighter top edge
       ctx.strokeStyle = 'rgba(0,0,0,0.45)'
       ctx.lineWidth = Math.max(1, px / 35)
       ctx.beginPath()
@@ -255,9 +259,52 @@ function drawCell(ctx: CanvasRenderingContext2D, map: BattleMap, c: number, r: n
       }
       break
     }
+    case 'window': {
+      // A framed pane of glass across the gap, with a mullion
+      const horizontal = doorIsHorizontal(map, c, r)
+      const t = px * 0.22
+      const [fx, fy, fw, fh] = horizontal ? [x, y + (px - t) / 2, px, t] : [x + (px - t) / 2, y, t, px]
+      ctx.fillStyle = '#3a3631'
+      ctx.fillRect(fx, fy, fw, fh)
+      const inset = Math.max(1, t * 0.22)
+      ctx.fillStyle = 'rgba(170,214,238,0.9)'
+      ctx.fillRect(fx + inset, fy + inset, fw - inset * 2, fh - inset * 2)
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)'
+      ctx.lineWidth = Math.max(1, px / 45)
+      ctx.beginPath()
+      if (horizontal) { ctx.moveTo(fx + px * 0.12, fy + fh * 0.4); ctx.lineTo(fx + px * 0.38, fy + fh * 0.4) }
+      else { ctx.moveTo(fx + fw * 0.4, fy + px * 0.12); ctx.lineTo(fx + fw * 0.4, fy + px * 0.38) }
+      ctx.stroke()
+      ctx.fillStyle = '#3a3631'
+      if (horizontal) ctx.fillRect(x + px / 2 - inset / 2, fy, inset, fh)
+      else ctx.fillRect(fx, y + px / 2 - inset / 2, fw, inset)
+      break
+    }
     case 'void':
       break
   }
+}
+
+/** Dashed outline and door line on hidden doors, so the GM can find them while editing. */
+function drawHiddenDoorMarks(ctx: CanvasRenderingContext2D, map: BattleMap, px: number) {
+  ctx.save()
+  ctx.strokeStyle = 'rgba(199,125,255,0.95)'
+  ctx.lineWidth = Math.max(1.5, px / 22)
+  for (let r = 0; r < map.rows; r++) {
+    for (let c = 0; c < map.cols; c++) {
+      if (tileByChar(getTile(map, c, r)).id !== 'secret') continue
+      const x = c * px
+      const y = r * px
+      ctx.setLineDash([Math.max(2, px / 8), Math.max(2, px / 10)])
+      ctx.strokeRect(x + 2, y + 2, px - 4, px - 4)
+      ctx.setLineDash([])
+      ctx.beginPath()
+      if (doorIsHorizontal(map, c, r)) { ctx.moveTo(x + px * 0.2, y + px / 2); ctx.lineTo(x + px * 0.8, y + px / 2) }
+      else { ctx.moveTo(x + px / 2, y + px * 0.2); ctx.lineTo(x + px / 2, y + px * 0.8) }
+      ctx.stroke()
+    }
+  }
+  ctx.restore()
 }
 
 function flame(ctx: CanvasRenderingContext2D, x: number, base: number, w: number, h: number, color: string) {
@@ -279,7 +326,11 @@ function speckle(ctx: CanvasRenderingContext2D, c: number, r: number, x: number,
 /** A soft shadow on open cells along their solid neighbours, so walls stand up. */
 function drawWallShadows(ctx: CanvasRenderingContext2D, map: BattleMap, px: number) {
   const w = px * 0.18
-  const solid = (c: number, r: number) => tileByChar(getTile(map, c, r)).solid
+  // Hidden doors cast a wall's shadow too, or they'd give themselves away
+  const solid = (c: number, r: number) => {
+    const t = tileByChar(getTile(map, c, r))
+    return t.solid || t.id === 'secret'
+  }
   for (let r = 0; r < map.rows; r++) {
     for (let c = 0; c < map.cols; c++) {
       if (solid(c, r)) continue

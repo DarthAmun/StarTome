@@ -644,7 +644,7 @@ function draw() {
   ctx.beginPath()
   ctx.rect(0, 0, mw, mh)
   ctx.clip()
-  drawBattleMap(ctx, previewMap() ?? m, px, { grid: true, images })
+  drawBattleMap(ctx, previewMap() ?? m, px, { grid: true, images, marks: true })
   ctx.restore()
   if (placing.value && pointer.value) {
     ctx.globalAlpha = 0.6
@@ -697,11 +697,12 @@ function drawSwatches() {
     const el = swatchRefs[t.id]
     if (!el) continue
     // The tile in the middle of a 3×3 map, so the door sits between walls
-    const sample: BattleMap = { cols: 3, rows: 3, tiles: t.id === 'door' ? 'sss#+#sss' : tileChar(t.id).repeat(9) }
+    const opening = t.id === 'door' || t.id === 'window' || t.id === 'secret'
+    const sample: BattleMap = { cols: 3, rows: 3, tiles: opening ? `sss#${tileChar(t.id)}#sss` : tileChar(t.id).repeat(9) }
     const ctx = el.getContext('2d')!
     ctx.save()
     ctx.translate(-28, -28)
-    drawBattleMap(ctx, sample, 28)
+    drawBattleMap(ctx, sample, 28, { marks: true })
     ctx.restore()
   }
 }

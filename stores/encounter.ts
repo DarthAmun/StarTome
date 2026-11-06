@@ -1,6 +1,7 @@
 import { computed, ref, toRaw, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { dbApi, parseJsonObject } from '~/composables/useDb'
+import { isDoorWall } from '~/db/schema'
 import { imageTypeOf } from '~/utils/image'
 import { useEntities } from '~/composables/useEntities'
 import type { DbEncounterWall, DbToken } from '~/composables/useDb'
@@ -1327,7 +1328,7 @@ export const useEncounterStore = defineStore('encounter', () => {
 
   async function toggleDoor(id: number): Promise<void> {
     const wall = walls.value.find(w => w.id === id)
-    if (!wall || wall.coverType !== 'door') return
+    if (!wall || !isDoorWall(wall.coverType)) return
     await updateWall(id, { isOpen: !wall.isOpen })
     syncToPlayer()
   }

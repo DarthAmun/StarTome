@@ -125,13 +125,22 @@ export interface DbEncounterToken {
   uses_dying?: boolean | null // dying rules at 0 HP; null = party tokens yes, others no — non-indexed
 }
 
+export type WallCoverType = 'full' | 'greater' | 'standard' | 'lesser' | 'window' | 'door' | 'secret'
+
+/** Doors and hidden doors open and close; everything else stays shut. */
+export function isDoorWall(coverType: string): boolean {
+  return coverType === 'door' || coverType === 'secret'
+}
+
 export interface DbEncounterWall {
   id?: number
   encounter_id: number
   points: { x: number; y: number }[] | string
-  /** Wall ('full'), PF2e cover degree or door. DM's Tome's 5e names (three-quarter,
-   *  half, quarter) become greater, standard, lesser on upgrade and import. */
-  coverType: 'full' | 'greater' | 'standard' | 'lesser' | 'door'
+  /** Wall ('full'), PF2e cover degree, window (sight passes), door, or hidden door
+   *  ('secret': opens like a door; the map shows a wall and only the GM sees it marked).
+   *  DM's Tome's 5e names (three-quarter, half, quarter) become greater, standard,
+   *  lesser on upgrade and import. */
+  coverType: WallCoverType
   isOpen: boolean
   /** Made by the map maker from the map's tiles; replaced when the map is saved again. Non-indexed */
   generated?: boolean

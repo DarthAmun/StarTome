@@ -3,13 +3,14 @@
  *
  * A map is a grid of tiles, one character per cell, stored on its encounter
  * (`battlemap`). The maker renders it to an image for the VTT and derives
- * line-of-sight walls from it: wall tiles block, door tiles get a door.
+ * line-of-sight walls from it: wall tiles block; door, window and hidden door
+ * tiles get a wall of that kind across the gap.
  */
-import type { DbEncounterWall } from '~/db/schema'
+import type { DbEncounterWall, WallCoverType } from '~/db/schema'
 
 export type TileId =
   | 'void' | 'stone' | 'wood' | 'carpet' | 'dirt' | 'grass' | 'sand' | 'snow' | 'ice' | 'rubble'
-  | 'swamp' | 'water' | 'deepwater' | 'fire' | 'magma' | 'wall' | 'door'
+  | 'swamp' | 'water' | 'deepwater' | 'fire' | 'magma' | 'wall' | 'window' | 'door' | 'secret'
 
 export interface TileDef {
   id: TileId
@@ -37,7 +38,9 @@ export const TILES: TileDef[] = [
   { id: 'fire',   char: 'f', label: 'Fire',        color: '#3a2418', solid: false },
   { id: 'magma',  char: 'l', label: 'Magma',       color: '#2b1410', solid: false },
   { id: 'wall',   char: '#', label: 'Wall',        color: '#3a3631', solid: true },
+  { id: 'window', char: '=', label: 'Window (sight passes)', color: '#8a8478', solid: false },
   { id: 'door',   char: '+', label: 'Door',        color: '#8a8478', solid: false },
+  { id: 'secret', char: '%', label: 'Hidden door (players see a wall)', color: '#3a3631', solid: false },
   { id: 'void',   char: '.', label: 'Void',        color: '#121212', solid: true },
 ]
 
@@ -285,25 +288,31 @@ export function mapWalls(map: BattleMap): GeneratedWall[] {
       }
     }
   }
-  // Doors
-  const door = tileChar('door')
+  // Doors, windows and hidden doors
   for (let r = 0; r < map.rows; r++) {
     for (let c = 0; c < map.cols; c++) {
-      if (getTile(map, c, r) !== door) continue
-      walls.push({ points: doorLine(map, c, r), coverType: 'door' })
+      const coverType = OPENINGS[getTile(map, c, r)]
+      if (coverType) walls.push({ points: doorLine(map, c, r), coverType })
     }
   }
   return walls
 }
 
+/** Tiles that sit in a wall and get a wall of their own across them, by tile character. */
+const OPENINGS: Record<string, WallCoverType> = { '+': 'door', '=': 'window', '%': 'secret' }
+
+/** Door, window or hidden door. */
+export function isOpening(ch: string): boolean {
+  return ch in OPENINGS
+}
+
 /**
- * Whether a door tile runs across the cell left to right: it follows the wall
- * it sits in, the axis with more wall (or door, for doors wider than one
- * square) next to it. Left to right when that's even.
+ * Whether a door (window, hidden door) tile runs across the cell left to right:
+ * it follows the wall it sits in, the axis with more wall (or openings, for doors
+ * and windows wider than one square) next to it. Left to right when that's even.
  */
 export function doorIsHorizontal(map: BattleMap, col: number, row: number): boolean {
-  const door = tileChar('door')
-  const inWall = (c: number, r: number) => isSolid(map, c, r) || getTile(map, c, r) === door
+  const inWall = (c: number, r: number) => isSolid(map, c, r) || isOpening(getTile(map, c, r))
   const across = Number(inWall(col - 1, row)) + Number(inWall(col + 1, row))
   const upright = Number(inWall(col, row - 1)) + Number(inWall(col, row + 1))
   return across >= upright

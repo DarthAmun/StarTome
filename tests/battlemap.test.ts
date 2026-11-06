@@ -7,6 +7,8 @@ import {
 } from '~/rules/battlemap'
 import { cleanUpUnusedImages, storeImage } from '~/rules/images'
 import { CAMPAIGN_TABLES, exportCampaignsPayload, importPayload } from '~/sync/backup'
+import { useFovCompute } from '~/composables/useFovCompute'
+import { isDoorWall, type DbEncounterWall } from '~/db/schema'
 
 /** A map from rows of tile characters. */
 function grid(...rows: string[]): BattleMap {
@@ -79,6 +81,24 @@ describe('battle map walls', () => {
       { points: [{ x: 0.5, y: 1 }, { x: 0.5, y: 2 }], coverType: 'door' },
       { points: [{ x: 0.5, y: 2 }, { x: 0.5, y: 3 }], coverType: 'door' },
     ])
+  })
+
+  it('puts windows and hidden doors across the gap like doors', () => {
+    const openings = mapWalls(grid('#=%+#', 'sssss')).filter(w => w.coverType !== 'full')
+    expect(openings.map(w => w.coverType)).toEqual(['window', 'secret', 'door'])
+    expect(openings.every(w => w.points[0].y === 0.5 && w.points[1].y === 0.5)).toBe(true)
+    const upright = mapWalls(grid('#s', '=s', '%s', '#s')).filter(w => w.coverType !== 'full')
+    expect(upright.map(w => [w.coverType, w.points[0].x === w.points[1].x])).toEqual([['window', true], ['secret', true]])
+  })
+
+  it('lets sight through windows and open (hidden) doors only', () => {
+    const { wallsToSegments } = useFovCompute()
+    const wall = (coverType: DbEncounterWall['coverType'], isOpen = false): DbEncounterWall =>
+      ({ encounter_id: 1, points: [{ x: 0, y: 0 }, { x: 1, y: 0 }], coverType, isOpen })
+    const blocking = (w: DbEncounterWall) => wallsToSegments([w])[0].isBlocking
+    expect([wall('full'), wall('window'), wall('door'), wall('door', true), wall('secret'), wall('secret', true)].map(blocking))
+      .toEqual([true, false, true, false, true, false])
+    expect(['door', 'secret', 'window', 'full'].map(isDoorWall)).toEqual([true, true, false, false])
   })
 
   it('makes no walls between two solid tiles or along the map border', () => {

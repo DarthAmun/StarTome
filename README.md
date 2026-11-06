@@ -95,13 +95,13 @@ Every entity supports:
 
 ### VTT Encounters (PixiJS)
 - Load a map image and configure grid size and offset
-- Map maker — paint a battle map from tiles (rooms, floors, carpet, sand, snow, ice, rubble, swamp, water, fire, magma, walls, doors); it becomes the encounter's map with its grid, walls and doors. Tools and tiles sit in a rail, assets in a side drawer; wheel zooms, middle-, Alt- or Space-drag pans
+- Map maker — paint a battle map from tiles (rooms, floors, carpet, sand, snow, ice, rubble, swamp, water, fire, magma, walls, doors, windows, hidden doors); it becomes the encounter's map with its grid, walls, doors and windows. Hidden doors look like wall on the map but open like doors for the GM. Tools and tiles sit in a rail, assets in a side drawer; wheel zooms, middle-, Alt- or Space-drag pans
 - Map assets — import PNG/WebP/SVG images (furniture, trees, rugs) one by one or as whole folders (picked or dropped; subfolders become library folders, re-imports skip what is already there) and place them on map maker maps: move, resize, rotate, flip, floor or object layer
 - Token library — drag templates onto the map, snap to grid
 - Per-token: name, image, HP, AC, initiative, size, conditions, visibility, dead/alive, notes
 - Tokens link to compendium creatures and hazards (normal, weak or elite): HP, AC and size come from the stat block, initiative rolls Perception
 - Fog of War — paint and erase fog cells; hide all / reveal all shortcuts
-- Wall tool — draw line walls with cover types (full, ¾, ½, ¼, door) for line-of-sight blocking
+- Wall tool — draw line walls with cover types (wall, greater, standard, lesser cover), windows (sight passes), doors and hidden doors (a door only the GM sees) for line-of-sight blocking
 - Field-of-view compute per token (vision range in tiles)
 - Round/turn tracker with a combat log
 - Sound playlist association per encounter

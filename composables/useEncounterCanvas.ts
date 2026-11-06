@@ -3,6 +3,7 @@ import * as PIXI from "pixi.js";
 import { useEncounterStore } from "../stores/encounter";
 import type { EncounterToken } from "../stores/encounter";
 import type { DbEncounterWall } from "./useDb";
+import { isDoorWall } from "~/db/schema";
 import { useFovCompute, type Point } from "./useFovCompute";
 import { AlphaFilter, Container } from "pixi.js";
 import { visibleConditions, getConditionColorHex, hpColorHex, hexColorToNumber, healthState } from "./useConditions";
@@ -126,14 +127,18 @@ export function useEncounterCanvas(options: CanvasOptions) {
     greater: 0xb8860b,
     standard: 0xc86414,
     lesser: 0xc83214,
+    window: 0x9fd4ff,
     door: 0x64c8dc,
+    secret: 0xc77dff,
   };
   const WALL_ALPHA: Record<string, number> = {
     full: 0.9,
     greater: 0.85,
     standard: 0.85,
     lesser: 0.75,
+    window: 0.8,
     door: 0.9,
+    secret: 0.9,
   };
 
   // Snaps to nearest half-cell: 0.0=corner, 0.5=tile-center, 1.0=next corner, etc.
@@ -573,7 +578,7 @@ export function useEncounterCanvas(options: CanvasOptions) {
       const color = WALL_COLORS[wall.coverType] ?? 0xffffff;
       const alpha = WALL_ALPHA[wall.coverType] ?? 0.9;
 
-      if (wall.coverType === "door" && wall.isOpen) {
+      if ((isDoorWall(wall.coverType) && wall.isOpen) || wall.coverType === "window") {
         for (let i = 0; i < pts.length - 1; i++) {
           const a = wpx(pts[i]),
             b = wpx(pts[i + 1]);
@@ -600,7 +605,7 @@ export function useEncounterCanvas(options: CanvasOptions) {
         wallsGraphics!.stroke();
       }
 
-      if (wall.coverType === "door") {
+      if (isDoorWall(wall.coverType)) {
         for (let i = 0; i < pts.length - 1; i++) {
           const a = wpx(pts[i]),
             b = wpx(pts[i + 1]);
@@ -1491,7 +1496,7 @@ export function useEncounterCanvas(options: CanvasOptions) {
       // Door toggle: select tool left-click on a door wall
       if (options.isDmMode && tool === "select" && e.button === 0) {
         const doorHit = getWallAtPoint(e.global.x, e.global.y);
-        if (doorHit && doorHit.wall.coverType === "door") {
+        if (doorHit && isDoorWall(doorHit.wall.coverType)) {
           store.toggleDoor(doorHit.wall.id!).then(() => {
             redrawWalls();
             recomputeFov();

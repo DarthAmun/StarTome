@@ -1,5 +1,6 @@
 import { parseJson } from '~/utils/json'
 import type { DbEncounterWall } from './useDb'
+import { isDoorWall } from '~/db/schema'
 
 export interface WallSegment {
   x1: number; y1: number; x2: number; y2: number
@@ -125,13 +126,14 @@ export function useFovCompute() {
   /**
    * Build WallSegments from DbEncounterWall records.
    * Parses the points JSON and derives line segments.
-   * Open doors are marked isBlocking: false.
+   * Open doors and windows are marked isBlocking: false.
    */
   function wallsToSegments(walls: DbEncounterWall[]): WallSegment[] {
     const segments: WallSegment[] = []
     for (const wall of walls) {
       const points: Point[] = parseJson<Point[]>(wall.points, [])
-      const isOpen = wall.coverType === 'door' && wall.isOpen
+      // Open doors and windows let sight through
+      const isOpen = (isDoorWall(wall.coverType) && wall.isOpen) || wall.coverType === 'window'
       for (let i = 0; i < points.length - 1; i++) {
         segments.push({
           x1: points[i].x,     y1: points[i].y,

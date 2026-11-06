@@ -1054,6 +1054,7 @@ import { useAreaTool } from "~/composables/useAreaTool";
 import { AREA_KINDS, type AreaKind, type AreaOverlay } from "~/rules/areas";
 import type { AreaSpec } from "~/composables/useDiceRoll";
 import { dbApi, getDb, parseJsonObject, type DbEncounterWall } from "~/composables/useDb";
+import { isDoorWall } from "~/db/schema";
 import { imageTypeOf, pickImageFile } from "~/utils/image";
 import { hexColorToNumber } from "~/composables/useConditions";
 import { useConditionPanel } from "~/composables/useConditionPanel";
@@ -1107,7 +1108,9 @@ const COVER_TYPES = [
   { value: 'greater',        label: 'Greater',  title: 'Greater cover: +4 circumstance to AC, Reflex and Stealth', color: 'rgba(184,134,11,0.85)' },
   { value: 'standard',       label: 'Standard', title: 'Standard cover: +2 circumstance to AC, Reflex and Stealth', color: 'rgba(200,100,20,0.85)' },
   { value: 'lesser',         label: 'Lesser',   title: 'Lesser cover: +1 circumstance to AC',  color: 'rgba(200,50,20,0.75)'  },
+  { value: 'window',         label: 'Window',   title: 'Window: sight passes through, movement does not', color: 'rgba(159,212,255,0.8)' },
   { value: 'door',           label: 'Door',     title: 'Opens and closes',                     color: 'rgba(100,200,220,0.9)' },
+  { value: 'secret',         label: 'Hidden',   title: 'Hidden door: opens and closes like a door; players only see the wall on the map', color: 'rgba(199,125,255,0.9)' },
 ] as const
 const activeCoverType = ref<DbEncounterWall['coverType']>('full')
 
@@ -1346,7 +1349,7 @@ function onCanvasRightClick(e: MouseEvent) {
       wallCtxMenu.y = e.clientY
       wallCtxMenu.wallId = wallHit.wall.id ?? null
       wallCtxMenu.segmentIndex = wallHit.segmentIndex
-      wallCtxMenu.isDoor = wallHit.wall.coverType === 'door'
+      wallCtxMenu.isDoor = isDoorWall(wallHit.wall.coverType)
       wallCtxMenu.isOpen = wallHit.wall.isOpen
       wallCtxMenu.open = true
       return
