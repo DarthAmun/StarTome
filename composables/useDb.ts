@@ -157,8 +157,8 @@ export const dbApi = {
     },
     /**
      * Makes a map maker map the encounter's map: its image, a grid that fits it
-     * and, with `walls`, its walls in place of the ones made from it before.
-     * Walls drawn by hand stay.
+     * and, with `walls`, its walls in place of the ones made from it before,
+     * with FOV turned on so they block sight. Walls drawn by hand stay.
      */
     async applyBattleMap(id: number, map: BattleMap, image: Blob, walls: GeneratedWall[] | null) {
       const db = getDb()
@@ -169,6 +169,7 @@ export const dbApi = {
           grid_size: EXPORT_CELL_PX, grid_offset_x: 0, grid_offset_y: 0, updated_at: now(),
         })
         if (!walls) return
+        await db.encounters.update(id, { fov_enabled: true })
         await db.encounterWalls.where('encounter_id').equals(id).filter(w => !!w.generated).delete()
         await db.encounterWalls.bulkAdd(walls.map(w => ({ encounter_id: id, ...w, isOpen: false, generated: true })))
       })

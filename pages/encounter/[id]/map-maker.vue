@@ -62,7 +62,8 @@
 
         <p class="mm-hint mm-foot">
           Saving draws the map at {{ EXPORT_CELL_PX }} px per square and sets the encounter's grid to match.
-          Walls you drew by hand on the encounter stay; walls made here are replaced.
+          With Make walls, FOV is turned on for the encounter. Walls you drew by hand
+          on the encounter stay; walls made here are replaced.
         </p>
       </aside>
 
@@ -324,7 +325,7 @@ async function save() {
     const walls = makeWalls.value ? mapWalls(map.value) : null
     await dbApi.encounters.applyBattleMap(encounterId, map.value, png, walls)
     dirty.value = false
-    notify(walls ? `Map saved with ${walls.length} walls and doors.` : 'Map saved.')
+    notify(walls ? `Map saved with ${walls.length} walls and doors; FOV is on.` : 'Map saved.')
   } catch (err) {
     reportError('Saving the map', err)
   } finally {

@@ -94,6 +94,7 @@ describe('applying a battle map to an encounter', () => {
     expect(row?.battlemap).toEqual(map)
     expect(row?.map_source).toMatch(/^img:/)
     expect(row?.grid_size).toBe(EXPORT_CELL_PX)
+    expect(row?.fov_enabled).toBe(true)
     const walls = await dbApi.walls.list(id)
     expect(walls.filter(w => !w.generated)).toHaveLength(1)
     expect(walls.filter(w => w.generated)).toHaveLength(mapWalls(map).length)
