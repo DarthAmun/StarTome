@@ -96,7 +96,7 @@ Every entity supports:
 ### VTT Encounters (PixiJS)
 - Load a map image and configure grid size and offset
 - Map maker — paint a battle map from tiles (rooms, floors, carpet, sand, snow, ice, rubble, swamp, water, fire, magma, walls, doors); it becomes the encounter's map with its grid, walls and doors
-- Map assets — import PNG/WebP/SVG images (furniture, trees, rugs) into a library and place them on map maker maps: move, resize, rotate, flip, floor or object layer
+- Map assets — import PNG/WebP/SVG images (furniture, trees, rugs) one by one or as whole folders (picked or dropped; subfolders become library folders, re-imports skip what is already there) and place them on map maker maps: move, resize, rotate, flip, floor or object layer
 - Token library — drag templates onto the map, snap to grid
 - Per-token: name, image, HP, AC, initiative, size, conditions, visibility, dead/alive, notes
 - Tokens link to compendium creatures and hazards (normal, weak or elite): HP, AC and size come from the stat block, initiative rolls Perception

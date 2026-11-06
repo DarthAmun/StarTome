@@ -347,6 +347,8 @@ export interface DbMapAsset {
   /** Natural size of the image, for the default size and aspect when placed. */
   px_width: number
   px_height: number
+  /** The folders it was imported from, "Pack / Trees"; missing for loose files. */
+  folder?: string
   created_at: string
 }
 

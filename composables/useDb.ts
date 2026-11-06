@@ -298,8 +298,9 @@ export const dbApi = {
     async list(): Promise<DbMapAsset[]> {
       return getDb().mapAssets.orderBy('name').toArray()
     },
-    async add(name: string, image: Blob, pxWidth: number, pxHeight: number): Promise<DbMapAsset> {
+    async add(name: string, image: Blob, pxWidth: number, pxHeight: number, folder?: string): Promise<DbMapAsset> {
       const row: DbMapAsset = { name, image: await storeImage(image), px_width: pxWidth, px_height: pxHeight, created_at: now() }
+      if (folder) row.folder = folder
       row.id = await getDb().mapAssets.add(row)
       return row
     },
@@ -309,6 +310,9 @@ export const dbApi = {
     /** Removes it from the library; maps it's placed on keep it (Settings › clean up drops unused images). */
     async delete(id: number): Promise<void> {
       await getDb().mapAssets.delete(id)
+    },
+    async deleteMany(ids: number[]): Promise<void> {
+      await getDb().mapAssets.bulkDelete(ids)
     },
   },
 

@@ -1,5 +1,5 @@
 <template>
-  <div class="mm-page">
+  <div class="mm-page" :class="{ 'mm-dropping': dropping }" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
     <header class="mm-toolbar">
       <NuxtLink :to="`/encounter/${encounterId}`" class="mm-btn">
         <OhVueIcon name="md-arrowback" scale="0.75" /> Encounter
@@ -57,11 +57,28 @@
         <section class="mm-section">
           <div class="mm-label-row">
             <span class="mm-label">Assets</span>
-            <button class="mm-btn mm-small" :disabled="importing" @click="importAssets">{{ importing ? 'Importing…' : 'Import' }}</button>
+            <span v-if="importing" class="mm-progress">Importing {{ importDone }}/{{ importTotal }}…</span>
+            <span v-else class="mm-import">
+              <button class="mm-btn mm-small" title="Import image files" @click="importFiles">Files</button>
+              <button class="mm-btn mm-small" title="Import a folder with all its subfolders" @click="importFolder">Folder</button>
+            </span>
           </div>
-          <div v-if="assets.length" class="mm-assets">
+          <template v-if="assets.length">
+            <div class="mm-filter">
+              <select v-if="folders.length" v-model="folderFilter" class="mm-input" title="Show one folder">
+                <option :value="null">All folders ({{ assets.length }})</option>
+                <option v-if="assets.some(a => !a.folder)" value="">Loose files</option>
+                <option v-for="f in folders" :key="f" :value="f">{{ f }}</option>
+              </select>
+              <input v-model="assetQuery" class="mm-input" type="search" placeholder="Search assets" />
+            </div>
+            <button v-if="folderFilter" class="mm-btn mm-small mm-danger mm-folder-del" @click="deleteFolder">
+              Remove this folder ({{ shownAssets.length }})
+            </button>
+          </template>
+          <div v-if="shownAssets.length" class="mm-assets">
             <div
-              v-for="a in assets" :key="a.id"
+              v-for="a in shownAssets" :key="a.id"
               class="mm-asset" :class="{ active: placing?.id === a.id }" :title="`${a.name}: click, then click the map`"
               @click="startPlacing(a)"
             >
@@ -70,7 +87,11 @@
               <button class="mm-asset-del" title="Remove from the library (placed copies stay)" @click.stop="deleteAsset(a)">×</button>
             </div>
           </div>
-          <p v-else class="mm-hint">Import PNG, WebP or SVG images with transparent backgrounds: furniture, trees, rugs, statues.</p>
+          <p v-else-if="assets.length" class="mm-hint">No assets match.</p>
+          <p v-else class="mm-hint">
+            Import PNG, WebP or SVG images with transparent backgrounds: furniture, trees, rugs, statues.
+            Pick single files or a whole folder, or drop them on the page. Subfolders become folders here.
+          </p>
         </section>
 
         <section class="mm-section">
@@ -137,7 +158,8 @@ import {
 } from '~/rules/battlemap'
 import { resolveImage } from '~/rules/images'
 import { battleMapPng, drawBattleMap, drawProp } from '~/utils/battlemapDraw'
-import { fileToAssetImage, pickImageFiles } from '~/utils/image'
+import { droppedImageFiles, fileToAssetImage, pickImageFiles, pickImageFolder } from '~/utils/image'
+import { assetFolder, assetFolders, assetKey, assetName, filterAssets, type AssetSource } from '~/rules/mapAssets'
 
 type Tool = 'select' | 'brush' | 'rect' | 'room' | 'fill'
 const TOOLS: { id: Tool; label: string; hint: string }[] = [
@@ -185,6 +207,14 @@ let strokeStart: BattleMap | null = null
 const assets = ref<DbMapAsset[]>([])
 const assetUrls = ref<Record<string, string>>({})
 const importing = ref(false)
+const importDone = ref(0)
+const importTotal = ref(0)
+const dropping = ref(false)
+/** Library filter: null = all folders, '' = loose files. */
+const folderFilter = ref<string | null>(null)
+const assetQuery = ref('')
+const folders = computed(() => assetFolders(assets.value))
+const shownAssets = computed(() => filterAssets(assets.value, folderFilter.value, assetQuery.value))
 /** The library asset the next click places. */
 const placing = shallowRef<DbMapAsset | null>(null)
 const selectedId = ref<string | null>(null)
@@ -219,22 +249,90 @@ async function loadAssets() {
   for (const a of assets.value) loadImage(a.image)
 }
 
-async function importAssets() {
+async function importFiles() {
   const files = await pickImageFiles()
-  if (!files.length) return
+  await importSources(files.map(file => ({ file, path: file.name })))
+}
+
+async function importFolder() {
+  const sources = await pickImageFolder()
+  if (!sources.length) return notify('No PNG, WebP, SVG, JPEG or GIF images in that folder.', 'info')
+  await importSources(sources)
+}
+
+/** Adds the images to the library; ones already there (same folder and name) are skipped. */
+async function importSources(sources: AssetSource[]) {
+  if (!sources.length || importing.value) return
+  const known = new Set(assets.value.map(a => assetKey(a.folder, a.name)))
   importing.value = true
+  importDone.value = 0
+  importTotal.value = sources.length
   let failed = 0
-  for (const file of files) {
-    try {
-      const { blob, width, height } = await fileToAssetImage(file)
-      await dbApi.mapAssets.add(file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' '), blob, width, height)
-    } catch {
-      failed++
+  let skipped = 0
+  for (const { file, path } of sources) {
+    const name = assetName(file.name)
+    const folder = assetFolder(path)
+    const key = assetKey(folder, name)
+    if (known.has(key)) {
+      skipped++
+    } else {
+      try {
+        const { blob, width, height } = await fileToAssetImage(file)
+        await dbApi.mapAssets.add(name, blob, width, height, folder || undefined)
+        known.add(key)
+      } catch {
+        failed++
+      }
     }
+    importDone.value++
   }
   importing.value = false
   await loadAssets()
-  if (failed) notify(`${failed} of ${files.length} files could not be read as images.`, 'warning')
+  // Show what came in: the folder, when it was one
+  const top = new Set(sources.map(s => assetFolder(s.path).split(' / ')[0]))
+  if (top.size === 1) {
+    const only = [...top][0]
+    folderFilter.value = only || (folders.value.length ? '' : null)
+  }
+  assetQuery.value = ''
+  const notes = [
+    skipped && `${skipped} already in the library were skipped`,
+    failed && `${failed} could not be read as images`,
+  ].filter(Boolean)
+  if (notes.length) notify(`Imported ${sources.length - skipped - failed} of ${sources.length}: ${notes.join(', ')}.`, failed ? 'warning' : 'info')
+}
+
+async function deleteFolder() {
+  const list = shownAssets.value
+  if (!list.length) return
+  if (!window.confirm(`Remove ${list.length} assets in "${folderFilter.value || 'Loose files'}" from the library? Copies already placed on maps stay.`)) return
+  await dbApi.mapAssets.deleteMany(list.map(a => a.id!))
+  if (placing.value && list.some(a => a.id === placing.value!.id)) placing.value = null
+  folderFilter.value = null
+  assetQuery.value = ''
+  await loadAssets()
+}
+
+function hasFiles(e: DragEvent) {
+  return !!e.dataTransfer && [...e.dataTransfer.types].includes('Files')
+}
+function onDragOver(e: DragEvent) {
+  if (!hasFiles(e)) return
+  e.preventDefault()
+  e.dataTransfer!.dropEffect = 'copy'
+  dropping.value = true
+}
+function onDragLeave(e: DragEvent) {
+  // Leaving for a child element fires too; only the page's own edge counts
+  if (!e.relatedTarget || !(e.currentTarget as Node).contains(e.relatedTarget as Node)) dropping.value = false
+}
+async function onDrop(e: DragEvent) {
+  if (!hasFiles(e)) return
+  e.preventDefault()
+  dropping.value = false
+  const sources = await droppedImageFiles(e.dataTransfer!)
+  if (!sources.length) return notify('No PNG, WebP, SVG, JPEG or GIF images were dropped.', 'info')
+  await importSources(sources)
 }
 
 async function deleteAsset(a: DbMapAsset) {
@@ -825,7 +923,28 @@ async function save() {
 .mm-label-row .mm-label { margin-bottom: 0; }
 .mm-small { padding: 3px 8px; font-size: 11px; }
 .mm-danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+.mm-import { display: flex; gap: 4px; }
+.mm-progress { font-size: 11px; color: var(--ink-faded); }
+.mm-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.mm-input {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--border-hi);
+  border-radius: var(--r);
+  background: var(--surface-solid);
+  color: var(--ink);
+  font-size: 12px;
+}
+.mm-folder-del { width: 100%; margin-bottom: 6px; }
+.mm-page.mm-dropping { outline: 3px dashed var(--accent); outline-offset: -3px; }
 .mm-assets {
+  max-height: 360px;
+  overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 4px;
