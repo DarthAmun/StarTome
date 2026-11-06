@@ -1,13 +1,14 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getDb } from '~/composables/useDb'
-import { rulesGet, rulesQuery, rulesSaveUser } from '~/composables/useRules'
+import { notifyRulesChanged, rulesGet, rulesQuery, rulesSaveUser } from '~/composables/useRules'
 import { buildStats, newBuild } from '~/rules/creatureBuilding'
 import { newRulesEntity } from '~/rules/factory'
 import type { Creature } from '~/types/rules'
 
 describe('built creatures', () => {
-  beforeEach(async () => { await getDb().rules.clear() })
+  // Cleared behind the repository's back: tell it, as the app's writers do
+  beforeEach(async () => { await getDb().rules.clear(); notifyRulesChanged() })
 
   it('are plain homebrew creatures the compendium finds at their level', async () => {
     const build = newBuild('brute')

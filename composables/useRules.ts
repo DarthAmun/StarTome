@@ -48,12 +48,44 @@ const bulkRevision = ref(0)
 /** A write: lists reload; the name index is patched with the entry's old and new name. */
 function touch(before?: RulesEntity | null, after?: RulesEntity | null) {
   queryCache.clear()
-  if (before) indexRemove(before)
-  if (after) indexAdd(after)
+  if (before) { indexRemove(before); kindIndexRemove(before) }
+  if (after) { indexAdd(after); kindIndexPut(after) }
+  if (!before && !after) kindIndex.clear()
   revision.value++
 }
 
-function matcher(q: RulesQuery): (e: RulesEntity) => boolean {
+/**
+ * What list filters and sorting look at, per entry (local edits applied).
+ * The kind index keeps one of these per entry in memory, so a new search or
+ * filter doesn't read every row of the kind again (~320 ms for 6,900
+ * creatures before); only the shown page is read.
+ */
+interface Facets {
+  id: string
+  /** Stored sortName: the order of the [kind+sortName] index. */
+  key: string
+  sortName: string
+  level: number
+  rarity: Rarity
+  game: RulesEntity['game']
+  origin: RulesOrigin
+  pack: string
+  traits: string[]
+  isFavorite: boolean
+  superseded: boolean
+  removed: boolean
+}
+
+function facetsOf(raw: RulesEntity): Facets {
+  const e = withLocalEdits(raw)
+  return {
+    id: raw.id, key: raw.sortName, sortName: e.sortName, level: e.level, rarity: e.rarity, game: e.game,
+    origin: e.origin, pack: e.origin === 'user' ? packOf(e) : '', traits: e.traits ?? [], isFavorite: !!e.isFavorite,
+    superseded: !!e.supersededBy, removed: !!e.upstream?.removed,
+  }
+}
+
+function matcher(q: RulesQuery): (e: Facets) => boolean {
   const text = q.text?.trim().toLowerCase() ?? ''
   const games = q.games?.length ? new Set<string>([...q.games, 'both']) : null
   const rarities = q.rarities?.length ? new Set(q.rarities) : null
@@ -61,14 +93,13 @@ function matcher(q: RulesQuery): (e: RulesEntity) => boolean {
   const traits = q.traits?.map(t => t.toLowerCase()) ?? []
   const hideSuperseded = q.hideSuperseded ?? true
   const packs = q.packs?.length ? new Set(q.packs) : null
-  return (raw) => {
-    const e = withLocalEdits(raw)
+  return (e) => {
     if (games && !games.has(e.game)) return false
-    if (hideSuperseded && e.supersededBy) return false
-    if (!q.showRemoved && e.upstream?.removed) return false
+    if (hideSuperseded && e.superseded) return false
+    if (!q.showRemoved && e.removed) return false
     if (q.favoritesOnly && !e.isFavorite) return false
     if (origins && !origins.has(e.origin)) return false
-    if (packs && (e.origin !== 'user' || !packs.has(packOf(e)))) return false
+    if (packs && (e.origin !== 'user' || !packs.has(e.pack))) return false
     if (rarities && !rarities.has(e.rarity)) return false
     if (q.levelMin !== null && q.levelMin !== undefined && e.level < q.levelMin) return false
     if (q.levelMax !== null && q.levelMax !== undefined && e.level > q.levelMax) return false
@@ -83,29 +114,77 @@ function matcher(q: RulesQuery): (e: RulesEntity) => boolean {
 const queryCache = new Map<string, Promise<string[]>>()
 const QUERY_CACHE_MAX = 20
 
+// ── Kind index ──────────────────────────────────────────────────────────────
+// Facets of every entry of a kind, in [kind+sortName] order (sortName, then id).
+// Built on the first query of the kind, patched by single-entry writes, dropped
+// after a sync, an import or a change in another tab.
+const kindIndex = new Map<RulesKind, Promise<Facets[]>>()
+const byLevelCache = new WeakMap<Facets[], Facets[]>()
+
+const before = (a: Facets, b: Facets) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+
+function kindRows(kind: RulesKind): Promise<Facets[]> {
+  let p = kindIndex.get(kind)
+  if (!p) {
+    p = (async () => {
+      const rows: Facets[] = []
+      await getDb().rules.where('[kind+sortName]').between([kind, ''], [kind, '\uffff']).each(raw => { rows.push(facetsOf(raw)) })
+      return rows
+    })()
+    kindIndex.set(kind, p)
+    p.catch(() => { if (kindIndex.get(kind) === p) kindIndex.delete(kind) })
+  }
+  return p
+}
+
+/** [kind+level+sortName] order: level, then sortName, then id. */
+function rowsByLevel(rows: Facets[]): Facets[] {
+  let sorted = byLevelCache.get(rows)
+  if (!sorted) {
+    sorted = [...rows].sort((a, b) => a.level - b.level || before(a, b))
+    byLevelCache.set(rows, sorted)
+  }
+  return sorted
+}
+
+/** Replaces or inserts an entry in its kind's index, if that index is loaded. */
+function kindIndexPut(raw: RulesEntity) {
+  const p = kindIndex.get(raw.kind)
+  if (!p) return
+  kindIndex.set(raw.kind, p.then(rows => {
+    const next = rows.filter(r => r.id !== raw.id)
+    const f = facetsOf(raw)
+    let lo = 0, hi = next.length
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (before(next[mid], f) < 0) lo = mid + 1; else hi = mid }
+    next.splice(lo, 0, f)
+    return next
+  }))
+}
+
+function kindIndexRemove(raw: RulesEntity) {
+  const p = kindIndex.get(raw.kind)
+  if (p) kindIndex.set(raw.kind, p.then(rows => rows.filter(r => r.id !== raw.id)))
+}
+
 async function matchingIds(q: RulesQuery): Promise<string[]> {
-  const db = getDb()
-  const byLevel = q.sort === 'level'
-  // [kind+level+sortName] sorts by level, then by name within a level
-  const index = byLevel ? '[kind+level+sortName]' : '[kind+sortName]'
-  const lower = byLevel ? [q.kind, -Infinity, ''] : [q.kind, '']
-  const upper = byLevel ? [q.kind, Infinity, '\uffff'] : [q.kind, '\uffff']
-  let coll = db.rules.where(index).between(lower, upper, true, true)
-  if (q.dir === 'desc') coll = coll.reverse()
+  const all = await kindRows(q.kind)
+  const rows = q.sort === 'level' ? rowsByLevel(all) : all
   const keep = matcher(q)
   const ids: string[] = []
   // Both releases ship the same conditions (same Foundry doc id): across games show one, the PF2e copy
   const twins = q.kind === 'condition' && !q.games?.length ? new Map<string, number>() : null
-  await coll.each(row => {
-    if (!keep(row)) return
+  const desc = q.dir === 'desc'
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[desc ? rows.length - 1 - i : i]
+    if (!keep(row)) continue
     const docId = twins && row.origin === 'foundry' && row.game !== 'both' ? row.id.split(':').pop()! : null
     if (docId) {
       const at = twins!.get(docId)
-      if (at !== undefined) { if (row.game === 'pf2e') ids[at] = row.id; return }
+      if (at !== undefined) { if (row.game === 'pf2e') ids[at] = row.id; continue }
       twins!.set(docId, ids.length)
     }
     ids.push(row.id)
-  })
+  }
   return ids
 }
 
@@ -133,7 +212,7 @@ export async function consumablePriceMedians(game: GameId): Promise<Record<numbe
   const keep = matcher({ kind: 'item', games: [game] })
   const byLevel: Record<number, number[]> = {}
   await getDb().rules.where('kind').equals('item').each(raw => {
-    if (!keep(raw)) return
+    if (!keep(facetsOf(raw))) return
     const e = withLocalEdits(raw) as Item
     if (e.category !== 'consumable' || !e.price?.cp) return
     ;(byLevel[e.level] ??= []).push(Math.round(e.price.cp / Math.max(1, e.priceFor ?? 1)))
@@ -146,8 +225,9 @@ export async function consumablePriceMedians(game: GameId): Promise<Record<numbe
 }
 
 /**
- * Name search across all kinds (global search, quick lookup). Prefix matches
- * come first via the index; a contains-scan fills up the rest.
+ * Name search across all kinds (global search, quick lookup): prefix matches
+ * first, then names that contain the text, each by name. Names come from the
+ * in-memory name index, so only the rows of the hits are read.
  */
 export async function rulesSearch(text: string, limit = 8, games?: GameId[]): Promise<RulesEntity[]> {
   const q = text.trim().toLowerCase()
@@ -155,29 +235,34 @@ export async function rulesSearch(text: string, limit = 8, games?: GameId[]): Pr
   const gameSet = games?.length ? new Set<string>([...games, 'both']) : null
   const keep = (e: RulesEntity) => !e.supersededBy && !e.upstream?.removed && (!gameSet || gameSet.has(e.game))
   const db = getDb()
-  const prefix = await db.rules.where('sortName').startsWith(q).filter(keep).limit(limit).toArray()
-  if (prefix.length >= limit) return prefix.map(withLocalEdits)
-  const seen = new Set(prefix.map(e => e.id))
-  let rest: RulesEntity[]
-  if (nameIndexReady) {
-    // Contains-matches from the in-memory name index (PERF-04): only matching rows are read
-    const keys: [string, string][] = []
-    for (const key of nameCounts.keys()) {
-      const sep = key.indexOf(':')
-      const name = key.slice(sep + 1)
-      if (!name.startsWith(q) && name.includes(q)) keys.push([key.slice(0, sep), name])
-      if (keys.length >= limit * 8) break
-    }
-    rest = keys.length
-      ? await db.rules.where('[kind+sortName]').anyOf(keys).filter(e => !seen.has(e.id) && keep(e)).limit(limit - prefix.length).toArray()
-      : []
-  } else {
-    rest = await db.rules
-      .filter(e => !seen.has(e.id) && e.sortName.includes(q) && keep(e))
-      .limit(limit - prefix.length)
-      .toArray()
+  startNameIndex()
+  if (!nameIndexReady) {
+    // Before the name index has loaded (just after start or a sync): read through the database
+    const prefix = await db.rules.where('sortName').startsWith(q).filter(keep).limit(limit).toArray()
+    if (prefix.length >= limit) return prefix.map(withLocalEdits)
+    const seen = new Set(prefix.map(e => e.id))
+    const rest = await db.rules.filter(e => !seen.has(e.id) && e.sortName.includes(q) && keep(e)).limit(limit - prefix.length).toArray()
+    return [...prefix, ...rest].map(withLocalEdits)
   }
-  return [...prefix, ...rest].map(withLocalEdits)
+  const prefix: [string, string][] = [], contains: [string, string][] = []
+  for (const key of nameCounts.keys()) {
+    const sep = key.indexOf(':')
+    const name = key.slice(sep + 1)
+    if (name.startsWith(q)) prefix.push([key.slice(0, sep), name])
+    else if (name.includes(q)) contains.push([key.slice(0, sep), name])
+  }
+  const byName = (a: [string, string], b: [string, string]) => (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : a[0] < b[0] ? -1 : 1)
+  const out: RulesEntity[] = []
+  // Superseded, removed and other-game entries are filtered out after reading: read a few more than needed per batch
+  const BATCH = Math.max(limit * 2, 16)
+  for (const keys of [prefix.sort(byName), contains.sort(byName)]) {
+    for (let i = 0; i < keys.length && out.length < limit; i += BATCH) {
+      const rows = await db.rules.where('[kind+sortName]').anyOf(keys.slice(i, i + BATCH)).toArray()
+      rows.sort((a, b) => (a.sortName < b.sortName ? -1 : a.sortName > b.sortName ? 1 : a.kind < b.kind ? -1 : 1))
+      for (const r of rows) { if (out.length < limit && keep(r)) out.push(r) }
+    }
+  }
+  return out.map(withLocalEdits)
 }
 
 export async function rulesGet(id: string): Promise<RulesEntity | undefined> {
@@ -376,7 +461,7 @@ export async function rulesDeleteMany(ids: string[]): Promise<number> {
   await db.rules.bulkDelete(rows.map(r => r.id))
   for (const r of rows) await Promise.all([releaseImage(r, r.img), releaseImage(r, (r as { tokenImg?: string | null }).tokenImg)])
   queryCache.clear()
-  for (const r of rows) indexRemove(r, false)
+  for (const r of rows) { indexRemove(r, false); kindIndexRemove(r) }
   nameIndex.value = new Map(nameCounts)
   revision.value++
   return rows.length
@@ -432,12 +517,15 @@ async function loadNameIndex() {
 
 /** Synchronous "does this compendium entry exist?" for ref rendering. Loads once,
  *  is patched on every single-entry write and reloads after a sync or import. */
+function startNameIndex() {
+  if (!import.meta.client || nameIndexStarted) return
+  nameIndexStarted = true
+  loadNameIndex()
+  watch(bulkRevision, () => { loadNameIndex() })
+}
+
 export function useRulesIndex() {
-  if (import.meta.client && !nameIndexStarted) {
-    nameIndexStarted = true
-    loadNameIndex()
-    watch(bulkRevision, () => { loadNameIndex() })
-  }
+  startNameIndex()
   return {
     has: (kind: string, name: string) => nameIndex.value.has(`${kind}:${name.trim().toLowerCase()}`),
     names: nameIndex,
@@ -449,7 +537,7 @@ export function useRulesRevision() {
 }
 
 // A sync or edit in another tab: lists and counts refresh (the name index reloads after our own sync/import)
-onTablesChanged(['rules'], () => { queryCache.clear(); revision.value++ })
+onTablesChanged(['rules'], () => { queryCache.clear(); kindIndex.clear(); revision.value++ })
 
 /** For writers outside this module (the sync worker, imports): tell lists, counts and the ref index to reload. */
 export function notifyRulesChanged() {
@@ -457,3 +545,6 @@ export function notifyRulesChanged() {
   touch()
   bulkRevision.value++
 }
+
+/** Tests only: loads the name index (the app starts it on first use in the browser). */
+export const loadRulesNameIndexForTests = loadNameIndex
