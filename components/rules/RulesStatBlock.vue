@@ -229,6 +229,7 @@
       </p>
       <p v-for="a in starship.actions" :key="a.name" class="rsb-line rsb-action">
         <b>{{ a.name }}</b> <span v-if="formatActionCost(a.cost)" class="rsb-glyph">{{ formatActionCost(a.cost) }}</span>
+        <button v-if="canPlaceZoneArea && parseZoneAreaEffect(a.text)" class="rsb-place" :title="`Set up the ${parseZoneAreaEffect(a.text)!.size}-zone ${parseZoneAreaEffect(a.text)!.kind} on the sensor map`" @click.stop="placeZoneArea(parseZoneAreaEffect(a.text)!)">Zone area</button>
         <template v-if="a.traits.length"> ({{ a.traits.map(formatTrait).join(', ') }})</template>
         <template v-if="a.frequency"> <b>Frequency</b> {{ a.frequency }};</template>
         {{ ' ' }}<span class="rsb-md" v-html="md(a.text)" />
@@ -389,6 +390,7 @@ import { useDiceRoll, useStatRolls } from '~/composables/useDiceRoll'
 import { strikeModifier, twoHandFormula, type MapStep } from '~/rules/rolls'
 import { parseAreaEffect } from '~/rules/areas'
 import { areaFireDcFromStrike, weaponAreas, type WeaponArea } from '~/rules/sf2eGear'
+import { parseZoneAreaEffect } from '~/rules/sensorMap'
 import { useEntityMarkdown } from '~/composables/useEntityMarkdown'
 import { rulesClassFeats, rulesFindByName, useRulesRevision } from '~/composables/useRules'
 import { classOptionGroups, classTrait, featuresByLevel, type OptionGroup } from '~/rules/subclasses'
@@ -491,7 +493,7 @@ const skills = computed(() =>
 const MAP_STEPS: MapStep[] = [0, 1, 2]
 const MAP_TITLE: Record<MapStep, string> = { 0: 'First attack', 1: 'Second attack (multiple attack penalty)', 2: 'Third attack (multiple attack penalty)' }
 const MAP_SUFFIX: Record<MapStep, string> = { 0: '', 1: ' (2nd attack)', 2: ' (3rd attack)' }
-const { roll, canPlaceArea, placeArea } = useStatRolls(() => props.game)
+const { roll, canPlaceArea, placeArea, canPlaceZoneArea, placeZoneArea } = useStatRolls(() => props.game)
 
 function check(label: string, modifier: number) {
   roll({ kind: 'check', label: `${props.entity.name}: ${label}`, modifier })

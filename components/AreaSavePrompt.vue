@@ -69,6 +69,7 @@ import { checkDegree, type Degree } from '~/rules/dcs'
 import { basicSaveDamage, DEGREE_LABEL, rollDie, rollExpression } from '~/rules/rolls'
 import { useEncounterStore, type EncounterToken } from '~/stores/encounter'
 import type { Creature, Hazard, Starship, Vehicle } from '~/types/rules'
+import { playerShipDefenses } from '~/composables/useStarshipEncounter'
 
 const props = defineProps<{
   /** A Play Buddy character's shared numbers, for its saves. */
@@ -103,6 +104,8 @@ watch(() => prompt.value?.id, async () => {
 watch([prompt, area], ([p, a]) => { if (p && (!a || !a.effect)) store.closeAreaPrompt(p.id) })
 
 async function saveModifier(t: EncounterToken, save: 'fort' | 'ref' | 'will'): Promise<number | null> {
+  // The party's starship: its sheet with the helmed bonuses (the Stations panel keeps it current)
+  if (t.sensorRole === 'player-ship') return playerShipDefenses.value?.tokenId === t.id ? playerShipDefenses.value.saves[save] : null
   const mirror = props.pbMirrorOf(t)
   if (mirror?.defenses) return mirror.defenses[save]
   if (!t.linkedRulesId) return null

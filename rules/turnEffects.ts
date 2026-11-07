@@ -167,6 +167,10 @@ export function startOfTurn(conds: TokenCondition[], settings: AutomationSetting
     if (slowed && !stunned) notes.push(`Slowed ${slowed}: loses ${slowed} action${slowed === 1 ? '' : 's'}`)
     if (quickened) notes.push('Quickened: 1 extra action (limited uses)')
   }
+  // Starships (Tech Core p. 173)
+  if (ed.has('Compromised')) notes.push(`Compromised ${ed.value('Compromised')}: hull integrity check (flat DC ${10 + ed.value('Compromised')}) in the Stations panel`)
+  else if (ed.has('Inoperable')) notes.push("Inoperable: can't act or move; −4 to AC, Perception and Reflex; off-guard")
+  if (ed.has('Off-Kilter')) notes.push("Off-kilter: −2 to attacks, Area Fire / Auto-Fire DCs and Reflex; can't move until Change Heading")
   return ed.result({ prompts, notes })
 }
 

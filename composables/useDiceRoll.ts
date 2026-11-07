@@ -1,3 +1,4 @@
+import type { ZoneAreaSpec } from '~/rules/sensorMap'
 import { inject, ref, type InjectionKey } from 'vue'
 import { rollCheck, rollStrikeDamage } from '~/rules/rolls'
 import { GAME_RULES } from '~/rules/registry'
@@ -50,6 +51,8 @@ export interface RollContext {
   roll(r: StatRoll): void
   /** Starts placing an area with this effect on the map (COMBAT_PLAN.md §5); only on the encounter map. */
   placeArea?(spec: AreaSpec): void
+  /** Starship abilities: a zone area on the sensor map (P7). */
+  placeZoneArea?(spec: ZoneAreaSpec): void
 }
 
 /** An area an ability describes: "20-foot burst … DC 22 basic Reflex … 6d6 fire damage". */
@@ -93,7 +96,11 @@ export function useStatRolls(game: () => GameId | undefined) {
   function placeArea(spec: AreaSpec) {
     ctx?.placeArea?.(spec)
   }
-  return { roll, canPlaceArea, placeArea }
+  const canPlaceZoneArea = !!ctx?.placeZoneArea
+  function placeZoneArea(spec: ZoneAreaSpec) {
+    ctx?.placeZoneArea?.(spec)
+  }
+  return { roll, canPlaceArea, placeArea, canPlaceZoneArea, placeZoneArea }
 }
 
 /** A stat-block roll without a target, as the dice panel shows it. */

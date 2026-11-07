@@ -40,6 +40,19 @@
         <button class="smp-btn smp-danger" title="Remove from the sensor map" @click="remove(selected.id)">Remove</button>
       </div>
 
+      <!-- Damage and repairs (P7) -->
+      <div v-if="selected" class="smp-bar">
+        <input v-model.number="dmg" class="smp-input smp-num" type="number" min="0" placeholder="dmg" @keydown.enter="applyDamage" />
+        <label class="smp-field" title="Critical hit (or the ship's critical failure)"><input v-model="dmgCrit" type="checkbox" /> crit</label>
+        <label class="smp-field" title="Bypassing: ignores Shield Points"><input v-model="dmgBypass" type="checkbox" /> bypassing</label>
+        <label v-if="selected.sensorRole === 'player-ship'" class="smp-field" title="At 0 HP the ship is inoperable instead of compromised"><input v-model="dmgNonlethal" type="checkbox" /> nonlethal</label>
+        <button class="smp-btn" :disabled="!dmg" @click="applyDamage">Damage</button>
+        <button class="smp-btn" :disabled="!dmg" title="Restore Hull Points (Shield Points don't come back this way)" @click="repair">Repair HP</button>
+        <button v-if="selected.shieldMax" class="smp-btn" :title="shieldTitle" @click="generateShields">{{ selected.sensorRole === 'player-ship' ? `Generate Shields (${shieldDice}d4)` : `Fortify (+${fortify})` }}</button>
+        <button v-if="selected.sensorRole === 'ship' && levelOf(selected)" class="smp-btn" title="Repair Self (3 actions): one battle station stops malfunctioning and it regains HP equal to its level" @click="repairSelf">Repair Self (+{{ levelOf(selected) }})</button>
+        <span v-if="lastNote" class="smp-dim">{{ lastNote }}</span>
+      </div>
+
       <!-- Zone area from the selected ship -->
       <div v-if="selected && areaOpen" class="smp-bar smp-area">
         <select v-model="area.kind" class="smp-input">
@@ -71,6 +84,7 @@ import { useParty } from '~/composables/useParty'
 import { rulesGet, rulesQuery } from '~/composables/useRules'
 import { areaZones, burstInRange, clampZone, DEFAULT_ZONES, fromBehind, inRange, tokensInZones, type Heading, type ZoneArea, type ZoneAreaKind } from '~/rules/sensorMap'
 import { starshipLevel, starshipSheet } from '~/rules/playerStarship'
+import { generateShieldsDice, repairSelfHp } from '~/rules/starshipCombat'
 import type { AreaOverlay, AreaSave } from '~/rules/areas'
 import type { RulesEntity, Starship } from '~/types/rules'
 import type { TrackToken } from '~/components/SensorTrack.vue'
@@ -199,6 +213,53 @@ async function rollSaves() {
   await store.addArea(overlay)
   store.openAreaPrompt(id, targets.value.map(t => t.id), overlay.label)
   areaOpen.value = false
+}
+
+// ── Damage and repairs ──
+const dmg = ref<number | null>(null)
+const dmgCrit = ref(false)
+const dmgBypass = ref(false)
+const dmgNonlethal = ref(false)
+const lastNote = ref('')
+async function applyDamage() {
+  if (!selected.value || !dmg.value) return
+  await store.applyDamage(selected.value.id, dmg.value, { critical: dmgCrit.value, bypassing: dmgBypass.value, nonlethal: dmgNonlethal.value })
+  lastNote.value = `${dmg.value} damage${dmgBypass.value ? ' (bypassing)' : ''}`
+  dmg.value = null; dmgCrit.value = false; dmgBypass.value = false; dmgNonlethal.value = false
+}
+async function repair() {
+  if (!selected.value || !dmg.value || selected.value.hpCurrent == null) return
+  await store.updateToken(selected.value.id, { hpCurrent: Math.min(selected.value.hpMax ?? Infinity, selected.value.hpCurrent + dmg.value) })
+  lastNote.value = `+${dmg.value} HP`
+  dmg.value = null
+}
+const levelOf = (t: EncounterToken) => (t.linkedRulesId ? entries.value.get(t.linkedRulesId)?.level ?? 0 : 0)
+const shipLevel = computed(() => starshipLevel(shipRow.value?.level_pinned, party.party.value.level))
+const shieldDice = computed(() => generateShieldsDice(shipLevel.value))
+const fortify = computed(() => {
+  const e = selected.value?.linkedRulesId ? entries.value.get(selected.value.linkedRulesId) : undefined
+  return e?.kind === 'starship' ? (e as Starship).shields?.fortify ?? 0 : 0
+})
+const shieldTitle = computed(() => selected.value?.sensorRole === 'player-ship'
+  ? 'Generate Shields (generator station action): roll the dice and add them'
+  : 'Fortify Shield Points (its generator): adds the fortify value')
+async function generateShields() {
+  const t = selected.value
+  if (!t) return
+  let gain = fortify.value
+  if (t.sensorRole === 'player-ship') {
+    gain = 0
+    for (let i = 0; i < shieldDice.value; i++) gain += Math.floor(Math.random() * 4) + 1
+  }
+  await store.setShields(t.id, (t.shieldPoints ?? 0) + gain)
+  lastNote.value = `+${gain} SP`
+}
+async function repairSelf() {
+  const t = selected.value
+  if (!t || t.hpCurrent == null) return
+  const gain = repairSelfHp(levelOf(t))
+  await store.updateToken(t.id, { hpCurrent: Math.min(t.hpMax ?? Infinity, t.hpCurrent + gain) })
+  lastNote.value = `Repair Self: +${gain} HP, one station repaired`
 }
 
 /** From a stat block: an area ability of the selected ship (P7 fills it from "3-zone cone … DC 16"). */

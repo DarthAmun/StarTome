@@ -90,6 +90,22 @@ export function tokensInZones<T extends ZoneToken>(area: ZoneArea, zonesCovered:
   return tokens.filter(t => set.has(t.zone) && !((area.kind === 'cone' || area.kind === 'line') && t.id === sourceId))
 }
 
+export interface ZoneAreaSpec { kind: ZoneAreaKind; size: number; dc?: number; save?: 'fort' | 'ref' | 'will'; basic?: boolean; damage?: string }
+
+/** A zone area with its save and damage, from a starship ability ("… (3-zone cone …), Damage 1d12+3 piercing (DC 16 basic Reflex save)"). */
+export function parseZoneAreaEffect(text: string): ZoneAreaSpec | null {
+  const area = parseZoneArea(text)
+  if (!area) return null
+  const plain = text.replace(/::(?:dice|button)\[([^\]|]+)(?:\|[^\]]*)?\]/g, '$1')
+  const save = plain.match(/DC\s*(\d+)\s+(basic\s+)?(reflex|fortitude|will)/i)
+  const dmg = plain.match(/(\d+d\d+(?:\s*[+-]\s*\d+)?)\s+([a-z]+)(?:\s+damage)?/i)
+  return {
+    ...area,
+    ...(save ? { dc: Number(save[1]), basic: !!save[2], save: ({ reflex: 'ref', fortitude: 'fort', will: 'will' } as const)[save[3].toLowerCase() as 'reflex'] } : {}),
+    ...(dmg ? { damage: `${dmg[1].replace(/\s/g, '')} ${dmg[2].toLowerCase()}` } : {}),
+  }
+}
+
 /** "3-zone cone", "1-zone burst", "6-zone line", "2-zone emanation" in an ability's text → kind and size. */
 export function parseZoneArea(text: string): { kind: ZoneAreaKind; size: number } | null {
   const m = (text ?? '').toLowerCase().match(/(\d+)[-\s]*zones?\s+(cone|burst|line|emanation)/)

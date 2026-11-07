@@ -60,7 +60,7 @@ Book content (enemy starships, station actions, upgrades, expansion bays) is **n
 | ~~**P4**~~ | ✅ Done 2026-11-07 (0.32.0): player starship sheet and crew roster (station assignments) | P3 | M |
 | ~~**P5**~~ | ✅ Done 2026-11-07 (0.33.0): ship interior map, battle stations on the map, helming, station actions | P4 | M |
 | ~~**P6**~~ | ✅ Done 2026-11-07 (0.34.0): sensor map (a row of zones), headings, ship tokens, zone areas | P3 | L |
-| **P7** | Starship combat engine: damage, shields, conditions, compromised, hull integrity | P5, P6 | L |
+| ~~**P7**~~ | ✅ Done 2026-11-07 (0.35.0): starship combat engine: damage, shields, conditions, compromised, hull integrity | P5, P6 | L |
 | **P8** | Encounter builder and resolution for starship encounters | P7 | S |
 | **P9** | Starship exploration and downtime | P4 | S–M |
 | **P10** | Play Buddy SF2e support (StarTome side + the spec for Play Buddy) | P4, Play Buddy | M |
@@ -285,7 +285,11 @@ The sensor map is a second view of the same encounter, next to the interior map.
 
 ---
 
-## P7. Starship combat engine (L)
+## P7. Starship combat engine (L) ✅ done 2026-11-07 (0.35.0)
+
+**Built:** `rules/starshipCombat.ts` (pure: SP-first damage with bypassing, the player ship's 0-HP → compromised/inoperable, hull damage while compromised, hull integrity check, repairs ending compromised with wrecked +1, ship state ↔ conditions, Generate Shields dice, Repair Self). The store's `applyDamage` uses it for every sensor-map token; the player ship skips the dying/defeated automation (`withPlayerShipEffects`), enters initiative right before the active turn (+0.5) and leaves it again, and marks every station malfunctioning (`starship.malfunctioning` on the encounter). The Stations panel shows the ship's live AC and saves (helmed item bonuses, the pilot's Piloting DC from their hand-entered Piloting, inoperable −4, off-kilter −2 Reflex), hands them to the save prompt (`playerShipDefenses`), runs the hull integrity check on the ship's turn (roll or pick a degree), toggles malfunctioning stations and greys out their actions, and writes HP, SP and compromised/wrecked/inoperable/off-kilter back to the ship. The sensor panel has damage (crit, bypassing, nonlethal), Repair HP, Generate Shields (player ship, rolled) / Fortify (enemies) and Repair Self. Starship abilities with a zone area get a "Zone area" button that preloads the sensor panel's area tool with its DC, save and damage. Turn reminders for compromised, inoperable and off-kilter. Enemy ships at 0 HP are defeated as usual (XP kept). Tests: `tests/starshipCombat.test.ts`.
+**Not done:** no warning when a creature-scale attack targets a starship (or the other way round); station actions are reminders, not one-click rolls; Strikes from a gunnery use the crew member's own attack roll.
+
 
 Builds on the existing combat store (`stores/encounter.ts`), combat log and undo.
 

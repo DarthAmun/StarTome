@@ -315,6 +315,7 @@
             @link="openLinkModal"
             @apply-damage="onCtxApplyDamage"
             @place-area="onPlaceArea"
+            @place-zone-area="onPlaceZoneArea"
           />
 
           <!-- Saves against an area (COMBAT_PLAN.md §5) -->
@@ -1596,6 +1597,13 @@ function onCtxAreaSaves() {
 function onPlaceArea(spec: AreaSpec, tokenId: number | null) {
   if (!areaTool.start(spec, tokenId)) return;
   activeTool.value = 'area';
+  statPanelTokenId.value = null;
+}
+
+/** A starship ability's zone area: the sensor panel selects the ship and fills its area tool. */
+function onPlaceZoneArea(spec: unknown, tokenId: number | null) {
+  sensorPanel.value?.select(tokenId);
+  sensorPanel.value?.startArea(spec);
   statPanelTokenId.value = null;
 }
 

@@ -14,6 +14,7 @@ import { damageWithTemp, grantTemp } from '~/rules/hp'
 import { cellsInArea, tokenInCells, type AreaOverlay, type AreaTrigger } from '~/rules/areas'
 import type { EncounterStarship } from '~/rules/playerStarship'
 import type { Heading, SensorMap, SensorRole } from '~/rules/sensorMap'
+import { hullIntegrityCheck, playerShipHpChange, shipDamage, shipStateOf, withShipState, type ShipStateChange } from '~/rules/starshipCombat'
 import type { Hazard, RulesEntity } from '~/types/rules'
 import { parseDefeated, type DefeatedEnemy } from '~/rules/advancement'
 import { healthState, type HealthState } from '~/composables/useConditions'
@@ -101,6 +102,12 @@ export interface BlankTokenInput {
 
 export interface HpChangeOptions {
   critical?: boolean
+  /** Starships: the damage ignores Shield Points (bypassing trait). */
+  bypassing?: boolean
+  /** Starships: nonlethal damage makes the player ship inoperable instead of compromised. */
+  nonlethal?: boolean
+  /** Player starship: hull damage of this change (set by applyDamage, also when the HP stay at 0). */
+  hullDamage?: number
   hitsAtZero?: number
   /** Damage taken by temporary HP in this change, logged as part of the damage. */
   absorbed?: number
@@ -550,6 +557,52 @@ export const useEncounterStore = defineStore('encounter', () => {
     if (zone != null) changes.sensorZone = Math.max(0, Math.min(zones - 1, zone))
     if (heading) changes.sensorHeading = heading
     await updateToken(id, changes)
+  }
+
+  // ── Starship combat (P7, rules/starshipCombat.ts) ──────────────────────────
+  /** The player ship's HP change → compromised / wrecked / inoperable, initiative and malfunctions. */
+  function withPlayerShipEffects(token: EncounterToken, updates: Partial<EncounterToken>, opts: HpChangeOptions): Partial<EncounterToken> {
+    const from = token.hpCurrent ?? 0
+    const to = updates.hpCurrent ?? 0
+    const change = playerShipHpChange(shipStateOf(token.conditions), from, to, { critical: opts.critical, nonlethal: opts.nonlethal, hullDamage: opts.hullDamage })
+    return { ...updates, ...shipChangeUpdates(token, change) }
+  }
+
+  /** Token updates (conditions, initiative) for a ship state change; malfunctions and notes are applied here. */
+  function shipChangeUpdates(token: EncounterToken, change: ShipStateChange): Partial<EncounterToken> {
+    const out: Partial<EncounterToken> = {}
+    const conditions = withShipState(token.conditions, change, (name, value) => ({ name, value }))
+    if (JSON.stringify(conditions) !== JSON.stringify(token.conditions)) out.conditions = conditions
+    if (change.initiative === true && token.initiative === null) {
+      // It takes its turns right before the turn in which it was reduced to 0 HP
+      const active = current.value?.tokens.find(t => t.id === _activeTurnTokenId.value)
+      out.initiative = (active?.initiative ?? 0) + 0.5
+      keepTurnPointer()
+    }
+    if (change.initiative === false) out.initiative = null
+    if (change.destroyed) out.isDead = true
+    if (change.malfunctionAll) setMalfunctioning('all', true)
+    for (const note of change.notes) appendLogEntry({ tokenId: token.id, tokenName: token.label || token.name, type: 'note', note, auto: true })
+    return out
+  }
+
+  /** The compromised ship's hull integrity check on its turn. */
+  async function hullIntegrity(tokenId: number, degree: Degree) {
+    const token = getToken(tokenId)
+    if (!token) return
+    const change = hullIntegrityCheck(shipStateOf(token.conditions), degree)
+    appendLogEntry({ tokenId, tokenName: token.label || token.name, type: 'roll', note: 'Hull integrity check', degree, auto: false })
+    await updateToken(tokenId, shipChangeUpdates(token, change))
+  }
+
+  /** Marks battle stations of the player ship malfunctioning (or repaired); 'all' = every station on the map. */
+  function setMalfunctioning(slots: number[] | 'all', on: boolean) {
+    const s = current.value?.starship
+    if (!s) return
+    const all = slots === 'all' ? s.markers.map(m => m.slot) : slots
+    const now = new Set(s.malfunctioning ?? [])
+    for (const slot of all) on ? now.add(slot) : now.delete(slot)
+    void setStarship({ ...s, malfunctioning: [...now].sort((a, b) => a - b) })
   }
 
   /** Shield Points of a sensor-map token (clamped to 0…max). */
@@ -1103,6 +1156,8 @@ export const useEncounterStore = defineStore('encounter', () => {
   /** Adds dying/wounded/unconscious (or defeat) to an HP change made by hand. */
   function withHpEffects(token: EncounterToken, updates: Partial<EncounterToken>, opts: HpChangeOptions): Partial<EncounterToken> {
     if (!('hpCurrent' in updates)) return updates
+    // The player starship doesn't die or go dying: it becomes compromised (rules/starshipCombat.ts)
+    if (token.sensorRole === 'player-ship') return withPlayerShipEffects(token, updates, opts)
     const usesDyingNow = updates.usesDying !== undefined ? (updates.usesDying ?? token.isPlayerToken) : usesDying(token)
     const fx = hpChangeEffects(updates.conditions ?? token.conditions, { from: token.hpCurrent, to: updates.hpCurrent ?? null, ...opts }, usesDyingNow, automation.value)
     const out = { ...updates }
@@ -1518,8 +1573,15 @@ export const useEncounterStore = defineStore('encounter', () => {
   function applyDamage(tokenId: number, amount: number, opts: HpChangeOptions = {}) {
     const token = getToken(tokenId)
     if (!token || token.hpCurrent === null || !amount) return
-    // A negative amount heals; temporary HP stay as they are
+    // A negative amount heals; temporary HP stay as they are (and Shield Points too)
     if (amount < 0) return updateToken(tokenId, { hpCurrent: token.hpCurrent - amount }, opts)
+    // Starships: Shield Points first, unless bypassing
+    if (token.shieldMax != null || token.sensorRole) {
+      const r = shipDamage({ sp: token.shieldPoints ?? 0, hp: token.hpCurrent }, amount, opts.bypassing)
+      const updates: Partial<EncounterToken> = { hpCurrent: r.hp }
+      if (r.absorbed) updates.shieldPoints = r.sp
+      return updateToken(tokenId, updates, { ...opts, absorbed: r.absorbed, hullDamage: Math.max(0, Math.round(amount) - r.absorbed) })
+    }
     const r = damageWithTemp({ hp: token.hpCurrent, temp: token.tempHp }, amount)
     const hitsAtZero = token.hpCurrent <= 0 && amount > r.absorbed ? 1 : 0
     const updates: Partial<EncounterToken> = { hpCurrent: r.hp }
@@ -1662,7 +1724,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     addTokenToEncounter, addCreatureToEncounter, addCreatureToEncounterAuto, addBlankToken, setTokenRulesLink, moveToken, updateToken, removeToken, rememberDefeated, clearDefeated, setStatus, addToLibrary, updateLibraryToken,
     openPlayerWindow, closePlayerWindow, setShapeOverlays,
     addArea, updateArea, removeArea, areaCells, areaPrompts, openAreaPrompt, closeAreaPrompt, addConditions, setStarship, setSensorMap,
-    addSensorToken, moveSensorToken, setShields,
+    addSensorToken, moveSensorToken, setShields, hullIntegrity, setMalfunctioning,
     nextTurn, prevTurn,
     automation, turnPrompts, turnNotes, usesDying, resolveRecovery, resolvePersistent, dismissPrompt,
     getToken, applyDamage, setTempHp, grantTempHp, rollAllInitiative, setInitiativeFormula, setPartyLevel, bulkRemoveTokens, bulkSetTokenVisibility, toggleCondition,

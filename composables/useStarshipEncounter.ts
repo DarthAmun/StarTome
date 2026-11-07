@@ -10,6 +10,14 @@ import { useStarship } from '~/composables/useStarship'
 import { freeSquaresNear, markersFromStations, starshipLevel, starshipSheet, type EncounterStarship } from '~/rules/playerStarship'
 import { DEFAULT_ZONES } from '~/rules/sensorMap'
 import { toPlain } from '~/utils/json'
+import { ref } from 'vue'
+
+/**
+ * The player ship's AC and saves right now (helmed bonuses, the pilot's
+ * Piloting DC, inoperable and off-kilter), set by the encounter's Stations
+ * panel. The save prompt uses them; any crew member rolls the ship's saves.
+ */
+export const playerShipDefenses = ref<{ tokenId: number; ac: number; saves: { fort: number; ref: number; will: number } } | null>(null)
 
 /** Makes an empty encounter the ship's interior map (build it in the map maker, then place the stations). */
 export async function createInterior(ship: DbStarship): Promise<number> {

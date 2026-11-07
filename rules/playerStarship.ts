@@ -244,6 +244,8 @@ export interface EncounterStarship {
   shipId: number
   role: 'interior' | 'battle'
   markers: StationMarker[]
+  /** Battle: slots of the player ship's malfunctioning battle stations (P7). */
+  malfunctioning?: number[]
 }
 
 export interface MapTokenLike { id: number; gridX: number; gridY: number; size: number; isDead?: boolean; conditions?: { name: string }[] }

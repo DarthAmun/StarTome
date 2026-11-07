@@ -69,6 +69,7 @@
  * turn order or the token menu. The header follows the token live: HP, temp
  * HP, AC and conditions. GM only.
  */
+import type { ZoneAreaSpec } from '~/rules/sensorMap'
 import { computed, provide, ref, shallowRef, watch } from 'vue'
 import { ROLL_CONTEXT, useDiceRoll, type AreaSpec, type RollAction, type StatRoll } from '~/composables/useDiceRoll'
 import { getConditionColor, hpColor } from '~/composables/useConditions'
@@ -100,6 +101,7 @@ const emit = defineEmits<{
   'apply-damage': [tokenId: number, amount: number, critical: boolean]
   /** An ability's area to put on the map, used by this token. */
   'place-area': [spec: AreaSpec, tokenId: number | null]
+  'place-zone-area': [spec: ZoneAreaSpec, tokenId: number | null]
 }>()
 
 const store = useEncounterStore()
@@ -203,7 +205,10 @@ function apply(tokenId: number, amount: number, critical: boolean): string {
   return `Applied ${amount} to ${t ? nameOf(t) : 'the target'}`
 }
 
-provide(ROLL_CONTEXT, { roll, placeArea: spec => emit('place-area', spec, props.token?.id ?? null) })
+provide(ROLL_CONTEXT, {
+  roll, placeArea: spec => emit('place-area', spec, props.token?.id ?? null),
+  ...(props.token?.sensorZone != null ? { placeZoneArea: (spec: ZoneAreaSpec) => emit('place-zone-area', spec, props.token?.id ?? null) } : {}),
+})
 
 function formatAt(iso: string) {
   const d = new Date(iso)
