@@ -24,11 +24,15 @@ import { characterOwner } from '~/rules/inventory'
 import { readyToLevel, XP_PER_LEVEL } from '~/rules/advancement'
 import { clampLevel, defaultLevelUpSelection, parseLevel, partyLevel, planLevelUp, type CharacterRole, type LevelChange, type PartyCharacter } from '~/rules/party'
 import type { NpcAttributes } from '~/types/entities'
-import { campaignRules } from '~/types/game'
 import { parseJson, toPlain } from '~/utils/json'
 import { onDomainEvent } from '~/composables/useDomainEvents'
 import { onTablesChanged } from '~/db/changes'
 import type { CharacterMirror } from '~/partylink/port'
+import { companionStats, type CompanionBuild } from '~/rules/companions'
+import { newRulesId } from '~/rules/factory'
+import { rulesGet, rulesSaveUser } from '~/composables/useRules'
+import { campaignGame, campaignRules } from '~/types/game'
+import type { Creature } from '~/types/rules'
 
 export interface Character extends PartyCharacter {
   campaignId: number
@@ -41,6 +45,9 @@ export interface Character extends PartyCharacter {
   pbPlayerId: string | null
   /** What that player last shared. */
   pbStatus: CharacterMirror | null
+  /** Companion type and stage (rules/companions.ts); its stat block is `companionRulesId`. */
+  companion: CompanionBuild | null
+  companionRulesId: string | null
 }
 
 export interface LevelUpEntry {
@@ -58,6 +65,7 @@ function toCharacter(r: DbCharacter): Character {
     level: r.level, xp: r.xp ?? 0, treatAsPc: r.role === 'pc' || !!r.treat_as_pc,
     strMod: r.str_mod ?? null, npcEntityId: r.npc_entity_id ?? null, tokenId: r.token_id ?? null,
     pbPlayerId: r.pb_player_id ?? null, pbStatus: r.pb_status ?? null,
+    companion: r.companion ?? null, companionRulesId: r.companion_rules_id ?? null,
   }
 }
 
@@ -213,6 +221,8 @@ async function load(campaignId: number, { adopt = true }: { adopt?: boolean } = 
     db.xpAwards.where('campaign_id').equals(campaignId).toArray(),
   ])
   loadedCampaign.value = campaignId
+  // Companion stat blocks follow their character's level, however it changed
+  for (const r of rows) if (r.companion) void syncCompanionEntry(r)
   characters.value = rows.map(toCharacter).sort((a, b) => (a.role === b.role ? a.name.localeCompare(b.name) : a.role === 'pc' ? -1 : 1))
   levelUps.value = ups.map(toLevelUp).sort((a, b) => b.at.localeCompare(a.at))
   xpAwards.value = awards.map(toXpAward).sort((a, b) => b.at.localeCompare(a.at))
@@ -289,12 +299,57 @@ async function applyMirror(id: number, mirror: CharacterMirror) {
   await reloadIfLoaded(row.campaign_id)
 }
 
+// ── Companions (rules/companions.ts) ──────────────────────────────────────
+
+/** Sets or clears a companion's build, and writes its stat block. */
+async function setCompanion(id: number, build: CompanionBuild | null) {
+  const row = await getDb().characters.get(id)
+  if (!row) return
+  await getDb().characters.update(id, { companion: build ? toPlain(build) : null, updated_at: now() })
+  if (build) await syncCompanionEntry({ ...row, companion: build }, true)
+  await reloadIfLoaded(row.campaign_id)
+}
+
+const syncing = new Set<number>()
+/**
+ * Writes the companion's homebrew creature entry when it's missing, its level
+ * is behind, or `force`. The character's library token links to it, so the
+ * map and the stat panel use the stat block.
+ */
+async function syncCompanionEntry(row: DbCharacter, force = false) {
+  if (!row.companion || syncing.has(row.id!)) return
+  syncing.add(row.id!)
+  try {
+    const existing = row.companion_rules_id ? await rulesGet(row.companion_rules_id) : undefined
+    if (!force && existing && existing.level === row.level && existing.name === row.name) return
+    const game = campaignGame(await dbApi.campaigns.get(row.campaign_id))
+    const stats = companionStats(row.companion, row.level)
+    const ts = now()
+    const entry: Creature = {
+      id: existing?.id ?? row.companion_rules_id ?? newRulesId(), origin: 'user', kind: 'creature', game,
+      name: row.name, sortName: row.name.toLowerCase(), level: row.level, rarity: 'common',
+      description: `${row.companion.base.typeName} companion, kept at its character's level by the party page.`,
+      sourceRefs: [], publication: { title: 'Companions', remaster: true },
+      createdAt: existing?.createdAt ?? ts, updatedAt: ts,
+      ...(existing?.img ? { img: existing.img } : {}), ...(existing?.gmNotes ? { gmNotes: existing.gmNotes } : {}),
+      spellcasting: [], inventory: [], ...stats,
+    }
+    await rulesSaveUser(entry)
+    if (row.companion_rules_id !== entry.id) await getDb().characters.update(row.id!, { companion_rules_id: entry.id })
+    // The character's map token stands for the stat block
+    if (row.token_id) await dbApi.tokens.update(row.token_id, { linkedRulesId: entry.id })
+  } finally {
+    syncing.delete(row.id!)
+  }
+}
+
 /** Remembers the library token that stands for the character on the map. */
 async function linkToken(id: number, tokenId: number | null) {
   const row = await getDb().characters.get(id)
   if (!row || (row.token_id ?? null) === tokenId) return
   await getDb().characters.update(id, { token_id: tokenId, updated_at: now() })
   await syncPcFlags(row.npc_entity_id, tokenId)
+  if (tokenId && row.companion_rules_id) await dbApi.tokens.update(tokenId, { linkedRulesId: row.companion_rules_id })
   await reloadIfLoaded(row.campaign_id)
 }
 
@@ -526,7 +581,7 @@ export function useParty() {
     xpPrompt,
     party: computed(() => partyLevel(characters.value)),
     defaultSelection: computed(() => defaultLevelUpSelection(characters.value)),
-    load, addCharacter, updateCharacter, removeCharacter, linkToken, linkPlayer, applyMirror, levelUp, settleLevelUp, pendingLevelUps, undoLevelUp, setNpcPlayerCharacter,
+    load, addCharacter, updateCharacter, removeCharacter, linkToken, setCompanion, linkPlayer, applyMirror, levelUp, settleLevelUp, pendingLevelUps, undoLevelUp, setNpcPlayerCharacter,
     requestLevelUp, dismissPrompt, requestXpAward, dismissXpPrompt,
     awardXp, undoXpAward, writeXpAward, writeXpUndo, promptReadyToLevel, reload: reloadIfLoaded,
   }

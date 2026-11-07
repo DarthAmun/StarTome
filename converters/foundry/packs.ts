@@ -45,5 +45,5 @@ export function packLabel(name: string): string {
 /** Document types the converter turns into compendium entries. Everything else is skipped. */
 export const CONVERTED_TYPES = new Set([
   'weapon', 'armor', 'shield', 'equipment', 'consumable', 'treasure', 'backpack', 'ammo', 'kit',
-  'npc', 'hazard', 'spell', 'feat', 'action', 'condition', 'ancestry', 'heritage', 'background', 'class', 'deity',
+  'npc', 'hazard', 'vehicle', 'spell', 'feat', 'action', 'condition', 'ancestry', 'heritage', 'background', 'class', 'deity',
 ])

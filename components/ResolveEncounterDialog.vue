@@ -144,7 +144,8 @@ const lines = computed<Line[]>(() => {
   const out: Line[] = []
   for (const t of sides.value.enemies) {
     const e = c.entries.get(t.linkedRulesId!)
-    if (!e) continue
+    // A vehicle is worth no XP: its crew is
+    if (!e || e.kind === 'vehicle') continue
     const kind = e.kind === 'hazard' ? 'hazard' : 'creature'
     const complex = e.kind === 'hazard' && (e as Hazard).complex
     out.push({

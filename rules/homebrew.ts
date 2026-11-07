@@ -476,6 +476,25 @@ const KIND_SHAPES: Record<RulesKind, Shape> = {
     activation: opt(arrOf(shape({ cost: req(actionCost, null), traits: opt(traits), frequency: opt(str), trigger: opt(str), text: opt(str) }))),
     grantsRune: opt(str),
   },
+  vehicle: {
+    size: req(oneOf(SIZES, SIZE_ALIASES), 'lg'),
+    price: req(money, null),
+    ac: req(num),
+    fort: req(num),
+    hardness: req(num, 0),
+    hp: req(num),
+    bt: opt(num),
+    immunities: req(strArr, []),
+    weaknesses: req(arrOf(weaknessShape), []),
+    resistances: req(arrOf(resistanceShape), []),
+    collision: req(shape({ dc: req(numOrNull, null), damage: req(str, '') }), { dc: null, damage: '' }),
+    crew: req(str, ''),
+    passengers: req(str, ''),
+    pilotingCheck: req(str, ''),
+    space: opt(either((v) => (v === null ? null : FAIL), shape({ long: req(num, 0), wide: req(num, 0), high: req(num, 0) }))),
+    speed: req(str, ''),
+    actions: req(arrOf(statAction), []),
+  },
 }
 
 // ── Entry ──────────────────────────────────────────────────────────────────

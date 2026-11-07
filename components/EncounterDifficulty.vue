@@ -70,7 +70,8 @@ const defeated = computed(() => encounter.value?.defeated ?? [])
 const xpEntries = computed(() => [
   ...sides.value.enemies.flatMap((t): (XpEntry & { name: string })[] => {
     const e = entries.value[t.linkedRulesId!]
-    if (!e) return []
+    // A vehicle is worth no XP: its crew is
+    if (!e || e.kind === 'vehicle') return []
     return [{ name: t.label || e.name, level: e.level, kind: e.kind === 'hazard' ? 'hazard' : 'creature', complex: e.kind === 'hazard' && (e as Hazard).complex, adjustment: t.adjustment }]
   }),
   ...defeated.value,

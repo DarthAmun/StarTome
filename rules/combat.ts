@@ -107,6 +107,8 @@ export function tokenStats(entity: RulesEntity | null | undefined, adj?: Adjustm
   const e = applyAdjustment(entity, adj)
   if (e.kind === 'creature') return { hpMax: e.hp, ac: e.ac, size: SIZE_SQUARES[e.size] ?? 1, perception: e.perception }
   if (e.kind === 'hazard') return { hpMax: e.hp ?? null, ac: e.ac ?? null, size: 1, perception: e.stealth.bonus }
+  // Vehicles: an object with a pilot; no Perception of its own
+  if (e.kind === 'vehicle') return { hpMax: e.hp, ac: e.ac, size: SIZE_SQUARES[e.size] ?? 1, perception: null }
   return { hpMax: null, ac: null, size: 1, perception: null }
 }
 
@@ -130,6 +132,10 @@ export function rulesScope(entity: RulesEntity | null | undefined, adj?: Adjustm
     if (e.ac !== undefined) scope.ac = e.ac
     if (e.hp !== undefined) scope.hp = e.hp
     Object.assign(scope, e.saves)
+  } else if (e.kind === 'vehicle') {
+    scope.ac = e.ac
+    scope.hp = e.hp
+    scope.fort = e.fort
   }
   return scope
 }

@@ -163,6 +163,39 @@
       <div v-if="hazard.reset" class="rsb-md rsb-line" v-html="md(`**Reset** ${hazard.reset}`)" />
     </template>
 
+    <!-- ── Vehicle ────────────────────────────────────────────── -->
+    <template v-if="vehicle">
+      <p v-if="vehicle.price" class="rsb-line"><b>Price</b> {{ formatMoney(vehicle.price, entity.game) }}</p>
+      <p class="rsb-line">
+        <b>Space</b> {{ vehicle.space ? `${vehicle.space.long} feet long, ${vehicle.space.wide} feet wide, ${vehicle.space.high} feet high` : '—' }}
+      </p>
+      <p class="rsb-line"><b>Crew</b> {{ vehicle.crew || '—' }}<template v-if="vehicle.passengers">; <b>Passengers</b> {{ vehicle.passengers }}</template></p>
+      <p v-if="vehicle.pilotingCheck" class="rsb-line"><b>Piloting Check</b> {{ vehicle.pilotingCheck }}</p>
+      <hr />
+      <p class="rsb-line">
+        <b>AC</b> {{ vehicle.ac }};
+        <b>Fort</b> <button class="rsb-roll" title="Roll Fortitude" @click.stop="check('Fortitude save', vehicle.fort)">{{ signed(vehicle.fort) }}</button>
+      </p>
+      <p class="rsb-line">
+        <b>Hardness</b> {{ vehicle.hardness }}, <b>HP</b> {{ vehicle.hp }}<template v-if="vehicle.bt"> (BT {{ vehicle.bt }})</template>
+        <template v-if="vehicle.immunities.length">; <b>Immunities</b> {{ vehicle.immunities.join(', ') }}</template>
+        <template v-if="vehicle.weaknesses.length">; <b>Weaknesses</b> {{ vehicle.weaknesses.map(formatIwr).join(', ') }}</template>
+        <template v-if="vehicle.resistances.length">; <b>Resistances</b> {{ vehicle.resistances.map(formatIwr).join(', ') }}</template>
+      </p>
+      <p v-if="vehicle.collision.dc || vehicle.collision.damage" class="rsb-line">
+        <b>Collision</b> {{ vehicle.collision.damage }}<template v-if="vehicle.collision.dc"> (DC {{ vehicle.collision.dc }})</template>
+      </p>
+      <hr />
+      <p class="rsb-line"><b>Speed</b> {{ vehicle.speed || '—' }}</p>
+      <p v-for="a in vehicle.actions" :key="a.name" class="rsb-line rsb-action">
+        <b>{{ a.name }}</b> <span v-if="formatActionCost(a.cost)" class="rsb-glyph">{{ formatActionCost(a.cost) }}</span>
+        <button v-if="canPlaceArea && areaOf(a)" class="rsb-place" :title="`Place the ${areaOf(a)!.sizeFt}-foot ${areaOf(a)!.kind} on the map and roll saves`" @click.stop="placeAbilityArea(a)">Place area</button>
+        <template v-if="a.traits.length"> ({{ a.traits.map(formatTrait).join(', ') }})</template>
+        <template v-if="a.frequency"> <b>Frequency</b> {{ a.frequency }};</template>
+        {{ ' ' }}<span class="rsb-md" v-html="md(a.text)" />
+      </p>
+    </template>
+
     <!-- ── Spell ──────────────────────────────────────────────── -->
     <template v-if="spell">
       <p v-if="spell.traditions.length" class="rsb-line"><b>Traditions</b> {{ spell.traditions.join(', ') }}</p>
@@ -266,7 +299,7 @@ import { GAME_CONFIG, type GameId } from '~/types/game'
 import {
   isRulesKind, RULES_KIND_CONFIG, RULES_KINDS,
   type AbilityKey, type Action, type Condition, type Creature, type Feat, type Hazard, type Item,
-  type ReferenceEntry, type RelicGift, type Resistance, type RulesEntity, type Sense, type Spell, type Spellcasting, type StatAction, type Strike, type Weakness,
+  type ReferenceEntry, type RelicGift, type Resistance, type RulesEntity, type Sense, type Spell, type Spellcasting, type StatAction, type Strike, type Vehicle, type Weakness,
 } from '~/types/rules'
 
 const props = defineProps<{ entity: RulesEntity; game?: GameId }>()
@@ -289,6 +322,7 @@ const feat = computed(() => props.entity.kind === 'feat' ? props.entity as Feat 
 const action = computed(() => props.entity.kind === 'action' ? props.entity as Action : null)
 const condition = computed(() => props.entity.kind === 'condition' ? props.entity as Condition : null)
 const gift = computed(() => props.entity.kind === 'relicGift' ? props.entity as RelicGift : null)
+const vehicle = computed(() => props.entity.kind === 'vehicle' ? props.entity as Vehicle : null)
 async function openRune(name: string) {
   const rune = await rulesFindByName('item', name, props.game)
   if (rune) openEntry(rune)
@@ -310,7 +344,7 @@ const headGlyph = computed(() => {
   return ''
 })
 
-const sizeLabel = computed(() => creature.value ? SIZE_LABEL[creature.value.size] : '')
+const sizeLabel = computed(() => creature.value ? SIZE_LABEL[creature.value.size] : vehicle.value ? SIZE_LABEL[vehicle.value.size] : '')
 
 const skills = computed(() =>
   Object.entries(creature.value?.skills ?? {})

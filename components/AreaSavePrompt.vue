@@ -68,7 +68,7 @@ import { applyAdjustment } from '~/rules/combat'
 import { checkDegree, type Degree } from '~/rules/dcs'
 import { basicSaveDamage, DEGREE_LABEL, rollDie, rollExpression } from '~/rules/rolls'
 import { useEncounterStore, type EncounterToken } from '~/stores/encounter'
-import type { Creature, Hazard } from '~/types/rules'
+import type { Creature, Hazard, Vehicle } from '~/types/rules'
 
 const props = defineProps<{
   /** A Play Buddy character's shared numbers, for its saves. */
@@ -111,6 +111,8 @@ async function saveModifier(t: EncounterToken, save: 'fort' | 'ref' | 'will'): P
   const e = applyAdjustment(entry, t.adjustment)
   if (e.kind === 'creature') return (e as Creature).saves[save]
   if (e.kind === 'hazard') return (e as Hazard).saves?.[save] ?? null
+  // Vehicles only have Fortitude; Reflex against a collision goes to the pilot
+  if (e.kind === 'vehicle') return save === 'fort' ? (e as Vehicle).fort : null
   return null
 }
 

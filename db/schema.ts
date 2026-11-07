@@ -19,6 +19,7 @@
  * DM's Tome's generic rules library (`systems`/`records`) was dropped in v4
  * and isn't imported (only DM's Tome's campaigns come over, FORK_PLAN §8.5).
  */
+import type { CompanionBuild } from '~/rules/companions'
 import Dexie, { type Table } from 'dexie'
 import { DB_NAME } from '~/utils/appNamespace'
 import { parseJson } from '~/utils/json'
@@ -197,6 +198,10 @@ export interface DbCharacter {
   pb_character_id?: string | null
   /** Last shared status, in our vocabulary (partylink/port.ts CharacterMirror). */
   pb_status?: CharacterMirror | null
+  /** Companions (STARFINDER_PLAN.md P2.2): the type and stage its stat block is built from; non-indexed */
+  companion?: CompanionBuild | null
+  /** The homebrew creature entry written from `companion`, kept at the character's level */
+  companion_rules_id?: string | null
   created_at: string
   updated_at: string
 }

@@ -3,7 +3,7 @@
  * The sync pipeline (sync/foundrySync.ts) feeds documents through convertFoundryDoc.
  */
 import type { RulesEntity, RulesKind } from '~/types/rules'
-import { convertCreature, convertHazard } from './actors'
+import { convertCreature, convertHazard, convertVehicle } from './actors'
 import type { ConvertContext, ConvertIssue, FoundryDoc } from './common'
 import { convertItem } from './items'
 import { CONVERTED_TYPES } from './packs'
@@ -30,8 +30,9 @@ export function kindOfFoundryType(type: string): RulesKind | null {
  * 4: 'class-archetype' is no subclass choice.
  * 5: class feat / skill increase levels (progression).
  * 6: strike range increments (SF2e Area Fire / Auto-Fire).
+ * 7: vehicles.
  */
-export const CONVERTER_VERSION = 6
+export const CONVERTER_VERSION = 7
 
 export interface ConvertResult { entity: RulesEntity | null; issues: ConvertIssue[] }
 
@@ -45,6 +46,7 @@ export function convertFoundryDoc(doc: FoundryDoc, base: Omit<ConvertContext, 'o
     if (kind === 'item') entity = convertItem(doc, ctx)
     else if (kind === 'creature') entity = convertCreature(doc, ctx)
     else if (kind === 'hazard') entity = convertHazard(doc, ctx)
+    else if (kind === 'vehicle') entity = convertVehicle(doc, ctx)
     else if (kind === 'spell') entity = convertSpell(doc, ctx)
     else if (kind === 'feat') entity = convertFeat(doc, ctx)
     else if (kind === 'action') entity = convertAction(doc, ctx)

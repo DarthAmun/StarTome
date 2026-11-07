@@ -211,6 +211,33 @@
       <StatActionRows :rows="L.actions" @update="(rows: StatAction[]) => set('actions', rows)" />
     </section>
 
+    <!-- ── Vehicle ────────────────────────────────────────────── -->
+    <section v-if="L.kind === 'vehicle'" class="red-section">
+      <h4>Vehicle</h4>
+      <div class="red-grid">
+        <label class="red-field"><span>Size</span>
+          <select class="red-input" :value="L.size" @change="set('size', str($event))">
+            <option v-for="s in SIZES" :key="s" :value="s">{{ SIZE_LABEL[s] }}</option>
+          </select>
+        </label>
+        <label class="red-field"><span>Price ({{ moneyUnit }})</span><input class="red-input" type="number" step="any" min="0" :value="priceValue" placeholder="—" @change="setPrice(str($event))" /></label>
+        <label class="red-field"><span>AC</span><input class="red-input" type="number" :value="L.ac" @change="set('ac', num($event))" /></label>
+        <label class="red-field"><span>Fort</span><input class="red-input" type="number" :value="L.fort" @change="set('fort', num($event))" /></label>
+        <label class="red-field"><span>Hardness</span><input class="red-input" type="number" :value="L.hardness" @change="set('hardness', num($event))" /></label>
+        <label class="red-field"><span>HP</span><input class="red-input" type="number" :value="L.hp" @change="set('hp', num($event))" /></label>
+        <label class="red-field"><span>BT</span><input class="red-input" type="number" :value="L.bt ?? ''" @change="set('bt', optNum($event))" /></label>
+        <label class="red-field"><span>Collision DC</span><input class="red-input" type="number" :value="L.collision.dc ?? ''" placeholder="—" @change="set('collision.dc', optNum($event) ?? null)" /></label>
+        <label class="red-field"><span>Collision damage</span><input class="red-input" :value="L.collision.damage" placeholder="4d10" @change="set('collision.damage', str($event))" /></label>
+        <label class="red-field red-span-3"><span>Crew</span><input class="red-input" :value="L.crew" placeholder="1 pilot, 1 crew" @change="set('crew', str($event))" /></label>
+        <label class="red-field red-span-3"><span>Passengers</span><input class="red-input" :value="L.passengers" @change="set('passengers', str($event))" /></label>
+        <label class="red-field red-span-3"><span>Piloting check</span><input class="red-input" :value="L.pilotingCheck" placeholder="Piloting (DC 25)" @change="set('pilotingCheck', str($event))" /></label>
+        <label class="red-field red-span-3"><span>Speed</span><input class="red-input" :value="L.speed" placeholder="40 feet (motorized), fly 60 feet (motorized)" @change="set('speed', str($event))" /></label>
+        <label class="red-field red-span-3"><span>Immunities</span><input class="red-input" :value="formatList(L.immunities)" @change="set('immunities', parseList(str($event)))" /></label>
+      </div>
+      <h5>Actions</h5>
+      <StatActionRows :rows="L.actions" @update="(rows: StatAction[]) => set('actions', rows)" />
+    </section>
+
     <!-- ── Spell ──────────────────────────────────────────────── -->
     <section v-if="L.kind === 'spell'" class="red-section">
       <h4>Spell</h4>

@@ -206,7 +206,7 @@ watch([text, levelMin, levelMax, kindFilter, rarity, traitText], () => {
 })
 
 function xpOf(r: ResultRow) {
-  return entryXp(game.value, { level: r.level, kind: r.kind, complex: r.complex }, partyLevelUsed.value)
+  return entryXp(game.value, { level: r.level, kind: r.kind === 'hazard' ? 'hazard' : 'creature', complex: r.complex }, partyLevelUsed.value)
 }
 
 function add(rulesId: string) {

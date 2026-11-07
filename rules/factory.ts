@@ -47,5 +47,11 @@ export function newRulesEntity(kind: RulesKind, init: { name: string; game: Game
       return { ...base, kind, facts: {} }
     case 'relicGift':
       return { ...base, kind, game: 'pf2e', tier: 'minor', aspects: [] }
+    case 'vehicle':
+      return {
+        ...base, kind, size: 'lg', price: null, ac: 10, fort: 0, hardness: 0, hp: 1,
+        immunities: [], weaknesses: [], resistances: [], collision: { dc: null, damage: '' },
+        crew: '', passengers: '', pilotingCheck: '', space: null, speed: '', actions: [],
+      }
   }
 }

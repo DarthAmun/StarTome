@@ -113,7 +113,7 @@ Every entity supports:
 - Available widgets: Dice Roller, NPC Generator, Conditions Grid, Random Table, Quest, Session, Note, Faction, Location, Rumor, Scratchpad, Rules Lookup, Encounter Link, Search, Compendium Entry, Timer
 
 ### Compendium (PF2e / SF2e)
-- Typed entries: items, creatures, hazards, spells, feats, actions, conditions, ancestries, heritages, backgrounds, classes, deities
+- Typed entries: items, creatures, hazards, spells, feats, actions, conditions, ancestries, heritages, backgrounds, classes, deities, relic gifts, vehicles
 - Synced from the Foundry VTT PF2e/SF2e release (`json-assets.zip` drop); re-syncs keep portraits, notes and local edits
 - Your own entries next to synced ones; `{{kind: Name}}` refs in every editor
 - DM's Tome import: campaigns come over, the old library is matched against the compendium
@@ -123,6 +123,8 @@ The plan for Tech Core, starships and tactical starship combat is in [STARFINDER
 - **Upgrade slots:** weapons and armor show "upgrades 1/2" by grade (Player Core improvement tables), with a GM-set base; full hosts, a second installed weapon or one above its host's grade get a warning
 - **Installed weapons** attach to the host their trait names
 - **Augmentations:** implant one in the character who owns it; implanted gear can't change hands, and more than four (apex ones free) gets a warning
+- **Vehicles:** a compendium kind synced from Foundry (AC, Fortitude, Hardness, HP, collision, crew, piloting check, speed); they stand on the map as tokens and are worth no XP
+- **Companions:** animal, robot and drone (mechanic) companions get a stat block from their type and stage (Tech Core advancement), written as a homebrew creature that follows the companion's level and links its map token
 - **Area Fire / Auto-Fire** buttons on creature Strikes with the area or automatic trait place the cone, line or burst and ask for basic Reflex saves
 
 ### Audio

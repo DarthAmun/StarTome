@@ -78,6 +78,10 @@
         </label>
 
         <div class="party-actions">
+          <button v-if="c.role === 'companion'" class="party-icon-btn" :class="{ active: !!c.companion }"
+            :title="c.companion ? 'Companion stat block (kept at this level)' : 'Build a companion stat block: animal, robot or drone'" @click="companionFor = c">
+            <OhVueIcon name="gi-robot-golem" scale="0.75" />
+          </button>
           <button class="party-icon-btn" title="Earn income (downtime)" @click="incomeFor = c">
             <OhVueIcon name="gi-coins" scale="0.75" />
           </button>
@@ -113,6 +117,7 @@
 
     <PartyInventory :campaign-id="campaignId" :game="game" :characters="characters" :party-level="party.level" />
 
+    <CompanionDialog v-if="companionFor" :character="companionFor" @close="companionFor = null" />
     <EarnIncomeDialog v-if="incomeFor" :campaign-id="campaignId" :game="game" :character="incomeFor" @close="incomeFor = null" />
 
     <PartyWealth :campaign-id="campaignId" :game="game" :characters="characters" :party="party" />
@@ -265,6 +270,7 @@ const firstActive = computed(() => levelUps.value.findIndex(l => !l.undoneAt))
 
 /** Earn Income (FEATURES_PLAN §10.4) for this party member. */
 const incomeFor = ref<{ id: number; name: string; level: number } | null>(null)
+const companionFor = ref<Character | null>(null)
 
 function openAwardXp() {
   requestXpAward({ campaignId, refType: null, refId: null, reason: '' })

@@ -55,7 +55,7 @@ Book content (enemy starships, station actions, upgrades, expansion bays) is **n
 |---|---|---|---|
 | ~~**P0**~~ | ✅ Done 2026-11-07: re-synced and checked the Tech Core content | — | S |
 | ~~**P1**~~ | ✅ Done 2026-11-07 (0.29.0): upgrade slots, installed weapons, augmentations, Area Fire / Auto-Fire | P0 | M |
-| **P2** | Vehicles and companions (drones, robot companions) | P0 | M |
+| ~~**P2**~~ | ✅ Done 2026-11-07 (0.30.0): vehicles and companions (drones, robot and animal companions) | P0 | M |
 | **P3** | Starship data model: new compendium kinds, homebrew format, book import | — | L |
 | **P4** | Player starship sheet and crew roster (station assignments) | P3 | M |
 | **P5** | Ship interior map: battle stations on the battle map, helming, station actions | P4 | M |
@@ -111,7 +111,12 @@ P1/P2 and P3 don't depend on each other and can run side by side. P5 and P6 can 
 
 ---
 
-## P2. Vehicles and companions (M)
+## P2. Vehicles and companions (M) ✅ done 2026-11-07 (0.30.0)
+
+**Built:**
+- **Vehicles:** compendium kind `vehicle` (segment `vehicles`), converted from Foundry `vehicle` actors (converter v7; price is a plain number in credits for SF2e, gold for PF2e), homebrew shape, editor section and stat block. Vehicles stand on the map with their AC, HP, size and Fortitude (area saves), and are left out of the XP meter and resolution (their crew counts). Golden test on Talon Strike Craft. **Not done:** vehicles in the party inventory (the inventory links `item` entries only); add one as a free-text entry with its price for now.
+- **Companions:** `rules/companions.ts` (pure) builds a stat block from a type's base statistics and its stage (young/commercial → mature/tactical → burly or deft/advanced → specialized/superior, the six specializations, the robot construct rules and the customizations that change numbers). The type's base numbers are entered by the GM in the companion dialog on the party page (no book data in the repo). `useParty` writes the stat block as a homebrew creature in the "Companions" pack, keeps it at the character's level on every load, and links the character's library token to it. `COMPANIONS_VERIFIED = false`. Tests: `tests/companions.test.ts`.
+
 
 ### P2.1 Vehicles
 - New compendium kind `vehicle` (segment `vehicles`) with these fields:

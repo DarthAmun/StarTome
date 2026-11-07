@@ -153,3 +153,16 @@ describe('homebrew plan', () => {
     expect(issuesReport(rows)).toContain('#2) — NOT IMPORTED')
   })
 })
+
+describe('homebrew vehicles', () => {
+  it('reads a vehicle and fills the optional parts', () => {
+    const c = check({
+      id: 'v-1', kind: 'vehicle', name: 'Test Skiff', level: 3, rarity: 'common', traits: ['tech'], description: '',
+      size: 'large', price: '3,000 credits', ac: 18, fort: 9, hp: 40, crew: '1 pilot', speed: '50 feet (motorized)',
+      collision: { dc: 18, damage: '2d10' },
+    })
+    expect(c.issues.filter(i => i.level === 'error')).toEqual([])
+    expect(c.entry).toMatchObject({ kind: 'vehicle', size: 'lg', price: { cp: 30_000 }, hardness: 0, actions: [] })
+    expect((c.entry as { space?: unknown }).space ?? null).toBeNull()
+  })
+})

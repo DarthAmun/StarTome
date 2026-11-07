@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { convertFoundryDoc, type FoundryDoc } from '~/converters/foundry'
-import type { Creature, Hazard, Item, ReferenceEntry, RulesEntity, Spell } from '~/types/rules'
+import type { Creature, Hazard, Item, ReferenceEntry, RulesEntity, Spell, Vehicle } from '~/types/rules'
 
 const dir = fileURLToPath(new URL('./fixtures/foundry/', import.meta.url))
 const fixtures: { game: 'pf2e' | 'sf2e'; pack: string; doc: FoundryDoc }[] = JSON.parse(readFileSync(`${dir}docs.json`, 'utf8'))
@@ -121,6 +121,20 @@ describe('Foundry converter — creatures and hazards', () => {
     expect(pillar.complex).toBe(true)
     expect(pillar.routine).toBeTruthy()
     expect(pillar.strikes?.length).toBeGreaterThan(0)
+  })
+})
+
+describe('Foundry converter — vehicles', () => {
+  it('Talon Strike Craft (SF2e Tech Core): defenses, collision, crew, price in credits', () => {
+    const v = as<Vehicle>(convert('Talon Strike Craft'))
+    expect(v).toMatchObject({
+      kind: 'vehicle', game: 'sf2e', level: 9, size: 'med', ac: 24, fort: 18, hardness: 15, hp: 120,
+      collision: { dc: 24, damage: '6d10' }, crew: '1 pilot, 1 crew', pilotingCheck: 'Piloting (DC 25)',
+      space: { long: 10, wide: 15, high: 5 }, price: { cp: 250_000 },
+    })
+    expect(v.speed).toMatch(/^40 feet \(motorized; land-based form\), fly 60 feet/)
+    expect(v.actions.map(a => a.name)).toEqual(['Bank', 'Homing Shot', 'Hover', 'Laser Cannon', 'Reconfigure'])
+    expect(v.publication?.title).toBe('Starfinder Tech Core')
   })
 })
 

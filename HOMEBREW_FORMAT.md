@@ -24,7 +24,7 @@ Only `rules` is needed. (A bare array of entries also works.)
 |---|---|---|
 | `id` | string | A random UUID v4. **Keep the same id** when I ask you to revise an entry: re-importing replaces the row with that id. New entry → new UUID. |
 | `origin` | `"user"` | Always `"user"`. |
-| `kind` | string | `item`, `creature`, `hazard`, `spell`, `feat`, `action`, `condition`, `ancestry`, `heritage`, `background`, `class`, `deity`, `relicGift` |
+| `kind` | string | `item`, `creature`, `hazard`, `spell`, `feat`, `action`, `condition`, `ancestry`, `heritage`, `background`, `class`, `deity`, `relicGift`, `vehicle` |
 | `game` | `"sf2e"` \| `"pf2e"` \| `"both"` | `"sf2e"` unless I say otherwise. |
 | `name` | string | Title Case. |
 | `sortName` | string | `name` lower-cased. |
@@ -202,6 +202,22 @@ A relic gift (GMG p. 96), PF2e only. In the party inventory it attaches to an it
 - `grantsRune`: for gifts that give the relic a rune, the rune's name.
 
 The import page also reads [pf2ools-data](https://github.com/Pf2ools/pf2ools-data)'s relic gifts as they are (MIT): the bundle `bundles/byDatatype/core/relicGift.json` or single files from `data/core/<book>/relicGift/`. They land in the pack "Relic Gifts (pf2ools)", and importing a newer bundle updates them.
+
+### vehicle
+
+A vehicle (SF2e Tech Core "Vehicles", PF2e GM Core). It can stand on the map as a token with its AC and HP; it's worth no XP (its crew is).
+
+```json
+{ "kind": "vehicle", "level": 9, "size": "lg", "price": "25,000 credits", "ac": 24, "fort": 18, "hardness": 15, "hp": 120,
+  "immunities": [], "weaknesses": [], "resistances": [],
+  "collision": { "dc": 24, "damage": "6d10" }, "crew": "1 pilot, 1 crew", "passengers": "",
+  "pilotingCheck": "Piloting (DC 25)", "space": { "long": 10, "wide": 15, "high": 5 },
+  "speed": "40 feet (motorized), fly 60 feet (motorized)",
+  "actions": [{ "name": "Laser Cannon", "cost": 2, "section": "offensive", "traits": ["fire"], "text": "…" }] }
+```
+
+- Required: `ac`, `fort`, `hp`. The rest has defaults (`size` `lg`, `hardness` 0, empty lists and text).
+- `space` in feet, or leave it out. `bt` is optional.
 
 ### ancestry, heritage, background, class, deity
 

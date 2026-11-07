@@ -38,7 +38,7 @@ export type RulesOrigin = 'foundry' | 'user' | 'legacy'
 
 export type RulesKind =
   | 'item' | 'creature' | 'hazard' | 'spell' | 'feat' | 'action' | 'condition'
-  | 'ancestry' | 'heritage' | 'background' | 'class' | 'deity' | 'relicGift'
+  | 'ancestry' | 'heritage' | 'background' | 'class' | 'deity' | 'relicGift' | 'vehicle'
 
 export interface Publication { title: string; remaster: boolean; license?: string }
 
@@ -280,7 +280,36 @@ export interface RelicGift extends RulesEntityBase {
   grantsRune?: string
 }
 
-export type RulesEntity = Item | Creature | Hazard | Spell | Feat | Action | Condition | ReferenceEntry | RelicGift
+/**
+ * A vehicle (Foundry `vehicle` actor; SF2e Tech Core pp. 134–141, PF2e GM Core).
+ * An object with crew: AC, Fortitude, Hardness and HP, a collision and a piloting check.
+ */
+export interface Vehicle extends RulesEntityBase {
+  kind: 'vehicle'
+  size: Size
+  price: Money | null
+  ac: number
+  fort: number
+  hardness: number
+  hp: number
+  bt?: number
+  immunities: string[]
+  weaknesses: Weakness[]
+  resistances: Resistance[]
+  /** Collision: a basic Reflex save against the DC, for the damage. */
+  collision: { dc: number | null; damage: string }
+  crew: string
+  passengers: string
+  /** "Piloting (DC 25)" */
+  pilotingCheck: string
+  /** Feet. */
+  space: { long: number; wide: number; high: number } | null
+  /** "40 feet (motorized), fly 60 feet (motorized)" */
+  speed: string
+  actions: StatAction[]
+}
+
+export type RulesEntity = Item | Creature | Hazard | Spell | Feat | Action | Condition | ReferenceEntry | RelicGift | Vehicle
 
 export type RulesEntityOf<K extends RulesKind> = Extract<RulesEntity, { kind: K }>
 
@@ -310,6 +339,7 @@ export const RULES_KIND_CONFIG: Record<RulesKind, RulesKindConfig> = {
   class:      { label: 'Class',      plural: 'Classes',     segment: 'classes',     icon: 'gi-swords-emblem',       color: '#6b9fe8', levelLabel: 'Level', hasLevel: false },
   deity:      { label: 'Deity',      plural: 'Deities',     segment: 'deities',     icon: 'gi-angel-outfit',        color: '#d4b54a', levelLabel: 'Level', hasLevel: false },
   relicGift:  { label: 'Relic gift', plural: 'Relic gifts', segment: 'relic-gifts', icon: 'gi-gem-pendant',         color: '#e0a35a', levelLabel: 'Level', hasLevel: false },
+  vehicle:    { label: 'Vehicle',    plural: 'Vehicles',    segment: 'vehicles',    icon: 'gi-jeep',                color: '#8fa3b8', levelLabel: 'Level', hasLevel: true },
 }
 
 export const RULES_KINDS = Object.keys(RULES_KIND_CONFIG) as RulesKind[]

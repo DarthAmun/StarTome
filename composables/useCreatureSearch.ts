@@ -13,7 +13,7 @@ export interface CreatureOption {
   id: string
   name: string
   level: number
-  kind: 'creature' | 'hazard'
+  kind: 'creature' | 'hazard' | 'vehicle'
   /** Displayable URL (portraits are resolved from the image store). */
   img: string | null
   game: RulesEntity['game']
@@ -44,7 +44,8 @@ export function useCreatureSearch(game: Ref<GameId>, opts: { limit?: number; haz
     loading.value = true
     try {
       const limit = opts.limit ?? 50
-      const kinds = opts.hazards ? (['creature', 'hazard'] as const) : (['creature'] as const)
+      // Vehicles stand on the map like hazards (tokens with AC and HP)
+      const kinds = opts.hazards ? (['creature', 'hazard', 'vehicle'] as const) : (['creature'] as const)
       const pages = await Promise.all(kinds.map(kind => rulesQuery({ kind, text, limit, sort: 'name' })))
       const items = pages.flatMap(p => p.items).sort((a, b) => a.sortName.localeCompare(b.sortName)).slice(0, limit)
       const options = await Promise.all(items.map(toCreatureOption))

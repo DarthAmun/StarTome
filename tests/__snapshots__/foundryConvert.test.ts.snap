@@ -2099,6 +2099,104 @@ Soft but resilient fabric contours perfectly to the wearer's body, offering basi
 }
 `;
 
+exports[`Foundry converter — whole output > sf2e/Talon Strike Craft 1`] = `
+{
+  "ac": 24,
+  "actions": [
+    {
+      "cost": null,
+      "name": "Bank",
+      "section": "offensive",
+      "text": "In its aerial form, the pilot of a talon strike craft can add the reckless trait to a Drive action, or attempt the Piloting check with a –1 circumstance penalty if it was already reckless, to shift the vehicle 5 feet to either side at any point during the movement without changing its heading.",
+      "traits": [],
+    },
+    {
+      "cost": 2,
+      "name": "Homing Shot",
+      "section": "offensive",
+      "text": "The talon strike craft fires homing missiles at a creature or object within 60 feet, dealing ::dice[3d8] bludgeoning plus 3[splash] fire (DC 25 basic Reflex save).",
+      "traits": [
+        "splash",
+      ],
+    },
+    {
+      "cost": null,
+      "name": "Hover",
+      "section": "offensive",
+      "text": "A talon strike craft in its land-based form maintains an altitude of 6 inches above other surfaces, such as the ground or water. If driven off a high surface, the strike craft loses 20 feet of altitude per round unless it Reconfigures, landing without harm to the skiff or its passengers.",
+      "traits": [],
+    },
+    {
+      "cost": 2,
+      "name": "Laser Cannon",
+      "section": "offensive",
+      "text": "The talon strike craft fires its mounted laser cannon, dealing ::dice[5d8] fire damage to creatures and objects in a 30-foot line (DC 25 basic Reflex save). This ability can be used by the crew in addition to the pilot.",
+      "traits": [
+        "fire",
+      ],
+    },
+    {
+      "cost": 2,
+      "name": "Reconfigure",
+      "section": "offensive",
+      "text": "The talon strike craft reconfigures its wings, switching between its aerial form and land-based form.",
+      "traits": [
+        "manipulate",
+      ],
+    },
+  ],
+  "collision": {
+    "damage": "6d10",
+    "dc": 24,
+  },
+  "createdAt": "",
+  "crew": "1 pilot, 1 crew",
+  "description": "This fighter craft is designed to control the battlefield from any angle, fighting for control of the skies before folding its wings into a tank-like configuration and hovering across the ground.",
+  "fort": 18,
+  "game": "sf2e",
+  "hardness": 15,
+  "hp": 120,
+  "id": "fvtt:sf2e:rulebook-bestiaries:8055yvw5H7ykFNsB",
+  "immunities": [],
+  "kind": "vehicle",
+  "level": 9,
+  "name": "Talon Strike Craft",
+  "origin": "foundry",
+  "passengers": "",
+  "pilotingCheck": "Piloting (DC 25)",
+  "price": {
+    "cp": 250000,
+  },
+  "publication": {
+    "license": "ORC",
+    "remaster": true,
+    "title": "Starfinder Tech Core",
+  },
+  "rarity": "common",
+  "resistances": [],
+  "size": "med",
+  "sortName": "talon strike craft",
+  "sourceRefs": [
+    {
+      "id": "Compendium.sf2e.rulebook-bestiaries.Actor.8055yvw5H7ykFNsB",
+      "system": "foundry",
+      "version": "1.6.1",
+    },
+  ],
+  "space": {
+    "high": 5,
+    "long": 10,
+    "wide": 15,
+  },
+  "speed": "40 feet (motorized; land-based form), fly 60 feet (motorized; aerial form)",
+  "traits": [
+    "tech",
+  ],
+  "updatedAt": "",
+  "weaknesses": [],
+}
+`;
+
 exports[`Foundry converter — whole output > sf2e/Warpstitcher 1`] = `
 {
   "abilities": {

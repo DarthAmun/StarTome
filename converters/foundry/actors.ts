@@ -1,5 +1,5 @@
-/** Foundry actors (npc, hazard) → Creature / Hazard. */
-import type { Creature, Hazard, Resistance, Spellcasting, StatAction, Strike, Weakness } from '~/types/rules'
+/** Foundry actors (npc, hazard, vehicle) → Creature / Hazard / Vehicle. */
+import type { Creature, Hazard, Resistance, Size, Spellcasting, StatAction, Strike, Vehicle, Weakness } from '~/types/rules'
 import {
   baseFields, costOf, frequencyOf, humanizeSlug, inline, rulesIdFromSource, text,
   type ConvertContext, type FoundryDoc,
@@ -220,4 +220,47 @@ export function convertHazard(doc: FoundryDoc, ctx: ConvertContext): Hazard {
   const reset = text(d.reset, ctx)
   if (reset) hazard.reset = reset
   return hazard
+}
+
+const SIZES = new Set(['tiny', 'sm', 'med', 'lg', 'huge', 'grg'])
+
+/**
+ * Foundry vehicle → Vehicle. `details.price` is a plain number in the game's
+ * main coin: credits in SF2e (1 cr = 10 cp), gold in PF2e.
+ */
+export function convertVehicle(doc: FoundryDoc, ctx: ConvertContext): Vehicle {
+  const s = doc.system ?? {}
+  const a = s.attributes ?? {}
+  const d = s.details ?? {}
+  const size = s.traits?.size?.value
+  const price = Number(d.price) || 0
+  const sp = d.space ?? {}
+  const vehicle: Vehicle = {
+    ...baseFields(doc, ctx, { level: d.level?.value, traits: s.traits, publication: d.publication }),
+    kind: 'vehicle',
+    description: text(d.description, ctx),
+    size: (SIZES.has(size) ? size : 'lg') as Size,
+    price: price > 0 ? { cp: Math.round(price * (ctx.game === 'sf2e' ? 10 : 100)) } : null,
+    ac: Number(a.ac?.value) || 0,
+    fort: Number(s.saves?.fortitude?.value) || 0,
+    hardness: Number(a.hardness) || 0,
+    hp: Number(a.hp?.max) || 0,
+    immunities: immunitiesOf(a.immunities),
+    weaknesses: weaknessesOf(a.weaknesses),
+    resistances: resistancesOf(a.resistances),
+    collision: {
+      dc: Number(a.collisionDC?.value) || null,
+      damage: String(a.collisionDamage?.value ?? ''),
+    },
+    crew: inline(d.crew, ctx),
+    passengers: inline(String(d.passengers ?? ''), ctx),
+    pilotingCheck: inline(d.pilotingCheck, ctx),
+    space: Number(sp.long) || Number(sp.wide) || Number(sp.high)
+      ? { long: Number(sp.long) || 0, wide: Number(sp.wide) || 0, high: Number(sp.high) || 0 }
+      : null,
+    speed: inline(d.speed, ctx),
+    actions: actionsOf(doc.items ?? [], ctx),
+  }
+  if (Number(a.hp?.brokenThreshold)) vehicle.bt = Number(a.hp.brokenThreshold)
+  return vehicle
 }
