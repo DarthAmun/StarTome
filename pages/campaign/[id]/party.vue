@@ -113,7 +113,7 @@
       </div>
     </section>
 
-    <PlayBuddyPanel v-if="game === 'pf2e'" ref="playBuddy" :campaign-id="campaignId" :characters="characters" />
+    <PlayBuddyPanel ref="playBuddy" :campaign-id="campaignId" :characters="characters" :game="game" />
 
     <PartyInventory :campaign-id="campaignId" :game="game" :characters="characters" :party-level="party.level" />
 

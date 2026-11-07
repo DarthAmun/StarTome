@@ -293,3 +293,20 @@ export function freeSquaresNear(x: number, y: number, taken: Set<string>, count:
 export function markersFromStations(slots: StationSlot[], nameOf: (stationId: string | null) => string): StationMarker[] {
   return slots.filter(s => s.marker && s.stationId).map(s => ({ slot: s.slot, x: s.marker!.x, y: s.marker!.y, name: nameOf(s.stationId) }))
 }
+
+/**
+ * A crew member's skill modifier: Play Buddy's value when the player shares
+ * it (P10), else the one entered by hand on the Starship page, else null.
+ */
+export function crewSkill(
+  c: { sfSkills?: Record<string, number>; pbStatus?: { skills?: { skills: Record<string, number> }; defenses?: { perception: number } } | null } | null | undefined,
+  skill: string,
+): number | null {
+  if (!c) return null
+  const key = skill.toLowerCase()
+  if (key === 'perception' && typeof c.pbStatus?.defenses?.perception === 'number') return c.pbStatus.defenses.perception
+  const pb = c.pbStatus?.skills?.skills?.[key]
+  if (typeof pb === 'number') return pb
+  const own = c.sfSkills?.[key]
+  return typeof own === 'number' ? own : null
+}

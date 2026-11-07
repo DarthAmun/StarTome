@@ -82,7 +82,7 @@ import { useParty } from '~/composables/useParty'
 import { useStarship } from '~/composables/useStarship'
 import { useEntityMarkdown } from '~/composables/useEntityMarkdown'
 import {
-  assignCrew, EXPLORATION_ACTIVITIES, helmingTokens, starshipLevel, starshipSheet, STATION_INITIATIVE_SKILL, stationKey, type StationMarker,
+  assignCrew, crewSkill, EXPLORATION_ACTIVITIES, helmingTokens, starshipLevel, starshipSheet, STATION_INITIATIVE_SKILL, stationKey, type StationMarker,
 } from '~/rules/playerStarship'
 import { formatActionCost, signed } from '~/rules/format'
 import { checkDegree, type Degree } from '~/rules/dcs'
@@ -168,8 +168,8 @@ const pilotDc = computed(() => {
     if (stationKey(name ?? '') !== 'pilot’s console') continue
     const placed = store.current?.tokens.find(t => t.id === id)
     const c = party.characters.value.find(ch => placed?.tokenId != null && ch.tokenId === placed.tokenId)
-    const mod = c?.sfSkills.piloting
-    return typeof mod === 'number' ? 10 + mod : null
+    const mod = crewSkill(c, 'piloting')
+    return mod != null ? 10 + mod : null
   }
   return null
 })

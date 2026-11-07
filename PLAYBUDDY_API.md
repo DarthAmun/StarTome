@@ -376,7 +376,26 @@ Same types as the live API, so StarTome uses one converter for both.
 
 ## 11. Out of scope for v1
 
-Spells and spell slots, feats, the full sheet, editing characters, the GM's own NPCs in Play Buddy, chat, maps, remote (non-loopback) access, SF2e (Play Buddy is PF2e-only; StarTome keeps SF2e campaigns unlinked).
+Spells and spell slots, feats, the full sheet, editing characters, the GM's own NPCs in Play Buddy, chat, maps, remote (non-loopback) access. (Starfinder 2e is no longer out of scope: see §11a.)
+
+## 11a. Starfinder 2e (asked for 2026-11-07)
+
+StarTome runs Starfinder 2e campaigns with tactical starship combat (STARFINDER_PLAN.md). Its side is built and tested against the mock (`--system sf2e`); everything here is **additive**, so a PF2e Play Buddy keeps working unchanged. What a Starfinder-capable Play Buddy should send:
+
+| Where | Field | Meaning |
+|---|---|---|
+| `GET /v1/game` | `system: 'sf2e'` | The game's system. Absent means `pf2e`. StarTome warns when it differs from the campaign's game. |
+| `ItemRef` (everywhere) | `system: 'sf2e'` | The Foundry system of `pack`/`foundryId`; StarTome resolves `fvtt:sf2e:<pack>:<_id>`. Absent means `pf2e`. StarTome sends it on SF2e items too. |
+| status `skills.skills` | SF2e slugs | `computers`, `piloting`, `crafting`, `athletics` … as in the SF2e Player Core. The starship crew cards use Piloting, Computers, Crafting and Perception (`defenses.perception`). |
+| status `skills.classDc` | number | Area Fire / Auto-Fire DCs (class DC + tracking). |
+| status `skills.attacks` | `{ ranged?, melee? }` | Weapon attack bonuses; gunnery Strikes use the ranged one. |
+| status `inventory.items[]` | `grade?` | `commercial` … `paragon`; StarTome's upgrade-slot check reads it. |
+| status `inventory.items[]` | `implanted?: true` | An augmentation implanted in the character (counts toward the four-implant limit). |
+| status `inventory.items[].attachments[]` | `kind: 'upgrade'` | Armor and weapon upgrades, and installed weapons. |
+| coins / `Cp` | — | Unchanged: SF2e prices and coins travel in copper too (1 credit = 10 cp, as Foundry stores them in silver). |
+| status `basic.heroPoints` | — | As in PF2e; a crew member can spend one to reroll the starship's save. |
+
+Optional, later: show the player the battle station they helm and its station actions (StarTome could push them as an offer-like notice).
 
 ## 12. Open questions
 
@@ -407,5 +426,6 @@ Without `--manual` the mock players answer by themselves (accept offers, roll re
 
 ## 14. Change log
 
+- 2026-11-07: Starfinder 2e additions (§11a): `game.system`, `ItemRef.system`, `skills.attacks`, item `grade` / `implanted`. The mock has `--system sf2e`.
 - 2026-10-31: hero points (`basic.heroPoints`, `heroPoint` offers) added.
 - 2026-10-31: first draft (Amon/StarTome), based on Play Buddy's data model at `7606e23` and StarTome's FORK_PLAN §9 / FEATURES_PLAN §6.

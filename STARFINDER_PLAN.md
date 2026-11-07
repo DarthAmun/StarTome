@@ -63,7 +63,7 @@ Book content (enemy starships, station actions, upgrades, expansion bays) is **n
 | ~~**P7**~~ | ✅ Done 2026-11-07 (0.35.0): starship combat engine: damage, shields, conditions, compromised, hull integrity | P5, P6 | L |
 | ~~**P8**~~ | ✅ Done 2026-11-07 (0.36.0): encounter builder and resolution for starship encounters | P7 | S |
 | ~~**P9**~~ | ✅ Done 2026-11-07 (0.37.0): starship exploration and downtime | P4 | S–M |
-| **P10** | Play Buddy SF2e support (StarTome side + the spec for Play Buddy) | P4, Play Buddy | M |
+| ~~**P10**~~ | ✅ Done 2026-11-07 (0.38.0): Play Buddy SF2e support (StarTome side + the spec for Play Buddy) | P4, Play Buddy | M |
 
 P1/P2 and P3 don't depend on each other and can run side by side. P5 and P6 can also run side by side once P3/P4 are in.
 
@@ -338,7 +338,10 @@ Builds on the existing combat store (`stores/encounter.ts`), combat log and undo
 
 ---
 
-## P10. Play Buddy SF2e support (M)
+## P10. Play Buddy SF2e support (M) ✅ done 2026-11-07 (0.38.0, StarTome side)
+
+**Built:** the spec for the Play Buddy author is PLAYBUDDY_API.md §11a (all additive). StarTome reads `game.system` (`LinkedGame.system`, pf2e when absent), resolves and sends `ItemRef.system` (`fvtt:sf2e:` ids; `rulesIdOfRef`), mirrors `skills.attacks` (`rangedAttack`/`meleeAttack`), item `grade` and `implanted`, and matches unknown items by name in the game's system. The Play Buddy panel shows in SF2e campaigns, with a warning when Play Buddy's game is the other system and a note that Starfinder needs a Play Buddy that reports it. Crew cards, the pilot's Piloting DC and Emergency Repairs use `crewSkill`: Play Buddy's shared value, else the hand-entered one. The mock (`scripts/playbuddy-mock.mjs --system sf2e`) has a Starfinder crew. Tests: `tests/playbuddySf2e.test.ts`. **Waiting on Play Buddy:** until it sends these fields, SF2e characters link but match items by name only and show no SF2e skills.
+
 
 Play Buddy is PF2e only today, so SF2e campaigns use `NoneLink`. Its creator plays in this campaign and will build the Play Buddy side. This phase is the StarTome side plus a spec in [PLAYBUDDY_API.md](PLAYBUDDY_API.md) they can build against.
 

@@ -40,7 +40,8 @@ export interface LinkedPlayer {
   autoAccept: { items: boolean; coins: boolean; levelUp: boolean; heroPoints: boolean; requests: boolean }
 }
 
-export interface LinkedGame { gameId: string; name: string; players: LinkedPlayer[]; eventSeq: number }
+/** `system`: the game system of Play Buddy's game (pf2e when it doesn't say). */
+export interface LinkedGame { gameId: string; name: string; players: LinkedPlayer[]; eventSeq: number; system: 'pf2e' | 'sf2e' }
 
 /** An item a player holds, as Play Buddy reports it. `rulesId` is our compendium match, if any. */
 export interface MirrorItem {
@@ -63,6 +64,9 @@ export interface MirrorItem {
   attachments: MirrorAttachment[]
   relic: { aspects: string[] } | null
   containerEntryId: string | null
+  /** SF2e: grade and implanted augmentations (P10). */
+  grade?: string | null
+  implanted?: boolean
 }
 
 /** A rune, talisman, upgrade, accessory or relic gift on a player's item. */
@@ -107,6 +111,9 @@ export interface CharacterMirror {
     skills: Record<string, number>
     classDc: number | null
     spellDc: number | null
+    /** SF2e weapon attack bonuses. */
+    rangedAttack?: number | null
+    meleeAttack?: number | null
   }
   inventory?: { coinsCp: number; items: MirrorItem[]; bulkTenths: number; investedCount: number }
 }

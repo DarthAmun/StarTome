@@ -8,7 +8,8 @@ export type Iso = string
 export type Cp = number
 export interface Coins { pp: number; gp: number; sp: number; cp: number }
 
-export interface ItemRef { slug: string; foundryId?: string; pack?: string }
+/** `system`: the Foundry system the pack belongs to; absent = pf2e (STARFINDER_PLAN.md P10). */
+export interface ItemRef { slug: string; foundryId?: string; pack?: string; system?: 'pf2e' | 'sf2e' }
 
 export type ErrorCode =
   | 'unauthorized' | 'pairCodeInvalid' | 'rateLimited'
@@ -47,6 +48,8 @@ export interface GamePlayer {
 export interface Game {
   gameId: string
   name: string
+  /** The game system Play Buddy's game uses; absent = pf2e. */
+  system?: 'pf2e' | 'sf2e'
   startedAt?: Iso
   players: GamePlayer[]
   eventSeq: number
@@ -85,6 +88,8 @@ export interface StatusSkills {
   skills: Record<string, number>
   classDc?: number
   spellcasting?: { source: string; tradition: string; dc: number; attack: number }[]
+  /** SF2e: weapon attack bonuses (gunnery Strikes use the ranged one). */
+  attacks?: { ranged?: number; melee?: number }
 }
 
 /**
@@ -127,6 +132,10 @@ export interface InventoryItem {
   attachments?: WireAttachment[]
   relic?: WireRelic
   identified: boolean
+  /** SF2e: the item's grade (commercial … paragon). */
+  grade?: string
+  /** SF2e: an augmentation implanted in the character. */
+  implanted?: boolean
 }
 
 export interface StatusInventory {

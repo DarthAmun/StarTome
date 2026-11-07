@@ -227,7 +227,7 @@
       <!-- ── Crew skills ── -->
       <section class="party-section">
         <div class="party-section-title">Crew skills</div>
-        <p class="ss-dim">Optional: SF2e skill modifiers for the station cards. Play Buddy will fill these once it supports Starfinder.</p>
+        <p class="ss-dim">Optional: SF2e skill modifiers for the station cards. A player linked to Play Buddy who shares their skills overrides these.</p>
         <div class="ss-skills">
           <div class="ss-skill-row ss-skill-head"><span /><span v-for="k in SKILL_KEYS" :key="k">{{ k }}</span></div>
           <div v-for="c in members" :key="c.id" class="ss-skill-row">
@@ -276,7 +276,7 @@ import { useParty, type Character } from '~/composables/useParty'
 import { useStarship } from '~/composables/useStarship'
 import { createInterior, startStarshipBattle, useAsInterior } from '~/composables/useStarshipEncounter'
 import { builtinConditions } from '~/composables/useConditions'
-import { activitiesFor, EXPLORATION_ACTIVITIES, starshipLevel, starshipLevelChanges, starshipSheet, STATION_INITIATIVE_SKILL, stationKey, type StationRow } from '~/rules/playerStarship'
+import { activitiesFor, crewSkill, EXPLORATION_ACTIVITIES, starshipLevel, starshipLevelChanges, starshipSheet, STATION_INITIATIVE_SKILL, stationKey, type StationRow } from '~/rules/playerStarship'
 import { formatActionCost, signed } from '~/rules/format'
 import { emergencyRepairs, emergencyRepairsDc, type RepairRank } from '~/rules/starshipCombat'
 import { rollCheck, rollExpression } from '~/rules/rolls'
@@ -354,10 +354,7 @@ function skillFor(r: StationRow) {
   return STATION_INITIATIVE_SKILL[stationKey(r.station?.name ?? '')] ?? 'Perception'
 }
 function skillValue(characterId: number, r: StationRow): number | null {
-  const c = party.characters.value.find(x => x.id === characterId)
-  const key = skillFor(r).toLowerCase()
-  const v = c?.sfSkills[key]
-  return typeof v === 'number' ? v : null
+  return crewSkill(party.characters.value.find(x => x.id === characterId), skillFor(r))
 }
 const SKILL_KEYS = ['Perception', 'Piloting', 'Computers', 'Crafting', 'Arcana', 'Nature', 'Occultism', 'Religion']
 function setSkill(c: Character, key: string, raw: string) {
@@ -415,10 +412,7 @@ const repairRank = ref<RepairRank>('trained')
 const repairRemote = ref(false)
 const repairDay = ref(false)
 const repairResult = ref('')
-const repairByMod = computed(() => {
-  const v = party.characters.value.find(c => c.id === repairBy.value)?.sfSkills.crafting
-  return typeof v === 'number' ? v : null
-})
+const repairByMod = computed(() => crewSkill(party.characters.value.find(c => c.id === repairBy.value), 'crafting'))
 const repairDc = computed(() => emergencyRepairsDc(repairRank.value, repairRemote.value))
 async function doRepairs() {
   if (!ship.value) return

@@ -5,7 +5,11 @@
  * /mock/* controls that play the players' side (accept offers, roll, return
  * items, take damage).
  *
- *   node scripts/playbuddy-mock.mjs [--port 47110] [--manual]
+ *   node scripts/playbuddy-mock.mjs [--port 47110] [--manual] [--system sf2e]
+ *
+ * --system sf2e: a Starfinder 2e game (PLAYBUDDY_API.md "Starfinder 2e"): the
+ * game reports `system: 'sf2e'`, the crew has SF2e skills and items carry
+ * SF2e Foundry refs.
  *
  * Pair code: 123456. Without --manual, players answer by themselves after a
  * moment: offers are accepted, roll requests rolled, damage applied.
@@ -58,11 +62,47 @@ function seedPlayers() {
   ]
 }
 
+/** A Starfinder crew (STARFINDER_PLAN.md P10). Prices in cp: 1 credit = 10 cp. */
+function seedSf2ePlayers() {
+  return [
+    {
+      playerId: 'p_carl', displayName: 'Carl', online: true,
+      shares: ['basic', 'defenses', 'skills', 'inventory'],
+      autoAccept: { items: false, coins: false, levelUp: false, heroPoints: true, requests: false },
+      character: {
+        characterId: 'c_vesk', name: 'Tarkus', level: 3, ancestry: 'Vesk', class: 'Soldier',
+        hp: { current: 52, max: 52, temp: 0 }, conditions: [], heroPoints: 1,
+        defenses: { ac: 20, saves: { fortitude: 11, reflex: 7, will: 8 }, perception: 8, speeds: { land: 25 } },
+        skills: { attributes: { str: 4, dex: 1, con: 3, int: 0, wis: 1, cha: 0 }, skills: { athletics: 11, piloting: 6, crafting: 5, intimidation: 7 }, classDc: 20, attacks: { ranged: 10, melee: 12 }, spellcasting: [] },
+        coins: { pp: 0, gp: 0, sp: 1200, cp: 0 },
+        items: [
+          { entryId: 'i1', ref: { slug: 'laser-pistol', foundryId: 'qIgcUV22LaDCzmb2', pack: 'equipment', system: 'sf2e' }, custom: false, name: 'Laser Pistol', quantity: 1, level: 0, rarity: 'common', type: 'weapon', price: 300, priceFor: 1, bulk: 0.1, location: 'held', grade: 'tactical', attachments: [] },
+        ],
+        nextEntry: 2,
+      },
+    },
+    {
+      playerId: 'p_lena', displayName: 'Lena', online: true,
+      shares: ['basic', 'defenses', 'skills'],
+      autoAccept: { items: false, coins: true, levelUp: false, heroPoints: true, requests: false },
+      character: {
+        characterId: 'c_ysoki', name: 'Pip', level: 3, ancestry: 'Ysoki', class: 'Mechanic',
+        hp: { current: 31, max: 31, temp: 0 }, conditions: [], heroPoints: 1,
+        defenses: { ac: 18, saves: { fortitude: 8, reflex: 10, will: 7 }, perception: 9, speeds: { land: 25 } },
+        skills: { attributes: { str: 0, dex: 2, con: 1, int: 4, wis: 1, cha: 0 }, skills: { computers: 11, crafting: 11, piloting: 9 }, classDc: 21, attacks: { ranged: 9 }, spellcasting: [] },
+        coins: { pp: 0, gp: 0, sp: 400, cp: 0 },
+        items: [],
+        nextEntry: 1,
+      },
+    },
+  ]
+}
+
 const CHECK_MODS = { perception: c => c.defenses.perception, fortitude: c => c.defenses.saves.fortitude, reflex: c => c.defenses.saves.reflex, will: c => c.defenses.saves.will }
 
-export function createMockServer({ port = 47110, manual = false, delayMs = 1200 } = {}) {
+export function createMockServer({ port = 47110, manual = false, delayMs = 1200, system = 'pf2e' } = {}) {
   const state = {
-    gameId: 'g_mock', name: 'Mock Game', tokens: new Set(), players: seedPlayers(),
+    gameId: 'g_mock', name: system === 'sf2e' ? 'Mock Starfinder Game' : 'Mock Game', tokens: new Set(), players: system === 'sf2e' ? seedSf2ePlayers() : seedPlayers(),
     offers: new Map(), byKey: new Map(), requests: new Map(), events: [], seq: 0, waiters: [],
   }
   const player = id => state.players.find(p => p.playerId === id)
@@ -77,7 +117,7 @@ export function createMockServer({ port = 47110, manual = false, delayMs = 1200 
   // ── Views ────────────────────────────────────────────────────────────────
   function gameView() {
     return {
-      gameId: state.gameId, name: state.name, startedAt: iso(), eventSeq: state.seq,
+      gameId: state.gameId, name: state.name, startedAt: iso(), eventSeq: state.seq, ...(system === 'sf2e' ? { system } : {}),
       players: state.players.map(p => ({
         playerId: p.playerId, displayName: p.displayName, online: p.online, lastSeenAt: iso(),
         character: { characterId: p.character.characterId, name: p.character.name, level: p.character.level, ancestry: p.character.ancestry, class: p.character.class, ...(p.character.class2 ? { class2: p.character.class2 } : {}) },
@@ -216,7 +256,7 @@ export function createMockServer({ port = 47110, manual = false, delayMs = 1200 
     if (path.startsWith('/mock/')) {
       if (path === '/mock/reset' && req.method === 'POST') {
         // Fresh players and no offers; pairing and the event sequence stay
-        state.players = seedPlayers(); state.offers.clear(); state.requests.clear(); state.byKey.clear()
+        state.players = system === 'sf2e' ? seedSf2ePlayers() : seedPlayers(); state.offers.clear(); state.requests.clear(); state.byKey.clear()
         return send(200, { ok: true })
       }
       if (path === '/mock/state' && req.method === 'GET') return send(200, { players: state.players, offers: [...state.offers.values()], requests: [...state.requests.values()].map(r => ({ requestId: r.requestId, ...r.body, deliveries: r.deliveries })), seq: state.seq })
@@ -374,7 +414,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2)
   const port = Number(args[args.indexOf('--port') + 1]) || 47110
   const manual = args.includes('--manual')
-  createMockServer({ port, manual }).then(({ url }) => {
+  const system = args.includes('--system') ? args[args.indexOf('--system') + 1] : 'pf2e'
+  createMockServer({ port, manual, system }).then(({ url }) => {
     console.log(`Mock Play Buddy on ${url} — pair code ${PAIR_CODE}${manual ? ' (manual: answer via /mock/*)' : ' (players answer by themselves)'}`)
   })
 }

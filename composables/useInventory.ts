@@ -593,7 +593,7 @@ async function replaceMirror(campaignId: number, owner: OwnerKey, items: MirrorI
           bulk_override: i.rulesId ? null : i.bulk,
           notes: '', identified: i.identified ? 1 : 0,
           player_name: i.identified ? null : i.name, player_description: null,
-          runes: runesSummary(i.attachments ?? []), grade: null, container_id: null, relic: i.relic ?? null, pb_entry_id: i.entryId, created_at: ts, updated_at: ts,
+          runes: runesSummary(i.attachments ?? []), grade: i.grade ?? null, implanted: i.implanted ? 1 : 0, container_id: null, relic: i.relic ?? null, pb_entry_id: i.entryId, created_at: ts, updated_at: ts,
         } satisfies DbInventory) as number
         ids.set(i.entryId, id)
         for (const a of i.attachments ?? []) {

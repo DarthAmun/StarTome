@@ -13,6 +13,13 @@
     </div>
 
     <p v-if="pb.error.value" class="pb-error">{{ pb.error.value }}</p>
+    <p v-if="systemMismatch" class="pb-error">
+      Play Buddy's game is a {{ pb.game.value!.system === 'sf2e' ? 'Starfinder' : 'Pathfinder' }} game, this campaign is {{ game === 'sf2e' ? 'Starfinder' : 'Pathfinder' }}:
+      items and skills won't match. Open the right game in Play Buddy.
+    </p>
+    <p v-else-if="game === 'sf2e' && !pb.connected.value" class="pb-dim pb-note">
+      Starfinder support needs a Play Buddy version that reports Starfinder games (PLAYBUDDY_API.md, "Starfinder 2e"). Until then, enter crew skills on the Starship page.
+    </p>
 
     <!-- Share file: which character it's for -->
     <div v-if="share" class="pb-box">
@@ -141,13 +148,14 @@
 </template>
 
 <script setup lang="ts">
+import type { GameId } from '~/types/game'
 import { useParty, type Character } from '~/composables/useParty'
 import { usePlayBuddy } from '~/composables/usePlayBuddy'
 import { readShareFile } from '~/partylink/convert'
 import type { Degree, LinkedPlayer } from '~/partylink/port'
 import { signed } from '~/rules/format'
 
-const props = defineProps<{ campaignId: number; characters: Character[] }>()
+const props = defineProps<{ campaignId: number; characters: Character[]; game?: GameId }>()
 
 const pb = usePlayBuddy()
 const party = useParty()
@@ -267,6 +275,8 @@ async function applyShare() {
 }
 
 defineExpose({ openShare: (name: string, text: string) => { share.value = { name, text }; shareTarget.value = props.characters.find(c => c.name === name)?.id ?? null } })
+/** Play Buddy's game is the other system (it says which since API "Starfinder 2e"). */
+const systemMismatch = computed(() => !!pb.game.value && (pb.game.value.system ?? 'pf2e') !== (props.game ?? 'pf2e'))
 </script>
 
 <style scoped>

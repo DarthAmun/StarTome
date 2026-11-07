@@ -35,17 +35,23 @@ export function cpToCoins(cp: number): W.Coins {
 export const bulkToTenths = (b: number) => Math.round((b ?? 0) * 10)
 export const tenthsToBulk = (t: number) => Math.round(t) / 10
 
-/** Our compendium id `fvtt:pf2e:<pack>:<_id>` → Play Buddy's item ref. */
+/** Our compendium id `fvtt:<pf2e|sf2e>:<pack>:<_id>` → Play Buddy's item ref (SF2e refs carry their system). */
 export function itemRefOf(rulesId: string | null, name: string): W.ItemRef {
-  const m = rulesId?.match(/^fvtt:pf2e:([^:]+):([^:]+)$/)
-  return m ? { slug: slugify(name), foundryId: m[2], pack: m[1] } : { slug: slugify(name) }
+  const m = rulesId?.match(/^fvtt:(pf2e|sf2e):([^:]+):([^:]+)$/)
+  if (!m) return { slug: slugify(name) }
+  return { slug: slugify(name), foundryId: m[3], pack: m[2], ...(m[1] === 'sf2e' ? { system: 'sf2e' as const } : {}) }
+}
+
+/** Play Buddy's item ref → our compendium id; refs without a system are PF2e. */
+export function rulesIdOfRef(ref: W.ItemRef): string | null {
+  return ref.foundryId && ref.pack ? `fvtt:${ref.system ?? 'pf2e'}:${ref.pack}:${ref.foundryId}` : null
 }
 
 // ── Play Buddy → StarTome ──────────────────────────────────────────────────
 
 export function gameFromWire(g: W.Game): LinkedGame {
   return {
-    gameId: g.gameId, name: g.name, eventSeq: g.eventSeq,
+    gameId: g.gameId, name: g.name, eventSeq: g.eventSeq, system: g.system ?? 'pf2e',
     players: g.players.map(p => ({
       playerId: p.playerId, name: p.displayName, online: p.online,
       characterId: p.character?.characterId ?? null, characterName: p.character?.name ?? null,
@@ -66,6 +72,8 @@ export function itemFromWire(i: W.InventoryItem, resolve: ItemResolver): MirrorI
     attachments: (i.attachments ?? []).map((a, n) => attachmentFromWire(a, `${i.entryId}:${n}`, resolve)),
     relic: i.relic ? { aspects: [...i.relic.aspects] } : null,
     containerEntryId: i.container ?? null,
+    ...(i.grade ? { grade: i.grade } : {}),
+    ...(i.implanted ? { implanted: true } : {}),
   }
 }
 
@@ -99,6 +107,7 @@ export function statusFromWire(s: W.StatusResponse, resolve: ItemResolver): Char
     out.skills = {
       strMod: s.skills.attributes.str, skills: { ...s.skills.skills },
       classDc: s.skills.classDc ?? null, spellDc: dcs.length ? Math.max(...dcs) : null,
+      ...(s.skills.attacks ? { rangedAttack: s.skills.attacks.ranged ?? null, meleeAttack: s.skills.attacks.melee ?? null } : {}),
     }
   }
   if (s.inventory) {
@@ -201,7 +210,7 @@ export function stackFromEntry(entry: InventoryEntry, item: Item | undefined, at
 
 /** Synced Foundry items by ref; relic gifts, homebrew and free text with a definition. */
 function definitionOf(rulesId: string | null, name: string, custom: OfferStack['custom']): Pick<W.OfferItem, 'ref' | 'definition'> {
-  if (rulesId?.startsWith('fvtt:pf2e:')) return { ref: itemRefOf(rulesId, name) }
+  if (rulesId?.startsWith('fvtt:pf2e:') || rulesId?.startsWith('fvtt:sf2e:')) return { ref: itemRefOf(rulesId, name) }
   return {
     definition: {
       id: slugify(name) || 'custom-item', name, type: PB_TYPE[custom.category as ItemCategory] ?? (custom.category === 'relic-gift' ? 'relic-gift' : 'gear'),

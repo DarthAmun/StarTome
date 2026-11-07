@@ -17,7 +17,7 @@ import { useInventory } from '~/composables/useInventory'
 import { notify } from '~/composables/useNotices'
 import { useParty, type Character } from '~/composables/useParty'
 import { rulesFindByName, rulesGetMany } from '~/composables/useRules'
-import { asCustomStack, readShareFile, stackFromEntry, statusFromWire } from '~/partylink/convert'
+import { asCustomStack, readShareFile, rulesIdOfRef, stackFromEntry, statusFromWire } from '~/partylink/convert'
 import {
   LinkError, type CharacterMirror, type DeliveryState, type LinkedGame, type LinkedPlayer, type LinkEvent, type LinkHealth,
   type LinkOffer, type LinkRequest, type PartyLink, type RollEntry, type ShareLevel,
@@ -63,7 +63,7 @@ let loopAbort: AbortController | null = null
 function link(): PartyLink {
   return createPlayBuddyLink(
     { baseUrl: baseUrlFor(conn.value.port), token: conn.value.token, clientId: conn.value.clientId },
-    ref => (ref.foundryId && ref.pack ? `fvtt:pf2e:${ref.pack}:${ref.foundryId}` : null),
+    rulesIdOfRef,
   )
 }
 
@@ -73,7 +73,7 @@ async function fillMatches(m: CharacterMirror) {
   const known = new Set((await rulesGetMany(items.map(i => i.rulesId).filter((x): x is string => !!x))).map(e => e.id))
   for (const i of items) {
     if (i.rulesId && known.has(i.rulesId)) continue
-    i.rulesId = i.custom ? null : (await rulesFindByName('item', i.name, 'pf2e'))?.id ?? null
+    i.rulesId = i.custom ? null : (await rulesFindByName('item', i.name, game.value?.system ?? 'pf2e'))?.id ?? null
   }
 }
 
@@ -209,7 +209,7 @@ async function syncTokens(tokenId: number | null, m: CharacterMirror) {
 async function importShareFile(campaignId: number, characterId: number, text: string): Promise<string | null> {
   const file = readShareFile(text)
   if (!file) return 'This is not a Play Buddy share file.'
-  const m = statusFromWire(file.status, ref => (ref.foundryId && ref.pack ? `fvtt:pf2e:${ref.pack}:${ref.foundryId}` : null))
+  const m = statusFromWire(file.status, rulesIdOfRef)
   await fillMatches(m)
   await useParty().applyMirror(characterId, m)
   const owner = characterOwner(characterId)
