@@ -5,6 +5,7 @@
       <span class="emb-threat" :style="{ color: THREAT_COLOR[rating.threat] }">{{ THREAT_LABEL[rating.threat] }}</span>
       <span v-if="!compact" class="emb-budget">
         moderate {{ rating.budgets.moderate }} · {{ partySize > 0 ? partySize : DEFAULT_PARTY_SIZE }} PCs
+        <template v-if="smallCrew"> · small crew: budgets −10/−20</template>
       </span>
     </div>
     <div class="emb-bar" role="meter" :aria-valuenow="rating.xp" :aria-valuemax="scaleMax" :aria-label="`Encounter XP: ${THREAT_LABEL[rating.threat]}`">
@@ -18,16 +19,17 @@
 </template>
 
 <script setup lang="ts">
-import { DEFAULT_PARTY_SIZE, rateEncounter, THREAT_LABEL, THREATS, type ThreatRating } from '~/rules/encounter'
+import { DEFAULT_PARTY_SIZE, rateEncounter, THREAT_LABEL, THREATS, type StarshipRating, type ThreatRating } from '~/rules/encounter'
 import type { GameId } from '~/types/game'
 
-const props = defineProps<{ game: GameId; xp: number; partySize: number; compact?: boolean }>()
+const props = defineProps<{ game: GameId; xp: number; partySize: number; compact?: boolean; starship?: StarshipRating | null }>()
+const smallCrew = computed(() => !!props.starship && !props.starship.concierge && (props.partySize > 0 ? props.partySize : DEFAULT_PARTY_SIZE) <= 3)
 
 const THREAT_COLOR: Record<ThreatRating, string> = {
   trivial: 'var(--text3)', low: '#7cc44e', moderate: '#e8c44a', severe: '#e8873a', extreme: '#e05555', beyond: '#b04ad0',
 }
 
-const rating = computed(() => rateEncounter(props.game, props.xp, props.partySize))
+const rating = computed(() => rateEncounter(props.game, props.xp, props.partySize, props.starship))
 const scaleMax = computed(() => Math.max(rating.value.budgets.extreme * 1.25, props.xp))
 
 function pct(v: number) {

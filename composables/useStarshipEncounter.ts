@@ -90,8 +90,12 @@ export async function startStarshipBattle(ship: DbStarship, name?: string): Prom
     encounterId: id, tokenId: null, gridX: -1000, gridY: -1000, size: 1, isVisible: 1, label: ship.name,
     hpCurrent: ship.hp_current ?? sheet.hp, hpMax: sheet.hp, ac: sheet.ac, isAlly: true,
   })
+  // The generator begins every encounter with full Shield Points; wrecked and the like stay with the ship
+  const hasGenerator = (ship.stations ?? []).some(sl => sl.stationId && lookup.stations.get(sl.stationId)?.name.toLowerCase() === 'generator')
   await db.encounterTokens.update(shipToken.id!, {
-    sensor_zone: 2, sensor_heading: 1, sensor_role: 'player-ship', shield_points: ship.sp_current ?? sheet.sp, shield_max: sheet.sp,
+    sensor_zone: 2, sensor_heading: 1, sensor_role: 'player-ship',
+    shield_points: hasGenerator ? sheet.sp : ship.sp_current ?? sheet.sp, shield_max: sheet.sp,
+    conditions: (ship.conditions ?? []).map(c => ({ name: c.name, value: c.value })),
   })
 
   // The crew at their stations

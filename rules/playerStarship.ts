@@ -246,6 +246,8 @@ export interface EncounterStarship {
   markers: StationMarker[]
   /** Battle: slots of the player ship's malfunctioning battle stations (P7). */
   malfunctioning?: number[]
+  /** Battle: the concierge upgrade variant rule (no small-crew budget cut), P8. */
+  concierge?: boolean
 }
 
 export interface MapTokenLike { id: number; gridX: number; gridY: number; size: number; isDead?: boolean; conditions?: { name: string }[] }

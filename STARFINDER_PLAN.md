@@ -61,7 +61,7 @@ Book content (enemy starships, station actions, upgrades, expansion bays) is **n
 | ~~**P5**~~ | ✅ Done 2026-11-07 (0.33.0): ship interior map, battle stations on the map, helming, station actions | P4 | M |
 | ~~**P6**~~ | ✅ Done 2026-11-07 (0.34.0): sensor map (a row of zones), headings, ship tokens, zone areas | P3 | L |
 | ~~**P7**~~ | ✅ Done 2026-11-07 (0.35.0): starship combat engine: damage, shields, conditions, compromised, hull integrity | P5, P6 | L |
-| **P8** | Encounter builder and resolution for starship encounters | P7 | S |
+| ~~**P8**~~ | ✅ Done 2026-11-07 (0.36.0): encounter builder and resolution for starship encounters | P7 | S |
 | **P9** | Starship exploration and downtime | P4 | S–M |
 | **P10** | Play Buddy SF2e support (StarTome side + the spec for Play Buddy) | P4, Play Buddy | M |
 
@@ -312,7 +312,10 @@ Builds on the existing combat store (`stores/encounter.ts`), combat log and undo
 
 ---
 
-## P8. Encounter builder and resolution (S)
+## P8. Encounter builder and resolution (S) ✅ done 2026-11-07 (0.36.0)
+
+**Built:** `starshipBudgets` in `rules/encounter.ts` (crew of ≤3: −10 trivial/low, −20 moderate and up; the concierge upgrade switches it off), used by the builder, the encounter meter and the resolve dialog of starship battles. The builder (SF2e) has a "Starship encounter" toggle with a concierge option and the active ship's name; its search adds starships. "Create encounter" in starship mode calls `startStarshipBattle` on the active ship, puts starships and starship-trait hazards on the sensor map at the far end facing the party, and creatures and other hazards on the interior; the encounter remembers the concierge choice. Starships count as creatures for XP (the player ship is an ally and counts for nothing). Battles now start with full Shield Points when the ship has a generator, and carry the ship's lasting conditions (wrecked …). Test in `tests/encounter.test.ts`.
+
 
 - The encounter builder gets a **Starship encounter** toggle. It adds the Starships and starship hazards lists next to creatures.
 - XP: starships count as creatures of their level; hazards as hazards; boarders as creatures. With a crew of 3 or fewer, the budget is 20 lower for moderate or harder and 10 lower for trivial or low (Tech Core, GM's Arsenal, pp. 206–209), shown as a note on the meter. The **concierge upgrade** variant switches this off.

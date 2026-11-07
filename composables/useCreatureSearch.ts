@@ -13,7 +13,7 @@ export interface CreatureOption {
   id: string
   name: string
   level: number
-  kind: 'creature' | 'hazard' | 'vehicle'
+  kind: 'creature' | 'hazard' | 'vehicle' | 'starship'
   /** Displayable URL (portraits are resolved from the image store). */
   img: string | null
   game: RulesEntity['game']

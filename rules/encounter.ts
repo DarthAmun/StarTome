@@ -64,8 +64,25 @@ export function threatBudgets(game: GameId, partySize: number): Record<ThreatLev
   return Object.fromEntries(THREATS.map(t => [t, encounterBudget(game, t, size)])) as Record<ThreatLevel, number>
 }
 
-export function rateEncounter(game: GameId, xp: number, partySize: number): EncounterRating {
-  const budgets = threatBudgets(game, partySize)
+/** Options for a tactical starship encounter (Tech Core, GM's Arsenal pp. 206–209). */
+export interface StarshipRating {
+  /** The concierge upgrade variant rule: a VI helps a small crew, so the budget isn't lowered. */
+  concierge?: boolean
+}
+
+/**
+ * A crew of three or fewer can't helm every station: the starship budget is
+ * 20 XP lower for moderate or harder and 10 lower for trivial and low.
+ */
+export function starshipBudgets(budgets: Record<ThreatLevel, number>, partySize: number, opts: StarshipRating = {}): Record<ThreatLevel, number> {
+  const size = partySize > 0 ? partySize : DEFAULT_PARTY_SIZE
+  if (size > 3 || opts.concierge) return budgets
+  return Object.fromEntries(THREATS.map(t => [t, Math.max(0, budgets[t] - (t === 'trivial' || t === 'low' ? 10 : 20))])) as Record<ThreatLevel, number>
+}
+
+export function rateEncounter(game: GameId, xp: number, partySize: number, starship?: StarshipRating | null): EncounterRating {
+  const base = threatBudgets(game, partySize)
+  const budgets = starship ? starshipBudgets(base, partySize, starship) : base
   let threat: ThreatRating = 'trivial'
   for (const t of THREATS) if (xp >= budgets[t]) threat = t
   if (xp > budgets.extreme) threat = 'beyond'

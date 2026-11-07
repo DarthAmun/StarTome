@@ -63,3 +63,21 @@ describe('tokenSides', () => {
     expect(unlinked).toHaveLength(2)
   })
 })
+
+describe('starship encounter budgets (Tech Core GM\'s Arsenal)', () => {
+  it('a crew of three or fewer gets 20 less for moderate+ and 10 less for trivial/low, unless the concierge upgrade is used', async () => {
+    const { rateEncounter, starshipBudgets, threatBudgets } = await import('~/rules/encounter')
+    const four = threatBudgets('sf2e', 4)
+    expect(starshipBudgets(four, 4)).toEqual(four)
+    const three = threatBudgets('sf2e', 3)
+    const cut = starshipBudgets(three, 3)
+    expect(cut.trivial).toBe(three.trivial - 10)
+    expect(cut.low).toBe(three.low - 10)
+    expect(cut.moderate).toBe(three.moderate - 20)
+    expect(cut.extreme).toBe(three.extreme - 20)
+    expect(starshipBudgets(three, 3, { concierge: true })).toEqual(three)
+    // 60 XP: moderate for 3 PCs in a starship fight (budget 60 → 40), low on foot
+    expect(rateEncounter('sf2e', three.moderate - 20, 3, {}).threat).toBe('moderate')
+    expect(rateEncounter('sf2e', three.moderate - 20, 3).threat).toBe('low')
+  })
+})

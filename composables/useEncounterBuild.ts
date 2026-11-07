@@ -11,6 +11,10 @@ import { rulesGet } from '~/composables/useRules'
 import { adjustedName, tokenStats, type Adjustment } from '~/rules/combat'
 import { partyMembers } from '~/rules/party'
 import { lsKey } from '~/utils/appNamespace'
+import { activeStarship, useStarship } from '~/composables/useStarship'
+import { startStarshipBattle } from '~/composables/useStarshipEncounter'
+import { DEFAULT_ZONES } from '~/rules/sensorMap'
+import type { Starship } from '~/types/rules'
 
 export interface BuildSlot {
   rulesId: string
@@ -23,6 +27,10 @@ export interface BuildState {
   slots: BuildSlot[]
   /** Overrides the party tab's level; null follows the party. */
   partyLevel: number | null
+  /** A tactical starship encounter on the campaign's active starship (P8). */
+  starship?: boolean
+  /** Concierge upgrade variant rule: no small-crew budget cut. */
+  concierge?: boolean
 }
 
 function emptyBuild(): BuildState {
@@ -42,6 +50,8 @@ function readBuild(campaignId: number): BuildState {
       name: typeof parsed.name === 'string' ? parsed.name : '',
       slots: Array.isArray(parsed.slots) ? parsed.slots.filter(s => s && typeof s.rulesId === 'string') : [],
       partyLevel: typeof parsed.partyLevel === 'number' ? parsed.partyLevel : null,
+      starship: !!parsed.starship,
+      concierge: !!parsed.concierge,
     }
   } catch {
     return emptyBuild()
@@ -120,8 +130,55 @@ export interface CreateResult {
   missing: number
 }
 
+/**
+ * A starship encounter: a battle on the active ship's interior with the crew at
+ * their stations; starships and starship hazards go on the sensor map (facing
+ * the party, from the far end), creatures and other hazards board the interior.
+ */
+async function createStarshipEncounter(campaignId: number, build: BuildState): Promise<CreateResult | null> {
+  const ship = await activeStarship(campaignId)
+  if (!ship) return null
+  const st = useStarship()
+  if (st.loadedCampaign.value !== campaignId) await st.load(campaignId)
+  const id = await startStarshipBattle(ship, build.name.trim() || `${ship.name}: starship battle`)
+  const db = getDb()
+  const enc = await db.encounters.get(id)
+  await db.encounters.update(id, {
+    status: 'prepared', party_level: build.partyLevel,
+    starship: enc?.starship ? { ...enc.starship, concierge: !!build.concierge } : enc?.starship ?? null,
+  })
+  const zones = enc?.sensor_map?.zones ?? DEFAULT_ZONES
+  let zone = zones - 2
+  const placeBoarder = columnPlacer(10, 2, 10)
+  let missing = 0
+  for (const slot of build.slots) {
+    const entry = await rulesGet(slot.rulesId).catch(() => undefined)
+    if (!entry) { missing++; continue }
+    const onSensors = entry.kind === 'starship' || (entry.kind === 'hazard' && entry.traits.includes('starship'))
+    const stats = tokenStats(entry, slot.adjustment)
+    const img = await dbApi.linkedImages.get(null, slot.rulesId)
+    for (let i = 0; i < slot.count; i++) {
+      const label = slot.count > 1 ? `${adjustedName(entry.name, slot.adjustment)} ${i + 1}` : null
+      const t = await dbApi.encounterTokens.add({
+        encounterId: id, tokenId: null, ...(onSensors ? { gridX: -1000, gridY: -1000 } : placeBoarder(stats.size)), size: onSensors ? 1 : stats.size,
+        label, hpCurrent: stats.hpMax, hpMax: stats.hpMax, ac: stats.ac, linkedRulesId: slot.rulesId, adjustment: slot.adjustment,
+        imageSource: img?.source ?? null, imageType: img?.type ?? 'file',
+      })
+      if (onSensors) {
+        const sp = entry.kind === 'starship' ? (entry as Starship).shields?.max ?? null : null
+        await db.encounterTokens.update(t.id!, {
+          sensor_zone: Math.max(0, zone), sensor_heading: -1, sensor_role: entry.kind === 'hazard' ? 'hazard' : 'ship', shield_points: sp, shield_max: sp,
+        })
+        zone = zone > zones - 4 ? zone - 1 : zones - 2
+      }
+    }
+  }
+  return { encounterId: id, missing }
+}
+
 /** Makes a new prepared VTT encounter with the party and the selected enemies on it. */
 export async function createEncounterFromBuild(campaignId: number, build: BuildState, characters: Character[]): Promise<CreateResult | null> {
+  if (build.starship) return createStarshipEncounter(campaignId, build)
   const enc = await dbApi.encounters.create({ campaignId, name: build.name.trim() || 'New Encounter' })
   if (!enc?.id) return null
   await dbApi.encounters.update({ id: enc.id, status: 'prepared', party_level: build.partyLevel })

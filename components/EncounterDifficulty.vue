@@ -1,6 +1,6 @@
 <template>
   <div class="ed">
-    <EncounterMeterBar :game="game" :xp="xp" :party-size="party.size" compact />
+    <EncounterMeterBar :game="game" :xp="xp" :party-size="party.size" compact :starship="store.current?.starship?.role === 'battle' ? { concierge: !!store.current.starship.concierge } : null" />
     <div class="ed-row">
       <span class="ed-label">Party lvl</span>
       <span class="ed-stepper" :title="encounter?.partyLevel == null ? 'From the party tab' : 'Overridden for this encounter'">

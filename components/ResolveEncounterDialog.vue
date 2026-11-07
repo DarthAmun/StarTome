@@ -23,7 +23,7 @@
             <span class="red-xp">{{ l.xp }} XP</span>
           </label>
           <div v-if="unlinked" class="red-dim red-note">+ {{ unlinked }} {{ unlinked === 1 ? 'token' : 'tokens' }} without a stat block (no XP)</div>
-          <EncounterMeterBar class="red-meter" :game="game" :xp="xpTotal" :party-size="participants.size" />
+          <EncounterMeterBar class="red-meter" :game="game" :xp="xpTotal" :party-size="participants.size" :starship="store.current?.starship?.role === 'battle' ? { concierge: !!store.current.starship.concierge } : null" />
 
           <!-- Participants -->
           <div class="red-title">Took part</div>
@@ -76,6 +76,7 @@
 
 <script setup lang="ts">
 /** "Resolve encounter" (FEATURES_PLAN.md §5): XP, participants and loot → stash. Works from the encounter page and the encounters list. */
+import { useEncounterStore } from '~/stores/encounter'
 import { dbApi } from '~/composables/useDb'
 import { useInventory } from '~/composables/useInventory'
 import { useParty } from '~/composables/useParty'
@@ -88,6 +89,8 @@ import { clampLevel, partyMembers } from '~/rules/party'
 import type { Adjustment } from '~/rules/combat'
 import { campaignGame, campaignRules, type GameId } from '~/types/game'
 import type { Hazard } from '~/types/rules'
+
+const store = useEncounterStore()
 
 const props = defineProps<{ encounterId: number }>()
 const emit = defineEmits<{ close: []; resolved: [] }>()

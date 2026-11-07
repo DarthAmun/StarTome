@@ -44,7 +44,8 @@
             <input v-model.number="levelMax" type="number" class="eb-num" min="-1" max="25" />
           </label>
           <select v-model="kindFilter" class="eb-select" aria-label="Kind">
-            <option value="both">Creatures &amp; hazards</option>
+            <option value="both">{{ build.starship ? 'Starships, creatures & hazards' : 'Creatures & hazards' }}</option>
+            <option v-if="build.starship" value="starship">Starships</option>
             <option value="creature">Creatures</option>
             <option value="hazard">Hazards</option>
           </select>
@@ -62,7 +63,7 @@
             </div>
             <div class="eb-result-info">
               <span class="eb-result-name">{{ r.name }}</span>
-              <span class="eb-result-meta">{{ r.kind === 'hazard' ? (r.complex ? 'Complex hazard' : 'Hazard') : 'Creature' }} {{ r.level }} · {{ xpOf(r) }} XP{{ otherGameTag(r.game, game) }}</span>
+              <span class="eb-result-meta">{{ r.kind === 'starship' ? 'Starship' : r.kind === 'hazard' ? (r.complex ? 'Complex hazard' : 'Hazard') : 'Creature' }} {{ r.level }} · {{ xpOf(r) }} XP{{ otherGameTag(r.game, game) }}</span>
             </div>
             <button class="eb-add" title="Add" @click="add(r.id)"><OhVueIcon name="md-add" scale="0.75" /></button>
           </div>
@@ -77,7 +78,17 @@
       <!-- ── Selection ── -->
       <section class="eb-panel eb-sel">
         <input v-model="build.name" class="eb-input eb-name" placeholder="Encounter name" />
-        <EncounterMeterBar :game="game" :xp="totalXp" :party-size="party.size" />
+        <div v-if="game === 'sf2e'" class="eb-starship">
+          <label class="eb-filter" title="A tactical starship encounter on the campaign's active starship: the crew at their stations, starships and starship hazards on the sensor map, creatures boarding">
+            <input v-model="build.starship" type="checkbox" /> Starship encounter
+          </label>
+          <label v-if="build.starship" class="eb-filter" title="Concierge upgrade variant rule: a VI helps a small crew, so the budget isn't lowered">
+            <input v-model="build.concierge" type="checkbox" /> concierge upgrade
+          </label>
+          <span v-if="build.starship && !shipName" class="eb-warn">No starship yet: <NuxtLink :to="`/campaign/${campaignId}/starship`">create one</NuxtLink></span>
+          <span v-else-if="build.starship" class="eb-hint">on {{ shipName }}</span>
+        </div>
+        <EncounterMeterBar :game="game" :xp="totalXp" :party-size="party.size" :starship="build.starship ? { concierge: !!build.concierge } : null" />
 
         <div v-if="!build.slots.length" class="eb-hint eb-empty">Add creatures and hazards from the compendium.</div>
         <div v-for="(slot, i) in build.slots" :key="`${slot.rulesId}:${i}`" class="eb-slot" :class="{ 'eb-slot--missing': !entries[slot.rulesId] }">
@@ -126,6 +137,7 @@
 </template>
 
 <script setup lang="ts">
+import { activeStarship } from '~/composables/useStarship'
 import { dbApi } from '~/composables/useDb'
 import { useParty } from '~/composables/useParty'
 import { rulesCounts, rulesGetMany, rulesQuery } from '~/composables/useRules'
@@ -165,7 +177,8 @@ type ResultRow = CreatureOption & { complex: boolean }
 const text = ref('')
 const levelMin = ref<number | ''>('')
 const levelMax = ref<number | ''>('')
-const kindFilter = ref<'both' | 'creature' | 'hazard'>('both')
+const kindFilter = ref<'both' | 'creature' | 'hazard' | 'starship'>('both')
+const shipName = ref<string | null>(null)
 const rarity = ref<Rarity | ''>('')
 const traitText = ref('')
 const results = shallowRef<ResultRow[]>([])
@@ -183,7 +196,9 @@ async function search() {
   const mine = ++run
   loading.value = true
   try {
-    const kinds = kindFilter.value === 'both' ? (['creature', 'hazard'] as const) : [kindFilter.value]
+    const kinds: ('creature' | 'hazard' | 'starship')[] = kindFilter.value === 'both'
+      ? (build.value.starship ? ['starship', 'creature', 'hazard'] : ['creature', 'hazard'])
+      : [kindFilter.value]
     const num = (v: number | '') => (v === '' || !Number.isFinite(v) ? null : v)
     const pages = await Promise.all(kinds.map(kind => rulesQuery({
       kind, text: text.value.trim(), limit: 60, sort: 'level',
@@ -200,7 +215,8 @@ async function search() {
   }
 }
 
-watch([text, levelMin, levelMax, kindFilter, rarity, traitText], () => {
+watch([text, levelMin, levelMax, kindFilter, rarity, traitText, () => build.value.starship], () => {
+  if (!build.value.starship && kindFilter.value === 'starship') kindFilter.value = 'both'
   if (timer) clearTimeout(timer)
   timer = setTimeout(search, 150)
 })
@@ -232,6 +248,7 @@ watch(() => build.value.slots.map(s => s.rulesId).join('|'), async () => {
 }, { immediate: true })
 
 function kindLabel(e: RulesEntity) {
+  if (e.kind === 'starship') return 'Starship'
   if (e.kind !== 'hazard') return 'Creature'
   return (e as Hazard).complex ? 'Complex hazard' : 'Hazard'
 }
@@ -278,6 +295,7 @@ onMounted(async () => {
   }
   const counts = await rulesCounts()
   compendiumEmpty.value = !(counts.creature ?? 0)
+  if (game.value === 'sf2e') shipName.value = (await activeStarship(campaignId))?.name ?? null
   search()
 })
 </script>
@@ -342,4 +360,5 @@ onMounted(async () => {
   .eb-cols { grid-template-columns: 1fr; }
   .eb-results { max-height: 360px; }
 }
+.eb-starship { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 4px 0 6px; font-size: 12.5px; }
 </style>
