@@ -2,7 +2,7 @@ import type { TokenCondition } from '~/stores/encounter'
 
 import type { GameId } from '~/types/game'
 
-export type ConditionGroup = 'abilities' | 'death' | 'senses' | 'detection' | 'attitudes' | 'other'
+export type ConditionGroup = 'abilities' | 'death' | 'senses' | 'detection' | 'attitudes' | 'other' | 'starship'
 
 export interface ConditionCatalogEntry {
   icon: string     // oh-vue-icons gi-* name
@@ -69,6 +69,12 @@ const SEED: Record<string, CatalogSeed> = {
   'Glitching':         { icon: 'gi-circuitry',        abbr: 'GLT', color: '#4ae8d5', valued: true,  group: 'other',     desc: 'Tech malfunctions; flat checks when using affected equipment.', games: ['sf2e'] },
   'Suppressed':        { icon: 'gi-bullets',          abbr: 'SUP', color: '#c0a060', valued: false, group: 'other',     desc: 'Pinned by fire; penalty to attacks and Speed.', games: ['sf2e'] },
   'Untethered':        { icon: 'gi-astronaut-helmet', abbr: 'UTH', color: '#7a9ae8', valued: false, group: 'other',     desc: 'Floating in zero gravity without a way to move.', games: ['sf2e'] },
+  // SF2e starship conditions (Tech Core p. 173); Foundry has none
+  'Compromised':       { icon: 'gi-cracked-shield',   abbr: 'CMP', color: '#d0503a', valued: true,  group: 'starship',  desc: 'At 0 HP: inoperable, stations malfunction; hull integrity check each round, destroyed at 10.', games: ['sf2e'] },
+  'Wrecked':           { icon: 'gi-ship-wreck',       abbr: 'WRK', color: '#a0603a', valued: true,  group: 'starship',  desc: 'Lasting hull damage; adds its value when the ship is compromised again.', games: ['sf2e'] },
+  'Inoperable':        { icon: 'gi-power-button',     abbr: 'INO', color: '#707a88', valued: false, group: 'starship',  desc: "Can't act or move; stations malfunction; −4 to AC, Perception and Reflex; off-guard.", games: ['sf2e'] },
+  'Off-Kilter':        { icon: 'gi-spaceship',        abbr: 'OFK', color: '#c8a040', valued: false, group: 'starship',  desc: "−2 to attacks, Area Fire / Auto-Fire DCs and Reflex; can't move until Change Heading.", games: ['sf2e'] },
+  'Malfunctioning':    { icon: 'gi-spark-spirit',     abbr: 'MAL', color: '#e0803a', valued: false, group: 'starship',  desc: 'Battle station: no station actions until repaired (Repair Station); passive benefits stay.', games: ['sf2e'] },
 }
 
 export const CONDITION_CATALOG: Record<string, ConditionCatalogEntry> = Object.fromEntries(

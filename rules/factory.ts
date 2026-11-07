@@ -53,5 +53,20 @@ export function newRulesEntity(kind: RulesKind, init: { name: string; game: Game
         immunities: [], weaknesses: [], resistances: [], collision: { dc: null, damage: '' },
         crew: '', passengers: '', pilotingCheck: '', space: null, speed: '', actions: [],
       }
+    case 'starship':
+      return {
+        ...base, kind, game: 'sf2e', level: 1, traits: ['tech'], size: 'med', perception: 0, sensorRange: 3, skills: {},
+        abilities: { str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0 }, ac: 10, saves: { fort: 0, ref: 0, will: 0 }, hp: 1,
+        shields: null, immunities: ['starship immunities'], weaknesses: [], resistances: [], speed: 2,
+        battleStations: [], strikes: [], actions: [],
+      }
+    case 'starshipFrame':
+      return { ...base, kind, game: 'sf2e', traits: ['tech'], size: 'med', sensorRange: 3, expansionBays: 4, customSlots: 4, defaultStations: [], stats: [] }
+    case 'battleStation':
+      return { ...base, kind, game: 'sf2e', advancement: [], actions: [] }
+    case 'stationUpgrade':
+      return { ...base, kind, game: 'sf2e', traits: ['starship', 'tech'], station: '', actions: [] }
+    case 'expansionBay':
+      return { ...base, kind, game: 'sf2e', takesSlot: true }
   }
 }

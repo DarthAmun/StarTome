@@ -24,7 +24,7 @@ Only `rules` is needed. (A bare array of entries also works.)
 |---|---|---|
 | `id` | string | A random UUID v4. **Keep the same id** when I ask you to revise an entry: re-importing replaces the row with that id. New entry → new UUID. |
 | `origin` | `"user"` | Always `"user"`. |
-| `kind` | string | `item`, `creature`, `hazard`, `spell`, `feat`, `action`, `condition`, `ancestry`, `heritage`, `background`, `class`, `deity`, `relicGift`, `vehicle` |
+| `kind` | string | `item`, `creature`, `hazard`, `spell`, `feat`, `action`, `condition`, `ancestry`, `heritage`, `background`, `class`, `deity`, `relicGift`, `vehicle`, `starship`, `starshipFrame`, `battleStation`, `stationUpgrade`, `expansionBay` |
 | `game` | `"sf2e"` \| `"pf2e"` \| `"both"` | `"sf2e"` unless I say otherwise. |
 | `name` | string | Title Case. |
 | `sortName` | string | `name` lower-cased. |
@@ -218,6 +218,66 @@ A vehicle (SF2e Tech Core "Vehicles", PF2e GM Core). It can stand on the map as 
 
 - Required: `ac`, `fort`, `hp`. The rest has defaults (`size` `lg`, `hardness` 0, empty lists and text).
 - `space` in feet, or leave it out. `bt` is optional.
+
+### Starships (SF2e Tech Core)
+
+Foundry has no starship data, so tactical starship combat (Tech Core ch. 6–7) comes from homebrew files: put everything from the book in one pack, e.g. `"publication": { "title": "Tech Core (local)" }`, and keep that file to yourself. Distances are **zones** (a number; `"3 zones"` is read as 3). Grades are `commercial`, `tactical`, `advanced`, `superior`, `elite`, `ultimate`, `paragon`. Battle stations and upgrades are referred to by name, lower case (`"gunnery"`, `"pilot's console"`).
+
+**`starship`** — an enemy or NPC starship (Starship Archive). `level` is its STARSHIP level.
+
+```json
+{ "kind": "starship", "level": 3, "traits": ["tech"], "size": "med", "perception": 9, "sensorRange": 4,
+  "skills": { "computers": 8, "piloting": 11 }, "abilities": { "str": 0, "dex": 4, "con": 2, "int": 3, "wis": 2, "cha": 1 },
+  "ac": 18, "saves": { "fort": 9, "ref": 11, "will": 7 }, "hp": 32, "shields": { "max": 10, "fortify": 5 },
+  "immunities": ["starship immunities"], "weaknesses": [], "resistances": [], "speed": 3,
+  "battleStations": [{ "station": "gunnery", "actions": [], "weapons": ["magnetar rail"] }, { "station": "pilot's console", "actions": ["Boost Thrusters", "Change Heading"] }],
+  "strikes": [{ "name": "magnetar rail", "range": "ranged", "bonus": 10, "traits": ["analog", "automatic", "ordnance"], "rangeZones": 6, "damage": [{ "formula": "1d12+3", "type": "piercing" }] }],
+  "actions": [{ "name": "Auto Fire", "cost": 2, "section": "offensive", "traits": [], "text": "magnetar rail (3-zone cone) 1d12+3 piercing, DC 16 basic Reflex save" }] }
+```
+
+- `shields`: `null` for a ship without a generator. `immunities`: `"starship immunities"` stands for the standard list.
+- Every NPC starship can Repair Self and Seek Starships; leave those out.
+
+**`starshipFrame`** — a player starship frame (bulwark, explorer, skirmisher) with its table "Statistics by Level".
+
+```json
+{ "kind": "starshipFrame", "traits": ["tech"], "size": "med", "sensorRange": 5, "expansionBays": 4, "customSlots": 4,
+  "defaultStations": [{ "station": "pilot's console", "upgrades": ["ramming prow"] }, { "station": "generator", "upgrades": [] }],
+  "stats": [{ "level": 1, "hp": 27, "sp": 10, "ac": 17, "fort": 9, "ref": 6, "will": 8, "speed": 2 }] }
+```
+
+- `stats`: one row per level 1–20; `speed` in zones.
+
+**`battleStation`** — pilot's console, gunnery, generator, scanners, magic conduit, drone console …, with its advancement table and its station actions.
+
+```json
+{ "kind": "battleStation", "name": "Pilot's Console",
+  "helmedBenefits": "The starship's AC is equal to your Piloting DC if it's higher. …",
+  "advancement": [{ "grade": "commercial", "level": 1, "upgrades": 0, "helmed": { "ac": 0, "ref": 0 } },
+                  { "grade": "superior", "level": 8, "upgrades": 2, "helmed": { "ac": 1, "ref": 1 } }],
+  "actions": [{ "name": "Boost Thrusters", "cost": 1, "section": "offensive", "traits": ["concentrate", "manipulate", "station"], "frequency": "once per round", "text": "The starship moves up to its Speed …", "grade": "commercial" }] }
+```
+
+- `advancement[]`: `grade`, `level`, `upgrades` and the station's own columns: `helmed` (`ac`, `fort`, `ref`, `will`), `sensors` (zones added to sensor range), `damageDice` and `tracking` (gunnery), `drones` (drone console).
+- `actions[].grade`: the lowest grade that grants the action.
+
+**`stationUpgrade`** — a battle station upgrade, or a starship weapon (installed in a gunnery).
+
+```json
+{ "kind": "stationUpgrade", "name": "Tractor Beam", "level": 4, "traits": ["starship", "tech"], "station": "generator",
+  "actions": [{ "name": "Pull Starship", "cost": 1, "section": "offensive", "traits": ["attack", "manipulate", "station"], "text": "…" }] }
+{ "kind": "stationUpgrade", "name": "Magnetar Rail", "level": 0, "traits": ["analog", "automatic", "ordnance"], "station": "gunnery",
+  "actions": [], "weapon": { "category": "advanced", "damage": { "dice": 1, "die": "d12", "type": "piercing" }, "range": 6, "upgrades": 1, "group": "projectile" } }
+```
+
+- `grades`: for upgrades with "Type commercial; Level 1" lines: `[{ "grade": "commercial", "level": 1, "text": "…" }]`.
+
+**`expansionBay`**
+
+```json
+{ "kind": "expansionBay", "name": "Crew Quarters", "takesSlot": false, "description": "…",
+  "options": [{ "name": "Bunks", "text": "+1 item bonus to Perception checks for initiative …" }] }
+```
 
 ### ancestry, heritage, background, class, deity
 

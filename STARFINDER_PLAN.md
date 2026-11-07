@@ -56,7 +56,7 @@ Book content (enemy starships, station actions, upgrades, expansion bays) is **n
 | ~~**P0**~~ | ✅ Done 2026-11-07: re-synced and checked the Tech Core content | — | S |
 | ~~**P1**~~ | ✅ Done 2026-11-07 (0.29.0): upgrade slots, installed weapons, augmentations, Area Fire / Auto-Fire | P0 | M |
 | ~~**P2**~~ | ✅ Done 2026-11-07 (0.30.0): vehicles and companions (drones, robot and animal companions) | P0 | M |
-| **P3** | Starship data model: new compendium kinds, homebrew format, book import | — | L |
+| ~~**P3**~~ | ✅ Done 2026-11-07 (0.31.0): starship data model, homebrew format, book import | — | L |
 | **P4** | Player starship sheet and crew roster (station assignments) | P3 | M |
 | **P5** | Ship interior map: battle stations on the battle map, helming, station actions | P4 | M |
 | **P6** | Sensor map: zones, headings, ship tokens, zone areas | P3 | L |
@@ -137,7 +137,15 @@ P1/P2 and P3 don't depend on each other and can run side by side. P5 and P6 can 
 
 ---
 
-## P3. Starship data model (L)
+## P3. Starship data model (L) ✅ done 2026-11-07 (0.31.0)
+
+**Built:**
+- Five compendium kinds in a "Starships" sidebar group: `starship`, `starshipFrame`, `battleStation`, `stationUpgrade` (also starship weapons and drones), `expansionBay`, with factory defaults, homebrew shapes (zones as numbers or "3 zones"), stat blocks and editor sections (JSON fields for the tables). **Change from the plan:** station actions live inside their battle station entry (`actions[]` with a `grade`), not as separate `action` entries, so a station is one self-contained entry; the two actions any station can use (Jump Start, Repair Station) are `action` entries with the `station` trait. Starship spells (magic conduit) are `spell` entries.
+- `rules/starships.ts`: frame statistics by level, station grade and actions by level, helmed bonuses, sensor range, starship immunities, zone parsing. The tables themselves live in the imported entries.
+- Starship conditions (compromised, wrecked, inoperable, off-kilter, malfunctioning) are built-in SF2e conditions (group `starship`).
+- **Book import:** `scripts/techcore/build.sh "<Tech Core PDF>"` reads the PDF (column-aware via `pdftotext -bbox-layout`) and writes `local/tech-core-startome.json` (git-ignored): 71 starships, 3 frames, 6 battle stations, 54 upgrades/weapons/drones, 9 expansion bays, 4 starship spells, 2 station actions. It imports with 2 small fixes. The Bulwark table was compared with Archives of Nethys (it has Tech Core since 2026-10-07) and matches; the rest is parsed text and may need small edits in the editor (a few captions and sidebar fragments end up in action texts).
+- Tests: `tests/starships.test.ts`.
+
 
 ### P3.1 New compendium kinds (types/rules.ts)
 

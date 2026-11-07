@@ -41,3 +41,6 @@ yarn-error.log*
 .DS_Store
 *.pem
 .claude
+
+# Local data built from your own books (never committed)
+local/

@@ -39,6 +39,7 @@ export type RulesOrigin = 'foundry' | 'user' | 'legacy'
 export type RulesKind =
   | 'item' | 'creature' | 'hazard' | 'spell' | 'feat' | 'action' | 'condition'
   | 'ancestry' | 'heritage' | 'background' | 'class' | 'deity' | 'relicGift' | 'vehicle'
+  | 'starship' | 'starshipFrame' | 'battleStation' | 'stationUpgrade' | 'expansionBay'
 
 export interface Publication { title: string; remaster: boolean; license?: string }
 
@@ -309,7 +310,120 @@ export interface Vehicle extends RulesEntityBase {
   actions: StatAction[]
 }
 
+// ── Starships (SF2e Tech Core ch. 6–7, STARFINDER_PLAN.md P3) ───────────────────
+// Foundry has no starship data: these come from homebrew files (the book,
+// imported locally). Distances are zones on the sensor map.
+
+/** A station action: an action available while helming a battle station, from a grade on. */
+export interface StationAction extends StatAction {
+  /** Lowest grade of the station that grants it (commercial … paragon); missing = always. */
+  grade?: string
+}
+
+/** One row of a battle station's advancement table (Tech Core pp. 179–183). */
+export interface StationAdvancement {
+  grade: string
+  /** Starship level the station reaches this grade at. */
+  level: number
+  /** Upgrade slots at this grade. */
+  upgrades: number
+  /** Item bonuses while someone helms the station. */
+  helmed?: Partial<Record<'ac' | 'fort' | 'ref' | 'will', number>>
+  /** Added to the starship's sensor range (scanners), helmed or not. */
+  sensors?: number
+  /** Gunnery: weapon damage dice and tracking bonus. */
+  damageDice?: number
+  tracking?: number
+  /** Drone console: drones it can deploy. */
+  drones?: number
+}
+
+export interface BattleStation extends RulesEntityBase {
+  kind: 'battleStation'
+  /** Benefits while installed, helmed or not (markdown). */
+  benefits?: string
+  /** Benefits while helmed (markdown). */
+  helmedBenefits?: string
+  advancement: StationAdvancement[]
+  actions: StationAction[]
+}
+
+export interface StarshipWeapon {
+  category: 'simple' | 'martial' | 'advanced'
+  damage: { dice: number; die: string; type: string }
+  /** Range increment in zones. */
+  range: number
+  /** Upgrade slots (the weapon table's column). */
+  upgrades: number
+  group?: string
+}
+
+/** A battle station upgrade or a starship weapon (installed in a gunnery). */
+export interface StationUpgrade extends RulesEntityBase {
+  kind: 'stationUpgrade'
+  /** Station it installs in, lower case ("gunnery", "pilot's console"); "any" for every station. */
+  station: string
+  actions: StationAction[]
+  /** Grades with their own level ("Type tactical; Level 2"), and what changes. */
+  grades?: { grade: string; level: number; text?: string }[]
+  weapon?: StarshipWeapon
+}
+
+/** A starship frame (bulwark, explorer, skirmisher): the player starship's statistics by level. */
+export interface StarshipFrame extends RulesEntityBase {
+  kind: 'starshipFrame'
+  size: Size
+  sensorRange: number
+  expansionBays: number
+  /** Customizable battle station slots besides the default ones. */
+  customSlots: number
+  /** Stations the frame comes with, and upgrades built into them (not counted against the limit). */
+  defaultStations: { station: string; upgrades: string[] }[]
+  /** One row per level, 1…20. Speed in zones. */
+  stats: { level: number; hp: number; sp: number; ac: number; fort: number; ref: number; will: number; speed: number }[]
+}
+
+export interface ExpansionBay extends RulesEntityBase {
+  kind: 'expansionBay'
+  /** False for bays that don't use one of the starship's expansion bay slots (crew quarters, lounge, mess bay). */
+  takesSlot: boolean
+  /** Choices within the bay (crew quarters: bunks, budget, …). */
+  options?: { name: string; text: string }[]
+}
+
+export interface StarshipStrike extends Strike {
+  /** Range increment in zones. */
+  rangeZones?: number
+}
+
+/** An enemy or NPC starship (Tech Core "Starship Archive"); the level is its STARSHIP level. */
+export interface Starship extends RulesEntityBase {
+  kind: 'starship'
+  size: Size
+  perception: number
+  sensorRange: number
+  skills: Record<string, number>
+  abilities: Record<AbilityKey, number>
+  ac: number
+  saves: { fort: number; ref: number; will: number }
+  /** Hull Points. */
+  hp: number
+  /** Shield Points and the generator's fortify value. */
+  shields?: { max: number; fortify: number } | null
+  /** "starship immunities" stands for the standard list (rules/starships.ts). */
+  immunities: string[]
+  weaknesses: Weakness[]
+  resistances: Resistance[]
+  /** Zones. */
+  speed: number
+  battleStations: { station: string; actions: string[]; weapons?: string[] }[]
+  strikes: StarshipStrike[]
+  actions: StatAction[]
+  living?: boolean
+}
+
 export type RulesEntity = Item | Creature | Hazard | Spell | Feat | Action | Condition | ReferenceEntry | RelicGift | Vehicle
+  | Starship | StarshipFrame | BattleStation | StationUpgrade | ExpansionBay
 
 export type RulesEntityOf<K extends RulesKind> = Extract<RulesEntity, { kind: K }>
 
@@ -323,6 +437,10 @@ export interface RulesKindConfig {
   color: string
   levelLabel: string            // "Level", "Rank"
   hasLevel: boolean             // false for reference kinds whose level is meaningless
+  /** Sidebar group; kinds without one are listed first. */
+  group?: 'starships'
+  /** Only offered in campaigns of this game (the compendium shows it anyway). */
+  game?: GameId
 }
 
 export const RULES_KIND_CONFIG: Record<RulesKind, RulesKindConfig> = {
@@ -340,6 +458,11 @@ export const RULES_KIND_CONFIG: Record<RulesKind, RulesKindConfig> = {
   deity:      { label: 'Deity',      plural: 'Deities',     segment: 'deities',     icon: 'gi-angel-outfit',        color: '#d4b54a', levelLabel: 'Level', hasLevel: false },
   relicGift:  { label: 'Relic gift', plural: 'Relic gifts', segment: 'relic-gifts', icon: 'gi-gem-pendant',         color: '#e0a35a', levelLabel: 'Level', hasLevel: false },
   vehicle:    { label: 'Vehicle',    plural: 'Vehicles',    segment: 'vehicles',    icon: 'gi-jeep',                color: '#8fa3b8', levelLabel: 'Level', hasLevel: true },
+  starship:       { label: 'Starship',        plural: 'Starships',        segment: 'starships',        icon: 'gi-spaceship',       color: '#4ab8e8', levelLabel: 'Starship', hasLevel: true,  group: 'starships', game: 'sf2e' },
+  starshipFrame:  { label: 'Starship frame',  plural: 'Frames',           segment: 'starship-frames',  icon: 'gi-space-shuttle',   color: '#5aa0d8', levelLabel: 'Level',    hasLevel: false, group: 'starships', game: 'sf2e' },
+  battleStation:  { label: 'Battle station',  plural: 'Battle stations',  segment: 'battle-stations',  icon: 'gi-radar-sweep',     color: '#6bc0c8', levelLabel: 'Level',    hasLevel: false, group: 'starships', game: 'sf2e' },
+  stationUpgrade: { label: 'Station upgrade', plural: 'Station upgrades', segment: 'station-upgrades', icon: 'gi-cog',             color: '#8fb0d0', levelLabel: 'Level',    hasLevel: true,  group: 'starships', game: 'sf2e' },
+  expansionBay:   { label: 'Expansion bay',   plural: 'Expansion bays',   segment: 'expansion-bays',   icon: 'gi-cargo-crate',     color: '#a0a8c0', levelLabel: 'Level',    hasLevel: false, group: 'starships', game: 'sf2e' },
 }
 
 export const RULES_KINDS = Object.keys(RULES_KIND_CONFIG) as RulesKind[]

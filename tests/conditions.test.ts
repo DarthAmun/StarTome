@@ -3,9 +3,11 @@ import { builtinConditions, conditionInfo, getConditionColor, CONDITION_CATALOG 
 import { campaignGame, campaignRules } from '~/types/game'
 
 describe('condition catalog', () => {
-  it('covers the 43 PF2e remaster conditions and adds 3 SF2e ones', () => {
+  it('covers the 43 PF2e remaster conditions and adds 3 SF2e ones plus 5 starship conditions', () => {
     expect(builtinConditions('pf2e')).toHaveLength(43)
-    expect(builtinConditions('sf2e')).toHaveLength(46)
+    expect(builtinConditions('sf2e')).toHaveLength(51)
+    expect(builtinConditions('sf2e').filter(c => c.group === 'starship').map(c => c.name)).toEqual(['Compromised', 'Inoperable', 'Malfunctioning', 'Off-Kilter', 'Wrecked'])
+    expect(builtinConditions('pf2e').map(c => c.name)).not.toContain('Compromised')
     expect(builtinConditions('pf2e').map(c => c.name)).not.toContain('Glitching')
     expect(builtinConditions('sf2e').map(c => c.name)).toContain('Untethered')
   })

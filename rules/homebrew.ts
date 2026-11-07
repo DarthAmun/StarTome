@@ -299,6 +299,39 @@ const statAction = shape({
   text: req(str, ''),
 })
 
+// ── Starships ──
+const GRADE_NAMES = ['commercial', 'tactical', 'advanced', 'superior', 'elite', 'ultimate', 'paragon'] as const
+const grade = oneOf(GRADE_NAMES)
+
+/** "3 zones", "3-zone" → 3, with a warning. */
+const zones: Checker = (v, path, ctx) => {
+  if (typeof v === 'string') {
+    const m = v.match(/^\s*(-?\d+)\s*-?\s*zones?\s*$/i)
+    if (m) { warn(ctx, path, `${show(v)} read as ${m[1]} zones`); return Number(m[1]) }
+  }
+  return num(v, path, ctx)
+}
+
+const stationAction = shape({
+  name: req(str),
+  cost: req(actionCost, null),
+  section: req(oneOf(['interaction', 'defensive', 'offensive'] as const), 'offensive'),
+  traits: req(traits, ['station']),
+  frequency: opt(str),
+  text: req(str, ''),
+  grade: opt(grade),
+})
+
+const starshipStrike = shape({
+  name: req(str),
+  range: req(oneOf(['melee', 'ranged'] as const), 'ranged'),
+  bonus: req(num),
+  traits: req(traits, []),
+  damage: req(arrOf(damageRoll), []),
+  effects: opt(strArr),
+  rangeZones: opt(zones),
+})
+
 const spellcasting = shape({
   name: req(str),
   tradition: req(str, ''),
@@ -494,6 +527,61 @@ const KIND_SHAPES: Record<RulesKind, Shape> = {
     space: opt(either((v) => (v === null ? null : FAIL), shape({ long: req(num, 0), wide: req(num, 0), high: req(num, 0) }))),
     speed: req(str, ''),
     actions: req(arrOf(statAction), []),
+  },
+  starship: {
+    size: req(oneOf(SIZES, SIZE_ALIASES), 'med'),
+    perception: req(num),
+    sensorRange: req(zones),
+    skills: req(record(num), {}),
+    abilities: req(shape({ str: req(num, 0), dex: req(num, 0), con: req(num, 0), int: req(num, 0), wis: req(num, 0), cha: req(num, 0) })),
+    ac: req(num),
+    saves: req(shape({ fort: req(num), ref: req(num), will: req(num) })),
+    hp: req(num),
+    shields: opt(either((v) => (v === null ? null : FAIL), shape({ max: req(num), fortify: req(num, 0) }))),
+    immunities: req(strArr, ['starship immunities']),
+    weaknesses: req(arrOf(weaknessShape), []),
+    resistances: req(arrOf(resistanceShape), []),
+    speed: req(zones),
+    battleStations: req(arrOf(shape({ station: req(str), actions: req(strArr, []), weapons: opt(strArr) })), []),
+    strikes: req(arrOf(starshipStrike), []),
+    actions: req(arrOf(statAction), []),
+    living: opt(bool),
+  },
+  starshipFrame: {
+    size: req(oneOf(SIZES, SIZE_ALIASES), 'med'),
+    sensorRange: req(zones),
+    expansionBays: req(num, 4),
+    customSlots: req(num, 4),
+    defaultStations: req(arrOf(shape({ station: req(str), upgrades: req(strArr, []) })), []),
+    stats: req(arrOf(shape({
+      level: req(num), hp: req(num), sp: req(num), ac: req(num), fort: req(num), ref: req(num), will: req(num), speed: req(zones),
+    }))),
+  },
+  battleStation: {
+    benefits: opt(str),
+    helmedBenefits: opt(str),
+    advancement: req(arrOf(shape({
+      grade: req(grade), level: req(num), upgrades: req(num, 0),
+      helmed: opt(shape({ ac: opt(num), fort: opt(num), ref: opt(num), will: opt(num) })),
+      sensors: opt(zones), damageDice: opt(num), tracking: opt(num), drones: opt(num),
+    }))),
+    actions: req(arrOf(stationAction), []),
+  },
+  stationUpgrade: {
+    station: req(str),
+    actions: req(arrOf(stationAction), []),
+    grades: opt(arrOf(shape({ grade: req(grade), level: req(num), text: opt(str) }))),
+    weapon: opt(shape({
+      category: req(oneOf(['simple', 'martial', 'advanced'] as const)),
+      damage: req(shape({ dice: req(num, 1), die: req(str), type: req(str) })),
+      range: req(zones),
+      upgrades: req(num, 1),
+      group: opt(str),
+    })),
+  },
+  expansionBay: {
+    takesSlot: req(bool, true),
+    options: opt(arrOf(shape({ name: req(str), text: req(str, '') }))),
   },
 }
 

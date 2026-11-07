@@ -238,6 +238,79 @@
       <StatActionRows :rows="L.actions" @update="(rows: StatAction[]) => set('actions', rows)" />
     </section>
 
+    <!-- ── Starship ───────────────────────────────────────────── -->
+    <section v-if="L.kind === 'starship'" class="red-section">
+      <h4>Starship</h4>
+      <div class="red-grid">
+        <label class="red-field"><span>Size</span>
+          <select class="red-input" :value="L.size" @change="set('size', str($event))">
+            <option v-for="s in SIZES" :key="s" :value="s">{{ SIZE_LABEL[s] }}</option>
+          </select>
+        </label>
+        <label class="red-field"><span>Perception</span><input class="red-input" type="number" :value="L.perception" @change="set('perception', num($event))" /></label>
+        <label class="red-field"><span>Sensor range (zones)</span><input class="red-input" type="number" :value="L.sensorRange" @change="set('sensorRange', num($event))" /></label>
+        <label class="red-field"><span>AC</span><input class="red-input" type="number" :value="L.ac" @change="set('ac', num($event))" /></label>
+        <label class="red-field"><span>Fort</span><input class="red-input" type="number" :value="L.saves.fort" @change="set('saves.fort', num($event))" /></label>
+        <label class="red-field"><span>Ref</span><input class="red-input" type="number" :value="L.saves.ref" @change="set('saves.ref', num($event))" /></label>
+        <label class="red-field"><span>Will</span><input class="red-input" type="number" :value="L.saves.will" @change="set('saves.will', num($event))" /></label>
+        <label class="red-field"><span>HP (hull)</span><input class="red-input" type="number" :value="L.hp" @change="set('hp', num($event))" /></label>
+        <label class="red-field"><span>SP (shields)</span><input class="red-input" type="number" :value="L.shields?.max ?? ''" placeholder="—" @change="setShields(optNum($event), L.shields?.fortify ?? 0)" /></label>
+        <label class="red-field"><span>Fortify</span><input class="red-input" type="number" :value="L.shields?.fortify ?? ''" placeholder="—" @change="setShields(L.shields?.max ?? null, optNum($event) ?? 0)" /></label>
+        <label class="red-field"><span>Speed (zones)</span><input class="red-input" type="number" :value="L.speed" @change="set('speed', num($event))" /></label>
+        <label class="red-field red-span-3"><span>Immunities</span><input class="red-input" :value="formatList(L.immunities)" placeholder="starship immunities" @change="set('immunities', parseList(str($event)))" /></label>
+        <JsonField label="Skills" :value="L.skills" :array="false" hint='{ "piloting": 11 }' :rows="2" @update="v => set('skills', v ?? {})" />
+        <JsonField label="Attribute modifiers" :value="L.abilities" :array="false" :rows="2" @update="v => set('abilities', v)" />
+        <JsonField label="Battle stations" :value="L.battleStations" hint='[{ "station": "gunnery", "actions": [], "weapons": ["magnetar rail"] }]' @update="v => set('battleStations', v)" />
+        <JsonField label="Strikes" :value="L.strikes" hint="like creature Strikes, plus rangeZones" @update="v => set('strikes', v)" />
+      </div>
+      <h5>Actions</h5>
+      <StatActionRows :rows="L.actions" @update="(rows: StatAction[]) => set('actions', rows)" />
+    </section>
+
+    <section v-if="L.kind === 'starshipFrame'" class="red-section">
+      <h4>Frame</h4>
+      <div class="red-grid">
+        <label class="red-field"><span>Size</span>
+          <select class="red-input" :value="L.size" @change="set('size', str($event))">
+            <option v-for="s in SIZES" :key="s" :value="s">{{ SIZE_LABEL[s] }}</option>
+          </select>
+        </label>
+        <label class="red-field"><span>Sensor range (zones)</span><input class="red-input" type="number" :value="L.sensorRange" @change="set('sensorRange', num($event))" /></label>
+        <label class="red-field"><span>Expansion bays</span><input class="red-input" type="number" :value="L.expansionBays" @change="set('expansionBays', num($event))" /></label>
+        <label class="red-field"><span>Customizable stations</span><input class="red-input" type="number" :value="L.customSlots" @change="set('customSlots', num($event))" /></label>
+        <JsonField label="Default stations" :value="L.defaultStations" hint='[{ "station": "pilot&apos;s console", "upgrades": ["ramming prow"] }]' :rows="3" @update="v => set('defaultStations', v)" />
+        <JsonField label="Statistics by level" :value="L.stats" hint='[{ "level": 1, "hp": 27, "sp": 10, "ac": 17, "fort": 9, "ref": 6, "will": 8, "speed": 2 }, …]' :rows="8" @update="v => set('stats', v)" />
+      </div>
+    </section>
+
+    <section v-if="L.kind === 'battleStation'" class="red-section">
+      <h4>Battle station</h4>
+      <div class="red-grid">
+        <label class="red-field red-span-3"><span>Benefits</span><textarea class="red-input" rows="2" :value="L.benefits ?? ''" @change="set('benefits', opt($event))" /></label>
+        <label class="red-field red-span-3"><span>Helmed benefits</span><textarea class="red-input" rows="2" :value="L.helmedBenefits ?? ''" @change="set('helmedBenefits', opt($event))" /></label>
+        <JsonField label="Advancement" :value="L.advancement" hint='[{ "grade": "commercial", "level": 1, "upgrades": 0, "helmed": { "ac": 0, "ref": 0 } }, …]' :rows="8" @update="v => set('advancement', v)" />
+        <JsonField label="Station actions" :value="L.actions" hint="stat actions plus grade" :rows="8" @update="v => set('actions', v)" />
+      </div>
+    </section>
+
+    <section v-if="L.kind === 'stationUpgrade'" class="red-section">
+      <h4>Station upgrade</h4>
+      <div class="red-grid">
+        <label class="red-field"><span>Installed in</span><input class="red-input" :value="L.station" placeholder="gunnery" @change="set('station', str($event).toLowerCase())" /></label>
+        <JsonField label="Starship weapon" :value="L.weapon ?? null" :array="false" hint='{ "category": "martial", "damage": { "dice": 1, "die": "d8", "type": "electricity" }, "range": 3, "upgrades": 1 }' :rows="3" @update="v => set('weapon', v ?? undefined)" />
+        <JsonField label="Grades" :value="L.grades ?? []" hint='[{ "grade": "tactical", "level": 2, "text": "…" }]' :rows="3" @update="v => set('grades', (v as unknown[]).length ? v : undefined)" />
+        <JsonField label="Station actions" :value="L.actions" :rows="6" @update="v => set('actions', v)" />
+      </div>
+    </section>
+
+    <section v-if="L.kind === 'expansionBay'" class="red-section">
+      <h4>Expansion bay</h4>
+      <div class="red-grid">
+        <label class="red-field red-check"><input type="checkbox" :checked="L.takesSlot" @change="set('takesSlot', checked($event))" /> Takes an expansion bay slot</label>
+        <JsonField label="Options" :value="L.options ?? []" hint='[{ "name": "Bunks", "text": "…" }]' :rows="4" @update="v => set('options', (v as unknown[]).length ? v : undefined)" />
+      </div>
+    </section>
+
     <!-- ── Spell ──────────────────────────────────────────────── -->
     <section v-if="L.kind === 'spell'" class="red-section">
       <h4>Spell</h4>
@@ -412,6 +485,10 @@ const priceValue = computed(() => {
   if (!p) return ''
   return local.value.game === 'sf2e' ? p.cp / 10 : p.cp / 100
 })
+
+function setShields(max: number | null | undefined, fortify: number) {
+  set('shields', max == null ? null : { max, fortify })
+}
 
 function setPrice(text: string) {
   if (text.trim() === '') return set('price', null)

@@ -196,6 +196,107 @@
       </p>
     </template>
 
+    <!-- ── Starship (enemy / NPC) ─────────────────────────────── -->
+    <template v-if="starship">
+      <p class="rsb-line"><b>Perception</b> <button class="rsb-roll" title="Roll Perception" @click.stop="check('Perception', starship.perception)">{{ signed(starship.perception) }}</button>; <b>Sensor Range</b> {{ zonesText(starship.sensorRange) }}</p>
+      <p v-if="starshipSkills.length" class="rsb-line"><b>Skills</b>{{ ' ' }}<template v-for="(sk, i) in starshipSkills" :key="sk.key">{{ i ? ', ' : '' }}{{ sk.label }}{{ ' ' }}<button class="rsb-roll" :title="`Roll ${sk.label}`" @click.stop="check(sk.label, sk.mod)">{{ signed(sk.mod) }}</button></template></p>
+      <p v-if="starship.battleStations.length" class="rsb-line">
+        <b>Battle Stations</b> <template v-for="(b, i) in starship.battleStations" :key="i">{{ i ? ', ' : '' }}{{ b.station }}<template v-if="b.actions.length || b.weapons?.length"> ({{ [...(b.weapons ?? []), ...b.actions].join(', ') }})</template></template>
+      </p>
+      <p class="rsb-line rsb-abilities">
+        <span v-for="k in ABILITY_KEYS" :key="k"><b>{{ titleCase(k) }}</b> {{ signed(starship.abilities[k]) }}</span>
+      </p>
+      <hr />
+      <p class="rsb-line">
+        <b>AC</b> {{ starship.ac }};
+        <b>Fort</b> <button class="rsb-roll" title="Roll Fortitude" @click.stop="check('Fortitude save', starship.saves.fort)">{{ signed(starship.saves.fort) }}</button>,
+        <b>Ref</b> <button class="rsb-roll" title="Roll Reflex" @click.stop="check('Reflex save', starship.saves.ref)">{{ signed(starship.saves.ref) }}</button>,
+        <b>Will</b> <button class="rsb-roll" title="Roll Will" @click.stop="check('Will save', starship.saves.will)">{{ signed(starship.saves.will) }}</button>
+      </p>
+      <p class="rsb-line">
+        <b>HP</b> {{ starship.hp }}<template v-if="starship.shields">; <b>SP</b> {{ starship.shields.max }}<template v-if="starship.shields.fortify"> (fortify {{ starship.shields.fortify }})</template></template>
+        <template v-if="starship.immunities.length">; <b>Immunities</b> {{ starship.immunities.join(', ') }}</template>
+        <template v-if="starship.weaknesses.length">; <b>Weaknesses</b> {{ starship.weaknesses.map(formatIwr).join(', ') }}</template>
+        <template v-if="starship.resistances.length">; <b>Resistances</b> {{ starship.resistances.map(formatIwr).join(', ') }}</template>
+      </p>
+      <hr />
+      <p class="rsb-line"><b>Speed</b> {{ zonesText(starship.speed) }}</p>
+      <p v-for="(s, i) in starship.strikes" :key="'ss' + i" class="rsb-line">
+        <b>{{ s.range === 'melee' ? 'Melee' : 'Ranged' }}</b> <span class="rsb-glyph">◆</span> {{ s.name }}
+        <template v-for="step in MAP_STEPS" :key="step"><button class="rsb-roll" :title="MAP_TITLE[step]" @click.stop="attack(s, step)">{{ signed(strikeModifier(s, step)) }}</button><template v-if="step < 2">/</template></template>
+        <template v-if="s.traits.length || s.rangeZones"> ({{ [...s.traits.map(formatTrait), ...(s.rangeZones ? [`range increment ${zonesText(s.rangeZones)}`] : [])].join(', ') }})</template>,
+        <b>Damage</b> <button class="rsb-roll" title="Roll damage" @click.stop="damage(s)">{{ damageText(s) }}</button>{{ ' ' }}<button class="rsb-roll rsb-roll--crit" title="Roll critical damage" @click.stop="damage(s, true)">crit</button><template v-if="s.effects?.length"> plus {{ s.effects.join(', ') }}</template>
+      </p>
+      <p v-for="a in starship.actions" :key="a.name" class="rsb-line rsb-action">
+        <b>{{ a.name }}</b> <span v-if="formatActionCost(a.cost)" class="rsb-glyph">{{ formatActionCost(a.cost) }}</span>
+        <template v-if="a.traits.length"> ({{ a.traits.map(formatTrait).join(', ') }})</template>
+        <template v-if="a.frequency"> <b>Frequency</b> {{ a.frequency }};</template>
+        {{ ' ' }}<span class="rsb-md" v-html="md(a.text)" />
+      </p>
+    </template>
+
+    <!-- ── Starship frame ─────────────────────────────────────── -->
+    <template v-if="frame">
+      <p class="rsb-line"><b>Sensor Range</b> {{ zonesText(frame.sensorRange) }}; <b>Expansion Bays</b> {{ frame.expansionBays }}</p>
+      <p class="rsb-line">
+        <b>Battle Stations</b> {{ frame.customSlots }} customizable slots<template v-if="frame.defaultStations.length"> plus {{ frame.defaultStations.map(d => d.upgrades.length ? `${d.station} (${d.upgrades.join(', ')})` : d.station).join(' and ') }}</template>
+      </p>
+      <table v-if="frame.stats.length" class="rsb-table">
+        <thead><tr><th>Level</th><th>HP</th><th>SP</th><th>AC</th><th>Fort</th><th>Ref</th><th>Will</th><th>Speed</th></tr></thead>
+        <tbody>
+          <tr v-for="r in [...frame.stats].sort((a, b) => a.level - b.level)" :key="r.level">
+            <td>{{ r.level }}</td><td>{{ r.hp }}</td><td>{{ r.sp }}</td><td>{{ r.ac }}</td><td>{{ signed(r.fort) }}</td><td>{{ signed(r.ref) }}</td><td>{{ signed(r.will) }}</td><td>{{ zonesText(r.speed) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </template>
+
+    <!-- ── Battle station ─────────────────────────────────────── -->
+    <template v-if="station">
+      <div v-if="station.benefits" class="rsb-md rsb-line" v-html="md(`**Benefits** ${station.benefits}`)" />
+      <div v-if="station.helmedBenefits" class="rsb-md rsb-line" v-html="md(`**Helmed Benefits** ${station.helmedBenefits}`)" />
+      <table v-if="station.advancement.length" class="rsb-table">
+        <thead><tr><th>Grade</th><th>Level</th><th>Upgrades</th><th v-for="c in stationColumns" :key="c.key">{{ c.label }}</th></tr></thead>
+        <tbody>
+          <tr v-for="r in station.advancement" :key="r.grade">
+            <td>{{ titleCase(r.grade) }}</td><td>{{ r.level }}</td><td>{{ r.upgrades }}</td><td v-for="c in stationColumns" :key="c.key">{{ c.value(r) }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <template v-for="g in stationGrades" :key="g.grade">
+        <p class="rsb-line rsb-subhead"><b>{{ titleCase(g.grade) }}</b></p>
+        <p v-for="a in g.actions" :key="a.name" class="rsb-line rsb-action">
+          <b>{{ a.name }}</b> <span v-if="formatActionCost(a.cost)" class="rsb-glyph">{{ formatActionCost(a.cost) }}</span>
+          <template v-if="a.traits.length"> ({{ a.traits.map(formatTrait).join(', ') }})</template>
+          <template v-if="a.frequency"> <b>Frequency</b> {{ a.frequency }};</template>
+          {{ ' ' }}<span class="rsb-md" v-html="md(a.text)" />
+        </p>
+      </template>
+    </template>
+
+    <!-- ── Station upgrade / starship weapon ──────────────────── -->
+    <template v-if="upgrade">
+      <p class="rsb-line"><b>Usage</b> installed in {{ upgrade.station === 'any' ? 'any battle station' : `a ${upgrade.station}` }}</p>
+      <p v-if="upgrade.weapon" class="rsb-line">
+        <b>{{ titleCase(upgrade.weapon.category) }} ranged starship weapon</b>;
+        <b>Damage</b> {{ upgrade.weapon.damage.dice }}{{ upgrade.weapon.damage.die }} {{ upgrade.weapon.damage.type }};
+        <b>Range</b> {{ zonesText(upgrade.weapon.range) }}; <b>Upgrades</b> {{ upgrade.weapon.upgrades }}<template v-if="upgrade.weapon.group">; <b>Group</b> {{ upgrade.weapon.group }}</template>
+      </p>
+      <p v-for="a in upgrade.actions" :key="a.name" class="rsb-line rsb-action">
+        <b>{{ a.name }}</b> <span v-if="formatActionCost(a.cost)" class="rsb-glyph">{{ formatActionCost(a.cost) }}</span>
+        <template v-if="a.traits.length"> ({{ a.traits.map(formatTrait).join(', ') }})</template>
+        <template v-if="a.frequency"> <b>Frequency</b> {{ a.frequency }};</template>
+        {{ ' ' }}<span class="rsb-md" v-html="md(a.text)" />
+      </p>
+      <p v-for="g in upgrade.grades ?? []" :key="g.grade" class="rsb-line"><b>Type</b> {{ g.grade }}; <b>Level</b> {{ g.level }}<template v-if="g.text">; {{ g.text }}</template></p>
+    </template>
+
+    <!-- ── Expansion bay ──────────────────────────────────────── -->
+    <template v-if="bay">
+      <p class="rsb-line">{{ bay.takesSlot ? 'Takes an expansion bay slot.' : "Doesn't take an expansion bay slot." }}</p>
+      <p v-for="o in bay.options ?? []" :key="o.name" class="rsb-line"><b>{{ o.name }}</b> <span class="rsb-md" v-html="md(o.text)" /></p>
+    </template>
+
     <!-- ── Spell ──────────────────────────────────────────────── -->
     <template v-if="spell">
       <p v-if="spell.traditions.length" class="rsb-line"><b>Traditions</b> {{ spell.traditions.join(', ') }}</p>
@@ -300,6 +401,7 @@ import {
   isRulesKind, RULES_KIND_CONFIG, RULES_KINDS,
   type AbilityKey, type Action, type Condition, type Creature, type Feat, type Hazard, type Item,
   type ReferenceEntry, type RelicGift, type Resistance, type RulesEntity, type Sense, type Spell, type Spellcasting, type StatAction, type Strike, type Vehicle, type Weakness,
+  type BattleStation, type ExpansionBay, type Starship, type StarshipFrame, type StationAction, type StationAdvancement, type StationUpgrade,
 } from '~/types/rules'
 
 const props = defineProps<{ entity: RulesEntity; game?: GameId }>()
@@ -323,6 +425,39 @@ const action = computed(() => props.entity.kind === 'action' ? props.entity as A
 const condition = computed(() => props.entity.kind === 'condition' ? props.entity as Condition : null)
 const gift = computed(() => props.entity.kind === 'relicGift' ? props.entity as RelicGift : null)
 const vehicle = computed(() => props.entity.kind === 'vehicle' ? props.entity as Vehicle : null)
+const starship = computed(() => props.entity.kind === 'starship' ? props.entity as Starship : null)
+const frame = computed(() => props.entity.kind === 'starshipFrame' ? props.entity as StarshipFrame : null)
+const station = computed(() => props.entity.kind === 'battleStation' ? props.entity as BattleStation : null)
+const upgrade = computed(() => props.entity.kind === 'stationUpgrade' ? props.entity as StationUpgrade : null)
+const bay = computed(() => props.entity.kind === 'expansionBay' ? props.entity as ExpansionBay : null)
+const zonesText = (n: number) => `${n} zone${n === 1 ? '' : 's'}`
+const starshipSkills = computed(() =>
+  Object.entries(starship.value?.skills ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => ({ key: k, label: titleCase(humanize(k)), mod: v })))
+/** Only the columns a station's table uses. */
+const stationColumns = computed(() => {
+  const rows = station.value?.advancement ?? []
+  const cols: { key: string; label: string; value: (r: StationAdvancement) => string }[] = [
+    { key: 'ac', label: 'Helmed AC', value: r => signed(r.helmed?.ac ?? 0) },
+    { key: 'fort', label: 'Helmed Fort', value: r => signed(r.helmed?.fort ?? 0) },
+    { key: 'ref', label: 'Helmed Ref', value: r => signed(r.helmed?.ref ?? 0) },
+    { key: 'will', label: 'Helmed Will', value: r => signed(r.helmed?.will ?? 0) },
+    { key: 'sensors', label: 'Sensors', value: r => `+${r.sensors ?? 0} zones` },
+    { key: 'damageDice', label: 'Damage dice', value: r => String(r.damageDice ?? 1) },
+    { key: 'tracking', label: 'Tracking', value: r => (r.tracking ? `+${r.tracking}` : '—') },
+    { key: 'drones', label: 'Drones', value: r => String(r.drones ?? 0) },
+  ]
+  return cols.filter(c => rows.some(r => (['ac', 'fort', 'ref', 'will'].includes(c.key) ? r.helmed?.[c.key as 'ac'] !== undefined : (r as unknown as Record<string, unknown>)[c.key] !== undefined)))
+})
+/** A station's actions by the grade they come at. */
+const stationGrades = computed(() => {
+  const order = ['commercial', 'tactical', 'advanced', 'superior', 'elite', 'ultimate', 'paragon']
+  const by = new Map<string, StationAction[]>()
+  for (const a of station.value?.actions ?? []) {
+    const g = a.grade ?? 'commercial'
+    by.set(g, [...(by.get(g) ?? []), a])
+  }
+  return order.filter(g => by.has(g)).map(g => ({ grade: g, actions: by.get(g)! }))
+})
 async function openRune(name: string) {
   const rune = await rulesFindByName('item', name, props.game)
   if (rune) openEntry(rune)
@@ -601,4 +736,8 @@ hr { border: none; border-top: 1px solid var(--border-hi); margin: 8px 0; }
 .rsb-gm-title, .rsb :deep(.rsb-gm-title) { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #e87a7a; margin-bottom: 2px; }
 .rsb-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 14px; padding-top: 6px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text3); }
 .rsb-foot-game { font-family: var(--fm); }
+.rsb-table { border-collapse: collapse; margin: 6px 0; font-size: 12.5px; }
+.rsb-table th, .rsb-table td { border: 1px solid var(--border); padding: 2px 8px; text-align: right; }
+.rsb-table th { color: var(--text2); font-weight: 600; }
+.rsb-subhead { margin-top: 6px; text-transform: uppercase; letter-spacing: 0.05em; font-size: 12px; color: var(--kind-color); }
 </style>

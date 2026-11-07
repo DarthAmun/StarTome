@@ -211,9 +211,9 @@
           <span class="sb-section-label">Compendium</span>
         </div>
         <div class="sb-children sb-compendium">
+          <template v-for="k in COMPENDIUM_KINDS" :key="k.kind">
+          <span v-if="k.groupStart" class="sb-kind-group">{{ k.groupStart }}</span>
           <NuxtLink
-            v-for="k in COMPENDIUM_KINDS"
-            :key="k.kind"
             :to="`/compendium/${k.segment}`"
             class="sb-child"
             :class="{ active: route.path === `/compendium/${k.segment}` }"
@@ -223,6 +223,7 @@
             <span class="sb-child-label">{{ k.plural }}</span>
             <span class="sb-child-count">{{ compendiumCounts[k.kind] || '' }}</span>
           </NuxtLink>
+          </template>
         </div>
 
       </div>
@@ -299,7 +300,12 @@ onMounted(loadCampaigns)
 defineExpose({ reload: loadCampaigns })
 
 // ── Compendium ─────────────────────────────────────────────────────────────
-const COMPENDIUM_KINDS = RULES_KINDS.map(kind => ({ kind, ...RULES_KIND_CONFIG[kind] }))
+const GROUP_LABEL = { starships: 'Starships' } as const
+const COMPENDIUM_KINDS = RULES_KINDS.map((kind, i) => {
+  const c = RULES_KIND_CONFIG[kind]
+  const prev = i ? RULES_KIND_CONFIG[RULES_KINDS[i - 1]].group : undefined
+  return { kind, ...c, groupStart: c.group && c.group !== prev ? GROUP_LABEL[c.group] : null }
+})
 const compendiumCounts = ref<Partial<Record<RulesKind, number>>>({})
 const rulesRevision = useRulesRevision()
 async function loadCompendiumCounts() { compendiumCounts.value = await rulesCounts() }
@@ -542,4 +548,5 @@ function campaignColor(id: number): string {
 .sidebar.collapsed [data-tip]:hover::after {
   opacity: 1;
 }
+.sb-kind-group { display: block; padding: 8px 12px 2px 28px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); }
 </style>
