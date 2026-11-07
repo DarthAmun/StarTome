@@ -47,7 +47,7 @@ export const dbApi = {
       const db = getDb()
       await db.transaction('rw', [db.campaigns, db.encounters, db.encounterTokens, db.encounterWalls, db.entities, db.entityLinks,
         db.entitySnapshots, db.entityConnections, db.graphLayouts, db.characters, db.levelUps, db.xpAwards,
-        db.treasureAwards, db.inventory, db.purses, db.tokens], async () => {
+        db.treasureAwards, db.inventory, db.purses, db.tokens, db.starships], async () => {
         const encIds = await db.encounters.where('campaign_id').equals(id).primaryKeys() as number[]
         if (encIds.length) {
           await db.encounterTokens.where('encounter_id').anyOf(encIds).delete()
@@ -63,7 +63,7 @@ export const dbApi = {
           await db.tokens.filter(t => t.linked_entity_id != null && ents.has(t.linked_entity_id)).modify({ linked_entity_id: null })
         }
         await db.entities.where('campaign_id').equals(id).delete()
-        for (const table of [db.entityConnections, db.graphLayouts, db.characters, db.levelUps, db.xpAwards, db.treasureAwards, db.inventory, db.purses]) {
+        for (const table of [db.entityConnections, db.graphLayouts, db.characters, db.levelUps, db.xpAwards, db.treasureAwards, db.inventory, db.purses, db.starships]) {
           await table.where('campaign_id').equals(id).delete()
         }
         await db.campaigns.delete(id)

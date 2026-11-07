@@ -66,6 +66,15 @@
               <OhVueIcon name="gi-three-friends" scale="0.75" style="color: #e8c44a" />
             </NuxtLink>
             <NuxtLink
+              v-if="c.game === 'sf2e'"
+              :to="`/campaign/${c.id}/starship`"
+              class="sb-icon-link"
+              :class="{ active: route.path === `/campaign/${c.id}/starship` }"
+              data-tip="Starship"
+            >
+              <OhVueIcon name="gi-spaceship" scale="0.75" style="color: #4ab8e8" />
+            </NuxtLink>
+            <NuxtLink
               :to="`/campaign/${c.id}/encounters`"
               class="sb-icon-link"
               :class="{ active: route.path === `/campaign/${c.id}/encounters` || route.path === `/campaign/${c.id}/encounter-builder` || (route.path.startsWith('/encounter') && activeCampaignId === c.id) }"
@@ -171,6 +180,15 @@
               >
                 <OhVueIcon name="gi-three-friends" scale="0.65" style="color:#e8c44a;width:14px;flex-shrink:0" />
                 <span>Party</span>
+              </NuxtLink>
+              <NuxtLink
+                v-if="c.game === 'sf2e'"
+                :to="`/campaign/${c.id}/starship`"
+                class="sb-child-tool"
+                :class="{ active: route.path === `/campaign/${c.id}/starship` }"
+              >
+                <OhVueIcon name="gi-spaceship" scale="0.65" style="color:#4ab8e8;width:14px;flex-shrink:0" />
+                <span>Starship</span>
               </NuxtLink>
               <NuxtLink
                 :to="`/campaign/${c.id}/encounters`"

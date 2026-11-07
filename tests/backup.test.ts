@@ -25,6 +25,11 @@ async function seed(name: string) {
   const bag = await db.inventory.add({ campaign_id: id, owner: `character:${chr}`, item_id: null, quantity: 1, name_override: 'Bag', notes: '', identified: 1 } as any) as number
   await db.inventory.add({ campaign_id: id, owner: `character:${chr}`, item_id: null, quantity: 2, name_override: 'Potion', notes: '', identified: 1, container_id: bag } as any)
   await db.purses.add({ campaign_id: id, owner: `encounter:${enc}`, cp: 50, updated_at: '' })
+  await db.starships.add({
+    campaign_id: id, name: `${name} Wing`, active: 1, frame_id: null, level_pinned: null, stations: [{ slot: 1, stationId: null, isDefault: false, upgradeIds: [] }],
+    bays: [], hp_current: null, sp_current: null, conditions: [], crew: [{ characterId: chr, slot: 1, activity: 'fly-the-ship' }],
+    presets: [{ name: 'Dogfight', crew: [{ characterId: chr, slot: 1 }] }], interior_encounter_id: enc, notes: '', img: null, created_at: '', updated_at: '',
+  })
   return { id, loc, npc, token, enc, chr, xp }
 }
 
@@ -88,6 +93,10 @@ describe('backup and import', () => {
     expect(items.map(i => i.owner)).toEqual([`character:${chr!.id}`, `character:${chr!.id}`])
     expect(items.find(i => i.name_override === 'Potion')!.container_id).toBe(bag.id)
     expect(await db.purses.where('campaign_id').equals(imported.id!).first()).toMatchObject({ owner: `encounter:${enc!.id}`, cp: 50 })
+    expect(await db.starships.where('campaign_id').equals(imported.id!).first()).toMatchObject({
+      name: 'Theirs Wing', interior_encounter_id: enc!.id,
+      crew: [{ characterId: chr!.id, slot: 1, activity: 'fly-the-ship' }], presets: [{ name: 'Dogfight', crew: [{ characterId: chr!.id, slot: 1 }] }],
+    })
   })
 
   it('replaces everything with a full backup, keeping its ids', async () => {

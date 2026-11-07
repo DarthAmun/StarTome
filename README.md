@@ -126,6 +126,8 @@ The plan for Tech Core, starships and tactical starship combat is in [STARFINDER
 - **Vehicles:** a compendium kind synced from Foundry (AC, Fortitude, Hardness, HP, collision, crew, piloting check, speed); they stand on the map as tokens and are worth no XP
 - **Companions:** animal, robot and drone (mechanic) companions get a stat block from their type and stage (Tech Core advancement), written as a homebrew creature that follows the companion's level and links its map token
 - **Starship compendium:** enemy starships, frames, battle stations (advancement tables and station actions by grade), station upgrades and starship weapons, expansion bays, and the five starship conditions. Foundry has no starship data: `scripts/techcore/build.sh "<your Tech Core PDF>"` builds a homebrew pack from your own copy of the book into `local/` (git-ignored), to import under Import & Export → Homebrew
+- **Starship page** (SF2e campaigns): the party's starship sheet from its frame at the party level (or a pinned level): HP/SP, AC, saves, speed, sensor range, conditions; battle station cards with grade, helmed bonus, upgrades (limits checked, a gunnery's weapon apart) and station actions; expansion bays; "new at this level"; several ships with one active
+- **Crew roster:** drag party members onto battle stations (one each), pick their exploration activity, see the suggested initiative skill with optional hand-entered SF2e skills, and save the arrangement as named presets
 - **Area Fire / Auto-Fire** buttons on creature Strikes with the area or automatic trait place the cone, line or burst and ask for basic Reflex saves
 
 ### Audio

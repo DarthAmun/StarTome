@@ -23,7 +23,7 @@ import {
   getDb, now, parseJsonObject, rowValues,
   type DbCampaign, type DbCharacter, type DbEncounter, type DbEncounterToken, type DbEncounterWall, type DbEntity,
   type DbEntityConnection, type DbEntityLink, type DbEntitySnapshot, type DbGraphLayout, type DbInventory, type DbLevelUp,
-  type DbMapAsset, type DbPurse, type DbToken, type DbTreasureAward, type DbXpAward,
+  type DbMapAsset, type DbPurse, type DbStarship, type DbToken, type DbTreasureAward, type DbXpAward,
 } from '~/composables/useDb'
 import { propImages } from '~/rules/battlemap'
 import { extractLinks } from '~/composables/useEntityParser'
@@ -51,6 +51,7 @@ export interface CampaignRows {
   treasureAwards: DbTreasureAward[]
   inventory: DbInventory[]
   purses: DbPurse[]
+  starships: DbStarship[]
 }
 export type CampaignTable = keyof CampaignRows
 
@@ -58,14 +59,14 @@ export type CampaignTable = keyof CampaignRows
 export const CAMPAIGN_TABLES: CampaignTable[] = [
   'campaigns', 'entities', 'tokens', 'mapAssets', 'encounters', 'encounterTokens', 'encounterWalls',
   'entityLinks', 'entitySnapshots', 'entityConnections', 'graphLayouts',
-  'characters', 'levelUps', 'xpAwards', 'treasureAwards', 'inventory', 'purses',
+  'characters', 'levelUps', 'xpAwards', 'treasureAwards', 'inventory', 'purses', 'starships',
 ]
 
 export const TABLE_LABELS: Record<CampaignTable | 'rules' | 'rulesOverlays', string> = {
   campaigns: 'Campaigns', encounters: 'Encounters', encounterTokens: 'Encounter Tokens', encounterWalls: 'Encounter Walls',
   entities: 'Notes & Entities', entityLinks: 'Entity Links', entitySnapshots: 'Entity Snapshots', entityConnections: 'Entity Connections',
   graphLayouts: 'Graphs', tokens: 'Tokens', mapAssets: 'Map assets', characters: 'Party members', levelUps: 'Level-ups', xpAwards: 'XP awards',
-  treasureAwards: 'Treasure awards', inventory: 'Inventory', purses: 'Purses',
+  treasureAwards: 'Treasure awards', inventory: 'Inventory', purses: 'Purses', starships: 'Starships',
   rules: 'Own compendium entries', rulesOverlays: 'Portraits, notes & edits on synced entries',
 }
 
@@ -137,10 +138,11 @@ export async function collectCampaignRows(campaignIds?: number[]): Promise<Campa
   const campaigns = campaignIds ? (await db.campaigns.bulkGet(campaignIds)).filter((c): c is DbCampaign => !!c) : await db.campaigns.toArray()
   const ids = campaigns.map(c => c.id!)
   const byCampaign = <T>(table: string) => (ids.length ? db.table(table).where('campaign_id').anyOf(ids).toArray() : Promise.resolve([])) as Promise<T[]>
-  const [encounters, entities, entityConnections, graphLayouts, characters, levelUps, xpAwards, treasureAwards, inventory, purses] = await Promise.all([
+  const [encounters, entities, entityConnections, graphLayouts, characters, levelUps, xpAwards, treasureAwards, inventory, purses, starships] = await Promise.all([
     byCampaign<DbEncounter>('encounters'), byCampaign<DbEntity>('entities'), byCampaign<DbEntityConnection>('entityConnections'),
     byCampaign<DbGraphLayout>('graphLayouts'), byCampaign<DbCharacter>('characters'), byCampaign<DbLevelUp>('levelUps'),
     byCampaign<DbXpAward>('xpAwards'), byCampaign<DbTreasureAward>('treasureAwards'), byCampaign<DbInventory>('inventory'), byCampaign<DbPurse>('purses'),
+    byCampaign<DbStarship>('starships'),
   ])
   const encIds = encounters.map(e => e.id!)
   const entIds = entities.map(e => e.id!)
@@ -158,7 +160,7 @@ export async function collectCampaignRows(campaignIds?: number[]): Promise<Campa
   const mapAssets = placed.size ? await db.mapAssets.filter(a => placed.has(a.image)).toArray() : []
   return {
     campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots,
-    entityConnections, graphLayouts, tokens, mapAssets, characters, levelUps, xpAwards, treasureAwards, inventory, purses,
+    entityConnections, graphLayouts, tokens, mapAssets, characters, levelUps, xpAwards, treasureAwards, inventory, purses, starships,
   }
 }
 
@@ -338,6 +340,15 @@ async function writeMerged(rows: Partial<CampaignRows>, opts: MergeOptions, coun
   }
   for (const p of (rows.purses ?? []).filter(p => camp.has(p.campaign_id) && owners.has(p.owner))) {
     await add('purses', { ...withoutId(p), campaign_id: camp.get(p.campaign_id)!, owner: owners.get(p.owner)! })
+  }
+  // Starships: their crew are characters, their interior an encounter
+  for (const s of (rows.starships ?? []).filter(s => camp.has(s.campaign_id))) {
+    const crewOf = (list: DbStarship['crew'] | undefined) => (list ?? []).filter(c => chr.has(c.characterId)).map(c => ({ ...c, characterId: chr.get(c.characterId)! }))
+    await add('starships', {
+      ...withoutId(s), campaign_id: camp.get(s.campaign_id)!,
+      crew: crewOf(s.crew), presets: (s.presets ?? []).map(p => ({ ...p, crew: crewOf(p.crew) })),
+      interior_encounter_id: s.interior_encounter_id != null ? enc.get(s.interior_encounter_id) ?? null : null,
+    })
   }
 
   // Resolution records point at characters, the XP log and inventory rows

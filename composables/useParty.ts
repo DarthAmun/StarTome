@@ -48,6 +48,8 @@ export interface Character extends PartyCharacter {
   /** Companion type and stage (rules/companions.ts); its stat block is `companionRulesId`. */
   companion: CompanionBuild | null
   companionRulesId: string | null
+  /** SF2e skills entered by hand (starship crew cards); Play Buddy values win once it supports SF2e (P10). */
+  sfSkills: Record<string, number>
 }
 
 export interface LevelUpEntry {
@@ -65,7 +67,7 @@ function toCharacter(r: DbCharacter): Character {
     level: r.level, xp: r.xp ?? 0, treatAsPc: r.role === 'pc' || !!r.treat_as_pc,
     strMod: r.str_mod ?? null, npcEntityId: r.npc_entity_id ?? null, tokenId: r.token_id ?? null,
     pbPlayerId: r.pb_player_id ?? null, pbStatus: r.pb_status ?? null,
-    companion: r.companion ?? null, companionRulesId: r.companion_rules_id ?? null,
+    companion: r.companion ?? null, companionRulesId: r.companion_rules_id ?? null, sfSkills: r.sf_skills ?? {},
   }
 }
 
@@ -253,7 +255,7 @@ async function addCharacter(input: { campaignId: number; name: string; role: Cha
   return id as number
 }
 
-async function updateCharacter(id: number, patch: Partial<Pick<Character, 'name' | 'role' | 'level' | 'treatAsPc' | 'strMod' | 'xp'>>) {
+async function updateCharacter(id: number, patch: Partial<Pick<Character, 'name' | 'role' | 'level' | 'treatAsPc' | 'strMod' | 'xp' | 'sfSkills'>>) {
   const c = characters.value.find(x => x.id === id) ?? (await getDb().characters.get(id).then(r => (r ? toCharacter(r) : undefined)))
   if (!c) return
   const changes: Partial<DbCharacter> = { updated_at: now() }
@@ -263,6 +265,7 @@ async function updateCharacter(id: number, patch: Partial<Pick<Character, 'name'
   if (patch.treatAsPc !== undefined) changes.treat_as_pc = patch.treatAsPc ? 1 : 0
   if (patch.strMod !== undefined) changes.str_mod = patch.strMod
   if (patch.xp !== undefined && Number.isFinite(patch.xp)) changes.xp = Math.max(0, Math.round(patch.xp))
+  if (patch.sfSkills !== undefined) changes.sf_skills = toPlain(patch.sfSkills)
   await getDb().characters.update(id, changes)
   if (changes.level !== undefined) await patchNpc(c.npcEntityId, { level: String(changes.level) })
   if (patch.role !== undefined) await syncPcFlags(c.npcEntityId, c.tokenId)

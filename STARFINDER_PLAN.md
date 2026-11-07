@@ -57,7 +57,7 @@ Book content (enemy starships, station actions, upgrades, expansion bays) is **n
 | ~~**P1**~~ | ✅ Done 2026-11-07 (0.29.0): upgrade slots, installed weapons, augmentations, Area Fire / Auto-Fire | P0 | M |
 | ~~**P2**~~ | ✅ Done 2026-11-07 (0.30.0): vehicles and companions (drones, robot and animal companions) | P0 | M |
 | ~~**P3**~~ | ✅ Done 2026-11-07 (0.31.0): starship data model, homebrew format, book import | — | L |
-| **P4** | Player starship sheet and crew roster (station assignments) | P3 | M |
+| ~~**P4**~~ | ✅ Done 2026-11-07 (0.32.0): player starship sheet and crew roster (station assignments) | P3 | M |
 | **P5** | Ship interior map: battle stations on the battle map, helming, station actions | P4 | M |
 | **P6** | Sensor map: zones, headings, ship tokens, zone areas | P3 | L |
 | **P7** | Starship combat engine: damage, shields, conditions, compromised, hull integrity | P5, P6 | L |
@@ -201,7 +201,10 @@ interface Starship extends RulesEntityBase {
 
 ---
 
-## P4. Player starship sheet and crew roster (M)
+## P4. Player starship sheet and crew roster (M) ✅ done 2026-11-07 (0.32.0)
+
+**Built:** Dexie v18 `starships` table (in campaign delete, export/import with crew, presets and interior encounter remapped; `useStarship` is its only writer), `rules/playerStarship.ts` (sheet at a level, slots from a frame, crew assignment rules, exploration activities, suggested initiative skill per station, level-up changes) and the **Starship** page (sidebar link in SF2e campaigns). A new ship gets the frame's default stations with their built-in upgrades and the three universal bays. Station weapons don't use upgrade slots; a gunnery holds one (two with Secondary Armaments). Party members get optional `sf_skills` (decision 3). **Not done here:** the level-up dialog doesn't list the ship's changes; the Starship page shows them under "New at level N" instead. Tests: `tests/playerStarship.test.ts`, backup round-trip.
+
 
 ### P4.1 The campaign's starship
 - New table `starships` (Dexie v18): `campaign_id, name, frame_id, level_mode ('party' | number), stations[], expansion_bays[], hp_current, sp_current, conditions[], interior_encounter_id?, notes, img`.

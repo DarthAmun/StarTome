@@ -20,6 +20,7 @@
  * and isn't imported (only DM's Tome's campaigns come over, FORK_PLAN §8.5).
  */
 import type { CompanionBuild } from '~/rules/companions'
+import type { BaySlot, CrewAssignment, CrewPreset, StationSlot } from '~/rules/playerStarship'
 import Dexie, { type Table } from 'dexie'
 import { DB_NAME } from '~/utils/appNamespace'
 import { parseJson } from '~/utils/json'
@@ -202,6 +203,8 @@ export interface DbCharacter {
   companion?: CompanionBuild | null
   /** The homebrew creature entry written from `companion`, kept at the character's level */
   companion_rules_id?: string | null
+  /** SF2e skill modifiers entered by hand for the starship crew cards (lower-case skill → modifier); non-indexed */
+  sf_skills?: Record<string, number> | null
   created_at: string
   updated_at: string
 }
@@ -357,6 +360,32 @@ export interface DbSoundPlaylist {
   updatedAt: string
 }
 
+/** The party's starship (STARFINDER_PLAN.md P4; rules/playerStarship.ts). */
+export interface DbStarship {
+  id?: number
+  campaign_id: number
+  name: string
+  /** The ship the party flies now (0 | 1); one per campaign. */
+  active: number
+  frame_id: string | null
+  /** null = follows the party level. */
+  level_pinned: number | null
+  stations: StationSlot[]
+  bays: BaySlot[]
+  /** Current Hull / Shield Points; null = full. */
+  hp_current: number | null
+  sp_current: number | null
+  conditions: { name: string; value: number | null }[]
+  crew: CrewAssignment[]
+  presets: CrewPreset[]
+  /** The encounter whose map is the ship's interior (station markers, walls); P5. */
+  interior_encounter_id: number | null
+  notes: string
+  img: string | null
+  created_at: string
+  updated_at: string
+}
+
 /** An image in the map maker's asset library (furniture, trees, decals …), for every campaign. */
 export interface DbMapAsset {
   id?: number
@@ -415,6 +444,7 @@ class StarTomeDb extends Dexie {
   treasureAwards!:    Table<DbTreasureAward>
   linkOffers!:        Table<DbLinkOffer>
   mapAssets!:         Table<DbMapAsset>
+  starships!:         Table<DbStarship>
 
   constructor() {
     super(DB_NAME)
@@ -546,6 +576,10 @@ class StarTomeDb extends Dexie {
           await tx.table(t).update(id, { attributes: attrs })
         }
       }
+    })
+    // v18: the party's starships (STARFINDER_PLAN.md P4)
+    this.version(18).stores({
+      starships:          '++id, campaign_id',
     })
   }
 }
