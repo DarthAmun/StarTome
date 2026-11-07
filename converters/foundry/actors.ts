@@ -48,6 +48,7 @@ function strikesOf(items: FoundryDoc[], actionNames: Map<string, string>): Strik
     return {
       name: i.name, range: ranged ? 'ranged' : 'melee', bonus: Number(s.bonus?.value) || 0, traits, damage,
       ...(effects.length ? { effects } : {}),
+      ...(Number(s.range?.increment) > 0 ? { rangeIncrement: Number(s.range.increment) } : {}),
     }
   })
 }

@@ -287,6 +287,7 @@ const strike = shape({
   traits: req(traits, []),
   damage: req(arrOf(damageRoll), []),
   effects: opt(strArr),
+  rangeIncrement: opt(num),
 })
 
 const statAction = shape({

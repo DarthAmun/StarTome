@@ -715,6 +715,7 @@ Goblins are superstitious, with an intense awe of magic and a fascination with f
       ],
       "name": "Shortbow",
       "range": "ranged",
+      "rangeIncrement": 60,
       "traits": [
         "deadly-d10",
         "reload-0",
@@ -1336,6 +1337,7 @@ Kobolds are diligent and hardworking creatures. While some kobolds live in commu
       ],
       "name": "Crossbow",
       "range": "ranged",
+      "rangeIncrement": 120,
       "traits": [
         "reload-1",
       ],

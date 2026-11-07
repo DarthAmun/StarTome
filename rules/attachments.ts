@@ -9,11 +9,11 @@
  */
 import type { Item, Runes } from '~/types/rules'
 
-export type AttachKind = 'rune' | 'talisman' | 'upgrade' | 'accessory' | 'gift'
+export type AttachKind = 'rune' | 'talisman' | 'upgrade' | 'installed' | 'accessory' | 'gift'
 export type HostKind = 'weapon' | 'armor' | 'shield'
 
 export const ATTACH_LABEL: Record<AttachKind, string> = {
-  rune: 'Rune', talisman: 'Talisman', upgrade: 'Upgrade', accessory: 'Accessory', gift: 'Gift',
+  rune: 'Rune', talisman: 'Talisman', upgrade: 'Upgrade', installed: 'Installed weapon', accessory: 'Accessory', gift: 'Gift',
 }
 
 type AttachableLike = Pick<Item, 'name' | 'traits' | 'category'> & Partial<Pick<Item, 'usage'>>
@@ -26,6 +26,9 @@ const HOST_WORDS: [RegExp, HostKind][] = [
 
 /** What an item attaches to, from its usage text ("etched onto a weapon", "affixed to armor or a weapon"). */
 export function hostsOf(item: AttachableLike | null | undefined): HostKind[] {
+  // SF2e installed weapons name their host in a trait: installed-two-handed-melee-weapon
+  const installed = item?.category === 'weapon' ? item.traits.find(t => t.startsWith('installed-')) : undefined
+  if (installed) return HOST_WORDS.filter(([re]) => re.test(installed.replace(/-/g, ' '))).map(([, k]) => k)
   const usage = item?.usage?.toLowerCase() ?? ''
   if (!/^(etched|affixed|attached|installed)\b/.test(usage)) {
     // SF2e upgrades don't always say where they go
@@ -38,6 +41,7 @@ export function hostsOf(item: AttachableLike | null | undefined): HostKind[] {
 export function attachKindOf(item: AttachableLike | null | undefined): AttachKind | null {
   if (!item) return null
   if (item.traits.includes('talisman')) return 'talisman'
+  if (item.category === 'weapon' && item.traits.some(t => t.startsWith('installed-'))) return 'installed'
   if (item.traits.includes('upgrade')) return 'upgrade'
   if (!hostsOf(item).length) return null
   if (item.traits.includes('rune') || item.usage?.toLowerCase().startsWith('etched')) return 'rune'

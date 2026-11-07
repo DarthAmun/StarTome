@@ -213,7 +213,8 @@ function definitionOf(rulesId: string | null, name: string, custom: OfferStack['
 
 function attachmentToWire(a: OfferAttachment): W.WireAttachment {
   return {
-    kind: a.kind, name: a.name, ...definitionOf(a.rulesId, a.name, a.custom),
+    // Wire v1 has no installed-weapon kind: it's sent as an upgrade (SF2e installed weapons work like one)
+    kind: a.kind === 'installed' ? 'upgrade' : a.kind, name: a.name, ...definitionOf(a.rulesId, a.name, a.custom),
     ...(a.identified ? {} : { identified: false }), ...(a.tier ? { tier: a.tier } : {}),
   }
 }

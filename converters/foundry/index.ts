@@ -29,8 +29,9 @@ export function kindOfFoundryType(type: string): RulesKind | null {
  * 3: class features by level, subclass choices/options.
  * 4: 'class-archetype' is no subclass choice.
  * 5: class feat / skill increase levels (progression).
+ * 6: strike range increments (SF2e Area Fire / Auto-Fire).
  */
-export const CONVERTER_VERSION = 5
+export const CONVERTER_VERSION = 6
 
 export interface ConvertResult { entity: RulesEntity | null; issues: ConvertIssue[] }
 

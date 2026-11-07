@@ -55,6 +55,10 @@ export interface InventoryEntry {
   attachKind?: AttachKind | null
   /** The entry is a relic (GMG p. 94); its gifts are attachments of kind 'gift'. */
   relic?: { aspects: string[] } | null
+  /** SF2e augmentation implanted in its owner (a character); rules/sf2eGear.ts. */
+  implanted?: boolean
+  /** SF2e weapon or armor: base upgrade slots set by the GM; null = the table value. */
+  upgradeSlots?: number | null
   /** A relic gift's value in cp, set by `giftValues` when entries load; never stored. */
   giftValue?: number
   /** Mirrored from Play Buddy: read-only here (PLAYBUDDY_API.md). */
@@ -130,12 +134,12 @@ export function planMove(entry: Pick<InventoryEntry, 'id' | 'owner' | 'quantity'
 
 /** Two entries are the same thing when everything but owner, quantity and id matches. Attachments and relics never stack. */
 export function sameStack(a: InventoryEntry, b: InventoryEntry): boolean {
-  if (a.attachedTo != null || b.attachedTo != null || a.relic || b.relic) return false
+  if (a.attachedTo != null || b.attachedTo != null || a.relic || b.relic || a.implanted || b.implanted) return false
   return a.itemId === b.itemId && a.nameOverride === b.nameOverride && a.priceOverride === b.priceOverride
     && a.bulkOverride === b.bulkOverride && a.notes === b.notes && a.identified === b.identified
     && a.playerName === b.playerName && a.playerDescription === b.playerDescription
     && a.grade === b.grade && JSON.stringify(a.runes) === JSON.stringify(b.runes)
-    && (a.containerId ?? null) === (b.containerId ?? null)
+    && (a.containerId ?? null) === (b.containerId ?? null) && (a.upgradeSlots ?? null) === (b.upgradeSlots ?? null)
 }
 
 // ── Currency ──────────────────────────────────────────────────────────────

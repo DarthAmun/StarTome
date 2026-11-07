@@ -257,6 +257,10 @@ export interface DbInventory {
   attached_to?: number | null      // the host entry a rune/talisman/upgrade/gift is attached to; non-indexed
   attach_kind?: AttachKind | null
   relic?: { aspects: string[] } | null
+  /** SF2e augmentation implanted in its character (owner): it can't change hands until removed; non-indexed */
+  implanted?: number | null        // 0 | 1
+  /** SF2e weapon/armor: the GM's base upgrade slots, replacing the table value (rules/sf2eGear.ts); non-indexed */
+  upgrade_slots?: number | null
   /** Mirror of a Play Buddy inventory entry: read-only here, replaced on every status read. */
   pb_entry_id?: string | null
   /** Stash stack offered to a Play Buddy player; cleared when the offer is answered. */

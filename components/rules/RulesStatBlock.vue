@@ -110,6 +110,9 @@
       <p class="rsb-line"><b>Speed</b> {{ speedLine }}</p>
       <p v-for="(s, i) in creature.strikes" :key="'s' + i" class="rsb-line">
         <b>{{ s.range === 'melee' ? 'Melee' : 'Ranged' }}</b> <span class="rsb-glyph">◆</span> {{ s.name }}
+        <button v-for="fa in canPlaceArea ? weaponAreasOf(s) : []" :key="fa.action + fa.kind" class="rsb-place"
+          :title="`${fa.action}: place a ${fa.sizeFt}-foot ${fa.kind} and roll basic Reflex saves against DC ${areaFireDcFromStrike(s.bonus)} (10 + the Strike's bonus)`"
+          @click.stop="placeWeaponArea(s, fa)">{{ fa.action }}</button>
         <template v-for="step in MAP_STEPS" :key="step"><button class="rsb-roll" :title="MAP_TITLE[step]" @click.stop="attack(s, step)">{{ signed(strikeModifier(s, step)) }}</button><template v-if="step < 2">/</template></template>
         <template v-if="s.traits.length"> ({{ s.traits.map(formatTrait).join(', ') }})</template>,
         <b>Damage</b> <button class="rsb-roll" title="Roll damage" @click.stop="damage(s)">{{ damageText(s) }}</button>{{ ' ' }}<button class="rsb-roll rsb-roll--crit" title="Roll critical damage: doubled, with deadly and fatal" @click.stop="damage(s, true)">crit</button><template v-if="twoHandFormula(s)">; two-handed <button class="rsb-roll" title="Roll damage wielded in two hands" @click.stop="damage(s, false, true)">{{ damageText(s, true) }}</button>{{ ' ' }}<button class="rsb-roll rsb-roll--crit" title="Roll critical damage in two hands" @click.stop="damage(s, true, true)">crit</button></template><template v-if="s.effects?.length"> plus {{ s.effects.join(', ') }}</template>
@@ -142,6 +145,9 @@
       <p v-if="hazardDefense" class="rsb-line" v-html="hazardDefense" />
       <p v-for="(st, i) in hazard.strikes ?? []" :key="'hs' + i" class="rsb-line">
         <b>{{ st.range === 'melee' ? 'Melee' : 'Ranged' }}</b> <span class="rsb-glyph">◆</span> {{ st.name }}
+        <button v-for="fa in canPlaceArea ? weaponAreasOf(st) : []" :key="fa.action + fa.kind" class="rsb-place"
+          :title="`${fa.action}: place a ${fa.sizeFt}-foot ${fa.kind} and roll basic Reflex saves against DC ${areaFireDcFromStrike(st.bonus)} (10 + the Strike's bonus)`"
+          @click.stop="placeWeaponArea(st, fa)">{{ fa.action }}</button>
         <template v-for="step in MAP_STEPS" :key="step"><button class="rsb-roll" :title="MAP_TITLE[step]" @click.stop="attack(st, step)">{{ signed(strikeModifier(st, step)) }}</button><template v-if="step < 2">/</template></template>
         <template v-if="st.traits.length"> ({{ st.traits.map(formatTrait).join(', ') }})</template>,
         <b>Damage</b> <button class="rsb-roll" title="Roll damage" @click.stop="damage(st)">{{ damageText(st) }}</button>{{ ' ' }}<button class="rsb-roll rsb-roll--crit" title="Roll critical damage: doubled, with deadly and fatal" @click.stop="damage(st, true)">crit</button><template v-if="twoHandFormula(st)">; two-handed <button class="rsb-roll" title="Roll damage wielded in two hands" @click.stop="damage(st, false, true)">{{ damageText(st, true) }}</button>{{ ' ' }}<button class="rsb-roll rsb-roll--crit" title="Roll critical damage in two hands" @click.stop="damage(st, true, true)">crit</button></template><template v-if="st.effects?.length"> plus {{ st.effects.join(', ') }}</template>
@@ -248,6 +254,7 @@
 import { useDiceRoll, useStatRolls } from '~/composables/useDiceRoll'
 import { strikeModifier, twoHandFormula, type MapStep } from '~/rules/rolls'
 import { parseAreaEffect } from '~/rules/areas'
+import { areaFireDcFromStrike, weaponAreas, type WeaponArea } from '~/rules/sf2eGear'
 import { useEntityMarkdown } from '~/composables/useEntityMarkdown'
 import { rulesClassFeats, rulesFindByName, useRulesRevision } from '~/composables/useRules'
 import { classOptionGroups, classTrait, featuresByLevel, type OptionGroup } from '~/rules/subclasses'
@@ -338,6 +345,17 @@ function areaOf(a: StatAction) {
 function placeAbilityArea(a: StatAction) {
   const spec = areaOf(a)
   if (spec) placeArea({ ...spec, label: `${a.name} (${props.entity.name})` })
+}
+/** SF2e area and automatic weapons (rules/sf2eGear.ts). */
+function weaponAreasOf(strike: Strike): WeaponArea[] {
+  return strike.range === 'ranged' ? weaponAreas(strike.traits, strike.rangeIncrement) : []
+}
+function placeWeaponArea(strike: Strike, area: WeaponArea) {
+  const first = strike.damage[0]
+  placeArea({
+    label: `${strike.name} ${area.action} (${props.entity.name})`, kind: area.kind, sizeFt: area.sizeFt,
+    effect: { save: 'ref', dc: areaFireDcFromStrike(strike.bonus), basic: true, damage: first ? { formula: first.formula, type: first.type } : null },
+  })
 }
 function spellAttack(name: string, modifier: number) {
   roll({ kind: 'attack', label: `${props.entity.name}: ${name} spell attack`, modifier })

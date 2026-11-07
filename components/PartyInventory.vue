@@ -69,6 +69,7 @@
           <span v-else class="inv-dim">· enter a Str modifier on the roster for the encumbrance warning</span>
         </template>
       </div>
+      <div v-for="w in implantWarnings" :key="w" class="inv-note inv-warn">{{ w }}</div>
       <div v-if="lastSplit" class="inv-note">{{ lastSplit }}</div>
 
       <!-- Items -->
@@ -82,6 +83,7 @@
             @change="updateEntry(e.id, { quantity: Number(($event.target as HTMLInputElement).value) })" />
           <div class="inv-name">
             <span v-if="e.attachKind" class="inv-kind" :class="`inv-kind--${e.attachKind}`">{{ kindLabel(e) }}</span>
+            <span v-if="e.implanted" class="inv-kind inv-kind--augmentation" title="Implanted: part of this character's body (Player Core p. 288). Remove it to hand it over.">implanted</span>
             <span v-if="e.relic" class="inv-kind inv-kind--relic" :title="e.relic.aspects.length ? `Aspects: ${e.relic.aspects.join(', ')}` : 'Relic'">relic{{ e.relic.aspects.length ? ` · ${e.relic.aspects.join(', ')}` : '' }}</span>
             <template v-if="view === 'gm'">
               <NuxtLink v-if="linkOf(e)" :to="linkOf(e)!">{{ nameOf(e) }}</NuxtLink>
@@ -91,6 +93,7 @@
               <span v-else-if="!e.identified" class="inv-unid" :title="`Players see: ${playerOf(e).name}`">unidentified · “{{ playerOf(e).name }}”</span>
               <span v-if="runeLabel(e)" class="inv-dim">{{ runeLabel(e) }}</span>
               <span v-if="attachedOf(e).length" class="inv-dim" :title="`${nameOf(e)} with everything attached`">· {{ money(withAttached(e)) }} in all</span>
+              <span v-if="slotLabel(e)" class="inv-dim" title="Upgrade slots used / slots at this grade (Player Core pp. 248, 267)">{{ slotLabel(e) }}</span>
               <span v-for="w in warningsOf(e)" :key="w" class="inv-warn">{{ w }}</span>
               <span v-if="e.pbOfferId" class="inv-offered" :title="offerTitle(e)">offered</span>
             </template>
@@ -134,10 +137,14 @@
             <button class="party-icon-btn" :title="e.identified ? 'Mark as unidentified' : 'Identify'" @click="setIdentified(e.id, !e.identified)">
               <OhVueIcon :name="e.identified ? 'md-visibility' : 'md-visibilityoff'" scale="0.75" />
             </button>
+            <button v-if="canImplant(e)" class="party-icon-btn" :class="{ active: e.implanted }"
+              :title="e.implanted ? 'Implanted. Click to remove the augmentation' : `Implant in ${ownerName(e.owner)}`" @click="setImplanted(e.id, !e.implanted)">
+              <OhVueIcon name="gi-cyborg-face" scale="0.75" />
+            </button>
             <button v-if="canHost(e)" class="party-icon-btn" :title="attachTitle(e)" :class="{ active: attaching === e.id }" @click="startAttach(e)">
               <OhVueIcon name="md-addcircleoutline" scale="0.75" />
             </button>
-            <button class="party-icon-btn" title="Move to…" :class="{ active: moving === e.id }" @click="startMove(e)">
+            <button v-if="!e.implanted" class="party-icon-btn" title="Move to…" :class="{ active: moving === e.id }" @click="startMove(e)">
               <OhVueIcon name="md-arrowforward" scale="0.75" />
             </button>
             <button class="party-icon-btn" title="Details" :class="{ active: open === e.id }" @click="open = open === e.id ? null : e.id">
@@ -210,6 +217,11 @@
                 <option value="">{{ itemGrade(e) ? `as item (${itemGrade(e)})` : '—' }}</option>
                 <option v-for="g in SF2E_GRADES" :key="g" :value="g">{{ g }}</option>
               </select>
+            </label>
+            <label v-if="game === 'sf2e'" title="Upgrade slots of the commercial item (the armor or weapon table); higher grades add their own">
+              <span>Base slots</span>
+              <input class="inv-input" type="number" min="0" :value="e.upgradeSlots ?? ''" :placeholder="String(baseUpgradeSlots(item(e)))"
+                @change="updateEntry(e.id, { upgradeSlots: val($event) === '' ? null : Number(val($event)) })" />
             </label>
           </template>
           <template v-if="!hostOf(e) && game === 'pf2e'">
@@ -286,6 +298,7 @@ import { useWealth } from '~/composables/useWealth'
 import { lootValue } from '~/rules/wealth'
 import { SF2E_GRADES } from '~/rules/registry'
 import { characterOwner, containerLoad, containerOf, dormantGift, effective, encumbrance, entryBulk, entryValue, parseOwner, partyTotals, STASH, toPlayerView, unidentifiedName, type Encumbrance, type InventoryEntry, type OwnerKey } from '~/rules/inventory'
+import { augmentationWarnings, baseUpgradeSlots, isAugmentation, upgradeSlots, upgradeWarnings } from '~/rules/sf2eGear'
 import { ATTACH_LABEL, attachedLabel, attachKindOf, attachmentWarnings, canAttach, fundamentalOf, hostKindOf } from '~/rules/attachments'
 import { formatBulk, formatMoney, parseBulk, parseMoney } from '~/rules/format'
 import { isPartyMember } from '~/rules/party'
@@ -305,7 +318,7 @@ const props = defineProps<{
 const AWARD_HINT = 'Treasure the party was given: counts toward the wealth readout. Leave it off for corrections, such as a forgotten item from before.'
 
 const inv = useInventory()
-const { entries, purses, items, gifts, purseList, load, addEntry, updateEntry, removeEntry, setIdentified, move, store, attach, detach, setRelic, adjustPurse, transferCoins, splitPurse } = inv
+const { entries, purses, items, gifts, purseList, load, addEntry, updateEntry, removeEntry, setIdentified, move, store, attach, detach, setRelic, setImplanted, adjustPurse, transferCoins, splitPurse } = inv
 const { formatDate } = useFormatters()
 
 const view = ref<'gm' | 'player'>('gm')
@@ -385,8 +398,27 @@ function kindLabel(e: InventoryEntry) {
   return e.attachKind === 'gift' ? `${gift(e)?.tier ?? ''} gift`.trim() : ATTACH_LABEL[e.attachKind ?? 'accessory']
 }
 function warningsOf(e: InventoryEntry) {
-  return e.attachedTo == null ? attachmentWarnings(attachedInfo(e), { kind: hostKindOf(item(e)), relic: !!e.relic }) : []
+  if (e.attachedTo != null) return []
+  const out = attachmentWarnings(attachedInfo(e), { kind: hostKindOf(item(e)), relic: !!e.relic })
+  if (game.value === 'sf2e' && gearKind(e)) out.push(...upgradeWarnings(slotted(e), slotInput(e)))
+  return out
 }
+// ── SF2e upgrade slots and augmentations (rules/sf2eGear.ts) ──
+const slotInput = (e: InventoryEntry) => ({ item: item(e), grade: e.grade ?? itemGrade(e), baseOverride: e.upgradeSlots ?? null })
+const slotted = (e: InventoryEntry) => attachedOf(e).map(a => ({
+  kind: a.attachKind ?? 'accessory', name: nameOf(a), grade: a.grade ?? itemGrade(a), description: item(a)?.description ?? '',
+}))
+function slotLabel(e: InventoryEntry) {
+  if (game.value !== 'sf2e' || !gearKind(e) || e.attachedTo != null) return ''
+  const att = slotted(e)
+  const used = att.filter(a => a.kind === 'upgrade' || a.kind === 'installed').length
+  const slots = upgradeSlots({ ...slotInput(e), attachedTexts: att.map(a => a.description) })
+  return slots || used ? `upgrades ${used}/${slots}` : ''
+}
+const canImplant = (e: InventoryEntry) => game.value === 'sf2e' && parseOwner(e.owner).kind === 'character' && isAugmentation(item(e))
+const implantWarnings = computed(() => game.value === 'sf2e' && selectedCharacter.value
+  ? augmentationWarnings(entries.value.filter(x => x.owner === selected.value && x.implanted).map(x => item(x) ?? null))
+  : [])
 const withAttached = (host: InventoryEntry) =>
   [host, ...attachedOf(host)].reduce((n, x) => n + entryValue(x, item(x)), 0)
 /** Things that take attachments: weapons, armor, shields, relics and free-text items. */
@@ -714,7 +746,8 @@ textarea.inv-input { height: auto; padding: 6px 8px; resize: vertical; font-fami
 .inv-kind { padding: 0 5px; border-radius: 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text2); border: 1px solid var(--border); }
 .inv-kind--rune { color: #6b9fe8; border-color: #6b9fe866; }
 .inv-kind--talisman { color: #5fc98a; border-color: #5fc98a66; }
-.inv-kind--upgrade { color: #4ab8e8; border-color: #4ab8e866; }
+.inv-kind--upgrade, .inv-kind--installed { color: #4ab8e8; border-color: #4ab8e866; }
+.inv-kind--augmentation { color: #c86fa8; border-color: #c86fa866; }
 .inv-kind--gift, .inv-kind--relic { color: #e0a35a; border-color: #e0a35a66; }
 .inv-attach { padding: 4px 0 10px 66px; }
 .inv-attach--attached { margin-left: -24px; }

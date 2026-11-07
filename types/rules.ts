@@ -126,6 +126,8 @@ export interface Strike {
   traits: string[]
   damage: DamageRoll[]
   effects?: string[]
+  /** Ranged: feet per range increment (SF2e Area Fire and Auto-Fire use it). */
+  rangeIncrement?: number
 }
 
 export interface StatAction {

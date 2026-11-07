@@ -115,6 +115,7 @@ All of these are required:
 }
 ```
 
+- `strikes[].rangeIncrement`: feet per range increment for ranged Strikes (optional). SF2e weapons with `area-cone`, `area-line` or `automatic` need it for the Area Fire / Auto-Fire buttons; `area-burst-10` carries its own size.
 - `size`: `tiny`, `sm`, `med`, `lg`, `huge`, `grg`
 - `skills` keys: lower-case skill names; lores as `"<topic> lore"`.
 - `abilities` are modifiers, not scores.

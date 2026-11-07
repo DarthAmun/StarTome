@@ -118,6 +118,13 @@ Every entity supports:
 - Your own entries next to synced ones; `{{kind: Name}}` refs in every editor
 - DM's Tome import: campaigns come over, the old library is matched against the compendium
 
+### Starfinder 2e
+The plan for Tech Core, starships and tactical starship combat is in [STARFINDER_PLAN.md](STARFINDER_PLAN.md).
+- **Upgrade slots:** weapons and armor show "upgrades 1/2" by grade (Player Core improvement tables), with a GM-set base; full hosts, a second installed weapon or one above its host's grade get a warning
+- **Installed weapons** attach to the host their trait names
+- **Augmentations:** implant one in the character who owns it; implanted gear can't change hands, and more than four (apex ones free) gets a warning
+- **Area Fire / Auto-Fire** buttons on creature Strikes with the area or automatic trait place the cone, line or burst and ask for basic Reflex saves
+
 ### Audio
 - Sound library with track management
 - Playlists — assign a playlist to an encounter for ambient audio during play

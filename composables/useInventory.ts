@@ -10,7 +10,7 @@ import { getDb, now, type DbInventory, type DbPurse } from '~/composables/useDb'
 import { onTablesChanged } from '~/db/changes'
 import { rulesFindByName, rulesGet, rulesGetMany } from '~/composables/useRules'
 import { attachKindOf, giftValues, replacedBy, runesSummary, type AttachKind } from '~/rules/attachments'
-import { planMove, sameStack, splitCoins, STASH, type InventoryEntry, type OwnerKey } from '~/rules/inventory'
+import { parseOwner, planMove, sameStack, splitCoins, STASH, type InventoryEntry, type OwnerKey } from '~/rules/inventory'
 import type { BulkTenths, Item, RelicGift, Runes } from '~/types/rules'
 import type { MirrorItem } from '~/partylink/port'
 
@@ -22,6 +22,7 @@ export function toEntry(r: DbInventory): InventoryEntry {
     playerName: r.player_name ?? null, playerDescription: r.player_description ?? null,
     runes: r.runes ?? null, grade: r.grade ?? null, containerId: r.container_id ?? null,
     attachedTo: r.attached_to ?? null, attachKind: r.attach_kind ?? null, relic: r.relic ?? null,
+    implanted: !!r.implanted, upgradeSlots: r.upgrade_slots ?? null,
     pbEntryId: r.pb_entry_id ?? null, pbOfferId: r.pb_offer_id ?? null,
   }
 }
@@ -137,7 +138,7 @@ async function addEntry(input: AddEntryInput): Promise<number> {
 }
 
 export type EntryPatch = Partial<Pick<InventoryEntry,
-  'quantity' | 'nameOverride' | 'priceOverride' | 'notes' | 'identified' | 'playerName' | 'playerDescription' | 'runes' | 'grade'>>
+  'quantity' | 'nameOverride' | 'priceOverride' | 'notes' | 'identified' | 'playerName' | 'playerDescription' | 'runes' | 'grade' | 'upgradeSlots'>>
   & { bulkOverride?: BulkTenths | null }
 
 async function updateEntry(id: number, patch: EntryPatch) {
@@ -150,7 +151,7 @@ async function updateEntry(id: number, patch: EntryPatch) {
     if (!Number.isFinite(q)) return
     if (q <= 0) return removeEntry(id)
     // Runes are etched onto one item: a stack of them would copy the runes for free
-    changes.quantity = row.attached_to != null || (await attachmentsOf(id)).length ? 1 : q
+    changes.quantity = row.attached_to != null || row.implanted || (await attachmentsOf(id)).length ? 1 : q
   }
   if (patch.nameOverride !== undefined) changes.name_override = patch.nameOverride?.trim() || (row.item_id ? null : 'Unnamed item')
   if (patch.priceOverride !== undefined) changes.price_override = patch.priceOverride
@@ -161,6 +162,7 @@ async function updateEntry(id: number, patch: EntryPatch) {
   if (patch.playerDescription !== undefined) changes.player_description = patch.playerDescription?.trim() || null
   if (patch.runes !== undefined) changes.runes = patch.runes as Runes | null
   if (patch.grade !== undefined) changes.grade = patch.grade || null
+  if (patch.upgradeSlots !== undefined) changes.upgrade_slots = patch.upgradeSlots == null || !Number.isFinite(patch.upgradeSlots) ? null : Math.max(0, Math.floor(patch.upgradeSlots))
   await db.inventory.update(id, changes)
   await reloadIfLoaded(row.campaign_id)
 }
@@ -284,6 +286,37 @@ async function detach(id: number) {
     }
   })
   await syncHost(hostId)
+  await reloadIfLoaded(row.campaign_id)
+}
+
+/**
+ * Implants an augmentation in the character that owns it (or removes it). One
+ * item of a stack is implanted; the rest stay a loose stack.
+ */
+async function setImplanted(id: number, implanted: boolean) {
+  const db = getDb()
+  const row = await db.inventory.get(id)
+  if (!row || row.attached_to != null || row.pb_entry_id || row.pb_offer_id) return
+  if (parseOwner(row.owner).kind !== 'character') return
+  const ts = now()
+  await db.transaction('rw', db.inventory, async () => {
+    if (!implanted) {
+      await db.inventory.update(id, { implanted: 0, updated_at: ts })
+      const merged = await findStack(row.campaign_id, row.owner, { ...toEntry(row), implanted: false }, id)
+      if (merged) {
+        await db.inventory.update(merged.id!, { quantity: merged.quantity + row.quantity, updated_at: ts })
+        await db.inventory.delete(id)
+      }
+      return
+    }
+    if (row.quantity > 1) {
+      await db.inventory.update(id, { quantity: row.quantity - 1, updated_at: ts })
+      const { id: _id, ...copy } = row
+      await db.inventory.add({ ...copy, quantity: 1, implanted: 1, container_id: null, created_at: ts, updated_at: ts })
+    } else {
+      await db.inventory.update(id, { implanted: 1, container_id: null, updated_at: ts })
+    }
+  })
   await reloadIfLoaded(row.campaign_id)
 }
 
@@ -417,8 +450,9 @@ async function moveRow(id: number, to: OwnerKey, quantity?: number): Promise<num
   const db = getDb()
   const row = await db.inventory.get(id)
   if (!row) return null
-  // An attachment moves with its host only; detach it first to hand it over
-  if (row.attached_to != null) return null
+  // An attachment moves with its host only; detach it first to hand it over.
+  // An implanted augmentation is part of its character's body.
+  if (row.attached_to != null || row.implanted) return null
   const plan = planMove(toEntry(row), to, quantity)
   if (plan.type === 'none') return null
   const ts = now()
@@ -732,7 +766,7 @@ export function useInventory() {
     gifts,
     loadedCampaign,
     purseList: computed(() => Object.entries(purses.value).map(([owner, cp]) => ({ owner, cp }))),
-    load, addEntry, updateEntry, removeEntry, setIdentified, move, store, attach, detach, setRelic,
+    load, addEntry, updateEntry, removeEntry, setIdentified, move, store, attach, detach, setRelic, setImplanted,
     setPurse, adjustPurse, transferCoins, splitPurse, releaseOwner,
     transferAll, restoreSnapshot, replaceMirror, markOffered, settleOffered, reload: reloadIfLoaded,
   }
