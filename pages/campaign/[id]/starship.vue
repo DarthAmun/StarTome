@@ -195,6 +195,35 @@
         </div>
       </section>
 
+      <!-- ── Exploration & downtime (P9) ── -->
+      <section class="party-section">
+        <div class="party-section-title">Exploration &amp; downtime</div>
+        <div class="ss-sub2">Emergency Repairs <span class="ss-dim">1 hour (or a day for twice the HP), Crafting; restores Hull Points and removes wrecked on a success</span></div>
+        <div class="ss-row">
+          <select v-model="repairBy" class="ss-input" title="Who repairs">
+            <option :value="null">Crew member…</option>
+            <option v-for="c in members" :key="c.id" :value="c.id">{{ c.name }}</option>
+          </select>
+          <label class="ss-field">Crafting <input v-model.number="repairMod" class="ss-input ss-num" type="number" :placeholder="repairByMod != null ? String(repairByMod) : '+0'" /></label>
+          <select v-model="repairRank" class="ss-input" title="Attempt at a higher rank for more HP (and a higher DC)">
+            <option value="trained">trained (+0)</option><option value="expert">expert (+10 HP)</option><option value="master">master (+30 HP)</option><option value="legendary">legendary (+50 HP)</option>
+          </select>
+          <label class="ss-field"><input v-model="repairRemote" type="checkbox" /> far from a port</label>
+          <label class="ss-field"><input v-model="repairDay" type="checkbox" /> a full day</label>
+          <span class="ss-dim">DC {{ repairDc }}</span>
+          <button class="ghost-btn ss-small" @click="doRepairs">Roll and apply</button>
+        </div>
+        <div v-if="repairResult" class="ss-note2">{{ repairResult }}</div>
+
+        <div class="ss-sub2">At the start of a starship encounter</div>
+        <div v-if="!startEffects.length" class="ss-dim">Nobody has an exploration activity yet (station cards above).</div>
+        <div v-for="e in startEffects" :key="e.who" class="ss-action"><b>{{ e.who }}</b> · {{ e.activity }}: <span class="ss-dim">{{ e.summary }}</span></div>
+
+        <div class="ss-sub2">Aboard during downtime</div>
+        <div v-for="b in bayBenefits" :key="b.name" class="ss-action"><b>{{ b.name }}</b><template v-if="b.option"> ({{ b.option }})</template>: <span class="ss-dim">{{ b.text }}</span></div>
+        <div class="ss-dim">Rebuilding at a major port takes a week and can change the frame, stations, bays and upgrades freely: edit them above.</div>
+      </section>
+
       <!-- ── Crew skills ── -->
       <section class="party-section">
         <div class="party-section-title">Crew skills</div>
@@ -247,8 +276,11 @@ import { useParty, type Character } from '~/composables/useParty'
 import { useStarship } from '~/composables/useStarship'
 import { createInterior, startStarshipBattle, useAsInterior } from '~/composables/useStarshipEncounter'
 import { builtinConditions } from '~/composables/useConditions'
-import { activitiesFor, starshipLevel, starshipLevelChanges, starshipSheet, STATION_INITIATIVE_SKILL, stationKey, type StationRow } from '~/rules/playerStarship'
+import { activitiesFor, EXPLORATION_ACTIVITIES, starshipLevel, starshipLevelChanges, starshipSheet, STATION_INITIATIVE_SKILL, stationKey, type StationRow } from '~/rules/playerStarship'
 import { formatActionCost, signed } from '~/rules/format'
+import { emergencyRepairs, emergencyRepairsDc, type RepairRank } from '~/rules/starshipCombat'
+import { rollCheck, rollExpression } from '~/rules/rolls'
+import { firstSentence } from '~/composables/useConditionCatalog'
 import { isPartyMember } from '~/rules/party'
 import { campaignGame } from '~/types/game'
 
@@ -376,6 +408,47 @@ async function startBattle() {
   await navigateTo(`/encounter/${id}`)
 }
 
+// ── Exploration & downtime (P9) ──
+const repairBy = ref<number | null>(null)
+const repairMod = ref<number | ''>('')
+const repairRank = ref<RepairRank>('trained')
+const repairRemote = ref(false)
+const repairDay = ref(false)
+const repairResult = ref('')
+const repairByMod = computed(() => {
+  const v = party.characters.value.find(c => c.id === repairBy.value)?.sfSkills.crafting
+  return typeof v === 'number' ? v : null
+})
+const repairDc = computed(() => emergencyRepairsDc(repairRank.value, repairRemote.value))
+async function doRepairs() {
+  if (!ship.value) return
+  const mod = repairMod.value === '' ? repairByMod.value ?? 0 : Number(repairMod.value)
+  const check = rollCheck(mod, repairDc.value)
+  const out = emergencyRepairs(check.degree!, repairRank.value, repairDay.value)
+  const rolled = out.dice ? rollExpression(out.dice)!.total : 0
+  const hpNow = ship.value.hp_current ?? sheet.value.hp
+  let hp = hpNow
+  let text = `Crafting ${check.d20} ${signed(mod)} = ${check.total} vs DC ${repairDc.value}: ${check.degree?.replace('-', ' ')}. `
+  if (out.damage) { hp = Math.max(0, hpNow - rolled); text += `The starship takes ${rolled} damage.` }
+  else if (out.dice) {
+    const gain = rolled * out.multiplier + out.bonus
+    hp = Math.min(sheet.value.hp, hpNow + gain)
+    text += `+${gain} HP (${out.dice} = ${rolled}${out.multiplier > 1 ? ' ×2' : ''}${out.bonus ? ` + ${out.bonus}` : ''})${out.clearsWrecked ? ', no longer wrecked' : ''}.`
+  } else text += 'No progress.'
+  const conditions = out.clearsWrecked ? ship.value.conditions.filter(c => c.name.toLowerCase() !== 'wrecked') : ship.value.conditions
+  await update(ship.value.id!, { hp_current: hp, conditions })
+  repairResult.value = text
+}
+const startEffects = computed(() => (ship.value?.crew ?? []).filter(c => c.activity).map(c => {
+  const a = EXPLORATION_ACTIVITIES.find(x => x.key === c.activity)
+  return { who: nameOf(c.characterId), activity: a?.name ?? c.activity!, summary: a?.summary ?? '' }
+}))
+const bayBenefits = computed(() => (ship.value?.bays ?? []).map(b => {
+  const bay = bayOf(b.bayId)
+  const opt = bay?.options?.find(o => o.name === b.option)
+  return { name: bay?.name ?? 'Missing bay', option: b.option ?? null, text: firstSentence(opt?.text || bay?.description || '') }
+}).filter(b => b.text))
+
 // ── Presets & delete ──
 const presetName = ref('')
 function savePresetNow() {
@@ -435,4 +508,6 @@ async function removeShip() {
 .ss-bays { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .ss-bay { display: flex; gap: 6px; align-items: center; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 13px; }
 .ss-notes { width: 100%; }
+.ss-sub2 { margin-top: 10px; font-size: 12.5px; font-weight: 600; color: var(--text2); }
+.ss-note2 { font-size: 12.5px; color: #5fc98a; margin: 4px 0; }
 </style>

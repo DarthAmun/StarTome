@@ -16,6 +16,12 @@
           <span v-for="c in shipConditions" :key="c" class="ssp-cond">{{ c }}</span>
         </div>
 
+        <!-- Exploration activities: what the crew does when initiative is rolled -->
+        <details v-if="info.role === 'battle' && startEffects.length && store.roundNumber <= 1" class="ssp-start" open>
+          <summary>Start of the encounter</summary>
+          <div v-for="e in startEffects" :key="e.who" class="ssp-dim"><b>{{ e.who }}</b> · {{ e.activity }}: {{ e.summary }}</div>
+        </details>
+
         <!-- Hull integrity check on the compromised ship's turn -->
         <div v-if="shipToken && compromised != null && turnTokenId === shipToken.id" class="ssp-turn ssp-hull">
           <b>Hull integrity check</b> <span class="ssp-dim">flat check DC {{ hullDc }}, any crew member rolls</span>
@@ -76,7 +82,7 @@ import { useParty } from '~/composables/useParty'
 import { useStarship } from '~/composables/useStarship'
 import { useEntityMarkdown } from '~/composables/useEntityMarkdown'
 import {
-  assignCrew, helmingTokens, starshipLevel, starshipSheet, STATION_INITIATIVE_SKILL, stationKey, type StationMarker,
+  assignCrew, EXPLORATION_ACTIVITIES, helmingTokens, starshipLevel, starshipSheet, STATION_INITIATIVE_SKILL, stationKey, type StationMarker,
 } from '~/rules/playerStarship'
 import { formatActionCost, signed } from '~/rules/format'
 import { checkDegree, type Degree } from '~/rules/dcs'
@@ -200,6 +206,11 @@ watch(() => [shipToken.value?.hpCurrent, shipToken.value?.shieldPoints, JSON.str
   }, 400)
 })
 
+const startEffects = computed(() => (ship.value?.crew ?? []).filter(c => c.activity).map(c => {
+  const a = EXPLORATION_ACTIVITIES.find(x => x.key === c.activity)
+  return { who: party.characters.value.find(ch => ch.id === c.characterId)?.name ?? '?', activity: a?.name ?? c.activity!, summary: a?.summary ?? '' }
+}))
+
 const COLORS = ['#4ab8e8', '#e8c44a', '#5fc98a', '#e0803a', '#a87de8', '#e05555', '#6bc0c8', '#c86fa8']
 const colorOf = (slot: number) => COLORS[(slot - 1) % COLORS.length]
 
@@ -259,4 +270,5 @@ defineExpose({ setMarker, markers, colorOf })
 .ssp-hull { border-color: #e05555aa; }
 .ssp-off { opacity: 0.45; }
 .ssp-mal { border-color: #e0803a; color: #e0803a; }
+.ssp-start { margin: 4px 0; } .ssp-start summary { cursor: pointer; font-size: 12px; color: var(--text2); }
 </style>

@@ -66,3 +66,14 @@ describe('ship state in conditions', () => {
       .toEqual({ kind: 'cone', size: 3, dc: 16, basic: true, save: 'ref', damage: '1d12+3 piercing' })
   })
 })
+
+describe('emergency repairs', () => {
+  it('DCs by rank and place; outcomes by degree; a full day doubles', async () => {
+    const { emergencyRepairs, emergencyRepairsDc } = await import('~/rules/starshipCombat')
+    expect([emergencyRepairsDc('trained', false), emergencyRepairsDc('trained', true), emergencyRepairsDc('master', true)]).toEqual([15, 20, 35])
+    expect(emergencyRepairs('success', 'trained', false)).toEqual({ dice: '2d8', bonus: 0, multiplier: 1, clearsWrecked: true, damage: false })
+    expect(emergencyRepairs('critical-success', 'expert', true)).toEqual({ dice: '4d8', bonus: 20, multiplier: 2, clearsWrecked: true, damage: false })
+    expect(emergencyRepairs('failure', 'master', false).dice).toBeNull()
+    expect(emergencyRepairs('critical-failure', 'legendary', true)).toMatchObject({ dice: '1d8', damage: true, bonus: 0 })
+  })
+})

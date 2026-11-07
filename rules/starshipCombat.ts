@@ -119,3 +119,44 @@ export function generateShieldsDice(level: number): number {
 export function repairSelfHp(level: number): number {
   return Math.max(1, level)
 }
+
+// ── Emergency Repairs (exploration, Tech Core p. 174) ──────────────────────
+
+export type RepairRank = 'trained' | 'expert' | 'master' | 'legendary'
+
+/** DC at a port and far from one, and the extra HP on a success, by the rank you choose to attempt at. */
+export const EMERGENCY_REPAIRS: Record<RepairRank, { port: number; remote: number; bonus: number }> = {
+  trained: { port: 15, remote: 20, bonus: 0 },
+  expert: { port: 20, remote: 25, bonus: 10 },
+  master: { port: 30, remote: 35, bonus: 30 },
+  legendary: { port: 40, remote: 45, bonus: 50 },
+}
+
+export function emergencyRepairsDc(rank: RepairRank, remote: boolean): number {
+  const r = EMERGENCY_REPAIRS[rank]
+  return remote ? r.remote : r.port
+}
+
+export interface RepairOutcome {
+  /** Dice to roll for the Hull Points regained (or the damage on a critical failure). */
+  dice: string | null
+  /** Flat HP added on a success (higher rank), already doubled for a day of work. */
+  bonus: number
+  /** Multiplier for the rolled HP (a full day doubles them). */
+  multiplier: number
+  /** Removes the wrecked condition. */
+  clearsWrecked: boolean
+  /** A critical failure damages the starship instead. */
+  damage: boolean
+}
+
+export function emergencyRepairs(degree: Degree, rank: RepairRank, fullDay: boolean): RepairOutcome {
+  const mult = fullDay ? 2 : 1
+  const bonus = EMERGENCY_REPAIRS[rank].bonus * mult
+  switch (degree) {
+    case 'critical-success': return { dice: '4d8', bonus, multiplier: mult, clearsWrecked: true, damage: false }
+    case 'success': return { dice: '2d8', bonus, multiplier: mult, clearsWrecked: true, damage: false }
+    case 'failure': return { dice: null, bonus: 0, multiplier: 1, clearsWrecked: false, damage: false }
+    case 'critical-failure': return { dice: '1d8', bonus: 0, multiplier: 1, clearsWrecked: false, damage: true }
+  }
+}

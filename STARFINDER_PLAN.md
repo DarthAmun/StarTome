@@ -62,7 +62,7 @@ Book content (enemy starships, station actions, upgrades, expansion bays) is **n
 | ~~**P6**~~ | ✅ Done 2026-11-07 (0.34.0): sensor map (a row of zones), headings, ship tokens, zone areas | P3 | L |
 | ~~**P7**~~ | ✅ Done 2026-11-07 (0.35.0): starship combat engine: damage, shields, conditions, compromised, hull integrity | P5, P6 | L |
 | ~~**P8**~~ | ✅ Done 2026-11-07 (0.36.0): encounter builder and resolution for starship encounters | P7 | S |
-| **P9** | Starship exploration and downtime | P4 | S–M |
+| ~~**P9**~~ | ✅ Done 2026-11-07 (0.37.0): starship exploration and downtime | P4 | S–M |
 | **P10** | Play Buddy SF2e support (StarTome side + the spec for Play Buddy) | P4, Play Buddy | M |
 
 P1/P2 and P3 don't depend on each other and can run side by side. P5 and P6 can also run side by side once P3/P4 are in.
@@ -326,7 +326,10 @@ Builds on the existing combat store (`stores/encounter.ts`), combat log and undo
 
 ---
 
-## P9. Starship exploration and downtime (S–M)
+## P9. Starship exploration and downtime (S–M) ✅ done 2026-11-07 (0.37.0)
+
+**Built:** `emergencyRepairs` / `emergencyRepairsDc` in `rules/starshipCombat.ts` (DC 15/20 at a port / far away, 20/25, 30/35, 40/45 for expert, master, legendary with +10/+30/+50 HP; 2d8 / 4d8, a day doubles, wrecked removed on a success, 1d8 damage on a critical failure). The Starship page's **Exploration & downtime** section rolls Emergency Repairs for a crew member (their hand-entered Crafting or a typed modifier) and applies it, lists the crew's exploration activities as start-of-encounter effects (the battle's Stations panel shows them in round 1 too), and lists each installed bay's downtime benefit. **Change from the plan:** the book has no separate "Repair Starship" activity: rebuilding at a major port takes a week and may change anything, which the Starship page already allows, so there's a note instead of a button. **Not done:** bay reminders inside the income and downtime dialogs, and a Drift travel log. The pack builder now reads the lounge and mess bay texts column-aware.
+
 
 - **Exploration activities** from the crew roster (P4.2) show as a list on the GM screen with their effect at the start of an encounter.
 - **Emergency Repairs** (exploration): restores HP and lowers wrecked. **Repair Starship** (downtime, in port): change stations, upgrades and bays for free, as the book allows. Both are buttons on the Starship page that log what was done.

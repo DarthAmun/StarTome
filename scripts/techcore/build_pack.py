@@ -111,13 +111,18 @@ for o in re.split(r' (?=(?:Budget|Comfortable|Extravagant): )', 'Bunks:' + rest)
     n, t = o.split(':', 1); opts.append({'name': n.strip(), 'text': re.sub(r'\s(Mess Bay|Tech CORE)\s', ' ', ' ' + t.strip() + ' ').strip()})
 cq_text = re.sub(r'\s(Mess Bay|Tech CORE)\s', ' ', ' ' + cq_text + ' ').strip()
 rules.append(fin({'kind': 'expansionBay', 'name': 'Crew Quarters', 'level': 0, 'traits': [], 'takesSlot': False, 'description': cq_text, 'options': opts}))
-L197 = ' '.join(l.strip() for l in lay.split('\n') if l.strip())
+COLS = open(T + '/cols/all.txt', encoding='utf-8').read()
 for name, start in (('Lounge', 'A starship’s lounge can be'), ('Mess Bay', 'Depending on the size and purpose of a starship, a mess bay')):
-    k = L197.find(start)
+    k = COLS.find(start)
     if k < 0: continue
-    seg = L197[k:k + 900]
-    seg = re.split(r'(?<=\.)\s+(?=[A-Z][a-z]+ [a-z]+ .*?expansion bay|This expansion bay provides|All Medium and larger)', seg)[0]
-    rules.append(fin({'kind': 'expansionBay', 'name': name, 'level': 0, 'traits': [], 'takesSlot': False, 'description': re.sub(r'\s{2,}', ' ', seg)}))
+    # the paragraph(s) up to the next heading or blank line, in column order
+    para = []
+    for line in COLS[k:].split('\n'):
+        t = line.strip()
+        if not t or t.startswith('==='): break
+        para.append(t)
+    text = re.sub(r'(\w)- (\w)', r'\1\2', ' '.join(para))
+    rules.append(fin({'kind': 'expansionBay', 'name': name, 'level': 0, 'traits': [], 'takesSlot': False, 'description': text}))
 # ── starships ──
 for s in json.load(open(T + '/archive.json')): rules.append(fin(s))
 # dedupe by id (last wins)
