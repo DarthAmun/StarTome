@@ -26,6 +26,11 @@
       :show-names="store.playerViewPrefs.turnRailShowNames"
     />
 
+    <!-- Starship battle: the sensor map, as the GM shares it -->
+    <div v-if="playerSensor" class="player-sensor">
+      <SensorTrack :zones="playerSensor.zones" :tokens="playerSensor.tokens" :turn-id="playerActiveTurnTokenId" />
+    </div>
+
     <div class="player-overlay">
       <div class="font-display text-forge-gold-l/70 text-sm tracking-widest uppercase">
         {{ store.current?.name }}
@@ -55,6 +60,7 @@ const canvasViewport = ref<{ x: number; y: number; scale: number } | null>(null)
 const playerRoundNumber = ref(1)
 const playerInitiativeOrder = ref<any[]>([])
 const playerActiveTurnTokenId = ref<number | null>(null)
+const playerSensor = ref<{ zones: number; tokens: any[] } | null>(null)
 
 function sortInitiative(tokens: any[]): any[] {
   return tokens.filter((t) => !t.isDead && t.isVisible !== false).slice().sort((a, b) => {
@@ -148,6 +154,7 @@ onMounted(async () => {
     playerRoundNumber.value = data.roundNumber ?? 1
     playerActiveTurnTokenId.value = data.activeTurnTokenId ?? null
     playerInitiativeOrder.value = data.turnOrder ?? sortInitiative(data.tokens ?? [])
+    playerSensor.value = data.sensor ?? null
     if (data.playerViewPrefs) store.playerViewPrefs = data.playerViewPrefs
 
     canvas?.drawGrid()
@@ -207,4 +214,5 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
+.player-sensor { position: absolute; top: 10px; left: 12px; right: 12px; z-index: 20; background: #0d1320e6; border: 1px solid #ffffff22; border-radius: 8px; padding: 6px 8px; }
 </style>

@@ -59,7 +59,7 @@ Book content (enemy starships, station actions, upgrades, expansion bays) is **n
 | ~~**P3**~~ | ✅ Done 2026-11-07 (0.31.0): starship data model, homebrew format, book import | — | L |
 | ~~**P4**~~ | ✅ Done 2026-11-07 (0.32.0): player starship sheet and crew roster (station assignments) | P3 | M |
 | ~~**P5**~~ | ✅ Done 2026-11-07 (0.33.0): ship interior map, battle stations on the map, helming, station actions | P4 | M |
-| **P6** | Sensor map: zones, headings, ship tokens, zone areas | P3 | L |
+| ~~**P6**~~ | ✅ Done 2026-11-07 (0.34.0): sensor map (a row of zones), headings, ship tokens, zone areas | P3 | L |
 | **P7** | Starship combat engine: damage, shields, conditions, compromised, hull integrity | P5, P6 | L |
 | **P8** | Encounter builder and resolution for starship encounters | P7 | S |
 | **P9** | Starship exploration and downtime | P4 | S–M |
@@ -257,7 +257,14 @@ This is the "characters on stations" feature. It has two parts: a standing assig
 
 ---
 
-## P6. Sensor map (L)
+## P6. Sensor map (L) ✅ done 2026-11-07 (0.34.0)
+
+**Built — and a correction to the plan below:** the book's sensor map (Tech Core pp. 170–171, its area diagrams) is a **row of zones**, not a 2D graph; headings point left or right, cones and lines run along the row, emanations spread both ways and bursts start on the border between two zones. (The "12-zone / 15-zone" captions on p. 168 belong to the starship *interior* map examples.) So there are no built-in layouts or layout editor: a battle has `sensor_map.zones` (12 by default, 3–30).
+- `rules/sensorMap.ts` (pure): distance, range, off-guard from behind, cone / line / emanation / burst zones (burst range check), targets (a cone never hits its source), and "3-zone cone" parsing.
+- Ships and hazards on the sensor map are **encounter tokens with a zone** (`sensor_zone`, `sensor_heading`, `sensor_role`, `shield_points`, `shield_max`), so initiative, HP, conditions, the stat panel and the combat log work unchanged; the battle map, FOV, map areas and helming skip them. The party's ship is one too (no initiative of its own, left out of the turn order and "roll all initiative"); a new battle puts it in zone 3.
+- `SensorMapPanel` (GM) above the interior: zone count, add starships and starship hazards from the compendium, drag between zones, turn, ◀ ▶, HP/SP, hide, stat block, remove; the selected ship's sensor range and rear zones are tinted; zone areas list their targets and open the existing save prompt (a hidden area carries the effect). `SensorTrack` is shared with the player view, which gets visible sensor tokens with a health word for enemies and the party ship's HP/SP. Tests: `tests/sensorMap.test.ts`.
+- **Not done:** zone terrain (cover from asteroids) is GM narration for now; line areas list every ship in the covered zones and the GM unticks extra ones in the save prompt.
+
 
 The sensor map is a second view of the same encounter, next to the interior map.
 

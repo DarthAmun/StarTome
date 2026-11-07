@@ -96,7 +96,7 @@ const markers = computed<StationMarker[]>(() => {
   return (ship.value?.stations ?? []).filter(s => s.marker && s.stationId)
     .map(s => ({ slot: s.slot, x: s.marker!.x, y: s.marker!.y, name: lookup.value.stations.get(s.stationId!)?.name ?? 'Station' }))
 })
-const helm = computed(() => helmingTokens(markers.value, store.current?.tokens ?? []))
+const helm = computed(() => helmingTokens(markers.value, (store.current?.tokens ?? []).filter(t => t.sensorZone == null)))
 const tokenName = (id: number | undefined) => store.current?.tokens.find(t => t.id === id)?.label || store.current?.tokens.find(t => t.id === id)?.name
 
 const rows = computed(() => (ship.value?.stations ?? []).filter(s => s.stationId).map(s => ({

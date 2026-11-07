@@ -22,7 +22,7 @@ export function useAreaTool() {
   /** An ability being placed (Place area in a stat block): its name and effect go onto the next area. */
   const pending = ref<{ label: string; effect: AreaEffect } | null>(null)
 
-  const tokens = (): AreaToken[] => store.current?.tokens ?? []
+  const tokens = (): AreaToken[] => (store.current?.tokens ?? []).filter(t => t.sensorZone == null)
 
   function tokenAt(p: Point): AreaToken | undefined {
     const c = Math.floor(p.col), r = Math.floor(p.row)

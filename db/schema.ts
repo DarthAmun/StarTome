@@ -21,6 +21,7 @@
  */
 import type { CompanionBuild } from '~/rules/companions'
 import type { BaySlot, CrewAssignment, CrewPreset, EncounterStarship, StationSlot } from '~/rules/playerStarship'
+import type { SensorMap } from '~/rules/sensorMap'
 import Dexie, { type Table } from 'dexie'
 import { DB_NAME } from '~/utils/appNamespace'
 import { parseJson } from '~/utils/json'
@@ -80,6 +81,8 @@ export interface DbEncounter {
   battlemap?: BattleMap | null
   /** A starship's interior or a starship battle (STARFINDER_PLAN.md P5); non-indexed */
   starship?: EncounterStarship | null
+  /** The sensor map of a starship battle (P6); its tokens are encounter tokens with a sensor_zone */
+  sensor_map?: SensorMap | null
   created_at: string
   updated_at: string
 }
@@ -127,6 +130,12 @@ export interface DbEncounterToken {
   acts_while_hidden?: number  // 0 | 1 — hidden token still takes its turn
   is_ally?: number            // 0 | 1 — fights with the party; left out of the XP meter
   uses_dying?: boolean | null // dying rules at 0 HP; null = party tokens yes, others no — non-indexed
+  /** On the sensor map instead of the battle map (STARFINDER_PLAN.md P6): zone, heading, role, Shield Points; non-indexed */
+  sensor_zone?: number | null
+  sensor_heading?: number | null
+  sensor_role?: 'player-ship' | 'ship' | 'hazard' | null
+  shield_points?: number | null
+  shield_max?: number | null
 }
 
 export type WallCoverType = 'full' | 'greater' | 'standard' | 'lesser' | 'window' | 'door' | 'secret'

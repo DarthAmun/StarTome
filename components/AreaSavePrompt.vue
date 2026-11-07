@@ -68,7 +68,7 @@ import { applyAdjustment } from '~/rules/combat'
 import { checkDegree, type Degree } from '~/rules/dcs'
 import { basicSaveDamage, DEGREE_LABEL, rollDie, rollExpression } from '~/rules/rolls'
 import { useEncounterStore, type EncounterToken } from '~/stores/encounter'
-import type { Creature, Hazard, Vehicle } from '~/types/rules'
+import type { Creature, Hazard, Starship, Vehicle } from '~/types/rules'
 
 const props = defineProps<{
   /** A Play Buddy character's shared numbers, for its saves. */
@@ -94,7 +94,7 @@ watch(() => prompt.value?.id, async () => {
   damageBreakdown.value = ''
   const p = prompt.value, a = area.value, e = effect.value
   if (!p || !a || !e) { rows.value = []; return }
-  const all = (store.current?.tokens ?? []).filter(t => !t.isDead)
+  const all = (store.current?.tokens ?? []).filter(t => !t.isDead && (p.tokenIds != null || t.sensorZone == null))
   const tokens = p.tokenIds ? all.filter(t => p.tokenIds!.includes(t.id)) : tokensInArea(store.areaCells(a), all)
   rows.value = await Promise.all(tokens.map(async t => ({ token: t, modifier: await saveModifier(t, e.save), d20: null, damageOverride: null })))
 }, { immediate: true })
@@ -113,6 +113,7 @@ async function saveModifier(t: EncounterToken, save: 'fort' | 'ref' | 'will'): P
   if (e.kind === 'hazard') return (e as Hazard).saves?.[save] ?? null
   // Vehicles only have Fortitude; Reflex against a collision goes to the pilot
   if (e.kind === 'vehicle') return save === 'fort' ? (e as Vehicle).fort : null
+  if (e.kind === 'starship') return (e as Starship).saves[save]
   return null
 }
 

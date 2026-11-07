@@ -295,6 +295,10 @@
             :grid-offset-y="encounter.gridOffsetY"
           />
 
+          <!-- Starship battle: the sensor map (zones) above the interior -->
+          <SensorMapPanel v-if="encounter?.starship?.role === 'battle' || encounter?.tokens.some(t => t.sensorZone != null)" ref="sensorPanel"
+            :turn-token-id="mode === 'run' ? currentTurnTokenId : null" @stat="id => statPanelTokenId = id" />
+
           <!-- Starship: battle stations on the map, who helms them, the station of the current turn -->
           <StarshipStationsPanel v-if="encounter?.starship" ref="stationsPanel" :placing="placingStation" :turn-token-id="mode === 'run' ? currentTurnTokenId : null" @place="onPlaceStation" />
 
@@ -1540,6 +1544,7 @@ const ctxArea = computed(() => store.current?.areas.find(a => a.id === areaCtxMe
 
 // ── Starship stations (STARFINDER_PLAN.md P5) ──────────────────────────────
 const stationsPanel = ref<{ markers: { slot: number; x: number; y: number }[]; colorOf: (slot: number) => string; setMarker: (slot: number, at: { x: number; y: number } | null) => Promise<void> } | null>(null);
+const sensorPanel = ref<{ startArea: (spec: any) => void; select: (id: number | null) => void } | null>(null);
 /** The station slot the next map click places; it borrows the area tool's click. */
 const placingStation = ref<number | null>(null);
 function onPlaceStation(slot: number | null) {

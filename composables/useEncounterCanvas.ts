@@ -1062,9 +1062,11 @@ export function useEncounterCanvas(options: CanvasOptions) {
     const enc = store.current;
     if (!enc) return;
 
+    // Starships and hazards on the sensor map aren't on the battle map
+    const onMap = enc.tokens.filter((t: any) => t.sensorZone == null);
     const tokens = options.isDmMode
-      ? enc.tokens
-      : enc.tokens.filter((t: any) => t.isVisible);
+      ? onMap
+      : onMap.filter((t: any) => t.isVisible);
     for (const token of tokens) {
       await renderToken(token);
     }

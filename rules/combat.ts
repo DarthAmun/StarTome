@@ -109,6 +109,8 @@ export function tokenStats(entity: RulesEntity | null | undefined, adj?: Adjustm
   if (e.kind === 'hazard') return { hpMax: e.hp ?? null, ac: e.ac ?? null, size: 1, perception: e.stealth.bonus }
   // Vehicles: an object with a pilot; no Perception of its own
   if (e.kind === 'vehicle') return { hpMax: e.hp, ac: e.ac, size: SIZE_SQUARES[e.size] ?? 1, perception: null }
+  // Starships stand in zones of the sensor map, not on squares
+  if (e.kind === 'starship') return { hpMax: e.hp, ac: e.ac, size: 1, perception: e.perception }
   return { hpMax: null, ac: null, size: 1, perception: null }
 }
 
@@ -136,6 +138,12 @@ export function rulesScope(entity: RulesEntity | null | undefined, adj?: Adjustm
     scope.ac = e.ac
     scope.hp = e.hp
     scope.fort = e.fort
+  } else if (e.kind === 'starship') {
+    Object.assign(scope, e.abilities, e.saves)
+    for (const [k, v] of Object.entries(e.skills)) scope[k.toLowerCase().replace(/[^a-z0-9]+/g, '_')] = v
+    scope.perception = e.perception
+    scope.ac = e.ac
+    scope.hp = e.hp
   }
   return scope
 }

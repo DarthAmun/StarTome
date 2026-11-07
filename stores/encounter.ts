@@ -13,6 +13,7 @@ import { freeSpots, rollInitiative, rulesScope, tokenStats, type Adjustment } fr
 import { damageWithTemp, grantTemp } from '~/rules/hp'
 import { cellsInArea, tokenInCells, type AreaOverlay, type AreaTrigger } from '~/rules/areas'
 import type { EncounterStarship } from '~/rules/playerStarship'
+import type { Heading, SensorMap, SensorRole } from '~/rules/sensorMap'
 import type { Hazard, RulesEntity } from '~/types/rules'
 import { parseDefeated, type DefeatedEnemy } from '~/rules/advancement'
 import { healthState, type HealthState } from '~/composables/useConditions'
@@ -215,6 +216,12 @@ export interface EncounterToken {
   timers: TokenTimer[]
   usesDying: boolean | null   // null = the default: party tokens do, others are defeated at 0 HP
   playerHealthState?: HealthState  // set only in player-sync payload; undefined in DM view
+  /** On the sensor map (P6): its zone (null = on the battle map), heading and role, and Shield Points. */
+  sensorZone: number | null
+  sensorHeading: Heading | null
+  sensorRole: SensorRole | null
+  shieldPoints: number | null
+  shieldMax: number | null
 }
 
 export interface Encounter {
@@ -242,6 +249,8 @@ export interface Encounter {
   areas: AreaOverlay[]        // bursts, cones … with their save effects (COMBAT_PLAN.md §5)
   /** A starship's interior or a starship battle (STARFINDER_PLAN.md P5); null otherwise. */
   starship: EncounterStarship | null
+  /** The sensor map of a starship battle (P6). */
+  sensorMap: SensorMap | null
 }
 
 export const useEncounterStore = defineStore('encounter', () => {
@@ -278,6 +287,8 @@ export const useEncounterStore = defineStore('encounter', () => {
   const initiativeOrder = computed(() =>
     (current.value?.tokens ?? [])
       .filter(t => (t.isVisible || t.actsWhileHidden) && !t.isDead)
+      // The player starship acts through its crew; it takes a turn only once compromised (it has an initiative then)
+      .filter(t => !(t.sensorRole === 'player-ship' && t.initiative === null))
       .sort((a, b) => {
         if (a.initiative === null && b.initiative === null) return 0
         if (a.initiative === null) return 1
@@ -334,6 +345,7 @@ export const useEncounterStore = defineStore('encounter', () => {
         defeated: parseDefeated(data.defeated),
         areas: parseJson<AreaOverlay[]>(data.areas, []),
         starship: data.starship ?? null,
+        sensorMap: data.sensor_map ?? null,
         tokens: ((data as any).tokens || []).map(normalizeToken),
       }
       roundNumber.value = data.round_number ?? 1
@@ -484,6 +496,67 @@ export const useEncounterStore = defineStore('encounter', () => {
       reportError('Placing the token', err)
       return { token: null, needsLinkPrompt: false }
     }
+  }
+
+  // ── Sensor map (STARFINDER_PLAN.md P6) ─────────────────────────────────────
+  /**
+   * Puts a starship or starship hazard from the compendium on the sensor map,
+   * or the party's own ship (`rulesId` null, with its name and HP/SP). It's an
+   * encounter token with a zone: the turn order, HP, conditions and the stat
+   * panel work as for any token; the battle map doesn't show it.
+   */
+  async function addSensorToken(input: {
+    rulesId: string | null; zone: number; heading: Heading; role: SensorRole; ally?: boolean
+    name?: string; hp?: number | null; hpMax?: number | null; sp?: number | null; spMax?: number | null; ac?: number | null
+  }): Promise<EncounterToken | null> {
+    if (!current.value) return null
+    try {
+      const entry = input.rulesId ? await rulesGet(input.rulesId) : null
+      const stats = tokenStats(entry ?? null)
+      const shields = entry?.kind === 'starship' ? (entry as { shields?: { max: number } | null }).shields?.max ?? null : null
+      const img = input.rulesId ? await dbApi.linkedImages.get(null, input.rulesId) : null
+      keepTurnPointer()
+      const result = await dbApi.encounterTokens.add({
+        encounterId: current.value.id, tokenId: null, gridX: -1000, gridY: -1000, size: 1, isVisible: 1,
+        label: input.name ?? null,
+        hpCurrent: input.hp ?? stats.hpMax, hpMax: input.hpMax ?? stats.hpMax, ac: input.ac ?? stats.ac,
+        linkedRulesId: input.rulesId, isAlly: input.ally || input.role === 'player-ship',
+        imageSource: img?.source ?? null, imageType: img?.type ?? 'file',
+      })
+      const sp = input.sp ?? shields
+      const fields = {
+        sensor_zone: input.zone, sensor_heading: input.heading, sensor_role: input.role,
+        shield_points: sp, shield_max: input.spMax ?? sp,
+        // The player starship has no initiative of its own (it joins only when compromised)
+        acts_while_hidden: 0,
+      }
+      await dbApi.encounterTokens.update({ id: result.id!, sensorZone: fields.sensor_zone, sensorHeading: fields.sensor_heading, sensorRole: fields.sensor_role, shieldPoints: fields.shield_points, shieldMax: fields.shield_max })
+      const token = normalizeToken({ ...result, ...fields })
+      current.value.tokens.push(token)
+      syncToPlayer()
+      return token
+    } catch (err) {
+      reportError('Placing the starship', err)
+      return null
+    }
+  }
+
+  /** Moves a sensor-map token to another zone and/or turns it. */
+  async function moveSensorToken(id: number, zone: number | null, heading?: Heading) {
+    const t = current.value?.tokens.find(x => x.id === id)
+    if (!t || t.sensorZone == null) return
+    const zones = current.value?.sensorMap?.zones ?? 12
+    const changes: Partial<EncounterToken> = {}
+    if (zone != null) changes.sensorZone = Math.max(0, Math.min(zones - 1, zone))
+    if (heading) changes.sensorHeading = heading
+    await updateToken(id, changes)
+  }
+
+  /** Shield Points of a sensor-map token (clamped to 0…max). */
+  async function setShields(id: number, value: number) {
+    const t = current.value?.tokens.find(x => x.id === id)
+    if (!t) return
+    await updateToken(id, { shieldPoints: Math.max(0, Math.min(t.shieldMax ?? value, Math.round(value))) })
   }
 
   /** Places a compendium creature (or hazard) directly, without a library token. */
@@ -671,6 +744,11 @@ export const useEncounterStore = defineStore('encounter', () => {
     if ('elevation' in updates) dbUpdates.elevation = updates.elevation
     if ('timers' in updates) dbUpdates.timers = plain(updates.timers)
     if ('usesDying' in updates) dbUpdates.usesDying = updates.usesDying
+    if ('sensorZone' in updates) dbUpdates.sensorZone = updates.sensorZone
+    if ('sensorHeading' in updates) dbUpdates.sensorHeading = updates.sensorHeading
+    if ('sensorRole' in updates) dbUpdates.sensorRole = updates.sensorRole
+    if ('shieldPoints' in updates) dbUpdates.shieldPoints = updates.shieldPoints
+    if ('shieldMax' in updates) dbUpdates.shieldMax = updates.shieldMax
     await dbApi.encounterTokens.update(dbUpdates as { id: number })
     if ('isPlayerToken' in updates && fovMode.value === 'group') {
       fovRecomputeTrigger.value++
@@ -1168,7 +1246,22 @@ export const useEncounterStore = defineStore('encounter', () => {
     if (!enc) return
     const mapChanged = enc.mapSource !== sentMap
     sentMap = enc.mapSource
-    const tokens = enc.tokens.filter(t => t.isVisible).map(t => toPlayerToken(t, playerImages))
+    const tokens = enc.tokens.filter(t => t.isVisible && t.sensorZone == null).map(t => toPlayerToken(t, playerImages))
+    // The sensor map: visible ships and hazards, with a health word instead of the enemies' numbers
+    const sensor = enc.sensorMap || enc.tokens.some(t => t.sensorZone != null)
+      ? {
+          zones: enc.sensorMap?.zones ?? 12,
+          tokens: enc.tokens.filter(t => t.isVisible && t.sensorZone != null).map(t => {
+            const own = t.sensorRole === 'player-ship'
+            return {
+              id: t.id, name: t.label || t.name, zone: t.sensorZone!, heading: t.sensorHeading ?? 1,
+              side: own ? 'party' : t.sensorRole === 'hazard' ? 'hazard' : t.isAlly ? 'ally' : 'enemy',
+              ...(own ? { hp: t.hpCurrent, hpMax: t.hpMax, sp: t.shieldPoints, spMax: t.shieldMax } : { health: t.isDead ? 'destroyed' : healthState(t) }),
+              conditions: t.conditions.filter(c => !c.hidden).map(c => (c.value != null ? `${c.name} ${c.value}` : c.name)),
+            }
+          }),
+        }
+      : null
     const turnOrder = playerTurnOrder().map(e => ({ ...e, imageSource: playerImages.ref(e.imageSource) }))
     playerWindow.sync({
       tokens,
@@ -1185,6 +1278,7 @@ export const useEncounterStore = defineStore('encounter', () => {
       roundNumber: roundNumber.value,
       turnOrder,
       wallDoorStates: walls.value.map(w => ({ id: w.id, isOpen: w.isOpen })),
+      sensor,
       playerViewPrefs: { ...playerViewPrefs.value },
     })
   }
@@ -1275,6 +1369,17 @@ export const useEncounterStore = defineStore('encounter', () => {
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+  /** Replaces the sensor map settings (number of zones …) and saves them. */
+  async function setSensorMap(map: SensorMap | null) {
+    if (!current.value) return
+    current.value.sensorMap = map
+    try {
+      await dbApi.encounters.update({ id: current.value.id, sensor_map: map ? toPlain(map) : null })
+    } catch (err) {
+      reportError('Saving the sensor map', err)
+    }
+  }
+
   /** Replaces the encounter's starship record (station markers …) and saves it. */
   async function setStarship(starship: EncounterStarship | null) {
     if (!current.value) return
@@ -1397,6 +1502,11 @@ export const useEncounterStore = defineStore('encounter', () => {
       elevation: raw.elevation ?? null,
       timers: parseJson<TokenTimer[]>(raw.timers, []),
       usesDying: raw.uses_dying == null ? null : Boolean(raw.uses_dying),
+      sensorZone: raw.sensor_zone ?? null,
+      sensorHeading: raw.sensor_heading === -1 ? -1 : raw.sensor_heading === 1 ? 1 : null,
+      sensorRole: raw.sensor_role ?? null,
+      shieldPoints: raw.shield_points ?? null,
+      shieldMax: raw.shield_max ?? null,
     }
   }
 
@@ -1445,7 +1555,7 @@ export const useEncounterStore = defineStore('encounter', () => {
   async function rollAllInitiative() {
     if (!current.value) return
     // Linked compendium entries give Perception (Stealth for hazards) and the formula scope
-    const tokensToRoll = current.value.tokens.filter(t => t.initiative === null)
+    const tokensToRoll = current.value.tokens.filter(t => t.initiative === null && t.sensorRole !== 'player-ship')
     const ids = [...new Set(tokensToRoll.map(t => t.linkedRulesId).filter((id): id is string => !!id))]
     const entries = new Map((await rulesGetMany(ids)).map(e => [e.id, e]))
 
@@ -1551,7 +1661,8 @@ export const useEncounterStore = defineStore('encounter', () => {
     setSoundPlaylistId,
     addTokenToEncounter, addCreatureToEncounter, addCreatureToEncounterAuto, addBlankToken, setTokenRulesLink, moveToken, updateToken, removeToken, rememberDefeated, clearDefeated, setStatus, addToLibrary, updateLibraryToken,
     openPlayerWindow, closePlayerWindow, setShapeOverlays,
-    addArea, updateArea, removeArea, areaCells, areaPrompts, openAreaPrompt, closeAreaPrompt, addConditions, setStarship,
+    addArea, updateArea, removeArea, areaCells, areaPrompts, openAreaPrompt, closeAreaPrompt, addConditions, setStarship, setSensorMap,
+    addSensorToken, moveSensorToken, setShields,
     nextTurn, prevTurn,
     automation, turnPrompts, turnNotes, usesDying, resolveRecovery, resolvePersistent, dismissPrompt,
     getToken, applyDamage, setTempHp, grantTempHp, rollAllInitiative, setInitiativeFormula, setPartyLevel, bulkRemoveTokens, bulkSetTokenVisibility, toggleCondition,

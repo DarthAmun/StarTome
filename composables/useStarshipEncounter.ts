@@ -7,7 +7,8 @@
 import { dbApi, getDb, now, type DbEncounter, type DbStarship } from '~/composables/useDb'
 import { useParty, type Character } from '~/composables/useParty'
 import { useStarship } from '~/composables/useStarship'
-import { freeSquaresNear, markersFromStations, type EncounterStarship } from '~/rules/playerStarship'
+import { freeSquaresNear, markersFromStations, starshipLevel, starshipSheet, type EncounterStarship } from '~/rules/playerStarship'
+import { DEFAULT_ZONES } from '~/rules/sensorMap'
 import { toPlain } from '~/utils/json'
 
 /** Makes an empty encounter the ship's interior map (build it in the map maker, then place the stations). */
@@ -55,7 +56,7 @@ export async function startStarshipBattle(ship: DbStarship, name?: string): Prom
   const id = enc!.id!
   const markers = markersFromStations(ship.stations ?? [], sid => (sid ? lookup.stations.get(sid)?.name ?? 'Station' : 'Station'))
   const starship: EncounterStarship = { shipId: ship.id!, role: 'battle', markers }
-  const copy: Partial<DbEncounter> = { starship: toPlain(starship), updated_at: now() }
+  const copy: Partial<DbEncounter> = { starship: toPlain(starship), sensor_map: { zones: DEFAULT_ZONES }, updated_at: now() }
   if (interior) {
     Object.assign(copy, {
       map_source: interior.map_source, map_type: interior.map_type, grid_size: interior.grid_size,
@@ -74,6 +75,16 @@ export async function startStarshipBattle(ship: DbStarship, name?: string): Prom
       await db.encounterTokens.add({ ...row, encounter_id: id, initiative: null, conditions: [], timers: [] })
     }
   }
+
+  // The party's ship on the sensor map: zone 3, facing right (move it before the fight starts)
+  const sheet = starshipSheet({ stations: ship.stations ?? [], bays: ship.bays ?? [] }, lookup, starshipLevel(ship.level_pinned, party.party.value.level))
+  const shipToken = await dbApi.encounterTokens.add({
+    encounterId: id, tokenId: null, gridX: -1000, gridY: -1000, size: 1, isVisible: 1, label: ship.name,
+    hpCurrent: ship.hp_current ?? sheet.hp, hpMax: sheet.hp, ac: sheet.ac, isAlly: true,
+  })
+  await db.encounterTokens.update(shipToken.id!, {
+    sensor_zone: 2, sensor_heading: 1, sensor_role: 'player-ship', shield_points: ship.sp_current ?? sheet.sp, shield_max: sheet.sp,
+  })
 
   // The crew at their stations
   const taken = new Set(markers.map(m => `${m.x},${m.y}`))
