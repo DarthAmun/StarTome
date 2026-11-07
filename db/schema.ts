@@ -20,7 +20,7 @@
  * and isn't imported (only DM's Tome's campaigns come over, FORK_PLAN §8.5).
  */
 import type { CompanionBuild } from '~/rules/companions'
-import type { BaySlot, CrewAssignment, CrewPreset, StationSlot } from '~/rules/playerStarship'
+import type { BaySlot, CrewAssignment, CrewPreset, EncounterStarship, StationSlot } from '~/rules/playerStarship'
 import Dexie, { type Table } from 'dexie'
 import { DB_NAME } from '~/utils/appNamespace'
 import { parseJson } from '~/utils/json'
@@ -78,6 +78,8 @@ export interface DbEncounter {
   areas?: unknown[] | string   // AreaOverlay[] (COMBAT_PLAN.md §5); non-indexed, no version bump
   /** The map maker's tiles this encounter's map was made from (rules/battlemap.ts); non-indexed */
   battlemap?: BattleMap | null
+  /** A starship's interior or a starship battle (STARFINDER_PLAN.md P5); non-indexed */
+  starship?: EncounterStarship | null
   created_at: string
   updated_at: string
 }

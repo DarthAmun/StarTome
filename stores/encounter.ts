@@ -12,6 +12,7 @@ import { evaluateFormula } from '~/composables/useFormulaEvaluator'
 import { freeSpots, rollInitiative, rulesScope, tokenStats, type Adjustment } from '~/rules/combat'
 import { damageWithTemp, grantTemp } from '~/rules/hp'
 import { cellsInArea, tokenInCells, type AreaOverlay, type AreaTrigger } from '~/rules/areas'
+import type { EncounterStarship } from '~/rules/playerStarship'
 import type { Hazard, RulesEntity } from '~/types/rules'
 import { parseDefeated, type DefeatedEnemy } from '~/rules/advancement'
 import { healthState, type HealthState } from '~/composables/useConditions'
@@ -239,6 +240,8 @@ export interface Encounter {
   status: string              // 'prepared' | 'active' | 'resolved'
   defeated: DefeatedEnemy[]   // enemies removed in Run mode; their XP counts at resolve
   areas: AreaOverlay[]        // bursts, cones … with their save effects (COMBAT_PLAN.md §5)
+  /** A starship's interior or a starship battle (STARFINDER_PLAN.md P5); null otherwise. */
+  starship: EncounterStarship | null
 }
 
 export const useEncounterStore = defineStore('encounter', () => {
@@ -330,6 +333,7 @@ export const useEncounterStore = defineStore('encounter', () => {
         status: data.status ?? 'prepared',
         defeated: parseDefeated(data.defeated),
         areas: parseJson<AreaOverlay[]>(data.areas, []),
+        starship: data.starship ?? null,
         tokens: ((data as any).tokens || []).map(normalizeToken),
       }
       roundNumber.value = data.round_number ?? 1
@@ -1271,6 +1275,17 @@ export const useEncounterStore = defineStore('encounter', () => {
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+  /** Replaces the encounter's starship record (station markers …) and saves it. */
+  async function setStarship(starship: EncounterStarship | null) {
+    if (!current.value) return
+    current.value.starship = starship
+    try {
+      await dbApi.encounters.update({ id: current.value.id, starship: starship ? toPlain(starship) : null })
+    } catch (err) {
+      reportError('Saving the starship stations', err)
+    }
+  }
+
   async function persistEncounter() {
     if (!current.value) return
     try {
@@ -1536,7 +1551,7 @@ export const useEncounterStore = defineStore('encounter', () => {
     setSoundPlaylistId,
     addTokenToEncounter, addCreatureToEncounter, addCreatureToEncounterAuto, addBlankToken, setTokenRulesLink, moveToken, updateToken, removeToken, rememberDefeated, clearDefeated, setStatus, addToLibrary, updateLibraryToken,
     openPlayerWindow, closePlayerWindow, setShapeOverlays,
-    addArea, updateArea, removeArea, areaCells, areaPrompts, openAreaPrompt, closeAreaPrompt, addConditions,
+    addArea, updateArea, removeArea, areaCells, areaPrompts, openAreaPrompt, closeAreaPrompt, addConditions, setStarship,
     nextTurn, prevTurn,
     automation, turnPrompts, turnNotes, usesDying, resolveRecovery, resolvePersistent, dismissPrompt,
     getToken, applyDamage, setTempHp, grantTempHp, rollAllInitiative, setInitiativeFormula, setPartyLevel, bulkRemoveTokens, bulkSetTokenVisibility, toggleCondition,

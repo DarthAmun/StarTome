@@ -169,6 +169,32 @@
         </div>
       </section>
 
+      <!-- ── Interior map & battle ── -->
+      <section class="party-section">
+        <div class="party-section-title">Interior map</div>
+        <p class="ss-dim">The ship's deck plan with its battle stations. Build it in the map maker, then place each station on its square
+          (Stations panel on the map). Every starship battle copies the map, its walls and objects, and puts the crew at their stations.</p>
+        <div class="ss-row">
+          <template v-if="interior">
+            <b>{{ interior.name }}</b>
+            <span class="ss-dim">{{ placedCount }} of {{ stationCount }} stations placed</span>
+            <NuxtLink class="ghost-btn ss-small" :to="`/encounter/${interior.id}/map-maker`">Map maker</NuxtLink>
+            <NuxtLink class="ghost-btn ss-small" :to="`/encounter/${interior.id}`">Place stations</NuxtLink>
+          </template>
+          <template v-else>
+            <button class="ghost-btn ss-small" @click="newInterior">Create an interior map</button>
+            <select v-if="campaignEncounters.length" class="ss-input" value="" @change="pickInterior(Number(val($event)))">
+              <option value="">or use an encounter's map…</option>
+              <option v-for="e in campaignEncounters" :key="e.id" :value="e.id">{{ e.name }}</option>
+            </select>
+          </template>
+          <span class="ss-spacer" />
+          <button class="seal-btn" :title="interior ? 'A new encounter: a copy of the interior with the crew at their stations' : 'Without an interior map the battle starts on an empty map'" @click="startBattle">
+            Start starship battle
+          </button>
+        </div>
+      </section>
+
       <!-- ── Crew skills ── -->
       <section class="party-section">
         <div class="party-section-title">Crew skills</div>
@@ -219,6 +245,7 @@ import { computed, onMounted, ref } from 'vue'
 import { dbApi } from '~/composables/useDb'
 import { useParty, type Character } from '~/composables/useParty'
 import { useStarship } from '~/composables/useStarship'
+import { createInterior, startStarshipBattle, useAsInterior } from '~/composables/useStarshipEncounter'
 import { builtinConditions } from '~/composables/useConditions'
 import { activitiesFor, starshipLevel, starshipLevelChanges, starshipSheet, STATION_INITIATIVE_SKILL, stationKey, type StationRow } from '~/rules/playerStarship'
 import { formatActionCost, signed } from '~/rules/format'
@@ -322,6 +349,32 @@ function upgradesFor(r: StationRow) {
   return catalog.value.upgrades.filter(u => (u.station === 'any' || stationKey(u.station) === key) && !r.slot.upgradeIds.includes(u.id))
 }
 const bayOf = (id: string) => lookup.value.bays.get(id) ?? null
+
+// ── Interior & battle (P5) ──
+const campaignEncounters = ref<{ id: number; name: string }[]>([])
+const interior = computed(() => campaignEncounters.value.find(e => e.id === ship.value?.interior_encounter_id) ?? null)
+const stationCount = computed(() => (ship.value?.stations ?? []).filter(s => s.stationId).length)
+const placedCount = computed(() => (ship.value?.stations ?? []).filter(s => s.stationId && s.marker).length)
+async function loadEncounters() {
+  campaignEncounters.value = (await dbApi.encounters.list(campaignId)).map(e => ({ id: e.id!, name: e.name }))
+}
+onMounted(loadEncounters)
+async function newInterior() {
+  if (!ship.value) return
+  const id = await createInterior(ship.value)
+  await loadEncounters()
+  await navigateTo(`/encounter/${id}/map-maker`)
+}
+async function pickInterior(id: number) {
+  if (!ship.value || !id) return
+  await useAsInterior(ship.value, id)
+  await loadEncounters()
+}
+async function startBattle() {
+  if (!ship.value) return
+  const id = await startStarshipBattle(ship.value)
+  await navigateTo(`/encounter/${id}`)
+}
 
 // ── Presets & delete ──
 const presetName = ref('')

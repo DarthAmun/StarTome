@@ -11,6 +11,7 @@ STATIONS = {
  'SCANNERS': ['level', 'upgrades', 'will', 'sensors'],
 }
 SKIP_HEADS = {'NEW TERMS', 'Tech CORE', 'READING BATTLE', 'STATION ENTRIES', 'USING CLASS FEATURES', 'STARSHIP SPELL REPOSITORY', 'BATTLE STATIONS'}
+CAPTIONS = {title(k) for k in STATIONS} | {'Pilot’s Console', 'Captain\'s Seat', 'Captain’s Seat'}
 out = {}; spells = []
 generic = {'actions': []}
 cur = None; grade = None; i = 0
@@ -89,7 +90,9 @@ while i < len(L):
             x = L[j]
             if x.startswith('==='): j += 1; continue
             if ACTION_HEAD.match(x) or re.match(r'^(COMMERCIAL|TACTICAL|ADVANCED|SUPERIOR|ELITE|ULTIMATE|PARAGON) ', x) or x in STATIONS or re.match(r'.+ ADVANCEMENT$', x) or x in SKIP_HEADS or (is_caps(x) and len(x) > 6): break
-            body.append(x); j += 1
+            # image captions ("Magic Conduit" under a picture) aren't part of the text
+            if x not in CAPTIONS: body.append(x)
+            j += 1
         a, mm = action_from(t, trait_line, body, grade)
         if mm.group(4): spell_tag = (mm.group(4), int(mm.group(5)))
         if spell_tag:   # a starship spell

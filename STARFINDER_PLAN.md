@@ -58,7 +58,7 @@ Book content (enemy starships, station actions, upgrades, expansion bays) is **n
 | ~~**P2**~~ | ✅ Done 2026-11-07 (0.30.0): vehicles and companions (drones, robot and animal companions) | P0 | M |
 | ~~**P3**~~ | ✅ Done 2026-11-07 (0.31.0): starship data model, homebrew format, book import | — | L |
 | ~~**P4**~~ | ✅ Done 2026-11-07 (0.32.0): player starship sheet and crew roster (station assignments) | P3 | M |
-| **P5** | Ship interior map: battle stations on the battle map, helming, station actions | P4 | M |
+| ~~**P5**~~ | ✅ Done 2026-11-07 (0.33.0): ship interior map, battle stations on the map, helming, station actions | P4 | M |
 | **P6** | Sensor map: zones, headings, ship tokens, zone areas | P3 | L |
 | **P7** | Starship combat engine: damage, shields, conditions, compromised, hull integrity | P5, P6 | L |
 | **P8** | Encounter builder and resolution for starship encounters | P7 | S |
@@ -233,7 +233,10 @@ This is the "characters on stations" feature. It has two parts: a standing assig
 
 ---
 
-## P5. Ship interior map and helming (M)
+## P5. Ship interior map and helming (M) ✅ done 2026-11-07 (0.33.0)
+
+**Built:** encounters get a `starship` record (`role: 'interior' | 'battle'`, station markers). The ship's interior is an encounter (create one or use an existing one from the Starship page); its markers live on the ship (decision 2). **Change from the plan:** stations are placed in the VTT's **Stations panel** (click Place, then a square; it borrows the area tool's click) rather than in the map maker, so the map maker stays a pure tile editor; markers are drawn as coloured squares through the area overlay. `useStarshipEncounter.startStarshipBattle` copies map, map maker tiles, walls and non-PC tokens, copies the markers, and puts each crew member's token on their station (free crew next to the first station; a character without a library token gets one). Helming is derived from positions (`helmingTokens`: on the square, not dead or unconscious, first wins), so moving a token on or off a station is the live assignment; "Save positions as crew" writes it back to the roster. In Run mode the panel shows the current turn's station, grade, actions and suggested initiative skill, and the ship's AC/saves with helmed bonuses. **Not done:** initiative isn't rolled with the station skill automatically (the panel names the skill; enter the roll by hand). The pack builder now splits Frequency/Requirements from the text and drops image captions.
+
 
 ### P5.1 Battle stations on the battle map
 - The map maker gets a **Battle station** marker: place a marker per station slot on the ship's interior map. It's stored in `starships.stations[].marker` and drawn as a labeled square (number + station icon) on the map and in the player window.

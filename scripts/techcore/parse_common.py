@@ -13,9 +13,14 @@ def is_caps(t):
 def join_lines(lines):
     """Lines of a body → markdown paragraphs: fields and degrees start new lines."""
     out = []
+    field_open = False
     for t in lines:
         if not t: continue
         m = DEGREE.match(t) or FIELDS.match(t)
+        # A field (Frequency, Requirements …) ends with its sentence: the next capitalized line is the body
+        if not m and out and field_open and re.search(r'[.;:]$|^\*\*Frequency\*\* [^.]*$', out[-1]) and t[:1].isupper():
+            out.append(t); field_open = False; continue
+        if m: field_open = not DEGREE.match(t)
         if m or not out:
             out.append(f'**{m.group(1)}** {t[len(m.group(1)):].strip()}' if m else t)
         elif out[-1].endswith('-') and not out[-1].endswith(' -'):

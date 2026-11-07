@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  activitiesFor, assignCrew, cleanCrew, slotsForFrame, starshipLevel, starshipLevelChanges, starshipSheet, type Lookup, type StationSlot,
+  activitiesFor, assignCrew, cleanCrew, freeSquaresNear, helmingTokens, markersFromStations, slotHelmedBy, slotsForFrame, starshipLevel, starshipLevelChanges, starshipSheet, type Lookup, type StationSlot,
 } from '~/rules/playerStarship'
 import type { BattleStation, ExpansionBay, StarshipFrame, StationUpgrade } from '~/types/rules'
 
@@ -113,5 +113,34 @@ describe('crew roster', () => {
     expect(activitiesFor('Gunnery').map(a => a.key)).toEqual(['lock-and-load', 'emergency-repairs'])
     expect(activitiesFor("Pilot's Console").map(a => a.key)).toContain('fly-the-ship')
     expect(activitiesFor(null).map(a => a.key)).toEqual(['emergency-repairs'])
+  })
+})
+
+describe('stations on the map', () => {
+  const markers = [{ slot: 1, x: 3, y: 3, name: 'Pilot' }, { slot: 2, x: 6, y: 3, name: 'Gunnery' }, { slot: 3, x: 9, y: 9, name: 'Scanners' }]
+  it('a token on a station square helms it; unconscious or dead ones don\'t; the first one wins', () => {
+    const tokens = [
+      { id: 10, gridX: 3, gridY: 3, size: 1 },
+      { id: 11, gridX: 3, gridY: 3, size: 1 },
+      { id: 12, gridX: 5, gridY: 2, size: 2 },                                    // a 2×2 token covering (6,3)
+      { id: 13, gridX: 9, gridY: 9, size: 1, conditions: [{ name: 'Unconscious' }] },
+    ]
+    expect([...helmingTokens(markers, tokens)]).toEqual([[1, 10], [2, 12]])
+    expect(slotHelmedBy(markers, tokens, 12)).toBe(2)
+    expect(slotHelmedBy(markers, tokens, 11)).toBeNull()
+  })
+  it('free squares ring outward and skip taken ones', () => {
+    const taken = new Set(['3,3', '2,2'])
+    const spots = freeSquaresNear(3, 3, taken, 3)
+    expect(spots).toEqual([{ x: 3, y: 2 }, { x: 4, y: 2 }, { x: 2, y: 3 }])
+    expect(freeSquaresNear(0, 0, new Set(['0,0']), 2)).toEqual([{ x: 1, y: 0 }, { x: 0, y: 1 }])
+  })
+  it('battle markers come from the stations that are placed', () => {
+    const slots = [
+      { slot: 1, stationId: 'p', isDefault: true, upgradeIds: [], marker: { x: 1, y: 2 } },
+      { slot: 2, stationId: null, isDefault: false, upgradeIds: [], marker: { x: 5, y: 5 } },
+      { slot: 3, stationId: 's', isDefault: false, upgradeIds: [] },
+    ]
+    expect(markersFromStations(slots, id => (id === 'p' ? 'Pilot' : '?'))).toEqual([{ slot: 1, x: 1, y: 2, name: 'Pilot' }])
   })
 })

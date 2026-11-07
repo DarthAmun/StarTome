@@ -230,3 +230,62 @@ export function starshipLevelChanges(before: StarshipSheet, now: StarshipSheet):
   }
   return out
 }
+
+// ── On the map (P5) ───────────────────────────────────────────────────────
+
+export interface StationMarker { slot: number; x: number; y: number; name: string }
+
+/**
+ * What makes an encounter a starship encounter: its ship, whether it's the
+ * ship's interior template or a battle copied from it, and the battle
+ * stations on its map (the interior's markers live on the ship).
+ */
+export interface EncounterStarship {
+  shipId: number
+  role: 'interior' | 'battle'
+  markers: StationMarker[]
+}
+
+export interface MapTokenLike { id: number; gridX: number; gridY: number; size: number; isDead?: boolean; conditions?: { name: string }[] }
+
+const OUT = /^(unconscious|dying|dead)$/i
+
+/** Slot → the token helming it: on the station's square, not unconscious; the first one wins. */
+export function helmingTokens(markers: StationMarker[], tokens: MapTokenLike[]): Map<number, number> {
+  const out = new Map<number, number>()
+  for (const m of markers) {
+    const t = tokens.find(t => !t.isDead && !(t.conditions ?? []).some(c => OUT.test(c.name))
+      && m.x >= t.gridX && m.x < t.gridX + Math.max(1, t.size) && m.y >= t.gridY && m.y < t.gridY + Math.max(1, t.size))
+    if (t) out.set(m.slot, t.id)
+  }
+  return out
+}
+
+/** The slot a token helms, if any. */
+export function slotHelmedBy(markers: StationMarker[], tokens: MapTokenLike[], tokenId: number): number | null {
+  for (const [slot, id] of helmingTokens(markers, tokens)) if (id === tokenId) return slot
+  return null
+}
+
+/** Free squares around a point, nearest first (ring by ring), skipping taken ones. */
+export function freeSquaresNear(x: number, y: number, taken: Set<string>, count: number): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = []
+  for (let r = 1; out.length < count && r < 30; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue
+        const p = { x: x + dx, y: y + dy }
+        if (p.x < 0 || p.y < 0 || taken.has(`${p.x},${p.y}`)) continue
+        taken.add(`${p.x},${p.y}`)
+        out.push(p)
+        if (out.length >= count) return out
+      }
+    }
+  }
+  return out
+}
+
+/** Markers for a battle copied from the ship's stations. */
+export function markersFromStations(slots: StationSlot[], nameOf: (stationId: string | null) => string): StationMarker[] {
+  return slots.filter(s => s.marker && s.stationId).map(s => ({ slot: s.slot, x: s.marker!.x, y: s.marker!.y, name: nameOf(s.stationId) }))
+}

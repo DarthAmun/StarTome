@@ -295,6 +295,9 @@
             :grid-offset-y="encounter.gridOffsetY"
           />
 
+          <!-- Starship: battle stations on the map, who helms them, the station of the current turn -->
+          <StarshipStationsPanel v-if="encounter?.starship" ref="stationsPanel" :placing="placingStation" :turn-token-id="mode === 'run' ? currentTurnTokenId : null" @place="onPlaceStation" />
+
           <!-- Condition automation: recovery checks, persistent damage, action reminders -->
           <TurnPrompts v-if="mode === 'run'" />
 
@@ -1535,7 +1538,33 @@ const AREA_HINT: Record<AreaKind, string> = {
 const areaCtxMenu = reactive({ open: false, x: 0, y: 0, areaId: null as string | null });
 const ctxArea = computed(() => store.current?.areas.find(a => a.id === areaCtxMenu.areaId) ?? null);
 
-watch(areaTool.canvasAreas, (list) => canvas?.setAreas(list), { deep: true });
+// ── Starship stations (STARFINDER_PLAN.md P5) ──────────────────────────────
+const stationsPanel = ref<{ markers: { slot: number; x: number; y: number }[]; colorOf: (slot: number) => string; setMarker: (slot: number, at: { x: number; y: number } | null) => Promise<void> } | null>(null);
+/** The station slot the next map click places; it borrows the area tool's click. */
+const placingStation = ref<number | null>(null);
+function onPlaceStation(slot: number | null) {
+  placingStation.value = slot;
+  activeTool.value = slot == null ? 'select' : 'area';
+}
+watch(activeTool, (tool) => { if (tool !== 'area') placingStation.value = null; });
+const stationAreas = computed(() => (stationsPanel.value?.markers ?? []).map(m => ({
+  id: `station-${m.slot}`, cells: [`${m.x},${m.y}`], color: hexColorToNumber(stationsPanel.value!.colorOf(m.slot)),
+})));
+function getAreaDraft(anchor: { col: number; row: number } | null, at: { col: number; row: number }) {
+  if (placingStation.value != null) return { id: 'draft', cells: [`${Math.floor(at.col)},${Math.floor(at.row)}`], color: 0x4ab8e8 };
+  return areaTool.getAreaDraft(anchor, at);
+}
+function onAreaClick(anchor: { col: number; row: number } | null, at: { col: number; row: number }): boolean {
+  if (placingStation.value != null) {
+    void stationsPanel.value?.setMarker(placingStation.value, { x: Math.floor(at.col), y: Math.floor(at.row) });
+    onPlaceStation(null);
+    return false;
+  }
+  return areaTool.onAreaClick(anchor, at);
+}
+const allCanvasAreas = computed(() => [...areaTool.canvasAreas.value, ...stationAreas.value]);
+
+watch(allCanvasAreas, (list) => canvas?.setAreas(list), { deep: true });
 
 const areaEffectId = ref<string | null>(null);
 
@@ -1897,8 +1926,8 @@ onMounted(async () => {
     onShapeCommit: (anchorCol, anchorRow, endCol, endRow) => {
       addShape(anchorCol, anchorRow, endCol, endRow);
     },
-    getAreaDraft: areaTool.getAreaDraft,
-    onAreaClick: areaTool.onAreaClick,
+    getAreaDraft,
+    onAreaClick,
     onWallComplete: async ({ points, coverType }) => {
       await store.addWall(points, coverType);
       canvas?.redrawWalls();
@@ -1921,7 +1950,7 @@ onMounted(async () => {
     await canvas.loadMap(store.current.mapSource, store.current.mapType);
   }
   await canvas.renderTokens();
-  canvas.setAreas(areaTool.canvasAreas.value);
+  canvas.setAreas(allCanvasAreas.value);
   canvas.redrawWalls();
   canvas.recomputeFov();
 
