@@ -84,6 +84,18 @@ Markdown, plus:
 - `shield`: `{ "acBonus": 2, "hardness": 5, "hp": 20, "bt": 10 }`
 - `container`: `{ "capacity": 40, "bulkReduction": 10 }`
 
+#### SF2e gear
+
+StarTome checks these rules from the item's fields and text, so write them the way it reads them:
+
+- **Grades** (`commercial`, `tactical`, `advanced`, `superior`, `elite`, `ultimate`, `paragon`): set `weapon.grade` / `armor.grade`. A weapon or armor gets extra upgrade slots and tracking from its grade (Player Core improvement tables). Gear with fixed grade versions (grenades, augmentations, many tech items) is **one entry per grade**, named `"Name (Tactical)"`, each with its own level and price.
+- **Upgrade slots:** armor has 1 base slot unless its table says otherwise; weapons have 1, archaic weapons 0. Write "starts with 0 upgrade slots" in a weapon's description when it has none, and "one fewer upgrade slot" in a fusion's or item's description when it costs one; StarTome counts both.
+- **Upgrades:** `category: "equipment"`, trait `"upgrade"`, and `usage` saying where they go: `"installed in armor"`, `"installed in a weapon"`, `"installed in a weapon that uses projectiles"`. The usage decides what the inventory lets you attach it to.
+- **Installed weapons:** a `weapon` item with a trait `installed-<host>`, e.g. `"installed-two-handed-melee-weapon"`, `"installed-armor"`. One per host; its grade can't exceed the host's.
+- **Augmentations:** `usage: "implanted"` (body part in the description). A character can have four; give apex augmentations the trait `"apex"`, and write "doesn't count against your implant limit" in the description of others that don't count.
+- **Area and automatic weapons:** traits `"area-cone"`, `"area-line"`, `"area-burst-10"` (the number is the burst's size in feet) and `"automatic"`. Cones and lines reach the range increment, so set `weapon.range`; Auto-Fire is a cone of half of it. On a creature, the same traits go on the Strike, with `rangeIncrement` (see creature).
+- **Grenades:** `category: "weapon"`, `weapon.group: "grenade"`, trait `"grenade"`, `expend: 1`, one entry per grade.
+
 ### creature
 
 All of these are required:
@@ -279,6 +291,10 @@ Foundry has no starship data, so tactical starship combat (Tech Core ch. 6–7) 
   "options": [{ "name": "Bunks", "text": "+1 item bonus to Perception checks for initiative …" }] }
 ```
 
+### Companions (animal, robot, drone)
+
+Not a kind: a companion's type or chassis (size, attacks, attribute modifiers, HP, skill, senses, speeds, support benefit, advanced maneuver) is typed into the **companion dialog on the party page**, which builds and levels the stat block itself. For a fixed NPC companion, write a `creature`. Feats that improve companions (Tactical Drone, robot customizations …) are ordinary `feat` entries.
+
 ### ancestry, heritage, background, class, deity
 
 Reference entries: rules text in `description`, quick facts in `facts` (string, number or string[] values; keys are shown as labels). Use these keys:
@@ -325,7 +341,9 @@ The group tag is `<class trait>-<choice>`, lower-case: `conduit-domain`, `envoy-
 1. Valid JSON (no comments, no trailing commas).
 2. Every entry has all common fields **and** its kind's required fields, arrays as `[]` when empty.
 3. `sortName` = lower-cased `name`; fresh UUIDs for new entries, same id for revisions.
-4. Prices in cp (credits × 10), bulk in tenths, distances in feet as numbers.
+4. Prices in cp (credits × 10), bulk in tenths, distances in feet as numbers; starship distances in zones as numbers.
 5. Numbers are balanced for the stated level (GM Core tables for creatures/hazards, treasure-by-level for item prices).
 6. Subclasses are `classfeature` feats with `optionOf`, named without the class; the class lists its features by level.
-7. After the JSON, list each entry as `name — kind, level` and anything you assumed.
+7. SF2e gear: grades set, one entry per fixed grade, upgrades with trait `upgrade` and an `installed in …` usage, augmentations `implanted`, area/automatic weapons with a `range`.
+8. Starship content: station actions carry their `grade`; frames have 20 `stats` rows; no book text from Paizo's starship chapters (build that pack with `scripts/techcore/build.sh` instead).
+9. After the JSON, list each entry as `name — kind, level` and anything you assumed.
