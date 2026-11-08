@@ -14,6 +14,7 @@
         </select>
         <button v-if="ship && !ship.active" class="ghost-btn" title="The party flies this ship now; starship encounters use it" @click="setActive(ship.id!)">Make active</button>
         <button class="ghost-btn" @click="creating = !creating">+ New starship</button>
+        <button v-if="ship" class="ghost-btn ss-danger" :title="`Delete ${ship.name}`" @click="removeShip">Delete starship</button>
       </div>
     </header>
 
@@ -27,11 +28,13 @@
       <div class="party-section-title">New starship</div>
       <div class="ss-row">
         <input v-model="newName" class="ss-input ss-wide" placeholder="Name your starship" />
-        <select v-model="newFrame" class="ss-input">
-          <option value="">Frame…</option>
-          <option v-for="f in catalog.frames" :key="f.id" :value="f.id">{{ f.name }}</option>
-        </select>
-        <button class="seal-btn" :disabled="!newFrame" @click="doCreate">Create</button>
+        <label class="ss-field">Frame
+          <select v-model="newFrame" class="ss-input">
+            <option v-for="f in catalog.frames" :key="f.id" :value="f.id">{{ f.name }}</option>
+          </select>
+        </label>
+        <button class="seal-btn" :disabled="!newFrame" :title="newFrame ? '' : 'Pick a frame first'" @click="doCreate">Create</button>
+        <span v-if="!newFrame" class="ss-warn">Pick a frame: it sets the ship's statistics and default stations.</span>
       </div>
     </section>
 
@@ -270,7 +273,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { dbApi } from '~/composables/useDb'
 import { useParty, type Character } from '~/composables/useParty'
 import { useStarship } from '~/composables/useStarship'
@@ -315,6 +318,10 @@ const levelChanges = computed(() => level.value <= 1 ? [] : starshipLevelChanges
 const creating = ref(false)
 const newName = ref('')
 const newFrame = ref('')
+// A frame is always picked, so Create works right away (the first frame unless you choose another)
+watch(() => catalog.value.frames.map(f => f.id).join('|'), () => {
+  if (!catalog.value.frames.some(f => f.id === newFrame.value)) newFrame.value = catalog.value.frames[0]?.id ?? ''
+}, { immediate: true })
 async function doCreate() {
   const id = await create(campaignId, newName.value, newFrame.value || null)
   picked.value = id
@@ -458,7 +465,9 @@ async function removeShip() {
 </script>
 
 <style scoped>
-.ss { padding: 24px 28px 60px; max-width: 1200px; display: flex; flex-direction: column; gap: 14px; }
+.ss { flex: 1; overflow-y: auto; padding: 24px 28px 60px; display: flex; flex-direction: column; gap: 14px; }
+.ss > * { max-width: 1200px; width: 100%; }
+.ss-danger { color: #e05555; }
 .ss-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
 .ss-head-actions { display: flex; gap: 8px; align-items: center; }
 .ss-sub, .ss-dim { font-size: 12px; color: var(--text3); }

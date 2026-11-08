@@ -272,7 +272,7 @@ defineExpose({ startArea, select })
 </script>
 
 <style scoped>
-.smp { position: absolute; top: 8px; left: 12px; right: 12px; z-index: 32; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 6px 20px #0006; display: flex; flex-direction: column; gap: 6px; max-height: 55vh; overflow-y: auto; }
+.smp { position: absolute; top: 8px; left: 12px; right: 12px; z-index: 29; background: var(--surface-solid); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 6px 20px #0006; display: flex; flex-direction: column; gap: 6px; max-height: 55vh; overflow-y: auto; }
 .smp--collapsed { right: auto; }
 .smp-head, .smp-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .smp-toggle { background: none; border: none; color: var(--text); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }

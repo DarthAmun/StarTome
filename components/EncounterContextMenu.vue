@@ -227,21 +227,33 @@ const tempValue = ref<number | null>(null)
 const timerName = ref('')
 const timerTurns = ref<number | null>(null)
 
-const MENU_W = 220
-const MENU_H = 450
+// Kept inside the window: measured while the menu is open (its size depends on the token)
+const size = ref({ w: 220, h: 450 })
+let resizeObs: ResizeObserver | null = null
+onBeforeUnmount(() => resizeObs?.disconnect())
 
 const adjustedX = computed(() => {
-  const max = window.innerWidth - MENU_W - 8
-  return Math.min(props.x, max)
+  const max = window.innerWidth - size.value.w - 8
+  return Math.max(8, Math.min(props.x, max))
 })
 
 const adjustedY = computed(() => {
-  const max = window.innerHeight - MENU_H - 8
-  return Math.min(props.y, max)
+  const max = window.innerHeight - Math.min(size.value.h, window.innerHeight - 16) - 8
+  return Math.max(8, Math.min(props.y, max))
 })
 
 watch(() => props.open, (val) => {
   if (!val) return
+  void nextTick(() => {
+    const el = menuEl.value
+    if (!el) return
+    const measure = () => { const r = el.getBoundingClientRect(); size.value = { w: r.width, h: r.height } }
+    measure()
+    // The menu can grow after it opens (sections, inputs): keep it inside the window
+    resizeObs?.disconnect()
+    resizeObs = new ResizeObserver(measure)
+    resizeObs.observe(el)
+  })
   initValue.value = props.targetToken?.initiative ?? null
   dmgValue.value = null
   tempValue.value = null
@@ -307,7 +319,12 @@ function onKey(e: KeyboardEvent) {
   border: 1px solid var(--parch-line);
   border-radius: 2px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  overflow: hidden;
+  /* its own width, not what's left to the window's edge: otherwise it changes size as it's moved in */
+  width: max-content;
+  max-width: min(300px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 4px 0;
 }
 

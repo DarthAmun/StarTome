@@ -7,6 +7,11 @@
         <div class="elist-head-title" style="color: #4ab8e8">Encounters</div>
         <NuxtLink class="btn-accent-sm elist-build" :to="`/campaign/${campaignId}/encounter-builder`" title="Build an encounter for the party">Build</NuxtLink>
         <button class="btn-accent-sm" @click="createEncounter">+ New</button>
+        <button v-if="game === 'sf2e'" class="btn-accent-sm" :title="activeShip ? `A starship battle on ${activeShip.name}: its interior map with the crew at their stations, and the sensor map` : 'Create a starship on the Starship page first'"
+          :disabled="!activeShip || creatingBattle" @click="createStarshipBattle">+ Starship</button>
+      </div>
+      <div v-if="game === 'sf2e' && !activeShip" class="elist-hint">
+        Starship battles need a starship: <NuxtLink :to="`/campaign/${campaignId}/starship`">create one</NuxtLink>.
       </div>
 
       <div class="elist-search">
@@ -42,6 +47,7 @@
         >
           <div class="erow-dot" :style="{ background: enc.status === 'active' ? '#4ab8e8' : activeId === enc.id ? '#4ab8e8' : 'var(--border-hi)' }" />
           <div class="erow-name">{{ enc.name }}</div>
+          <span v-if="enc.starshipRole" class="erow-pill erow-pill--ship" :title="enc.starshipRole === 'battle' ? 'Starship battle: interior and sensor map' : 'A starship\'s interior map (template for its battles)'">{{ enc.starshipRole === 'battle' ? 'starship' : 'interior' }}</span>
           <span v-if="enc.status" class="erow-pill" :style="statusStyle(enc.status)">{{ enc.status }}</span>
           <span class="erow-date">{{ formatDate(enc.updatedAt) }}</span>
           <div class="enc-actions" @click.stop>
@@ -137,6 +143,10 @@ import { resolveImage } from '~/rules/images'
 import { dbApi, getDb } from '~/composables/useDb'
 import { useFormatters } from '~/composables/useFormatters'
 import { useResolution } from '~/composables/useResolution'
+import { activeStarship, useStarship } from '~/composables/useStarship'
+import { startStarshipBattle } from '~/composables/useStarshipEncounter'
+import type { DbStarship } from '~/composables/useDb'
+import { campaignGame, type GameId } from '~/types/game'
 
 const { formatDateShort: formatDate } = useFormatters()
 const route = useRoute()
@@ -194,6 +204,7 @@ async function loadEncounters() {
       xpTotal: r.xp_total ?? null,
       xpAwarded: r.xp_awarded ?? null,
       partyLevelAtResolve: r.party_level_at_resolve ?? null,
+      starshipRole: r.starship?.role ?? null,
     }
   }))
   encounters.value = withTokens
@@ -201,6 +212,29 @@ async function loadEncounters() {
 
 function selectEncounter(enc: any) {
   activeId.value = enc.id
+}
+
+// ── Starship battles (SF2e): prepared here like any encounter, run in the VTT ──
+const game = ref<GameId>('pf2e')
+const activeShip = ref<DbStarship | null>(null)
+const creatingBattle = ref(false)
+onMounted(async () => {
+  game.value = campaignGame(await dbApi.campaigns.get(campaignId))
+  if (game.value === 'sf2e') activeShip.value = (await activeStarship(campaignId)) ?? null
+})
+async function createStarshipBattle() {
+  if (!activeShip.value) return
+  creatingBattle.value = true
+  try {
+    const st = useStarship()
+    if (st.loadedCampaign.value !== campaignId) await st.load(campaignId)
+    const id = await startStarshipBattle(activeShip.value)
+    await getDb().encounters.update(id, { status: 'prepared' })
+    await loadEncounters()
+    activeId.value = id
+  } finally {
+    creatingBattle.value = false
+  }
 }
 
 async function createEncounter() {
@@ -434,4 +468,6 @@ function statusStyle(status: string) {
   display: flex;
   gap: 8px;
 }
+.elist-hint { padding: 4px 14px 8px; font-size: 11.5px; color: var(--text3); }
+.erow-pill--ship { color: #4ab8e8; border-color: #4ab8e866; }
 </style>

@@ -246,7 +246,7 @@ defineExpose({ setMarker, markers, colorOf })
 </script>
 
 <style scoped>
-.ssp { position: absolute; left: 12px; bottom: 76px; z-index: 30; width: 300px; max-height: 60vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 6px 20px #0006; }
+.ssp { position: absolute; left: 12px; bottom: 76px; z-index: 29; width: 300px; max-height: 60vh; overflow-y: auto; background: var(--surface-solid); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 6px 20px #0006; }
 .ssp--collapsed { width: auto; }
 .ssp-head { display: flex; gap: 6px; align-items: center; cursor: pointer; }
 .ssp-spacer { flex: 1; }
