@@ -12,6 +12,7 @@
     "generate": "nuxt generate",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "typecheck": "nuxi typecheck"
   },
   "dependencies": {
@@ -40,6 +41,7 @@
   },
   "devDependencies": {
     "@nuxt/devtools": "^4.1.0",
+    "@playwright/test": "^1.65.0",
     "@types/markdown-it": "^14.2.0",
     "@types/node": "^24.19.2",
     "fake-indexeddb": "^6.2.7",

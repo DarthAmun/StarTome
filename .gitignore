@@ -44,3 +44,7 @@ yarn-error.log*
 
 # Local data built from your own books (never committed)
 local/
+
+# Playwright
+test-results/
+playwright-report/

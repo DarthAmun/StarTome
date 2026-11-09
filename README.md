@@ -12,8 +12,10 @@ StarTome is unofficial and not affiliated with Paizo Inc. Pathfinder and Starfin
 |-------|------|
 | App | PWA (installable, offline-capable) |
 | Database | IndexedDB via Dexie.js (database `startome`, schema v4) |
-| Frontend | Nuxt 3 (static/CSR) + Vue 3 |
+| Frontend | Nuxt 4 (static/CSR) + Vue 3 |
 | Styling | Plain CSS (`assets/css`) |
+| UI primitives | Reka UI (dialogs, menus, popovers, comboboxes, tooltips; styled by our CSS) |
+| Composables | VueUse |
 | Icons | oh-vue-icons |
 | State | Pinia |
 | Canvas / VTT | PixiJS v8 |
@@ -21,6 +23,7 @@ StarTome is unofficial and not affiliated with Paizo Inc. Pathfinder and Starfin
 | Markdown | markdown-it + DOMPurify |
 | Import / Export | JSZip |
 | Sync | BroadcastChannel API |
+| Tests | Vitest (logic), Playwright (browser smoke tests) |
 
 ---
 
@@ -32,6 +35,20 @@ pnpm dev
 ```
 
 Open http://localhost:3001 — all data is stored in your browser's IndexedDB.
+
+## Tests
+
+```bash
+pnpm test         # Vitest: rules, importers, database (tests/)
+pnpm test:e2e     # Playwright: the app in Chromium (e2e/)
+```
+
+The Playwright tests run against the dev server on port 3001 (a running
+`pnpm dev` is reused, otherwise one is started). Every test starts with an
+empty browser profile, so it works on the seeded "Welcome to StarTome"
+campaign and never sees your own data. Once per machine, fetch the browser:
+`pnpm exec playwright install chromium`. `pnpm test:e2e --ui` steps through
+them; a failure keeps a trace and screenshot in `test-results/`.
 
 ## Production Build
 

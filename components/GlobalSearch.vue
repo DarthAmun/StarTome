@@ -725,12 +725,14 @@ watch(open, async (val) => {
 })
 
 // Global keyboard shortcut
-onKeyStroke('k', e => {
-  if (!e.metaKey && !e.ctrlKey) return
+// Capture phase, and the event stops here: Nuxt DevTools (dev only) claims Ctrl+K too
+useEventListener(window, 'keydown', (e: KeyboardEvent) => {
+  if (e.key.toLowerCase() !== 'k' || (!e.metaKey && !e.ctrlKey) || e.shiftKey || e.altKey) return
   e.preventDefault()
+  e.stopPropagation()
   if (open.value) close()
   else open.value = true
-})
+}, { capture: true })
 </script>
 
 <style scoped>
