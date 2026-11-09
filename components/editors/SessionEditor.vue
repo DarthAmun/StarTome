@@ -43,7 +43,17 @@
             :key="props.entityId"
             :session-id="props.entityId"
             :campaign-id="props.campaignId"
+            :mode="mode"
             @navigate="(t, n) => $emit('navigate', t, n)"
+            @recap="recapAuto = false; showRecap = true"
+        />
+
+        <SessionRecapDialog
+            v-if="showRecap"
+            :session-id="props.entityId"
+            :campaign-id="props.campaignId"
+            :auto="recapAuto"
+            @close="showRecap = false"
         />
     </div>
 </template>
@@ -76,6 +86,8 @@ const attrDraft = useAttributeDraft(entity, () => false);
 const draftAttributes = attrDraft.draft;
 const attrSave = useDebouncedSave(500);
 const showAttributes = ref(false);
+const showRecap = ref(false);
+const recapAuto = ref(false);
 
 const mode = computed(() => (draftAttributes.value as SessionAttributes).mode ?? "planning");
 
@@ -93,8 +105,14 @@ function setMode(value: SessionAttributes["mode"]) {
     const next: SessionAttributes = { ...(draftAttributes.value as SessionAttributes), mode: value };
     // Starting the session: it's played today unless a date was set
     if (value === "running" && !next.date) next.date = new Date().toISOString().slice(0, 10);
+    const starting = value === "running" && mode.value !== "running";
     onAttributesChange(next as EntityAttributes);
     attrSave.flush();
+    // Starting play: what the players should know from last time, and hero points
+    if (starting) {
+        recapAuto.value = true;
+        showRecap.value = true;
+    }
 }
 
 function onAttributesChange(attrs: EntityAttributes) {

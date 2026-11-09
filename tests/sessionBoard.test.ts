@@ -109,3 +109,24 @@ describe('logsInOrder', () => {
     expect(out.map(o => [o.log.uid, o.attachedTo.map(p => p.uid)])).toEqual([['l1', []], ['l2', ['s']]])
   })
 })
+
+describe('play helpers', () => {
+  it('rolls on a table with its die and finds the row', async () => {
+    const { rollOnTable } = await import('~/utils/sessionBoard')
+    const table = { die: 'd6', rows: [{ min: 1, max: 3, result: 'Rain' }, { min: 4, max: 6, result: 'Sun' }] }
+    expect(rollOnTable(table, () => 0)).toEqual({ roll: 1, result: 'Rain' })
+    expect(rollOnTable(table, () => 0.99)).toEqual({ roll: 6, result: 'Sun' })
+    expect(rollOnTable({ rows: [] }, () => 0.5)).toEqual({ roll: 11, result: '—' })
+  })
+
+  it('sums up a resolved encounter', async () => {
+    const { encounterOutcome } = await import('~/utils/sessionBoard')
+    expect(encounterOutcome({
+      name: 'Ambush',
+      combat_log: [{ round: 1, type: 'damage' }, { round: 3, type: 'death', tokenName: 'Zix' }, { round: 3, type: 'death', tokenName: 'Goblin' }],
+      defeated: [{ name: 'Goblin' }, { name: 'Goblin' }, { name: 'Hobgoblin' }],
+      xp_awarded: 80,
+      resolution: { loot: { entries: [{}, {}], cp: 1200 } },
+    })).toBe('Resolved {{encounter: Ambush}} after 3 rounds.\n- Defeated: 2× Goblin, Hobgoblin\n- Went down: Zix\n- XP: 80 each\n- Loot to the stash: 2 items and 12 gp')
+  })
+})

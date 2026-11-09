@@ -281,8 +281,7 @@ const WIDGET_ICONS = {
 
 <script setup lang="ts">
 import { imageSrc } from '~/rules/images'
-import { rulesQuery, rulesRefRoute } from '~/composables/useRules'
-import { RULES_KINDS } from '~/types/rules'
+import { rulesRefRoute } from '~/composables/useRules'
 import { lsKey } from '~/utils/appNamespace'
 import { useEntities } from "~/composables/useEntities";
 import { useEntityMarkdown } from "~/composables/useEntityMarkdown";
@@ -314,6 +313,7 @@ const emit = defineEmits<{
 const store = useEntities();
 const router = useRouter();
 const { entityLookup, extraTypes: rulesExtraTypes, campaignEncounters, campaignGameId } = useEntityRendering(() => props.campaignId);
+const { linkCandidates } = useLinkAutocomplete(() => props.campaignId, campaignEncounters, campaignGameId);
 
 const dmCtx = useDmScreenContext()
 
@@ -956,68 +956,15 @@ async function checkAutocomplete(
         return;
     }
 
-    const match = text.slice(0, pos).match(/\{\{(\w+):\s*([^}@]*)$/);
-    if (!match) {
+    const found = await linkCandidates(text.slice(0, pos));
+    if (!found) {
         autocomplete.value.show = false;
         return;
     }
-    const partialType = match[1].toLowerCase();
-    if (partialType === "roll") {
-        autocomplete.value.show = false;
-        return;
-    }
-    const partialName = match[2];
-    const campaignCandidates = store.entities
-        .filter(
-            (e) =>
-                e.campaignId === props.campaignId &&
-                (!partialType || e.type.startsWith(partialType)) &&
-                (!partialName ||
-                    e.name.toLowerCase().includes(partialName.toLowerCase())),
-        )
-        .map((e) => ({ type: e.type, name: e.name, id: e.id }));
-    const encounterCandidates = "encounter".startsWith(partialType)
-        ? campaignEncounters.value
-              .filter(
-                  (e) =>
-                      !partialName ||
-                      e.name.toLowerCase().includes(partialName.toLowerCase()),
-              )
-              .map((e) => ({ type: "encounter", name: e.name, id: e.id }))
-        : [];
-    let graphCandidates: { type: string; name: string; id: number }[] = [];
-    if ("graph".startsWith(partialType)) {
-        const graphs = await dbApi.graphLayout.list(props.campaignId);
-        graphCandidates = graphs
-            .filter(
-                (g) =>
-                    !partialName ||
-                    (g.name ?? "Default").toLowerCase().includes(partialName.toLowerCase()),
-            )
-            .map((g) => ({ type: "graph", name: g.name ?? "Default", id: g.id! }));
-    }
-    // Compendium entries once the typed kind is unambiguous ({{spell: fir…)
-    let rulesCandidates: { type: string; name: string; id: number }[] = [];
-    const rulesKinds = RULES_KINDS.filter((k) => k.startsWith(partialType));
-    if (partialType && rulesKinds.length === 1 && partialName.trim()) {
-        const page = await rulesQuery({
-            kind: rulesKinds[0],
-            text: partialName.trim(),
-            games: [campaignGameId.value],
-            limit: 6,
-        });
-        rulesCandidates = page.items.map((e) => ({ type: e.kind, name: e.name, id: -1 }));
-    }
-    const candidates = [
-        ...campaignCandidates,
-        ...encounterCandidates,
-        ...graphCandidates,
-        ...rulesCandidates,
-    ].slice(0, 8);
     autocomplete.value = {
-        show: candidates.length > 0,
-        items: candidates,
-        triggerStart: pos - match[0].length,
+        show: found.items.length > 0,
+        items: found.items,
+        triggerStart: found.triggerStart,
         source,
         mixedIdx,
         cursorIdx: 0,

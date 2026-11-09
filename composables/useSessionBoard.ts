@@ -17,19 +17,33 @@ export type SessionPanel = DbSessionPanel & { id: number }
 export interface BoardState {
   edges: SessionBoardEdge[]
   viewport: { x: number; y: number; zoom: number }
-  selectedPanelId?: number
+  /** The panel last clicked or ticked: the capture bar's target, restored after an encounter. */
+  selectedPanelId?: number | null
+  /** End of the "happened next" chain. */
+  lastTouchedUid?: string | null
   migrated?: true
 }
+
+/** Statuses that mean a panel came up in play. */
+export const TOUCHED_STATUSES = new Set(['played', 'continued', 'done', 'revealed', 'awarded'])
+
+/** What a panel's status becomes when something is logged on it in running mode. */
+const TOUCH_STATUS: Partial<Record<SessionPanelKind, string>> = { scene: 'played', beat: 'done', clue: 'revealed' }
+
+/** Panels that can be part of the "happened next" chain (not notes, logs, references or rewards). */
+const SEQUENCE_KINDS = new Set<SessionPanelKind>(['scene', 'beat', 'clue', 'encounter'])
 
 const PANEL_SAVE_MS = 400
 const CONTENT_SAVE_MS = 1200
 
-export function useSessionBoard(sessionId: () => number, campaignId: () => number) {
+export function useSessionBoard(sessionId: () => number, campaignId: () => number, running: () => boolean = () => false) {
   const store = useEntities()
   const panels = ref<SessionPanel[]>([])
   const drawer = ref<SessionPanel[]>([])
   const edges = ref<SessionBoardEdge[]>([])
   const viewport = ref<BoardState['viewport']>({ x: 40, y: 40, zoom: 0.9 })
+  const selectedPanelId = ref<number | null>(null)
+  const lastTouchedUid = ref<string | null>(null)
   const loaded = ref(false)
 
   const session = computed(() => store.entities.find(e => e.id === sessionId()) ?? (store.currentEntity?.id === sessionId() ? store.currentEntity : null))
@@ -53,6 +67,8 @@ export function useSessionBoard(sessionId: () => number, campaignId: () => numbe
       const uids = new Set(mine.map(p => p.uid))
       edges.value = (board?.edges ?? []).filter(e => uids.has(e.source) && uids.has(e.target))
       if (board?.viewport) viewport.value = { ...board.viewport }
+      selectedPanelId.value = mine.some(p => p.id === board?.selectedPanelId) ? board!.selectedPanelId! : null
+      lastTouchedUid.value = board?.lastTouchedUid && uids.has(board.lastTouchedUid) ? board.lastTouchedUid : null
       loaded.value = true
     } catch (err) {
       reportError('Loading the session board', err)
@@ -98,7 +114,10 @@ export function useSessionBoard(sessionId: () => number, campaignId: () => numbe
     if (!s) return
     const attrs = (s.attributes ?? {}) as Record<string, unknown>
     const prev = (attrs.board ?? {}) as BoardState
-    const board: BoardState = { ...prev, edges: edges.value, viewport: viewport.value, migrated: true }
+    const board: BoardState = {
+      ...prev, edges: edges.value, viewport: viewport.value, migrated: true,
+      selectedPanelId: selectedPanelId.value, lastTouchedUid: lastTouchedUid.value,
+    }
     store.updateEntity(sessionId(), { attributes: toPlain({ ...attrs, board }) as SessionAttributes }).catch(() => {})
   }
 
@@ -163,6 +182,8 @@ export function useSessionBoard(sessionId: () => number, campaignId: () => numbe
       }
     }
     panels.value = panels.value.filter(p => p.id !== panel.id)
+    if (selectedPanelId.value === panel.id) selectedPanelId.value = null
+    if (lastTouchedUid.value === panel.uid) lastTouchedUid.value = null
     scheduleContent()
   }
 
@@ -202,6 +223,55 @@ export function useSessionBoard(sessionId: () => number, campaignId: () => numbe
     return parent ? { x: parent.x + p.x, y: parent.y + p.y } : { x: p.x, y: p.y }
   }
 
+  // ── Play: statuses, the "happened next" chain, the capture target ───────
+
+  /**
+   * A panel came up in play: in running mode it joins the "happened next"
+   * chain after the panel that came up before it.
+   */
+  function touch(id: number) {
+    const panel = panels.value.find(p => p.id === id)
+    if (!panel || !running() || !SEQUENCE_KINDS.has(panel.kind)) return
+    const prev = lastTouchedUid.value
+    if (prev === panel.uid) return
+    if (prev && byUid.value.has(prev) && !edges.value.some(e => e.kind === 'sequence' && e.source === prev && e.target === panel.uid)) {
+      edges.value = [...edges.value, { id: newUid(), source: prev, target: panel.uid, kind: 'sequence' }]
+    }
+    lastTouchedUid.value = panel.uid
+    scheduleBoard()
+  }
+
+  /** Sets a status; a status that means "it came up" adds the panel to the chain while running. */
+  function setStatus(id: number, status: string) {
+    const panel = find(id)
+    if (!panel) return
+    const was = panel.status
+    updatePanel(id, { status })
+    if (TOUCHED_STATUSES.has(status) && !TOUCHED_STATUSES.has(was ?? '')) touch(id)
+    select(id)
+  }
+
+  function select(id: number | null) {
+    if (selectedPanelId.value === id) return
+    selectedPanelId.value = id
+    scheduleBoard()
+  }
+
+  /** Something was logged on this panel: an untouched scene, beat or clue now counts as played. */
+  function markLogged(id: number) {
+    const panel = panels.value.find(p => p.id === id)
+    if (!panel) return
+    const to = TOUCH_STATUS[panel.kind]
+    if (to && !TOUCHED_STATUSES.has(panel.status ?? '') && panel.status !== 'skipped') setStatus(id, to)
+    else touch(id)
+  }
+
+  /** Sequence connections in chain order, numbered from 1 (for their labels). */
+  const sequenceNumbers = computed(() => {
+    const seq = edges.value.filter(e => e.kind === 'sequence')
+    return new Map(seq.map((e, i) => [e.id, i + 1]))
+  })
+
   // ── Connections and viewport ────────────────────────────────────────────
 
   function addEdge(source: string, target: string, kind: SessionBoardEdge['kind']) {
@@ -229,8 +299,8 @@ export function useSessionBoard(sessionId: () => number, campaignId: () => numbe
   watch(sessionId, () => { flushAll(); load() })
 
   return {
-    panels, drawer, edges, viewport, loaded, session, byUid,
+    panels, drawer, edges, viewport, loaded, session, byUid, selectedPanelId, lastTouchedUid, sequenceNumbers,
     load, addPanel, updatePanel, updateAttrs, deletePanel, moveToDrawer, placeFromDrawer, absolutePosition,
-    addEdge, updateEdge, removeEdge, setViewport, flushAll,
+    addEdge, updateEdge, removeEdge, setViewport, flushAll, touch, setStatus, select, markLogged,
   }
 }

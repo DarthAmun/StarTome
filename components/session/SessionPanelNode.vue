@@ -25,6 +25,23 @@
                     <OhVueIcon name="fa-eye" scale="0.65" /> Players
                 </button>
             </template>
+            <template v-if="panel.kind === 'encounter' && panel.attrs.encounterId != null">
+                <div class="sp-tb-sep" />
+                <button class="sp-tb-btn sp-tb-btn--go" title="Open the encounter; Back returns here" @click="data.onRun()">
+                    <OhVueIcon name="gi-crossed-swords" scale="0.65" /> Run
+                </button>
+            </template>
+            <template v-if="panel.kind === 'random-table' && panel.attrs.entityId != null">
+                <div class="sp-tb-sep" />
+                <button class="sp-tb-btn sp-tb-btn--go" @click="data.onRoll()"><OhVueIcon name="fa-dice" scale="0.65" /> Roll</button>
+                <button v-if="lastRoll" class="sp-tb-btn" title="Turn the last result into a Log" @click="data.onLogRoll()">Log it</button>
+            </template>
+            <template v-if="panel.kind === 'reward' && panel.attrs.xp">
+                <div class="sp-tb-sep" />
+                <button class="sp-tb-btn sp-tb-btn--go" title="Award this XP to the party" @click="data.onAwardXp()">
+                    <OhVueIcon name="gi-laurels" scale="0.65" /> Award XP
+                </button>
+            </template>
             <div class="sp-tb-sep" />
             <button v-if="panel.kind !== 'frame'" class="sp-tb-btn" title="Move to the campaign drawer" @click="data.onToDrawer()">
                 <OhVueIcon name="md-folder" scale="0.7" /> Drawer
@@ -37,7 +54,7 @@
 
     <div
         class="sp-node"
-        :class="[`sp-node--${panel.kind}`, `sp-status--${panel.status ?? 'none'}`, { 'sp-node--selected': selected }]"
+        :class="[`sp-node--${panel.kind}`, `sp-status--${panel.status ?? 'none'}`, { 'sp-node--selected': selected, 'sp-node--target': data.isTarget }]"
         :style="{ '--kind': accent, width: cfg.width + 'px' }"
     >
         <Handle id="l" type="source" :position="Position.Left" class="sp-handle" />
@@ -68,10 +85,11 @@
         </div>
 
         <template v-else>
-            <div class="sp-title" :class="{ 'sp-title--empty': !panel.title }">{{ panel.title || placeholder }}</div>
+            <div v-if="panel.title || !previewHtml" class="sp-title" :class="{ 'sp-title--empty': !panel.title }">{{ panel.title || placeholder }}</div>
             <div v-if="info.sub" class="sp-sub">{{ info.sub }}</div>
             <div v-if="info.missing" class="sp-missing">{{ info.missing }}</div>
             <div v-if="panel.kind === 'reward' && panel.attrs.xp" class="sp-reward">{{ panel.attrs.xp }} XP</div>
+            <div v-if="lastRoll" class="sp-roll"><b>{{ lastRoll.roll }}</b> {{ lastRoll.result }}</div>
             <div
                 v-if="previewHtml && panel.kind !== 'beat'"
                 class="sp-preview md-content"
@@ -109,6 +127,11 @@ const props = defineProps<{
         onToggleShouldKnow: () => void
         onToDrawer: () => void
         onDelete: () => void
+        onRun: () => void
+        onRoll: () => void
+        onLogRoll: () => void
+        onAwardXp: () => void
+        isTarget: boolean
     }
 }>()
 
@@ -117,6 +140,7 @@ const cfg = computed(() => PANEL_KINDS[panel.value.kind])
 const info = computed(() => props.data.info ?? {})
 const previewHtml = computed(() => props.data.previewHtml)
 
+const lastRoll = computed(() => panel.value.attrs.lastRoll as { roll: number; result: string } | undefined)
 const logType = computed(() => (panel.value.attrs.logType as LogType | undefined) ?? 'happened')
 const accent = computed(() => (panel.value.kind === 'log' ? LOG_TYPE_COLORS[logType.value] : cfg.value.color))
 const kindLabel = computed(() => (panel.value.kind === 'log' ? `Log · ${logType.value}` : cfg.value.label))
@@ -149,6 +173,7 @@ const logTimeFull = computed(() => logDate.value?.toLocaleString() ?? '')
     cursor: pointer;
     transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s;
 }
+.sp-node--target { box-shadow: 0 0 0 2px color-mix(in oklch, var(--kind) 45%, transparent), 0 2px 10px rgba(0, 0, 0, 0.22); }
 .sp-node--selected { border-color: var(--kind); box-shadow: 0 0 0 2px color-mix(in oklch, var(--kind) 30%, transparent); }
 .sp-node--log { background: color-mix(in oklch, var(--kind) 9%, var(--surface-solid)); border-style: dashed; border-top-style: solid; }
 .sp-node--beat { padding-bottom: 8px; }
@@ -172,6 +197,8 @@ const logTimeFull = computed(() => logDate.value?.toLocaleString() ?? '')
 .sp-title--empty { color: var(--text3); font-style: italic; font-family: var(--fu); font-weight: 400; }
 .sp-sub { font-size: 11px; color: var(--text2); margin-top: 2px; }
 .sp-missing { font-size: 11px; color: var(--danger); margin-top: 2px; }
+.sp-roll { margin-top: 5px; font-size: 12px; color: var(--text); padding: 3px 6px; border-radius: 4px; background: color-mix(in oklch, var(--kind) 12%, transparent); }
+.sp-roll b { color: var(--kind); margin-right: 4px; }
 .sp-reward { font-size: 12px; font-weight: 600; color: var(--kind); margin-top: 3px; }
 
 .sp-preview {
@@ -207,6 +234,7 @@ const logTimeFull = computed(() => logDate.value?.toLocaleString() ?? '')
     font-size: 11px; color: var(--text2); background: transparent; border: none; cursor: pointer; white-space: nowrap;
 }
 .sp-tb-btn:hover { background: var(--bg2); color: var(--text); }
+.sp-tb-btn--go { color: var(--accent-l); font-weight: 600; }
 .sp-tb-btn--on { background: var(--accent-bg); color: var(--accent-l); }
 .sp-tb-btn--danger:hover { color: var(--danger); background: var(--danger-bg); }
 .sp-tb-sep { width: 1px; height: 16px; background: var(--border-hi); margin: 0 2px; }

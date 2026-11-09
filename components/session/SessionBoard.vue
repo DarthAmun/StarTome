@@ -14,6 +14,9 @@
                 <span>{{ PANEL_KINDS[k].label }}</span>
             </button>
             <span class="sb-spacer" />
+            <button v-if="running" class="sb-tool" title="What the players should know from last session" @click="$emit('recap')">
+                <OhVueIcon name="md-history" scale="0.8" /> Recap
+            </button>
             <button class="sb-tool" title="Fit everything into view" @click="fit()">
                 <OhVueIcon name="md-fitscreen" scale="0.8" /> Fit
             </button>
@@ -69,6 +72,7 @@
                 </div>
             </aside>
 
+            <div class="sb-main">
             <!-- Canvas -->
             <div ref="canvasRef" class="sb-canvas" @dragover.prevent @drop="onDrop">
                 <VueFlow
@@ -88,6 +92,7 @@
                     @connect="onConnect"
                     @node-drag-stop="onNodeDragStop"
                     @node-double-click="(e: any) => openEditor(panelIdOf(e.node.id))"
+                    @node-click="(e: any) => board.select(panelIdOf(e.node.id))"
                     @move-end="(e: any) => board.setViewport(e.flowTransform)"
                     @pane-context-menu="onPaneContextMenu"
                     @pane-click="closeMenus"
@@ -135,6 +140,18 @@
                 </div>
             </div>
 
+            <!-- Running: log what happens -->
+            <SessionCaptureBar
+                v-if="running"
+                :target="captureTarget"
+                :campaign-id="campaignId"
+                :encounters="encounters"
+                :game-id="campaignGameId"
+                @submit="onCapture"
+                @clear-target="board.select(null)"
+            />
+            </div>
+
             <!-- Panel editor -->
             <SessionPanelEditor
                 v-if="editorPanel"
@@ -161,18 +178,22 @@ import { useSessionBoard, type SessionPanel } from '~/composables/useSessionBoar
 import { useEntities } from '~/composables/useEntities'
 import { useEntityMarkdown } from '~/composables/useEntityMarkdown'
 import { useEntityRendering } from '~/composables/useEntityRendering'
-import { getDb, type SessionBoardEdge, type SessionPanelKind } from '~/composables/useDb'
-import { PANEL_KINDS, PANEL_KIND_ORDER, EDGE_KIND_STYLE } from '~/utils/sessionBoard'
+import { getDb, type DbEncounter, type SessionBoardEdge, type SessionPanelKind } from '~/composables/useDb'
+import { PANEL_KINDS, PANEL_KIND_ORDER, EDGE_KIND_STYLE, encounterOutcome, rollOnTable } from '~/utils/sessionBoard'
+import { useParty } from '~/composables/useParty'
 import { ENTITY_TYPE_CONFIG, type EntityType, type RandomTableAttributes } from '~/types/entities'
 import { imageSrc } from '~/rules/images'
 
-const props = defineProps<{ sessionId: number; campaignId: number }>()
-defineEmits<{ navigate: [type: string, name: string] }>()
+const props = defineProps<{ sessionId: number; campaignId: number; mode?: string }>()
+defineEmits<{ navigate: [type: string, name: string]; recap: [] }>()
 
 const store = useEntities()
-const board = useSessionBoard(() => props.sessionId, () => props.campaignId)
+const running = computed(() => props.mode === 'running')
+const board = useSessionBoard(() => props.sessionId, () => props.campaignId, () => running.value)
 const { renderMarkdown } = useEntityMarkdown()
-const { entityLookup } = useEntityRendering(() => props.campaignId)
+const { entityLookup, campaignGameId } = useEntityRendering(() => props.campaignId)
+const router = useRouter()
+const party = useParty()
 
 const flowId = computed(() => `session-board-${props.sessionId}`)
 const nodeTypes = { panel: markRaw(SessionPanelNode), frame: markRaw(SessionFrameNode) } as unknown as NodeTypesObject
@@ -188,8 +209,11 @@ const canvasRef = ref<HTMLElement | null>(null)
 
 // ── Encounters (picker and panel info) ───────────────────────────────────
 const encounters = ref<{ id: number; name: string; status: string }[]>([])
+const encounterRows = new Map<number, DbEncounter>()
 async function loadEncounters() {
     const rows = await getDb().encounters.where('campaign_id').equals(props.campaignId).toArray()
+    encounterRows.clear()
+    for (const r of rows) encounterRows.set(r.id!, r)
     encounters.value = rows.map(r => ({ id: r.id!, name: r.name, status: r.status ?? 'prepared' })).sort((a, b) => a.name.localeCompare(b.name))
 }
 
@@ -249,8 +273,13 @@ function panelData(p: SessionPanel) {
         panel: p,
         get previewHtml() { return previewOf(p) },
         get info() { return infoOf(p) },
+        get isTarget() { return running.value && board.selectedPanelId.value === p.id },
         onOpen: () => openEditor(p.id),
-        onStatus: (s: string) => board.updatePanel(p.id, { status: s }),
+        onStatus: (s: string) => board.setStatus(p.id, s),
+        onRun: () => runEncounter(p),
+        onRoll: () => rollTable(p),
+        onLogRoll: () => logRoll(p),
+        onAwardXp: () => awardXp(p),
         onToggleShouldKnow: () => board.updateAttrs(p.id, { playersShouldKnow: !p.attrs.playersShouldKnow }),
         onToDrawer: () => { board.moveToDrawer(p.id); if (editorId.value === p.id) editorId.value = null },
         onDelete: () => deletePanel(p),
@@ -286,7 +315,9 @@ const flowEdges = computed<Edge[]>(() => {
             return {
                 id: e.id, source: ids.get(e.source)!, target: ids.get(e.target)!,
                 type: e.kind === 'attach' ? 'straight' : 'smoothstep',
-                label: e.label,
+                label: e.kind === 'sequence' ? String(board.sequenceNumbers.value.get(e.id) ?? '') : e.label,
+                labelStyle: e.kind === 'sequence' ? { fill: 'var(--accent-l)', fontWeight: 700, fontSize: '11px' } : undefined,
+                labelBgStyle: e.kind === 'sequence' ? { fill: 'var(--bg2)' } : undefined,
                 style: { stroke: st.stroke, strokeWidth: st.width, strokeDasharray: st.dash },
                 markerEnd: e.kind === 'attach' ? undefined : { type: MarkerType.ArrowClosed, color: st.stroke },
                 data: { kind: e.kind },
@@ -429,6 +460,90 @@ async function removeFromDrawer(p: SessionPanel) {
     await board.deletePanel(p.id)
 }
 
+// ── Play ─────────────────────────────────────────────────────────────────
+const captureTarget = computed(() => (board.selectedPanelId.value == null ? null : board.panels.value.find(p => p.id === board.selectedPanelId.value && p.kind !== 'frame' && p.kind !== 'log') ?? null))
+
+/** Where a new Log goes: under the panel it's attached to (below its other logs), else at the view's centre. */
+function logSpot(target: SessionPanel | null): { x: number; y: number } {
+    if (!target) {
+        const c = viewCenter()
+        return { x: Math.round(c.x - 120), y: Math.round(c.y - 30) }
+    }
+    const abs = board.absolutePosition(target)
+    const h = flow?.findNode(nodeId(target))?.dimensions.height ?? 120
+    const attached = board.edges.value.filter(e => e.kind === 'attach' && (e.source === target.uid || e.target === target.uid)).length
+    return { x: abs.x + 10, y: Math.round(abs.y + h + 40 + attached * 110) }
+}
+
+async function addLog(target: SessionPanel | null, content: string, attrs: Record<string, unknown> = {}) {
+    const log = await board.addPanel('log', logSpot(target), {
+        content,
+        attrs: { logType: 'happened', at: new Date().toISOString(), ...attrs },
+    })
+    if (log && target) {
+        board.addEdge(target.uid, log.uid, 'attach')
+        board.markLogged(target.id)
+    }
+    return log
+}
+
+async function onCapture(entry: { text: string; logType: string; playersShouldKnow: boolean }) {
+    await addLog(captureTarget.value, entry.text, { logType: entry.logType, playersShouldKnow: entry.playersShouldKnow || undefined })
+}
+
+function runEncounter(p: SessionPanel) {
+    const id = p.attrs.encounterId
+    if (typeof id !== 'number') return
+    board.select(p.id)
+    board.flushAll()
+    router.push(`/encounter/${id}?from=session-${props.sessionId}`)
+}
+
+/** Encounters resolved since their panel last looked: their outcome becomes a Log on the panel. */
+async function logEncounterResults() {
+    for (const p of board.panels.value.filter(x => x.kind === 'encounter' && typeof x.attrs.encounterId === 'number' && !x.attrs.resultLogged)) {
+        const enc = encounterRows.get(p.attrs.encounterId as number)
+        if (enc?.status !== 'resolved') continue
+        board.updateAttrs(p.id, { resultLogged: true })
+        await addLog(p, encounterOutcome(enc), { fromEncounterId: enc.id })
+    }
+}
+
+function rollTable(p: SessionPanel) {
+    const ent = store.entities.find(e => e.id === p.attrs.entityId)
+    if (!ent) return
+    const { roll, result } = rollOnTable(ent.attributes as RandomTableAttributes)
+    board.updateAttrs(p.id, { lastRoll: { roll, result, at: new Date().toISOString() } })
+}
+
+async function logRoll(p: SessionPanel) {
+    const last = p.attrs.lastRoll as { roll: number; result: string } | undefined
+    if (!last) return
+    await addLog(p, `Rolled ${last.roll} on {{random-table: ${p.title}}}: ${last.result}`)
+}
+
+/** Opens the Award XP dialog prefilled; confirming it ticks the panel and remembers the award. */
+function awardXp(p: SessionPanel) {
+    const started = new Date().toISOString()
+    const reason = p.title || 'Session reward'
+    party.requestXpAward({ campaignId: props.campaignId, refType: null, refId: null, reason, amount: Number(p.attrs.xp) || undefined })
+    const stop = watch(party.xpPrompt, async (prompt) => {
+        if (prompt) return
+        stop()
+        // The dialog writes the award after closing
+        await new Promise(r => setTimeout(r, 400))
+        const award = await getDb().xpAwards.where('campaign_id').equals(props.campaignId).filter(a => a.at >= started && !a.undone_at).last()
+        if (!award?.id) return
+        board.updateAttrs(p.id, { awardIds: [...((p.attrs.awardIds as number[]) ?? []), award.id] })
+        board.setStatus(p.id, 'awarded')
+    })
+}
+
+function onWindowFocus() {
+    if (!running.value) return
+    loadEncounters().then(logEncounterResults)
+}
+
 // ── View ─────────────────────────────────────────────────────────────────
 function onPaneReady(api: VueFlowStore) {
     flow = api
@@ -457,14 +572,25 @@ function onKey(e: KeyboardEvent) {
 
 onMounted(async () => {
     window.addEventListener('keydown', onKey)
+    window.addEventListener('focus', onWindowFocus)
     await Promise.all([board.load(), loadEncounters(), store.loadAll(props.campaignId)])
     // A converted board has never been looked at: show all of it once the panels are measured
     const vp = board.viewport.value
     const fitOnOpen = board.panels.value.length > 0 && vp.x === 40 && vp.y === 40 && vp.zoom === 0.9
     buildNodes()
     if (fitOnOpen) fitWhenMeasured()
+    // Back from an encounter: the panel you ran it from is selected again
+    if (board.selectedPanelId.value != null) {
+        await nextTick()
+        const n = flow?.findNode(`p${board.selectedPanelId.value}`)
+        if (n) flow?.addSelectedNodes([n])
+    }
+    if (running.value) await logEncounterResults()
 })
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onBeforeUnmount(() => {
+    window.removeEventListener('keydown', onKey)
+    window.removeEventListener('focus', onWindowFocus)
+})
 
 watch(() => props.sessionId, async () => {
     editorId.value = null
@@ -506,7 +632,8 @@ watch(() => props.sessionId, async () => {
 .sb-count { font-size: 10px; padding: 0 5px; border-radius: 99px; background: var(--accent); color: #fff; }
 
 .sb-body { flex: 1; min-height: 0; display: flex; }
-.sb-canvas { flex: 1; min-width: 0; position: relative; }
+.sb-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sb-canvas { flex: 1; min-height: 0; position: relative; }
 
 .sb-empty {
     position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;

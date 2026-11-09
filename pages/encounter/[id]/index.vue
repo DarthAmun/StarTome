@@ -6,11 +6,8 @@
       <!-- ── Top toolbar ─────────────────────────────────────────────────────── -->
       <header class="encounter-toolbar">
         <!-- Back -->
-        <NuxtLink
-          :to="encounter?.campaignId ? `/campaign/${encounter.campaignId}/encounters` : '/'"
-          class="back-btn"
-        >
-          <OhVueIcon name="md-arrowback" scale="0.75" /> Back
+        <NuxtLink :to="backTo" class="back-btn">
+          <OhVueIcon name="md-arrowback" scale="0.75" /> {{ fromSessionId ? 'Back to session' : 'Back' }}
         </NuxtLink>
 
         <!-- Editable encounter name -->
@@ -1089,6 +1086,16 @@ const ADJUSTMENT_OPTIONS: { value: Adjustment | null; label: string }[] = [
 ];
 
 const route = useRoute();
+// Opened from a session board (Run on an Encounter panel): Back returns there
+const fromSessionId = computed(() => {
+  const m = String(route.query.from ?? '').match(/^session-(\d+)$/);
+  return m ? Number(m[1]) : null;
+});
+const backTo = computed(() => {
+  const cid = encounter.value?.campaignId;
+  if (!cid) return '/';
+  return fromSessionId.value ? `/campaign/${cid}/sessions/${fromSessionId.value}` : `/campaign/${cid}/encounters`;
+});
 /** The map was made in the map maker (pages/encounter/[id]/map-maker.vue). */
 const hasBattleMap = ref(false);
 const store = useEncounterStore();

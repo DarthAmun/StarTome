@@ -222,3 +222,46 @@ export function logsInOrder<P extends Pick<DbSessionPanel, 'uid' | 'kind' | 'att
         .filter((p): p is P => !!p && p.kind !== 'log'),
     }))
 }
+
+// ── Play helpers ─────────────────────────────────────────────────────────
+
+/** A roll on a random table: the die from its attributes (d20 when unset), the row it lands on. */
+export function rollOnTable(table: { die?: string; rows?: { min: number; max: number; result: string }[] }, random = Math.random): { roll: number; result: string } {
+  const sides = Number((table.die ?? 'd20').replace(/^d/, '')) || 20
+  const roll = 1 + Math.floor(random() * sides)
+  const row = (table.rows ?? []).find(r => roll >= r.min && roll <= r.max)
+  return { roll, result: row?.result ?? '—' }
+}
+
+export interface EncounterOutcomeInput {
+  name: string
+  combat_log?: unknown
+  defeated?: unknown
+  xp_awarded?: number | null
+  resolution?: unknown
+}
+
+/** The text of the Log an Encounter panel gets when its encounter is resolved. */
+export function encounterOutcome(enc: EncounterOutcomeInput): string {
+  const log = (Array.isArray(enc.combat_log) ? enc.combat_log : []) as { round?: number; type?: string; tokenName?: string }[]
+  const rounds = log.reduce((m, e) => Math.max(m, e.round ?? 0), 0)
+  const defeated = (Array.isArray(enc.defeated) ? enc.defeated : []) as { name?: string }[]
+  const fallen = [...new Set(log.filter(e => e.type === 'death' && e.tokenName).map(e => e.tokenName!))]
+  const res = (enc.resolution && typeof enc.resolution === 'object' ? enc.resolution : {}) as { loot?: { entries?: unknown[]; cp?: number } }
+  const lines = [`Resolved {{encounter: ${enc.name}}}${rounds ? ` after ${rounds} round${rounds === 1 ? '' : 's'}` : ''}.`]
+  const names = defeated.map(d => d.name).filter(Boolean) as string[]
+  if (names.length) lines.push(`- Defeated: ${countNames(names)}`)
+  const down = fallen.filter(n => !names.includes(n))
+  if (down.length) lines.push(`- Went down: ${down.join(', ')}`)
+  if (enc.xp_awarded) lines.push(`- XP: ${enc.xp_awarded} each`)
+  const stacks = res.loot?.entries?.length ?? 0
+  const cp = res.loot?.cp ?? 0
+  if (stacks || cp) lines.push(`- Loot to the stash: ${[stacks ? `${stacks} item${stacks === 1 ? '' : 's'}` : '', cp ? `${(cp / 100).toLocaleString()} gp` : ''].filter(Boolean).join(' and ')}`)
+  return lines.join('\n')
+}
+
+function countNames(names: string[]): string {
+  const counts = new Map<string, number>()
+  for (const n of names) counts.set(n, (counts.get(n) ?? 0) + 1)
+  return [...counts].map(([n, c]) => (c > 1 ? `${c}× ${n}` : n)).join(', ')
+}

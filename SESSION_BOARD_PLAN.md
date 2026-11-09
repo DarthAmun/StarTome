@@ -2,7 +2,7 @@
 
 Goal: a session stops being two markdown editors (Prep / Notes) and becomes a **board**: a canvas of panels (scenes, beats, clues, encounters, log entries …) that you arrange, connect and run from. What actually happened lives on the board next to what was planned. Unused panels go to the next session or to a campaign-wide drawer.
 
-Written 2026-11-09 against `main` at `3f0f95c`. **P1 built 2026-11-09** (see §12 for what differs from this plan).
+Written 2026-11-09 against `main` at `3f0f95c`. **P1 and P2 built 2026-11-09** (see §12 and §13 for what differs from this plan).
 
 ---
 
@@ -224,8 +224,8 @@ Later candidates: HP and conditions (also in the mirror), party wealth, starship
 
 | Phase | Contents | Done when |
 |---|---|---|
-| **P1 Board and data** | `sessionPanels` table, v19 migration + converter, backup/delete wiring, `SessionBoard.vue` with all ten panel types and three connection kinds, palette to add panels, side drawer editor with tab bar and LinkBar, mode switch in the header, link rebuilding, Session Log page | Old sessions open as boards with their scenes and notes; you can prep a new session entirely on the board |
-| **P2 Running** | Status toggles per kind, automatic sequence connections, quick capture bar (autocomplete as composable), encounter Run + back + automatic result Logs, random table Roll / Log it, Reward award buttons, recap check | A session can be run from the board without opening another editor |
+| **P1 Board and data** ✅ done | `sessionPanels` table, v19 migration + converter, backup/delete wiring, `SessionBoard.vue` with all ten panel types and three connection kinds, palette to add panels, side drawer editor with tab bar and LinkBar, mode switch in the header, link rebuilding, Session Log page | Old sessions open as boards with their scenes and notes; you can prep a new session entirely on the board |
+| **P2 Running** ✅ done | Status toggles per kind, automatic sequence connections, quick capture bar (autocomplete as composable), encounter Run + back + automatic result Logs, random table Roll / Log it, Reward award buttons, recap check | A session can be run from the board without opening another editor |
 | **P3 Finishing** | Finish review, campaign drawer with search, next-session creation, continued scenes across boards | Unused prep flows into the next session or the drawer |
 | **P4 Extras** | Party floating panel (§9), remove the GM screen session widget, campaign-format `panels` docs, global search into panels, inspiration search across campaigns | – |
 
@@ -263,3 +263,12 @@ Tests (vitest): the migration converter (heading splitting, edge cases: no headi
 - **Status toggles** (planned/played/…, done, revealed, awarded) and the *players should know* flag are already in P1, on the panel toolbar and in the side editor. Sequence connections can be set by hand (click a connection); creating them automatically is still P2.
 - **Frames resize** with a corner handle, not `@vue-flow/node-resizer` (no new dependency).
 - Not done yet from P1's list: nothing. The GM screen session widget still shows the old fields (removal is P4).
+
+## 13. P2 as built
+
+- **"Happened next" chain**: in running mode, marking a Scene, Beat, Clue or Encounter as played / continued / done / revealed (or logging on it) links it after the panel that came up before. Notes, Logs, references and Rewards stay out of the chain. Sequence connections are numbered.
+- **Capture bar** (running mode, below the board): logs attach to the selected panel (or are improvised), with the four log types, the *players should know* flag, and `{{type: …}}` plus `@name` autocomplete. Logging on an untouched Scene, Beat or Clue marks it played / done / revealed. The link search moved from MarkdownEditor into [useLinkAutocomplete.ts](composables/useLinkAutocomplete.ts), which both use.
+- **Encounters**: *Run* opens `/encounter/<id>?from=session-<id>`; the encounter page's Back button then says "Back to session". When the board opens (or the window regains focus) in running mode, every resolved encounter on it gets a result Log once (`encounterOutcome`: rounds, defeated, who went down, XP, loot). The panel you ran from is selected again.
+- **Random tables**: *Roll* shows the result on the panel; *Log it* turns it into a Log.
+- **Rewards**: *Award XP* opens the existing Award XP dialog prefilled; a confirmed award is remembered in `awardIds` and ticks the panel. **Treasure is not awarded from the panel**: the treasure tools live in the Party page's wealth section, which isn't a standalone dialog yet.
+- **Recap** opens when a session switches to running (only if there is something to show) and from the *Recap* button: the previous session's *players should know* Logs to tick off, and *+1 hero point to everyone* for players on Play Buddy.

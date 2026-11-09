@@ -51,7 +51,7 @@
                         v-for="s in cfg.statuses"
                         :key="s"
                         :class="{ on: panel.status === s }"
-                        @click="board.updatePanel(panel.id, { status: s })"
+                        @click="board.setStatus(panel.id, s)"
                     >{{ s }}</button>
                 </div>
             </div>
