@@ -1851,7 +1851,6 @@ select optgroup {
 
 /* Ghost */
 .ghost-btn,
-.pv-btn,
 .pv-btn--ghost,
 .f-btn,
 .f-btn--ghost,
@@ -1873,7 +1872,6 @@ select optgroup {
     text-decoration: none;
 }
 .ghost-btn:hover,
-.pv-btn:hover,
 .pv-btn--ghost:hover,
 .f-btn:hover,
 .f-btn--ghost:hover,
@@ -1926,6 +1924,12 @@ select optgroup {
 .btn-sm {
     padding: 4px 10px !important;
     font-size: 12px !important;
+}
+.pv-btn--primary:disabled,
+.pv-btn--ghost:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
 }
 
 /* Icon buttons */

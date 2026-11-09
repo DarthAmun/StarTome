@@ -12,7 +12,7 @@
             <label class="f-label">Image</label>
             <div class="enc-add-condition">
               <input v-model="form.imageSource" placeholder="URL or file path" class="pv-input flex-1" />
-              <button type="button" class="pv-btn pv-btn--primary icon-btn-sq" @click="emit('browse')">
+              <button type="button" class="icon-btn-sq" @click="emit('browse')">
                 <OhVueIcon name="fa-folder-open" scale="0.9" />
               </button>
             </div>
