@@ -98,4 +98,40 @@ test.describe('note editor (CodeMirror)', () => {
     await expect(block).toHaveCount(0)
     await expect(page.locator('.mixed-preview strong', { hasText: 'new' })).toBeVisible()
   })
+
+  test('random table rows: link completion, Enter leaves, line breaks become spaces', async ({ page }) => {
+    await openSeeded(page)
+    const { campaignId } = await seededIds(page)
+    // The demo has no random table: make one with a row
+    await page.goto(`/#/campaign/${campaignId}/random-tables`)
+    await page.getByRole('button', { name: /^New Random Table/ }).first().click()
+    await page.getByRole('button', { name: '+ Add row' }).click()
+    const cell = page.locator('.rte-result-input .cm-content').first()
+    await expect(cell).toBeVisible()
+    await cell.click()
+    await page.keyboard.press('End')
+    await page.keyboard.type(' near {{obs')
+    await expect(page.locator('.cm-tooltip-autocomplete li', { hasText: 'The Obsidian Circle' })).toBeVisible()
+    await page.waitForTimeout(150)
+    await page.keyboard.press('Enter')
+    await expect(cell).toContainText('near {{faction: The Obsidian Circle}}')
+
+    // Enter with no list open leaves the field instead of adding a line
+    await page.keyboard.press('Enter')
+    await expect(cell).not.toBeFocused()
+    await expect(cell.locator('.cm-line')).toHaveCount(1)
+
+    // A pasted line break becomes a space
+    await cell.click()
+    await page.keyboard.press('End')
+    await page.keyboard.insertText(' and\nmore')
+    await expect(cell.locator('.cm-line')).toHaveCount(1)
+    await expect(cell).toContainText('and more')
+
+    // Saved: still there after a reload
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(800)
+    await page.reload()
+    await expect(page.locator('.rte-result-input .cm-content').first()).toContainText('{{faction: The Obsidian Circle}} and more')
+  })
 })

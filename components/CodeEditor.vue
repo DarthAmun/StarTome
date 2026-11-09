@@ -1,5 +1,5 @@
 <template>
-  <div ref="host" class="cme" :class="{ 'cme--fill': fill }" />
+  <div ref="host" class="cme" :class="{ 'cme--fill': fill, 'cme--single': singleLine }" />
 </template>
 
 <script setup lang="ts">
@@ -12,6 +12,8 @@
  * - v-model is the text; outside changes replace the document.
  * - `fill`: takes its parent's height and scrolls; else it grows with the text.
  * - Escape (with no completion open) emits `escape`; leaving emits `blur`.
+ * - `singleLine`: a one-line field (it still wraps on screen): no line
+ *   breaks (pasted ones become spaces), Enter leaves it, the UI font.
  * - Exposes focus(), insert(before, after) (wraps the selection) and view.
  */
 import { onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
@@ -38,8 +40,9 @@ const props = withDefaults(defineProps<{
   readonly?: boolean
   autofocus?: boolean
   fill?: boolean
+  singleLine?: boolean
   complete?: CompleteFn
-}>(), { placeholder: '', readonly: false, autofocus: false, fill: false })
+}>(), { placeholder: '', readonly: false, autofocus: false, fill: false, singleLine: false })
 const emit = defineEmits<{ 'update:modelValue': [text: string]; blur: []; escape: [] }>()
 
 const host = shallowRef<HTMLDivElement | null>(null)
@@ -146,8 +149,24 @@ const dot = {
   position: 20,
 }
 
+/** One-line fields: line breaks become spaces, Enter (with no list open) leaves the field */
+function singleLineExtensions(): Extension[] {
+  return [
+    EditorState.transactionFilter.of(tr => {
+      if (!tr.docChanged || tr.newDoc.lines === 1) return tr
+      const text = tr.newDoc.toString().replace(/\s*\n\s*/g, ' ')
+      return [{ changes: { from: 0, to: tr.startState.doc.length, insert: text }, selection: { anchor: Math.min(tr.newSelection.main.head, text.length) } }]
+    }),
+    Prec.highest(keymap.of([{
+      key: 'Enter',
+      run: v => { if (completionStatus(v.state) === 'active') return false; v.contentDOM.blur(); return true },
+    }])),
+  ]
+}
+
 function extensions(): Extension[] {
   return [
+    ...(props.singleLine ? singleLineExtensions() : []),
     history(),
     markdown(),
     syntaxHighlighting(markdownStyle),
@@ -233,6 +252,7 @@ defineExpose({ focus, insert, view })
 .cme--fill { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .cme--fill .cm-editor { flex: 1; min-height: 0; }
 .cme--fill .cm-scroller { overflow-y: auto; }
+.cme.cme--single .cm-scroller { font-family: inherit; line-height: 1.5; }
 
 /* The completion list sits in body: above dialogs */
 .cm-tooltip.cm-tooltip-autocomplete { z-index: calc(var(--z-modal-top) + 50); }

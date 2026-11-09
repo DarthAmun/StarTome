@@ -39,30 +39,14 @@
           <input class="rte-num-input" type="number" v-model.number="row.min" min="1" :max="dieMax" @change="saveRows" />
           <input class="rte-num-input" type="number" v-model.number="row.max" min="1" :max="dieMax" @change="saveRows" />
           <div class="rte-result-wrap">
-            <input
-              :ref="(el) => setInputRef(el as HTMLInputElement | null, i)"
-              class="rte-result-input"
-              type="text"
+            <CodeEditor
               v-model="row.result"
+              class="rte-result-input"
+              single-line
               placeholder="Result…"
-              @input="(e) => { saveRows(); checkAc(e as InputEvent, i) }"
-              @keydown="(e) => onResultKeydown(e as KeyboardEvent, i)"
-              @blur="hideAc"
+              :complete="completeLinks"
+              @update:model-value="saveRows"
             />
-            <div v-if="ac.show && ac.rowIdx === i" class="rte-ac-dropdown">
-              <button
-                v-for="(item, idx) in ac.items"
-                :key="`${item.type}:${item.name}`"
-                class="rte-ac-item"
-                :class="{ 'rte-ac-item--active': ac.cursorIdx === idx }"
-                @mousedown.prevent="applyAc(i)"
-              >
-                <span class="rte-ac-dot" :style="{ background: typeColorMap[item.type] ?? '#888' }" />
-                <span class="rte-ac-name">{{ item.name }}</span>
-                <span class="rte-ac-type">{{ item.type }}</span>
-              </button>
-              <p v-if="!ac.items.length" class="rte-ac-empty">No matches</p>
-            </div>
           </div>
           <button class="rte-del-btn" @click="removeRow(i)">✕</button>
         </div>
@@ -96,7 +80,8 @@ import { rulesRefRoute } from '~/composables/useRules'
 import { useEntities } from '~/composables/useEntities'
 import type { RandomTableAttributes, RandomTableRow } from '~/types/entities'
 import { useEntityMarkdown } from '~/composables/useEntityMarkdown'
-import { useEntityRendering, typeColorMap } from '~/composables/useEntityRendering'
+import { useEntityRendering } from '~/composables/useEntityRendering'
+import { useLinkCompletion } from '~/composables/useLinkCompletion'
 
 const props = defineProps<{ entityId: number; campaignId: number }>()
 const emit = defineEmits<{ navigate: [type: string, name: string]; deleted: [] }>()
@@ -107,54 +92,8 @@ const { entityLookup, extraTypes, campaignGameId } = useEntityRendering(() => pr
 const router = useRouter()
 const entity = computed(() => store.entities.find(e => e.id === props.entityId) ?? store.currentEntity)
 
-const inputRefs: (HTMLInputElement | null)[] = []
-function setInputRef(el: HTMLInputElement | null, i: number) { inputRefs[i] = el }
-
-const ac = ref({ show: false, items: [] as { type: string; name: string }[], triggerStart: 0, cursorIdx: 0, rowIdx: -1 })
-
-function checkAc(e: InputEvent, rowIdx: number) {
-  const el = e.target as HTMLInputElement
-  const pos = el.selectionStart ?? 0
-  const match = el.value.slice(0, pos).match(/\{\{([\w-]*):\s*([^}@]*)$/)
-  if (!match) { ac.value.show = false; return }
-  const partialType = match[1].toLowerCase()
-  const partialName = match[2]
-  const candidates = store.entities
-    .filter(ent =>
-      ent.campaignId === props.campaignId &&
-      (!partialType || ent.type.startsWith(partialType)) &&
-      (!partialName || ent.name.toLowerCase().includes(partialName.toLowerCase()))
-    )
-    .map(ent => ({ type: ent.type, name: ent.name }))
-    .slice(0, 8)
-  ac.value = { show: candidates.length > 0, items: candidates, triggerStart: pos - match[0].length, cursorIdx: 0, rowIdx }
-}
-
-function applyAc(rowIdx: number) {
-  const item = ac.value.items[ac.value.cursorIdx]
-  const el = inputRefs[rowIdx]
-  const row = rows.value[rowIdx]
-  if (!item || !el || !row) return
-  const pos = el.selectionStart ?? 0
-  const triggerStart = ac.value.triggerStart
-  const replacement = `{{${item.type}: ${item.name}}}`
-  row.result = `${row.result.slice(0, triggerStart)}${replacement}${row.result.slice(pos)}`
-  ac.value.show = false
-  saveRows()
-  nextTick(() => { el.setSelectionRange(triggerStart + replacement.length, triggerStart + replacement.length); el.focus() })
-}
-
-function onResultKeydown(e: KeyboardEvent, rowIdx: number) {
-  if (!ac.value.show || ac.value.rowIdx !== rowIdx) return
-  const items = ac.value.items
-  if (e.key === 'Escape') { e.preventDefault(); ac.value.show = false; return }
-  if (!items.length) return
-  if (e.key === 'ArrowDown' || (e.key === 'Tab' && !e.shiftKey)) { e.preventDefault(); ac.value.cursorIdx = (ac.value.cursorIdx + 1) % items.length }
-  else if (e.key === 'ArrowUp' || (e.key === 'Tab' && e.shiftKey)) { e.preventDefault(); ac.value.cursorIdx = (ac.value.cursorIdx - 1 + items.length) % items.length }
-  else if (e.key === 'Enter') { e.preventDefault(); applyAc(rowIdx) }
-}
-
-function hideAc() { setTimeout(() => { ac.value.show = false; ac.value.rowIdx = -1 }, 150) }
+// `{{` links in a result, as in notes
+const { completeLinks } = useLinkCompletion(() => props.campaignId)
 
 async function onResultClick(e: MouseEvent) {
   const el = (e.target as HTMLElement).closest('[data-entity-type]') as HTMLElement | null
@@ -214,7 +153,6 @@ function addRow() {
 
 function removeRow(i: number) {
   rows.value.splice(i, 1)
-  inputRefs.splice(i, 1)
   saveRows()
 }
 
@@ -284,12 +222,12 @@ async function onDelete() {
 .rte-num-input:focus { outline: none; border-color: var(--border-hi); }
 
 .rte-result-input {
-  width: 100%; padding: 4px 8px; border-radius: 5px;
+  width: 100%; min-height: 0; padding: 4px 8px; border-radius: 5px;
   background: var(--bg); border: 1px solid var(--border);
   font-size: 12.5px; color: var(--text);
 }
-.rte-result-input:focus { outline: none; border-color: var(--border-hi); }
-.rte-result-input::placeholder { color: var(--text3); }
+.rte-result-input:focus-within { border-color: var(--border-hi); }
+.rte-result-input :deep(.cm-editor) { font-size: 12.5px; }
 
 .rte-del-btn {
   width: 22px; height: 22px; border-radius: 4px; font-size: 10px;
@@ -308,21 +246,5 @@ async function onDelete() {
 
 .rte-result-wrap { position: relative; min-width: 0; }
 
-.rte-ac-dropdown {
-  position: absolute; top: calc(100% + 2px); left: 0; z-index: 200;
-  background: var(--surface-solid); border: 1px solid var(--border-hi);
-  border-radius: var(--r2); width: 260px; overflow: hidden; box-shadow: var(--sh-md);
-}
-.rte-ac-item {
-  display: flex; align-items: center; gap: 8px; padding: 6px 10px; width: 100%;
-  background: transparent; border: none; cursor: pointer; color: var(--text);
-  transition: background 0.1s; text-align: left; font-size: 12px;
-}
-.rte-ac-item:hover, .rte-ac-item--active { background: var(--surface-hi); }
-.rte-ac-item--active { border-left: 2px solid var(--accent); padding-left: 8px; }
-.rte-ac-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.rte-ac-name { flex: 1; }
-.rte-ac-type { font-size: 10px; color: var(--text3); font-family: var(--fm); }
-.rte-ac-empty { padding: 8px 10px; font-size: 11px; color: var(--text3); font-style: italic; margin: 0; }
 .rte-roll-result :deep(.entity-ref) { cursor: pointer; }
 </style>
