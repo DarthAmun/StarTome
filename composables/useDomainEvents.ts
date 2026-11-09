@@ -6,6 +6,8 @@
  */
 export interface DomainEvents {
   questCompleted: { campaignId: number; questId: number; name: string; milestone: boolean }
+  /** An NPC entry got a new name; party members linked to it follow. */
+  npcRenamed: { campaignId: number; npcId: number; name: string }
 }
 
 type Listener<K extends keyof DomainEvents> = (payload: DomainEvents[K]) => void | Promise<void>

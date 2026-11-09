@@ -136,6 +136,7 @@ async function updateEntity(id: number, updates: { name?: string; content?: stri
     const entity = entities.value.find(e => e.id === id)
     const before = entity ?? (currentEntity.value?.id === id ? currentEntity.value : null)
     const wasCompleted = (before?.attributes as { status?: string } | undefined)?.status === 'completed'
+    const prevName = before?.name
     if (entity) Object.assign(entity, updates)
     if (currentEntity.value?.id === id) Object.assign(currentEntity.value, updates)
 
@@ -157,6 +158,10 @@ async function updateEntity(id: number, updates: { name?: string; content?: stri
     }
 
     if (updates.content !== undefined) await syncLinks(id, updates.content)
+
+    if (before?.type === 'npc' && updates.name !== undefined && updates.name !== prevName) {
+      await emitDomainEvent('npcRenamed', { campaignId: before.campaignId, npcId: id, name: updates.name })
+    }
 
     const after = updates.attributes as { status?: string; milestone?: boolean } | undefined
     if (before?.type === 'quest' && !wasCompleted && after?.status === 'completed') {

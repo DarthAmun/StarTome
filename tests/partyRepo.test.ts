@@ -76,6 +76,21 @@ describe('party repository', () => {
     expect(party.characters.value.map(x => x.name)).toEqual(['Lira'])
   })
 
+  it('renames party members when their NPC is renamed', async () => {
+    const c = await campaign('milestone')
+    const party = useParty()
+    await party.load(c.id)
+    const entities = useEntities()
+    await entities.loadAll(c.id)
+    await entities.updateEntity(c.kib, { name: 'Kibwe' })
+    expect(party.characters.value.map(x => x.name)).toEqual(['Kibwe', 'Lira'])
+
+    // A rename that happened without the event is picked up on the next load
+    await getDb().entities.update(c.lira, { name: 'Lirael' })
+    await party.load(c.id)
+    expect(party.characters.value.map(x => x.name)).toEqual(['Kibwe', 'Lirael'])
+  })
+
   it('asks to level up when a milestone quest is completed in a milestone campaign', async () => {
     for (const mode of ['milestone', 'xp'] as const) {
       const c = await campaign(mode)

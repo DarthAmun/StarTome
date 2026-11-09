@@ -199,6 +199,12 @@ async function adoptFlaggedNpcs(campaignId: number) {
     ])
     const linked = new Set(existing.map(c => c.npc_entity_id).filter((id): id is number => id != null))
     const ts = now()
+    // Linked characters carry their NPC's name (renames made before npcRenamed existed)
+    const npcName = new Map(npcs.map(n => [n.id!, n.name]))
+    for (const c of existing) {
+      const name = c.npc_entity_id != null ? npcName.get(c.npc_entity_id) : undefined
+      if (name && name !== c.name) await db.characters.update(c.id!, { name, updated_at: ts })
+    }
     const fresh = npcs
       .filter(n => !linked.has(n.id!) && parseJsonObject(n.attributes).isPlayerCharacter)
       .map((n): DbCharacter => ({
@@ -567,6 +573,14 @@ onDomainEvent('questCompleted', async ({ campaignId, questId, name, milestone })
   const advancement = campaignRules(await dbApi.campaigns.get(campaignId)).advancement
   if (advancement === 'milestone' && milestone) requestLevelUp({ campaignId, trigger: 'quest', refId: questId, reason: `Milestone reached: ${name}` })
   if (advancement === 'xp') requestXpAward({ campaignId, refType: 'quest', refId: questId, reason: `Quest: ${name}` })
+})
+
+// A renamed NPC renames the party members that stand for it
+onDomainEvent('npcRenamed', async ({ campaignId, npcId, name }) => {
+  const rows = await getDb().characters.where('npc_entity_id').equals(npcId).toArray()
+  const ts = now()
+  for (const r of rows) if (r.name !== name) await getDb().characters.update(r.id!, { name, updated_at: ts })
+  if (rows.length) await reloadIfLoaded(campaignId)
 })
 
 function requestLevelUp(p: LevelUpPrompt) { prompt.value = p }
