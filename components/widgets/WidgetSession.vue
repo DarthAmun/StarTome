@@ -39,7 +39,8 @@ import type { SessionAttributes } from '~/types/entities'
 import { getDb, type DbSessionPanel } from '~/composables/useDb'
 import { useEntityMarkdown } from '~/composables/useEntityMarkdown'
 import { useEntityRendering } from '~/composables/useEntityRendering'
-import { LOG_TYPE_COLORS, PANEL_KINDS, logsInOrder, type LogType, type SessionBoardEdge } from '~/utils/sessionBoard'
+import { LOG_TYPE_COLORS, PANEL_KINDS, logsInOrder, type LogType } from '~/utils/sessionBoard'
+import type { SessionBoardEdge } from '~/db/schema'
 
 const props = defineProps<{ entity: Entity }>()
 // Sessions have a mode (planning/running/finished), not a status

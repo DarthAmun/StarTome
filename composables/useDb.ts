@@ -15,7 +15,8 @@ import { resolveImageDataUrl, storeImage, storeInlineAttributes, storeInlineImag
 import { EXPORT_CELL_PX, type BattleMap, type GeneratedWall } from '~/rules/battlemap'
 import { imageTypeOf } from '~/utils/image'
 
-export * from '~/db/schema'
+// Relative: Nuxt's auto-import scanner doesn't resolve '~' in export-star
+export * from '../db/schema'
 
 // ── API ──────────────────────────────────────────────────────────────────
 

@@ -59,7 +59,8 @@ import { useEntityMarkdown } from '~/composables/useEntityMarkdown'
 import { useEntities, type Entity } from '~/composables/useEntities'
 import { useEntityRendering } from '~/composables/useEntityRendering'
 import { getDb, type DbSessionPanel } from '~/composables/useDb'
-import { LOG_TYPE_COLORS, PANEL_KINDS, logsInOrder, type LogType, type SessionBoardEdge } from '~/utils/sessionBoard'
+import { LOG_TYPE_COLORS, PANEL_KINDS, logsInOrder, type LogType } from '~/utils/sessionBoard'
+import type { SessionBoardEdge } from '~/db/schema'
 import type { SessionAttributes } from '~/types/entities'
 
 const route = useRoute()

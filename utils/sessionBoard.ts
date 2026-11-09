@@ -6,8 +6,6 @@
 import { extractLinks } from '~/composables/useEntityParser'
 import type { DbSessionPanel, SessionBoardEdge, SessionPanelKind } from '~/db/schema'
 
-export type { DbSessionPanel, SessionBoardEdge, SessionPanelKind } from '~/db/schema'
-
 export interface PanelKindConfig {
   label: string
   color: string
