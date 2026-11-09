@@ -145,8 +145,8 @@ const phaseTitle = computed(() => ({
 
 const phaseIcon = computed(() => ({
   configure: 'md-fileupload',
-  running:   'md-hourglass-empty',
-  done:      'md-check-circle-outline',
+  running:   'md-hourglassempty',
+  done:      'md-checkcircleoutline',
 }[props.phase]))
 
 const exportedOn = computed(() => {
