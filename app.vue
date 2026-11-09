@@ -140,18 +140,8 @@ function inkWritePage() {
 // ── PWA install prompt ───────────────────────────────────────────
 const installPrompt = ref<Event | null>(null)
 
-if (import.meta.client) {
-  const onBeforeInstall = (e: Event) => { e.preventDefault(); installPrompt.value = e }
-  const onAppInstalled = () => { installPrompt.value = null }
-  onMounted(() => {
-    window.addEventListener('beforeinstallprompt', onBeforeInstall)
-    window.addEventListener('appinstalled', onAppInstalled)
-  })
-  onUnmounted(() => {
-    window.removeEventListener('beforeinstallprompt', onBeforeInstall)
-    window.removeEventListener('appinstalled', onAppInstalled)
-  })
-}
+useEventListener(window, 'beforeinstallprompt', (e: Event) => { e.preventDefault(); installPrompt.value = e })
+useEventListener(window, 'appinstalled', () => { installPrompt.value = null })
 
 async function installApp() {
   const prompt = installPrompt.value as any

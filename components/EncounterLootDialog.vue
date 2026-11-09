@@ -1,13 +1,6 @@
 <template>
-  <Teleport to="body">
-    <div class="pv-dialog-mask" @click.self="emit('close')">
-      <div class="pv-dialog eld" role="dialog" aria-label="Encounter loot">
-        <div class="pv-dialog-header">
-          <span class="pv-dialog-title">Loot · {{ name }}</span>
-          <button class="pv-dialog-close" aria-label="Close" @click="emit('close')">
-            <OhVueIcon name="md-close" scale="0.85" />
-          </button>
-        </div>
+  <AppDialog class="eld" @close="emit('close')">
+      <template #title>Loot · {{ name }}</template>
         <div class="pv-dialog-content eld-body">
           <div v-if="pace" class="eld-pace" title="Treasure awarded since the last level-up against this level's row of Party Treasure by Level">
             This level so far <b>{{ money(pace.awarded) }}</b> of {{ money(pace.expected) }}.
@@ -30,9 +23,7 @@
             </div>
           </section>
         </div>
-      </div>
-    </div>
-  </Teleport>
+    </AppDialog>
 </template>
 
 <script setup lang="ts">

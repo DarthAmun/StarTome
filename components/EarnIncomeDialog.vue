@@ -1,13 +1,6 @@
 <template>
-  <Teleport to="body">
-    <div class="pv-dialog-mask" @click.self="emit('close')">
-      <div class="pv-dialog eid" role="dialog" aria-label="Earn income">
-        <div class="pv-dialog-header">
-          <span class="pv-dialog-title">Earn income · {{ character.name }}</span>
-          <button class="pv-dialog-close" aria-label="Close" @click="emit('close')">
-            <OhVueIcon name="md-close" scale="0.85" />
-          </button>
-        </div>
+  <AppDialog class="eid" @close="emit('close')">
+      <template #title>Earn income · {{ character.name }}</template>
         <div class="pv-dialog-content eid-body">
           <div class="eid-row">
             <label class="eid-field">Task level
@@ -53,9 +46,7 @@
           <button class="ghost-btn" @click="emit('close')">Cancel</button>
           <button class="seal-btn" :disabled="!total || saving" @click="apply">Add {{ money(total) }}</button>
         </div>
-      </div>
-    </div>
-  </Teleport>
+    </AppDialog>
 </template>
 
 <script setup lang="ts">

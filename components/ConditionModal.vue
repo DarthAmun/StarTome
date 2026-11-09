@@ -1,7 +1,5 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open && token" class="pv-dialog-mask" style="z-index:var(--z-modal-top)" @click.self="$emit('close')">
-      <div class="pv-dialog cm-dialog" @keydown.esc="$emit('close')">
+  <AppDialog v-if="open && token" top class="cm-dialog" bare title="Conditions" @close="$emit('close')">
 
         <!-- Header -->
         <div class="cm-header">
@@ -153,10 +151,7 @@
         <div class="cm-footer">
           <button class="link-btn link-btn--link" @click="$emit('close')">Done</button>
         </div>
-
-      </div>
-    </div>
-  </Teleport>
+    </AppDialog>
 </template>
 
 <script setup lang="ts">

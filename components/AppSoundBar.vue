@@ -268,13 +268,7 @@ async function selectDevice(deviceId: string) {
   showDevicePicker.value = false
 }
 
-function onDocClick(e: MouseEvent) {
-  if (devWrapRef.value && !devWrapRef.value.contains(e.target as Node))
-    showDevicePicker.value = false
-}
-
-onMounted(() => document.addEventListener('mousedown', onDocClick))
-onUnmounted(() => document.removeEventListener('mousedown', onDocClick))
+onClickOutside(devWrapRef, () => { showDevicePicker.value = false })
 </script>
 
 <style scoped>

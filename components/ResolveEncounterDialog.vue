@@ -1,13 +1,6 @@
 <template>
-  <Teleport to="body">
-    <div class="pv-dialog-mask" @click.self="emit('close')">
-      <div class="pv-dialog red" role="dialog" aria-labelledby="red-title">
-        <div class="pv-dialog-header">
-          <span id="red-title" class="pv-dialog-title">Resolve {{ ctx?.encounter.name ?? 'encounter' }}</span>
-          <button class="pv-dialog-close" aria-label="Close" @click="emit('close')">
-            <OhVueIcon name="md-close" scale="0.85" />
-          </button>
-        </div>
+  <AppDialog class="red" @close="emit('close')">
+      <template #title>Resolve {{ ctx?.encounter.name ?? 'encounter' }}</template>
         <div v-if="!ctx" class="pv-dialog-content red-dim">Loading…</div>
         <div v-else class="pv-dialog-content">
           <!-- Enemies -->
@@ -69,9 +62,7 @@
             <OhVueIcon name="gi-laurels" scale="0.85" /> Resolve
           </button>
         </div>
-      </div>
-    </div>
-  </Teleport>
+    </AppDialog>
 </template>
 
 <script setup lang="ts">

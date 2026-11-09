@@ -42,9 +42,7 @@
     </div>
   </div>
 
-  <Teleport to="body">
-    <div v-if="showConfig" class="wng-backdrop" @click.self="showConfig = false">
-      <div class="wng-modal" @click.stop>
+  <AppDialog v-if="showConfig" box-class="wng-modal" mask-class="wng-backdrop" bare title="NPC Generator Config" @close="showConfig = false">
         <div class="wng-modal-head">
           <span>NPC Generator Config</span>
           <button class="wng-modal-x" @click="showConfig = false">✕</button>
@@ -77,9 +75,7 @@
         <div class="wng-modal-foot">
           <button class="wng-btn wng-btn--gen" @click="showConfig = false">Done</button>
         </div>
-      </div>
-    </div>
-  </Teleport>
+    </AppDialog>
 </template>
 
 <script setup lang="ts">

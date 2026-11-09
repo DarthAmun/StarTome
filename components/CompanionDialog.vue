@@ -1,13 +1,6 @@
 <template>
-  <Teleport to="body">
-    <div class="pv-dialog-mask" @click.self="emit('close')">
-      <div class="pv-dialog cpd" role="dialog" aria-label="Companion">
-        <div class="pv-dialog-header">
-          <span class="pv-dialog-title">Companion · {{ character.name }}</span>
-          <button class="pv-dialog-close" aria-label="Close" @click="emit('close')">
-            <OhVueIcon name="md-close" scale="0.85" />
-          </button>
-        </div>
+  <AppDialog class="cpd" @close="emit('close')">
+      <template #title>Companion · {{ character.name }}</template>
         <div class="pv-dialog-content cpd-body">
           <p class="cpd-dim">
             Enter the type (or chassis) from the book and its stage. StarTome builds the stat block at {{ character.name }}'s level
@@ -97,9 +90,7 @@
           <button class="ghost-btn" @click="emit('close')">Cancel</button>
           <button class="seal-btn" :disabled="saving || !b.base.typeName.trim()" @click="save(b)">Save stat block</button>
         </div>
-      </div>
-    </div>
-  </Teleport>
+    </AppDialog>
 </template>
 
 <script setup lang="ts">

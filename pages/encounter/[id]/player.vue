@@ -186,14 +186,13 @@ onMounted(async () => {
   }))
   // The GM's "close player view" button
   unsubscribe.push(playerWindow.onClose(() => window.close()))
-
-  // Notify DM window when this tab closes
-  window.addEventListener('beforeunload', notifyClosed)
 })
+
+// Notify DM window when this tab closes
+useEventListener(window, 'beforeunload', notifyClosed)
 
 onUnmounted(() => {
   for (const off of unsubscribe) off()
-  window.removeEventListener('beforeunload', notifyClosed)
   canvas?.destroy()
 })
 </script>

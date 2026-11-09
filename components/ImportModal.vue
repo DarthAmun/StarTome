@@ -1,7 +1,5 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="pv-dialog-mask" @click.self="phase !== 'running' && emit('close')">
-      <div class="pv-dialog imp-modal">
+  <AppDialog v-if="open" :dismissable="phase !== 'running'" class="imp-modal" bare :title="phaseTitle" @close="emit('close')">
 
         <!-- Header -->
         <div class="pv-dialog-header">
@@ -103,10 +101,7 @@
             </button>
           </template>
         </div>
-
-      </div>
-    </div>
-  </Teleport>
+    </AppDialog>
 </template>
 
 <script setup lang="ts">

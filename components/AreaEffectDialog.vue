@@ -1,7 +1,6 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open && area" class="modal-overlay" @click.self="emit('close')" @keydown.esc="emit('close')">
-      <form class="modal-box" @submit.prevent="save(false)">
+  <AppDialog v-if="open && area" mask-class="modal-overlay" box-class="modal-box" bare title="Area effect" @close="emit('close')">
+      <form @submit.prevent="save(false)">
         <div class="modal-title">Area effect</div>
 
         <label class="ae-field">
@@ -67,8 +66,7 @@
           <button class="pv-btn pv-btn--primary" type="button" :disabled="!valid || !form.save" @click="save(true)">Save &amp; roll saves</button>
         </div>
       </form>
-    </div>
-  </Teleport>
+  </AppDialog>
 </template>
 
 <script setup lang="ts">

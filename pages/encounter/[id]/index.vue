@@ -752,9 +752,7 @@
       </div>
 
       <!-- ── Log clear confirmation ─────────────────────────────────────────── -->
-      <Teleport to="body">
-        <div v-if="clearLogConfirm" class="pv-dialog-mask" @click.self="clearLogConfirm = false">
-          <div class="pv-dialog" style="max-width:360px">
+      <AppDialog v-if="clearLogConfirm" style="max-width:360px" bare title="Clear Combat Log?" @close="clearLogConfirm = false">
             <div class="link-modal-header">
               <span class="link-modal-title">Clear Combat Log?</span>
               <button class="link-modal-close" @click="clearLogConfirm = false">✕</button>
@@ -765,14 +763,10 @@
               <button class="link-btn link-btn--skip" @click="clearLogConfirm = false">Cancel</button>
               <button class="link-btn link-btn--link" style="background:var(--blood)" @click="doClearLog">Clear</button>
             </div>
-          </div>
-        </div>
-      </Teleport>
+        </AppDialog>
 
       <!-- ── Link to Stat Block Modal ───────────────────────────────────────────── -->
-      <Teleport to="body">
-        <div v-if="linkModalOpen" class="pv-dialog-mask" @click.self="linkModalOpen = false">
-          <div class="pv-dialog link-modal">
+      <AppDialog v-if="linkModalOpen" class="link-modal" bare title="Link to Stat Block?" @close="linkModalOpen = false">
             <div class="link-modal-header">
               <span class="link-modal-title">Link to Stat Block?</span>
               <button class="link-modal-close" @click="linkModalOpen = false">✕</button>
@@ -801,9 +795,7 @@
               <button class="link-btn link-btn--skip" @click="linkModalOpen = false">Skip</button>
               <button class="link-btn link-btn--link" :disabled="!linkSelectedId" @click="confirmLink">Link</button>
             </div>
-          </div>
-        </div>
-      </Teleport>
+        </AppDialog>
 
       <!-- ── Token Edit Modal ──────────────────────────────────────────────────── -->
       <TokenEditModal
@@ -965,13 +957,7 @@
       />
 
       <!-- ── Token Picker Modal (right-click → place from library) ─────────── -->
-      <Teleport to="body">
-        <div
-          v-if="showTokenPicker"
-          class="modal-overlay"
-          @click.self="showTokenPicker = false"
-        >
-          <div class="modal-box token-picker-box">
+      <AppDialog v-if="showTokenPicker" mask-class="modal-overlay" box-class="modal-box" class="token-picker-box" bare title="Place Token" @close="showTokenPicker = false">
             <div class="modal-title">Place Token</div>
             <input class="pv-input"
               v-model="tokenPickerSearch"
@@ -1003,22 +989,14 @@
               </button>
               <button type="button" class="pv-btn pv-btn--ghost" @click="showTokenPicker = false">Cancel</button>
             </div>
-          </div>
-        </div>
-      </Teleport>
+        </AppDialog>
       <ResolveEncounterDialog v-if="showResolve && encounter" :encounter-id="encounter.id" @close="showResolve = false" @resolved="onResolved" />
       <EncounterLootDialog v-if="showLoot && encounter" :encounter-id="encounter.id" :campaign-id="encounter.campaignId" :game="campaignGameId" :name="encounter.name" @close="showLoot = false" />
     </div>
     <!-- end encounter-page -->
 
     <!-- ── Initiative formula modal ── -->
-    <Teleport to="body">
-      <div v-if="showInitFormula" class="pv-dialog-mask" @click.self="showInitFormula = false" @keyup.esc="showInitFormula = false">
-        <div class="pv-dialog init-formula-modal">
-          <div class="pv-dialog-header">
-            <span class="pv-dialog-title">Initiative Formula</span>
-            <button class="pv-dialog-close" @click="showInitFormula = false">✕</button>
-          </div>
+    <AppDialog v-if="showInitFormula" class="init-formula-modal" title="Initiative Formula" @close="showInitFormula = false">
           <div class="pv-dialog-content">
             <div class="init-formula-label">Formula expression</div>
             <div class="init-formula-row">
@@ -1046,9 +1024,7 @@
             <button v-if="store.current?.initiativeFormula" class="init-formula-clear" @click="clearInitFormula">Clear</button>
             <button class="init-formula-save" @click="saveInitFormula">Save</button>
           </div>
-        </div>
-      </div>
-    </Teleport>
+      </AppDialog>
 </template>
 
 <script setup lang="ts">

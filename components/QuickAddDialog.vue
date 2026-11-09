@@ -1,7 +1,5 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="modal-overlay" @click.self="emit('close')" @keydown.esc="emit('close')">
-      <div class="modal-box qa-box">
+  <AppDialog v-if="open" mask-class="modal-overlay" box-class="modal-box" class="qa-box" bare title="Add to the fight" @close="emit('close')">
         <div class="modal-title">
           Add to the fight
           <span v-if="where" class="qa-where">{{ where }}</span>
@@ -58,9 +56,7 @@
             <button class="pv-btn pv-btn--primary" type="submit" :disabled="!blank.label.trim()">Add</button>
           </div>
         </form>
-      </div>
-    </div>
-  </Teleport>
+    </AppDialog>
 </template>
 
 <script setup lang="ts">

@@ -1,14 +1,5 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open && snapshot" class="pv-dialog-mask" @click.self="close">
-      <div class="pv-dialog snap-dialog">
-
-        <div class="pv-dialog-header">
-          <span class="pv-dialog-title">Edit Historical State</span>
-          <button class="pv-dialog-close" @click="close">
-            <OhVueIcon name="md-close" scale="0.85" />
-          </button>
-        </div>
+  <AppDialog v-if="open && snapshot" class="snap-dialog" title="Edit Historical State" @close="close">
 
         <div class="pv-dialog-content">
           <div style="margin-bottom:16px">
@@ -57,10 +48,7 @@
             Save
           </button>
         </div>
-
-      </div>
-    </div>
-  </Teleport>
+    </AppDialog>
 </template>
 
 <script setup lang="ts">

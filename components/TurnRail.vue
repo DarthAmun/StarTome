@@ -68,14 +68,7 @@ const SIZE_FACTOR: Record<TurnRailSize, number> = { small: 0.75, medium: 1, larg
 const vertical = computed(() => props.position !== 'top')
 
 // Portrait size follows the screen so the rail stays legible on large displays
-const viewportW = ref(typeof window !== 'undefined' ? window.innerWidth : 1280)
-const viewportH = ref(typeof window !== 'undefined' ? window.innerHeight : 800)
-function onResize() {
-  viewportW.value = window.innerWidth
-  viewportH.value = window.innerHeight
-}
-onMounted(() => window.addEventListener('resize', onResize))
-onUnmounted(() => window.removeEventListener('resize', onResize))
+const { width: viewportW, height: viewportH } = useWindowSize({ initialWidth: 1280, initialHeight: 800 })
 
 const unit = computed(() => {
   const base = Math.min(96, Math.max(28, Math.min(viewportW.value, viewportH.value) * 0.05))

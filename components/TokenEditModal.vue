@@ -1,7 +1,5 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open && token" class="pv-dialog-mask" style="z-index:var(--z-modal-top)" @click.self="$emit('close')">
-      <div class="pv-dialog tem-dialog" @keydown.esc="$emit('close')">
+  <AppDialog v-if="open && token" top class="tem-dialog" bare :title="localLabel || token.name" @close="$emit('close')">
 
         <!-- Header -->
         <div class="tem-header">
@@ -226,10 +224,7 @@
           <button class="link-btn link-btn--skip" @click="$emit('close')">Cancel</button>
           <button class="link-btn link-btn--link" @click="save">Save Changes</button>
         </div>
-
-      </div>
-    </div>
-  </Teleport>
+    </AppDialog>
 </template>
 
 <script setup lang="ts">

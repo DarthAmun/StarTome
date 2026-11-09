@@ -757,15 +757,10 @@ function openPlayerView() {
   mapWindow.open(props.campaignId, currentLocationId.value)
 }
 
-function onKeyDown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && drawMode.value) cancelDraw()
-}
-
-onMounted(() => window.addEventListener('keydown', onKeyDown))
+onKeyStroke('Escape', () => { if (drawMode.value) cancelDraw() })
 onUnmounted(() => {
   window.removeEventListener('mousemove', onMouseMove)
   window.removeEventListener('mouseup', onMouseUp)
-  window.removeEventListener('keydown', onKeyDown)
 })
 </script>
 

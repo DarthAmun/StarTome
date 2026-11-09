@@ -252,22 +252,7 @@
         </div>
 
         <!-- ── Edit Campaign Dialog ── -->
-        <Teleport to="body">
-            <div
-                v-if="editingCamp"
-                class="pv-dialog-mask"
-                @click.self="editingCamp = null"
-            >
-                <div class="pv-dialog">
-                    <div class="pv-dialog-header">
-                        <span class="pv-dialog-title">Edit Campaign</span>
-                        <button
-                            class="pv-dialog-close"
-                            @click="editingCamp = null"
-                        >
-                            <OhVueIcon name="md-close" scale="0.85" />
-                        </button>
-                    </div>
+        <AppDialog v-if="editingCamp" title="Edit Campaign" @close="editingCamp = null">
                     <div class="pv-dialog-content">
                         <div class="dlg-field">
                             <label class="f-label">Title</label>
@@ -328,10 +313,7 @@
                             Save
                         </button>
                     </div>
-                </div>
-            </div>
-
-        </Teleport>
+        </AppDialog>
     </div>
 </template>
 

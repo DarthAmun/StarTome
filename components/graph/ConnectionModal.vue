@@ -1,13 +1,5 @@
 <template>
-    <Teleport to="body">
-        <div v-if="open" class="pv-dialog-mask" @click.self="$emit('close')">
-            <div class="pv-dialog cm-dialog">
-                <div class="pv-dialog-header">
-                    <span class="pv-dialog-title">Connection</span>
-                    <button class="pv-dialog-close" @click="$emit('close')">
-                        <OhVueIcon name="md-close" scale="0.85" />
-                    </button>
-                </div>
+    <AppDialog v-if="open" class="cm-dialog" title="Connection" @close="$emit('close')">
                 <div class="pv-dialog-content">
                     <div class="cm-endpoints">
                         <span class="cm-endpoint">{{ sourceName }}</span>
@@ -63,9 +55,7 @@
                     <button class="ghost-btn" @click="$emit('close')">Cancel</button>
                     <button class="seal-btn" @click="onSave">Save</button>
                 </div>
-            </div>
-        </div>
-    </Teleport>
+        </AppDialog>
 </template>
 
 <script setup lang="ts">

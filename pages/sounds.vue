@@ -250,8 +250,7 @@
     <Teleport to="body">
 
       <!-- New Playlist -->
-      <div v-if="showNewPlaylist" class="snd-dialog-mask" @click.self="showNewPlaylist = false">
-        <div class="snd-dialog">
+      <AppDialog v-if="showNewPlaylist" box-class="snd-dialog" mask-class="snd-dialog-mask" bare title="New playlist" @close="showNewPlaylist = false">
           <div class="snd-dlg-header">
             <span class="snd-dlg-title">New Playlist</span>
             <button class="snd-dlg-close" @click="showNewPlaylist = false">✕</button>
@@ -274,12 +273,10 @@
             <button class="ghost-btn" @click="showNewPlaylist = false">Cancel</button>
             <button class="seal-btn" :disabled="!newPlName.trim()" @click="submitNewPlaylist">Create</button>
           </div>
-        </div>
-      </div>
+      </AppDialog>
 
       <!-- Add Track -->
-      <div v-if="showAddTrack" class="snd-dialog-mask" @click.self="showAddTrack = false">
-        <div class="snd-dialog snd-dialog--wide">
+      <AppDialog v-if="showAddTrack" box-class="snd-dialog" mask-class="snd-dialog-mask" class="snd-dialog--wide" bare title="Add Track" @close="showAddTrack = false">
           <div class="snd-dlg-header">
             <span class="snd-dlg-title">Add Track</span>
             <button class="snd-dlg-close" @click="showAddTrack = false">✕</button>
@@ -328,12 +325,10 @@
             <button class="ghost-btn" @click="showAddTrack = false">Cancel</button>
             <button class="seal-btn" :disabled="!canSubmitTrack" @click="submitAddTrack">Add</button>
           </div>
-        </div>
-      </div>
+      </AppDialog>
 
       <!-- Edit Track -->
-      <div v-if="showEditTrack" class="snd-dialog-mask" @click.self="showEditTrack = false">
-        <div class="snd-dialog snd-dialog--wide">
+      <AppDialog v-if="showEditTrack" box-class="snd-dialog" mask-class="snd-dialog-mask" class="snd-dialog--wide" bare title="Edit Track" @close="showEditTrack = false">
           <div class="snd-dlg-header">
             <span class="snd-dlg-title">Edit Track</span>
             <button class="snd-dlg-close" @click="showEditTrack = false">✕</button>
@@ -349,12 +344,10 @@
             <button class="ghost-btn" @click="showEditTrack = false">Cancel</button>
             <button class="seal-btn" :disabled="!editTrackName.trim()" @click="submitEditTrack">Save</button>
           </div>
-        </div>
-      </div>
+      </AppDialog>
 
       <!-- Library Picker (add tracks to playlist) -->
-      <div v-if="showLibraryPicker" class="snd-dialog-mask" @click.self="showLibraryPicker = false">
-        <div class="snd-dialog snd-dialog--wide">
+      <AppDialog v-if="showLibraryPicker" box-class="snd-dialog" mask-class="snd-dialog-mask" class="snd-dialog--wide" bare title="Add from Library" @close="showLibraryPicker = false">
           <div class="snd-dlg-header">
             <span class="snd-dlg-title">Add from Library</span>
             <button class="snd-dlg-close" @click="showLibraryPicker = false">✕</button>
@@ -393,8 +386,7 @@
             <button class="ghost-btn" @click="showLibraryPicker = false">Cancel</button>
             <button class="seal-btn" :disabled="!pickedTrackIds.length" @click="submitLibraryPick">Add Selected</button>
           </div>
-        </div>
-      </div>
+      </AppDialog>
 
     </Teleport>
 

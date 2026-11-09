@@ -1,7 +1,5 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="pv-dialog-mask" @click.self="phase !== 'applying' && close()">
-      <div class="pv-dialog ifm-modal">
+  <AppDialog v-if="open" :dismissable="phase !== 'applying'" class="ifm-modal" bare :title="phaseTitle" @close="close()">
 
         <!-- Header -->
         <div class="pv-dialog-header">
@@ -182,10 +180,7 @@
             <button class="sett-btn ifm-btn-primary" @click="close()">Done</button>
           </template>
         </div>
-
-      </div>
-    </div>
-  </Teleport>
+    </AppDialog>
 </template>
 
 <script setup lang="ts">

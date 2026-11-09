@@ -290,24 +290,14 @@ const notesStore = useEntities()
 const encounterStore = useEncounterStore()
 
 // ── Collapse state ─────────────────────────────────────────────────────────
-const collapsed = ref(false)
-if (import.meta.client) {
-  collapsed.value = localStorage.getItem(lsKey('sidebar.collapsed')) === '1'
-}
-watch(collapsed, v => {
-  if (import.meta.client) localStorage.setItem(lsKey('sidebar.collapsed'), v ? '1' : '0')
-})
+const collapsed = useLocalStorage(lsKey('sidebar.collapsed'), false, { serializer: { read: v => v === '1', write: v => (v ? '1' : '0') } })
 
 // Keyboard shortcut B
-if (import.meta.client) {
-  const onKeydown = (e: KeyboardEvent) => {
-    const target = e.target as HTMLElement
-    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
-    if (e.key === 'b' || e.key === 'B') collapsed.value = !collapsed.value
-  }
-  onMounted(() => document.addEventListener('keydown', onKeydown))
-  onUnmounted(() => document.removeEventListener('keydown', onKeydown))
-}
+onKeyStroke(['b', 'B'], e => {
+  const target = e.target as HTMLElement
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
+  collapsed.value = !collapsed.value
+}, { target: document })
 
 // ── Campaigns ─────────────────────────────────────────────────────────────
 const campaigns = ref<DbCampaign[]>([])

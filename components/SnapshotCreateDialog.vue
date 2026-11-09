@@ -1,14 +1,5 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="pv-dialog-mask" @click.self="close">
-      <div class="pv-dialog snap-dialog">
-
-        <div class="pv-dialog-header">
-          <span class="pv-dialog-title">Record Historical State</span>
-          <button class="pv-dialog-close" @click="close">
-            <OhVueIcon name="md-close" scale="0.85" />
-          </button>
-        </div>
+  <AppDialog v-if="open" class="snap-dialog" title="Record Historical State" @close="close">
 
         <div class="pv-dialog-content">
 
@@ -70,10 +61,7 @@
             Record State
           </button>
         </div>
-
-      </div>
-    </div>
-  </Teleport>
+    </AppDialog>
 </template>
 
 <script setup lang="ts">

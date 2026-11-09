@@ -1,7 +1,5 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="pv-dialog-mask" @click.self="emit('close')">
-      <div class="pv-dialog bc-dialog" @keydown.esc="emit('close')">
+  <AppDialog v-if="open" class="bc-dialog" bare :title="base ? `Rebuild ${base.name}` : 'Build creature'" @close="emit('close')">
         <div class="bc-head">
           <span class="bc-title">{{ base ? `Rebuild ${base.name}` : 'Build creature' }}</span>
           <button class="bc-close" @click="emit('close')">✕</button>
@@ -152,9 +150,7 @@
           <button v-if="!base" class="ghost-btn" :disabled="!name.trim()" @click="save(true)">Save and edit</button>
           <button class="seal-btn" :disabled="!name.trim()" @click="save(false)">{{ base ? 'Rebuild' : 'Save' }}</button>
         </div>
-      </div>
-    </div>
-  </Teleport>
+    </AppDialog>
 </template>
 
 <script setup lang="ts">

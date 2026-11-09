@@ -1,7 +1,5 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="modal-overlay" @click.self="emit('close')">
-      <div class="modal-box">
+  <AppDialog v-if="open" mask-class="modal-overlay" box-class="modal-box" bare :title="title" @close="emit('close')">
         <div class="modal-title">{{ title }}</div>
         <div class="space-y-3">
           <div>
@@ -51,9 +49,7 @@
           <button type="button" class="pv-btn pv-btn--ghost" @click="emit('close')">Cancel</button>
           <button type="button" class="pv-btn pv-btn--primary" @click="emit('confirm')">{{ confirmLabel }}</button>
         </div>
-      </div>
-    </div>
-  </Teleport>
+    </AppDialog>
 </template>
 
 <script setup lang="ts">

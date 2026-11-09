@@ -290,12 +290,7 @@ function commitDamage() {
   emit('close')
 }
 
-onMounted(() => {
-  window.addEventListener('keydown', onKey)
-})
-onUnmounted(() => {
-  window.removeEventListener('keydown', onKey)
-})
+useEventListener(window, 'keydown', onKey)
 
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape' && props.open) emit('close')

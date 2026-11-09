@@ -39,20 +39,8 @@ const openKey = ref<string | null>(null)
 // Options only for the open menu, computed once per change
 const openOptions = computed(() => openKey.value ? props.browse.filterOptions(openKey.value) : [])
 
-function onDocClick(e: MouseEvent) {
-  if (openKey.value && !rootRef.value?.contains(e.target as Node)) openKey.value = null
-}
-function onDocKey(e: KeyboardEvent) {
-  if (e.key === 'Escape') openKey.value = null
-}
-onMounted(() => {
-  document.addEventListener('mousedown', onDocClick)
-  document.addEventListener('keydown', onDocKey)
-})
-onBeforeUnmount(() => {
-  document.removeEventListener('mousedown', onDocClick)
-  document.removeEventListener('keydown', onDocKey)
-})
+onClickOutside(rootRef, () => { openKey.value = null })
+onKeyStroke('Escape', () => { openKey.value = null })
 </script>
 
 <style scoped>

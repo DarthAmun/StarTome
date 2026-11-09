@@ -1,13 +1,5 @@
 <template>
-  <Teleport to="body">
-    <div v-if="xpPrompt" class="pv-dialog-mask" @click.self="dismissXpPrompt()">
-      <div class="pv-dialog axd" role="dialog" aria-labelledby="axd-title">
-        <div class="pv-dialog-header">
-          <span id="axd-title" class="pv-dialog-title">Award XP</span>
-          <button class="pv-dialog-close" aria-label="Close" @click="dismissXpPrompt()">
-            <OhVueIcon name="md-close" scale="0.85" />
-          </button>
-        </div>
+  <AppDialog v-if="xpPrompt" class="axd" title="Award XP" @close="dismissXpPrompt()">
         <div class="pv-dialog-content">
           <label class="axd-field">
             <span class="f-label">For</span>
@@ -39,9 +31,7 @@
             Award {{ amount > 0 ? amount : 0 }} XP to {{ selected.size }}
           </button>
         </div>
-      </div>
-    </div>
-  </Teleport>
+    </AppDialog>
 </template>
 
 <script setup lang="ts">

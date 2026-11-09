@@ -1,13 +1,6 @@
 <template>
-    <Teleport to="body">
-        <div v-show="ready" class="pv-dialog-mask" @click.self="$emit('close')">
-            <div class="pv-dialog srd" role="dialog" aria-labelledby="srd-title">
-                <div class="pv-dialog-header">
-                    <span id="srd-title" class="pv-dialog-title">Recap{{ previous ? ` · ${previous.name}` : '' }}</span>
-                    <button class="pv-dialog-close" aria-label="Close" @click="$emit('close')">
-                        <OhVueIcon name="md-close" scale="0.85" />
-                    </button>
-                </div>
+    <AppDialog :open="!!(ready)" class="srd" @close="$emit('close')">
+          <template #title>Recap{{ previous ? ` · ${previous.name}` : '' }}</template>
                 <div class="pv-dialog-content">
                     <p v-if="!previous" class="srd-dim">No earlier session to recap.</p>
                     <template v-else>
@@ -34,9 +27,7 @@
                 <div class="pv-dialog-footer">
                     <button class="srd-btn srd-btn--primary" @click="$emit('close')">Start the session</button>
                 </div>
-            </div>
-        </div>
-    </Teleport>
+        </AppDialog>
 </template>
 
 <script setup lang="ts">

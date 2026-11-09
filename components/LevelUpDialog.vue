@@ -1,13 +1,5 @@
 <template>
-  <Teleport to="body">
-    <div v-if="prompt" class="pv-dialog-mask" @click.self="dismissPrompt()">
-      <div class="pv-dialog lud" role="dialog" aria-labelledby="lud-title">
-        <div class="pv-dialog-header">
-          <span id="lud-title" class="pv-dialog-title">Level up the party?</span>
-          <button class="pv-dialog-close" aria-label="Close" @click="dismissPrompt()">
-            <OhVueIcon name="md-close" scale="0.85" />
-          </button>
-        </div>
+  <AppDialog v-if="prompt" class="lud" title="Level up the party?" @close="dismissPrompt()">
         <div class="pv-dialog-content">
           <p class="lud-reason">{{ prompt.reason }}</p>
           <div v-if="!rows.length" class="lud-empty">
@@ -29,9 +21,7 @@
             Level up {{ selectedCount }} {{ selectedCount === 1 ? 'character' : 'characters' }}
           </button>
         </div>
-      </div>
-    </div>
-  </Teleport>
+    </AppDialog>
 </template>
 
 <script setup lang="ts">

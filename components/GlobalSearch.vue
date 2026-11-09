@@ -8,9 +8,7 @@
     </button>
 
     <!-- Modal -->
-    <Transition name="gs-fade">
-      <div v-if="open" class="pv-dialog-mask" @click.self="close">
-        <div class="pv-dialog gs-dialog" :class="{ 'gs-dialog--cmd': inCommandMode }">
+    <AppDialog v-if="open" class="gs-dialog" :class="{ 'gs-dialog--cmd': inCommandMode }" bare title="Search" @close="close">
           <!-- Input row -->
           <div class="gs-input-row" :class="{ 'gs-input-row--cmd': inCommandMode }">
             <span class="gs-input-icon gs-input-icon--cmd" v-if="inCommandMode">›_</span>
@@ -256,9 +254,7 @@
               Type to search, or <span class="gs-cmd-hint-trigger" @click="activateCommandMode">›_ type a command</span>
             </div>
           </template>
-        </div>
-      </div>
-    </Transition>
+    </AppDialog>
   </Teleport>
 </template>
 
@@ -729,17 +725,12 @@ watch(open, async (val) => {
 })
 
 // Global keyboard shortcut
-if (import.meta.client) {
-  const onGlobalKeydown = (e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-      e.preventDefault()
-      if (open.value) close()
-      else open.value = true
-    }
-  }
-  onMounted(() => window.addEventListener('keydown', onGlobalKeydown))
-  onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
-}
+onKeyStroke('k', e => {
+  if (!e.metaKey && !e.ctrlKey) return
+  e.preventDefault()
+  if (open.value) close()
+  else open.value = true
+})
 </script>
 
 <style scoped>
@@ -1054,8 +1045,4 @@ if (import.meta.client) {
 .gs-cmd-hint-trigger:hover { background: var(--accent-bg); }
 
 /* Transition */
-.gs-fade-enter-active,
-.gs-fade-leave-active { transition: opacity 0.15s, transform 0.15s; }
-.gs-fade-enter-from,
-.gs-fade-leave-to { opacity: 0; transform: scale(0.97); }
 </style>

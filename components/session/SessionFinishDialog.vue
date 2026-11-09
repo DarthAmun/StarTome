@@ -1,13 +1,5 @@
 <template>
-    <Teleport to="body">
-        <div class="pv-dialog-mask" @click.self="$emit('close')">
-            <div class="pv-dialog sfd" role="dialog" aria-labelledby="sfd-title">
-                <div class="pv-dialog-header">
-                    <span id="sfd-title" class="pv-dialog-title">Finish session</span>
-                    <button class="pv-dialog-close" aria-label="Close" @click="$emit('close')">
-                        <OhVueIcon name="md-close" scale="0.85" />
-                    </button>
-                </div>
+    <AppDialog class="sfd" title="Finish session" @close="$emit('close')">
                 <div class="pv-dialog-content">
                     <p v-if="!rows.length" class="sfd-dim">Everything you planned came up. Nothing to carry over.</p>
                     <template v-else>
@@ -38,9 +30,7 @@
                         {{ rows.length ? 'Finish and carry over' : 'Finish' }}
                     </button>
                 </div>
-            </div>
-        </div>
-    </Teleport>
+        </AppDialog>
 </template>
 
 <script setup lang="ts">

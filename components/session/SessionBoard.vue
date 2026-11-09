@@ -615,10 +615,9 @@ function onWindowFocus() {
 
 // ── Party panel ──────────────────────────────────────────────────────────
 const PARTY_KEY = lsKey('session.showParty')
-const showParty = ref((() => { try { return localStorage.getItem(PARTY_KEY) === '1' } catch { return false } })())
+const showParty = useLocalStorage(PARTY_KEY, false, { serializer: { read: v => v === '1', write: v => (v ? '1' : '0') } })
 function toggleParty() {
     showParty.value = !showParty.value
-    try { localStorage.setItem(PARTY_KEY, showParty.value ? '1' : '0') } catch { /* private mode */ }
 }
 
 // ── Finishing ────────────────────────────────────────────────────────────
@@ -685,9 +684,10 @@ function onKey(e: KeyboardEvent) {
     }
 }
 
+useEventListener(window, 'keydown', onKey)
+useEventListener(window, 'focus', onWindowFocus)
+
 onMounted(async () => {
-    window.addEventListener('keydown', onKey)
-    window.addEventListener('focus', onWindowFocus)
     await Promise.all([board.load(), loadEncounters(), store.loadAll(props.campaignId)])
     // A converted board has never been looked at: show all of it once the panels are measured
     const vp = board.viewport.value
@@ -712,10 +712,6 @@ onMounted(async () => {
         if (n) flow?.addSelectedNodes([n])
     }
     if (running.value) await logEncounterResults()
-})
-onBeforeUnmount(() => {
-    window.removeEventListener('keydown', onKey)
-    window.removeEventListener('focus', onWindowFocus)
 })
 
 watch(() => props.sessionId, async () => {

@@ -572,15 +572,7 @@ function deletePreset(name: string) {
 }
 
 // Close presets dropdown on outside click
-if (import.meta.client) {
-  const onDocClick = (e: MouseEvent) => {
-    if (showPresets.value && presetsRef.value && !presetsRef.value.contains(e.target as Node)) {
-      showPresets.value = false
-    }
-  }
-  onMounted(() => document.addEventListener('click', onDocClick))
-  onUnmounted(() => document.removeEventListener('click', onDocClick))
-}
+onClickOutside(presetsRef, () => { showPresets.value = false })
 
 // ── Widget helpers ─────────────────────────────────────────────────────────
 function getEntity(w: DmWidget) {
