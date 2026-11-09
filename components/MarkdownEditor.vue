@@ -110,53 +110,16 @@
                     </button>
                 </div>
                 <div class="editor-area-wrap">
-                    <textarea
+                    <CodeEditor
                         ref="editorRef"
                         v-model="draftContent"
-                        class="editor-textarea"
-                        spellcheck="true"
+                        class="editor-code"
+                        fill
                         :readonly="readonly"
                         placeholder="Write here…"
-                        @input="onNotesInput"
-                        @keydown="onEditKeydown"
+                        :complete="completeLinks"
+                        @update:model-value="scheduleContentEmit"
                     />
-                    <div
-                        v-if="
-                            autocomplete.show && autocomplete.source === 'edit'
-                        "
-                        class="autocomplete-dropdown autocomplete-dropdown--abs"
-                    >
-                        <button
-                            v-for="(item, idx) in autocomplete.items"
-                            :key="`${item.type}:${item.name}`"
-                            class="autocomplete-item"
-                            :class="{
-                                'autocomplete-item--active':
-                                    autocomplete.cursorIdx === idx,
-                            }"
-                            @mousedown.prevent="applyAutocomplete(item)"
-                        >
-                            <span
-                                class="autocomplete-dot"
-                                :style="{
-                                    background:
-                                        localTypeColorMap[item.type] ?? '#888',
-                                }"
-                            />
-                            <span class="autocomplete-name">{{
-                                item.name
-                            }}</span>
-                            <span class="autocomplete-type">{{
-                                item.type
-                            }}</span>
-                        </button>
-                        <p
-                            v-if="!autocomplete.items.length"
-                            class="autocomplete-empty"
-                        >
-                            No matches — will link on save
-                        </p>
-                    </div>
                 </div>
             </div>
 
@@ -178,17 +141,14 @@
                     :class="{ 'mixed-block--active': activeBlock === i, 'mixed-block--hidden': isBlockRedacted(i) }"
                 >
                     <template v-if="activeBlock === i && !readonly">
-                        <textarea
+                        <CodeEditor
                             v-model="editableBlocks[i]"
-                            class="mixed-textarea"
-                            :ref="
-                                (el: any) => {
-                                    if (el) mixedRefs[i] = el;
-                                }
-                            "
-                            @input="onBlockInput(i)"
+                            class="mixed-code"
+                            autofocus
+                            :complete="completeLinks"
+                            @update:model-value="onBlockInput"
                             @blur="onBlockBlur"
-                            @keydown="onMixedBlockKeydown($event, i)"
+                            @escape="onBlockBlur"
                         />
                     </template>
                     <div
@@ -221,33 +181,6 @@
 
         <slot name="below-content" />
 
-        <!-- Mixed-mode autocomplete teleported to body to escape overflow:hidden parents -->
-        <Teleport to="body">
-            <div
-                v-if="autocomplete.show && autocomplete.source === 'mixed-notes' && dropdownPos"
-                class="autocomplete-dropdown autocomplete-dropdown--fixed"
-                :style="{
-                    top: dropdownPos.top + 'px',
-                    left: dropdownPos.left + 'px',
-                    transform: dropdownPos.above ? 'translateY(-100%)' : 'none',
-                }"
-            >
-                <button
-                    v-for="(item, idx) in autocomplete.items"
-                    :key="`${item.type}:${item.name}`"
-                    class="autocomplete-item"
-                    :class="{ 'autocomplete-item--active': autocomplete.cursorIdx === idx }"
-                    @mousedown.prevent="applyAutocomplete(item)"
-                >
-                    <span class="autocomplete-dot" :style="{ background: localTypeColorMap[item.type] ?? '#888' }" />
-                    <span class="autocomplete-name">{{ item.name }}</span>
-                    <span class="autocomplete-type">{{ item.type }}</span>
-                </button>
-                <p v-if="!autocomplete.items.length" class="autocomplete-empty">
-                    No matches — will link on save
-                </p>
-            </div>
-        </Teleport>
     </div>
 </template>
 
@@ -290,6 +223,7 @@ import type { RandomTableAttributes } from "~/types/entities";
 import { useEntityRendering, typeColorMap, typeIconHtml, ENCOUNTER_COLOR } from "~/composables/useEntityRendering";
 import { useDiceRoll } from "~/composables/useDiceRoll";
 import { getDb, dbApi } from "~/composables/useDb";
+import type { EditorCompletions } from "~/components/CodeEditor.vue";
 import { ENTITY_TYPE_CONFIG, ENTITY_TYPE_ROUTE, npcClassLine } from "~/types/entities";
 import type { EntityType } from "~/types/entities";
 
@@ -656,41 +590,24 @@ function setViewMode(m: ViewMode) {
 // ── Mixed mode ────────────────────────────────────────────────────────────────
 const editableBlocks = ref<string[]>([""]);
 const activeBlock = ref<number | null>(null);
-const mixedRefs: Record<number, HTMLTextAreaElement> = {};
 
 function syncBlocks() {
     const blocks = draftContent.value.split(/\n\n+/);
     editableBlocks.value = blocks.length > 0 ? blocks : [""];
     activeBlock.value = null;
-    const len = editableBlocks.value.length;
-    Object.keys(mixedRefs).forEach(k => { if (Number(k) >= len) delete mixedRefs[Number(k)] });
 }
 
+// The block's editor opens focused with the cursor at the end (CodeEditor autofocus)
 function activateBlock(i: number) {
     activeBlock.value = i;
-    nextTick(() => {
-        const el = mixedRefs[i];
-        if (!el) return;
-        el.style.height = "auto";
-        el.style.height = `${el.scrollHeight}px`;
-        el.focus();
-        el.setSelectionRange(el.value.length, el.value.length);
-    });
 }
 
-function onBlockInput(i: number) {
-    const el = mixedRefs[i];
-    if (el) {
-        el.style.height = "auto";
-        el.style.height = `${el.scrollHeight}px`;
-    }
+function onBlockInput() {
     draftContent.value = editableBlocks.value.join("\n\n");
     scheduleContentEmit();
-    checkAutocomplete(el ?? null, editableBlocks.value[i], "mixed-notes", i);
 }
 
 function onBlockBlur() {
-    autocomplete.value.show = false;
     while (
         editableBlocks.value.length > 1 &&
         !editableBlocks.value[editableBlocks.value.length - 1].trim()
@@ -797,272 +714,69 @@ function scheduleContentEmit() {
     contentSave.schedule(() => emit("update:content", draftContent.value));
 }
 
-// ── Edit mode input ───────────────────────────────────────────────────────────
-const editorRef = ref<HTMLTextAreaElement | null>(null);
+// ── Edit mode editor ──────────────────────────────────────────────────────────
+const editorRef = ref<{ insert: (before: string, after?: string) => void; focus: (toEnd?: boolean) => void } | null>(null);
 
-function onNotesInput() {
-    scheduleContentEmit();
-    checkAutocomplete(editorRef.value, draftContent.value, "edit");
-}
-
-// ── Insert helpers ────────────────────────────────────────────────────────────
-function insertInto(
-    el: HTMLTextAreaElement | null,
-    draft: { value: string },
-    before: string,
-    after: string,
-) {
-    if (!el) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const selected = draft.value.slice(start, end);
-    draft.value =
-        draft.value.slice(0, start) +
-        before +
-        selected +
-        after +
-        draft.value.slice(end);
-    scheduleContentEmit();
-    nextTick(() => {
-        el.setSelectionRange(
-            start + before.length,
-            start + before.length + selected.length,
-        );
-        el.focus();
-    });
-}
-
+/** Toolbar and widget buttons: wrap the selection, as one undo step */
 function insertNotes(before: string, after: string) {
-    insertInto(editorRef.value, draftContent, before, after);
+    editorRef.value?.insert(before, after);
 }
 
-// ── Tab indent/dedent ────────────────────────────────────────────────────────
-function handleTabInTextarea(
-    el: HTMLTextAreaElement | null,
-    dedent: boolean,
-) {
-    if (!el) return;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    if (dedent) {
-        const lineStart = draftContent.value.lastIndexOf("\n", start - 1) + 1;
-        const lineContent = draftContent.value.slice(lineStart);
-        if (lineContent.startsWith("\t")) {
-            draftContent.value =
-                draftContent.value.slice(0, lineStart) +
-                draftContent.value.slice(lineStart + 1);
-            nextTick(() =>
-                el.setSelectionRange(
-                    Math.max(lineStart, start - 1),
-                    Math.max(lineStart, end - 1),
-                ),
-            );
-        } else if (lineContent.startsWith("  ")) {
-            draftContent.value =
-                draftContent.value.slice(0, lineStart) +
-                draftContent.value.slice(lineStart + 2);
-            nextTick(() =>
-                el.setSelectionRange(
-                    Math.max(lineStart, start - 2),
-                    Math.max(lineStart, end - 2),
-                ),
-            );
-        }
-    } else {
-        draftContent.value =
-            draftContent.value.slice(0, start) +
-            "\t" +
-            draftContent.value.slice(end);
-        nextTick(() => el.setSelectionRange(start + 1, start + 1));
+// ── Link completion ───────────────────────────────────────────────────────────
+/**
+ * What an open `{{` before the cursor offers: before the colon, this
+ * campaign's entries by type or name; after `{{type: ` entries, encounters,
+ * graphs and compendium entries (useLinkAutocomplete); after
+ * `{{type: Name @` that entry's historical states. `before` is the line up
+ * to the cursor.
+ */
+function completeLinks(before: string): EditorCompletions | null | Promise<EditorCompletions | null> {
+    const snapMatch = before.match(/\{\{(\w+):\s*([^@|}\n]+?)\s*@\s*([^}|]*)$/);
+    if (snapMatch) return completeSnapshots(snapMatch);
+    // Before the colon (`{{`, `{{fac`, `{{obsid`): this campaign's entries whose type or name fits; no database read
+    const open = before.match(/\{\{\s*([\w-]*)$/);
+    if (open) {
+        const word = open[1].toLowerCase();
+        const items = store.entities
+            .filter((e) => e.campaignId === props.campaignId && (!word || e.type.startsWith(word) || e.name.toLowerCase().includes(word)))
+            .sort((a, b) => Number(!a.type.startsWith(word)) - Number(!b.type.startsWith(word)) || a.name.localeCompare(b.name))
+            .slice(0, 8);
+        if (!items.length) return null;
+        return {
+            from: open.index!,
+            items: items.map((e) => ({ label: e.name, detail: e.type, apply: `{{${e.type}: ${e.name}}}`, color: localTypeColorMap[e.type] ?? "#888" })),
+        };
     }
+    return completeAfterColon(before);
 }
 
-// ── Autocomplete ──────────────────────────────────────────────────────────────
-type AcSource = "edit" | "mixed-notes";
-const autocomplete = ref({
-    show: false,
-    items: [] as any[],
-    triggerStart: 0,
-    source: "edit" as AcSource,
-    mixedIdx: -1,
-    cursorIdx: 0,
-    mode: "entity" as "entity" | "snapshot",
-});
+/** `{{type: Name @ partial`: that entry's historical states */
+async function completeSnapshots(snapMatch: RegExpMatchArray): Promise<EditorCompletions | null> {
+    const [, partialType, entityName, partialLabel] = snapMatch;
+    const ent = store.findByTypeAndName(partialType.toLowerCase(), entityName.trim());
+    if (!ent) return null;
+    const snaps = await getDb().entitySnapshots.where("entity_id").equals(ent.id).toArray();
+    const q = partialLabel.trim().toLowerCase();
+    const items = snaps
+        .filter((s) => !q || s.label.toLowerCase().includes(q))
+        .slice(0, 8)
+        .map((s) => ({ label: s.label, detail: "snapshot", apply: `@ ${s.label}}}`, color: localTypeColorMap.snapshot }));
+    return items.length ? { from: snapMatch.index! + snapMatch[0].indexOf("@"), items } : null;
+}
 
-const dropdownPos = ref<{ top: number; left: number; above: boolean } | null>(null);
-
-watch(
-    () => autocomplete.value.show && autocomplete.value.source === "mixed-notes"
-        ? autocomplete.value.mixedIdx
-        : null,
-    (idx) => {
-        if (idx === null) { dropdownPos.value = null; return; }
-        const el = mixedRefs[idx];
-        if (!el) return;
-        const rect = el.getBoundingClientRect();
-        const above = window.innerHeight - rect.bottom < 180;
-        dropdownPos.value = { top: above ? rect.top - 4 : rect.bottom + 4, left: rect.left, above };
-    },
-    { flush: "post" },
-);
-
-async function checkAutocomplete(
-    el: HTMLTextAreaElement | null,
-    text: string,
-    source: AcSource,
-    mixedIdx = -1,
-) {
-    if (!el) return;
-    const pos = el.selectionStart;
-
-    const snapMatch = text
-        .slice(0, pos)
-        .match(/\{\{(\w+):\s*([^@|}\n]+?)\s*@\s*([^}|]*)$/);
-    if (snapMatch) {
-        const [, partialType, entityName] = snapMatch;
-        const partialLabel = snapMatch[3];
-        const ent = store.findByTypeAndName(
-            partialType.toLowerCase(),
-            entityName.trim(),
-        );
-        if (ent) {
-            const snaps = await getDb()
-                .entitySnapshots.where("entity_id")
-                .equals(ent.id)
-                .toArray();
-            const filtered = snaps.filter(
-                (s) =>
-                    !partialLabel.trim() ||
-                    s.label
-                        .toLowerCase()
-                        .includes(partialLabel.trim().toLowerCase()),
-            );
-            const items = filtered
-                .slice(0, 8)
-                .map((s) => ({ type: "snapshot", name: s.label, id: s.id }));
-            const atPos = snapMatch.index! + snapMatch[0].indexOf("@");
-            autocomplete.value = {
-                show: items.length > 0,
-                items,
-                triggerStart: atPos,
-                source,
-                mixedIdx,
-                cursorIdx: 0,
-                mode: "snapshot",
-            };
-            return;
-        }
-        autocomplete.value.show = false;
-        return;
-    }
-
-    const found = await linkCandidates(text.slice(0, pos));
-    if (!found) {
-        autocomplete.value.show = false;
-        return;
-    }
-    autocomplete.value = {
-        show: found.items.length > 0,
-        items: found.items,
-        triggerStart: found.triggerStart,
-        source,
-        mixedIdx,
-        cursorIdx: 0,
-        mode: "entity",
+/** After `{{type: `: entries, encounters, graphs and compendium entries */
+async function completeAfterColon(before: string): Promise<EditorCompletions | null> {
+    const found = await linkCandidates(before);
+    if (!found || !found.items.length) return null;
+    return {
+        from: found.triggerStart,
+        items: found.items.map((item) => ({
+            label: item.name,
+            detail: item.type,
+            apply: `{{${item.type}: ${item.name}}}`,
+            color: localTypeColorMap[item.type] ?? "#888",
+        })),
     };
-}
-
-function applyAutocomplete(item: any) {
-    const ac = autocomplete.value;
-    let el: HTMLTextAreaElement | null;
-    let getVal: () => string;
-    let setVal: (s: string) => void;
-    if (ac.source === "mixed-notes") {
-        el = mixedRefs[ac.mixedIdx] ?? null;
-        getVal = () => editableBlocks.value[ac.mixedIdx];
-        setVal = (s) => {
-            editableBlocks.value[ac.mixedIdx] = s;
-            draftContent.value = editableBlocks.value.join("\n\n");
-        };
-    } else {
-        el = editorRef.value;
-        getVal = () => draftContent.value;
-        setVal = (s) => {
-            draftContent.value = s;
-        };
-    }
-    if (!el) return;
-    const pos = el.selectionStart;
-    const before = getVal().slice(0, ac.triggerStart);
-    const after = getVal().slice(pos);
-    const replacement =
-        ac.mode === "snapshot"
-            ? `@ ${item.name}}}`
-            : `{{${item.type}: ${item.name}}}`;
-    setVal(`${before}${replacement}${after}`);
-    scheduleContentEmit();
-    autocomplete.value.show = false;
-    nextTick(() => {
-        const p = before.length + replacement.length;
-        el!.setSelectionRange(p, p);
-        el!.focus();
-    });
-}
-
-function onAutocompleteKeydown(e: KeyboardEvent): boolean {
-    if (!autocomplete.value.show) return false;
-    const items = autocomplete.value.items;
-    if (e.key === "Escape") {
-        e.preventDefault();
-        autocomplete.value.show = false;
-        return true;
-    }
-    if (!items.length) return false;
-    if (e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey)) {
-        e.preventDefault();
-        autocomplete.value.cursorIdx =
-            (autocomplete.value.cursorIdx + 1) % items.length;
-        return true;
-    }
-    if (e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey)) {
-        e.preventDefault();
-        autocomplete.value.cursorIdx =
-            (autocomplete.value.cursorIdx - 1 + items.length) % items.length;
-        return true;
-    }
-    if (e.key === "Enter") {
-        e.preventDefault();
-        applyAutocomplete(items[autocomplete.value.cursorIdx]);
-        return true;
-    }
-    return false;
-}
-
-function onEditKeydown(e: KeyboardEvent) {
-    if (onAutocompleteKeydown(e)) return;
-    if (e.key === "Tab") {
-        e.preventDefault();
-        handleTabInTextarea(editorRef.value, e.shiftKey);
-        return;
-    }
-    if ((e.metaKey || e.ctrlKey) && e.key === "b") {
-        e.preventDefault();
-        insertNotes("**", "**");
-        return;
-    }
-    if ((e.metaKey || e.ctrlKey) && e.key === "i") {
-        e.preventDefault();
-        insertNotes("*", "*");
-        return;
-    }
-}
-
-function onMixedBlockKeydown(e: KeyboardEvent, i: number) {
-    if (onAutocompleteKeydown(e)) return;
-    if (e.key === "Escape") {
-        e.preventDefault();
-        onBlockBlur();
-    }
 }
 
 // ── Inline widget helpers ─────────────────────────────────────────────────────
@@ -1212,10 +926,6 @@ async function onMixedPreviewClick(e: MouseEvent, i: number) {
 // ── Sync blocks on mount if in mixed mode ────────────────────────────────────
 onMounted(() => {
     if (viewMode.value === "mixed") syncBlocks();
-});
-
-onUnmounted(() => {
-    Object.keys(mixedRefs).forEach(k => delete mixedRefs[Number(k)]);
 });
 </script>
 
@@ -1402,6 +1112,9 @@ onUnmounted(() => {
     to   { transform: scale(1);   opacity: 1; }
 }
 
+.editor-code :deep(.cm-content) { padding: 18px 22px; }
+.mixed-code :deep(.cm-content) { padding: 5px 10px; }
+
 .editor-area-wrap {
     flex: 1;
     overflow: hidden;
@@ -1411,87 +1124,7 @@ onUnmounted(() => {
     min-height: 0;
 }
 
-.editor-textarea {
-    flex: 1;
-    min-height: 0;
-    width: 100%;
-    padding: 18px 22px;
-    background: transparent;
-    border: none;
-    outline: none;
-    resize: none;
-    overflow-y: auto;
-    color: var(--text);
-    font-family: var(--fm);
-    font-size: 13px;
-    line-height: 1.75;
-    caret-color: var(--accent);
-}
-.editor-textarea::placeholder {
-    color: var(--text3);
-}
 
-/* ── Autocomplete ────────────────────────────────────────────────────────── */
-.autocomplete-dropdown {
-    background: var(--surface-solid);
-    border: 1px solid var(--border-hi);
-    border-radius: var(--r2);
-    width: 280px;
-    overflow: hidden;
-    box-shadow: var(--sh-md);
-}
-.autocomplete-dropdown--abs {
-    position: absolute;
-    bottom: 8px;
-    left: 22px;
-    z-index: var(--z-sidebar);
-}
-.autocomplete-dropdown--fixed {
-    position: fixed;
-    z-index: var(--z-top);
-}
-.autocomplete-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 12px;
-    width: 100%;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    color: var(--text);
-    transition: background 0.1s;
-    text-align: left;
-    font-size: 13px;
-}
-.autocomplete-item:hover,
-.autocomplete-item--active {
-    background: var(--surface-hi);
-}
-.autocomplete-item--active {
-    border-left: 2px solid var(--accent);
-    padding-left: 10px;
-}
-.autocomplete-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-.autocomplete-name {
-    flex: 1;
-}
-.autocomplete-type {
-    font-size: 10px;
-    color: var(--text3);
-}
-.autocomplete-empty {
-    font-size: 12px;
-    color: var(--text3);
-    padding: 8px 12px;
-    font-style: italic;
-    margin: 0;
-}
 
 /* ── Preview pane ────────────────────────────────────────────────────────── */
 .preview-pane {
@@ -1573,22 +1206,6 @@ onUnmounted(() => {
     min-height: 30px;
 }
 
-.mixed-textarea {
-    width: 100%;
-    padding: 5px 10px;
-    background: transparent;
-    border: none;
-    outline: none;
-    resize: none;
-    color: var(--text);
-    font-family: var(--fm);
-    font-size: 13px;
-    line-height: 1.75;
-    caret-color: var(--accent);
-    min-height: 30px;
-    overflow: hidden;
-    display: block;
-}
 
 .mixed-add-btn {
     align-self: flex-start;

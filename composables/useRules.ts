@@ -8,6 +8,7 @@
 import { ref, shallowRef, toRaw, watch } from 'vue'
 import { getDb, now } from '~/composables/useDb'
 import { onTablesChanged } from '~/db/changes'
+import { buildNameIndex, searchNames, type NameIndex } from '~/utils/search'
 import { newRulesEntity, newRulesId } from '~/rules/factory'
 import { isOverlayPath, setPath, withLocalEdits } from '~/rules/edits'
 import { packOf } from '~/rules/packs'
@@ -225,9 +226,10 @@ export async function consumablePriceMedians(game: GameId): Promise<Record<numbe
 }
 
 /**
- * Name search across all kinds (global search, quick lookup): prefix matches
- * first, then names that contain the text, each by name. Names come from the
- * in-memory name index, so only the rows of the hits are read.
+ * Name search across all kinds (global search, quick lookup): the whole name,
+ * then names starting with the text, then word starts and small typos
+ * (utils/search.ts), then names containing it. Names come from the in-memory
+ * name index, so only the rows of the hits are read.
  */
 export async function rulesSearch(text: string, limit = 8, games?: GameId[]): Promise<RulesEntity[]> {
   const q = text.trim().toLowerCase()
@@ -244,25 +246,26 @@ export async function rulesSearch(text: string, limit = 8, games?: GameId[]): Pr
     const rest = await db.rules.filter(e => !seen.has(e.id) && e.sortName.includes(q) && keep(e)).limit(limit - prefix.length).toArray()
     return [...prefix, ...rest].map(withLocalEdits)
   }
-  const prefix: [string, string][] = [], contains: [string, string][] = []
-  for (const key of nameCounts.keys()) {
-    const sep = key.indexOf(':')
-    const name = key.slice(sep + 1)
-    if (name.startsWith(q)) prefix.push([key.slice(0, sep), name])
-    else if (name.includes(q)) contains.push([key.slice(0, sep), name])
-  }
-  const byName = (a: [string, string], b: [string, string]) => (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : a[0] < b[0] ? -1 : 1)
+  // Names ranked by the search index (whole name, name start, word starts and typos, then contains)
+  const ranked = searchNames(currentNameSearch(), q)
+  const keys = ranked.map(k => { const sep = k.indexOf(':'); return [k.slice(0, sep), k.slice(sep + 1)] as [string, string] })
+  const rank = new Map(ranked.map((k, i) => [k, i]))
   const out: RulesEntity[] = []
   // Superseded, removed and other-game entries are filtered out after reading: read a few more than needed per batch
   const BATCH = Math.max(limit * 2, 16)
-  for (const keys of [prefix.sort(byName), contains.sort(byName)]) {
-    for (let i = 0; i < keys.length && out.length < limit; i += BATCH) {
-      const rows = await db.rules.where('[kind+sortName]').anyOf(keys.slice(i, i + BATCH)).toArray()
-      rows.sort((a, b) => (a.sortName < b.sortName ? -1 : a.sortName > b.sortName ? 1 : a.kind < b.kind ? -1 : 1))
-      for (const r of rows) { if (out.length < limit && keep(r)) out.push(r) }
-    }
+  for (let i = 0; i < keys.length && out.length < limit; i += BATCH) {
+    const rows = await db.rules.where('[kind+sortName]').anyOf(keys.slice(i, i + BATCH)).toArray()
+    rows.sort((a, b) => (rank.get(indexKey(a))! - rank.get(indexKey(b))!) || (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0))
+    for (const r of rows) { if (out.length < limit && keep(r)) out.push(r) }
   }
   return out.map(withLocalEdits)
+}
+
+// The name list as a search index, rebuilt when the list has changed since
+let nameSearch: { index: NameIndex; for: Map<string, number> } | null = null
+function currentNameSearch(): NameIndex {
+  if (nameSearch?.for !== nameIndex.value) nameSearch = { index: buildNameIndex(nameIndex.value.keys()), for: nameIndex.value }
+  return nameSearch.index
 }
 
 export async function rulesGet(id: string): Promise<RulesEntity | undefined> {

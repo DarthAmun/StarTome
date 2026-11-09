@@ -267,13 +267,7 @@ import { dbApi } from '~/composables/useDb'
 import { ENTITY_TYPE_CONFIG } from '~/types/entities'
 import { PANEL_KINDS, type SessionPanelKind } from '~/utils/sessionBoard'
 import { getDb } from '~/composables/useDb'
-
-/** Panels on session boards whose title or text matches (drawer panels have no page to open). */
-async function searchPanels(lq: string, limit: number) {
-  return getDb().sessionPanels
-    .filter(p => p.session_id != null && p.kind !== 'frame' && (p.title.toLowerCase().includes(lq) || p.content.toLowerCase().includes(lq)))
-    .limit(limit).toArray()
-}
+import { searchAppAll } from '~/composables/useSearchIndex'
 import type { EntityType } from '~/types/entities'
 import { useEntities } from '~/composables/useEntities'
 import type { Entity } from '~/composables/useEntities'
@@ -504,31 +498,27 @@ async function runSearch(q: string) {
     return
   }
 
-  const lq = q.toLowerCase()
-
-  // All sources at once (PERF-04)
-  const [allCampaigns, entityDbRows, rulesRows, encounterRows, graphRows, panelRows] = await Promise.all([
-    campaignNames(),
-    dbApi.entities.search(lq, 5),
-    rulesSearch(lq, 6),
-    dbApi.encounters.search(lq, 5),
-    dbApi.graphLayout.searchAll(lq, 5),
-    searchPanels(lq, 6),
+  // Own data from the search index (names, tags and text; typos and word starts), the compendium by name
+  const [hits, rulesRows] = await Promise.all([
+    searchAppAll(q, { campaign: 5, entity: 6, encounter: 5, graph: 5, panel: 6 }),
+    rulesSearch(q, 6),
   ])
   if (seq !== searchSeq) return
-  const campaigns: SearchResult[] = allCampaigns
-    .filter((c: any) => c.name.toLowerCase().includes(lq))
-    .slice(0, 5)
-    .map((c: any) => ({ kind: 'campaign', id: c.id, name: c.name }))
 
-  const entities: SearchResult[] = entityDbRows.map((r: any) => ({
-    kind: 'entity',
-    id: r.id,
-    name: r.name,
-    type: r.type,
-    campaignId: r.campaign_id,
-    entity: notesStore.entities.find(en => en.id === r.id) ?? normalizeEntity(r),
-  }))
+  const campaigns: SearchResult[] = hits.campaign.map(h => ({ kind: 'campaign', id: h.refId, name: h.name }))
+
+  // Entry cards need the whole entry: from the store when it's loaded, else from the database
+  const missing = hits.entity.filter(h => !notesStore.entities.some(en => en.id === h.refId)).map(h => h.refId)
+  const fetched = missing.length ? await getDb().entities.bulkGet(missing) : []
+  if (seq !== searchSeq) return
+  const entities: SearchResult[] = hits.entity.map(h => ({
+    kind: 'entity' as const,
+    id: h.refId,
+    name: h.name,
+    type: h.type,
+    campaignId: h.campaignId,
+    entity: notesStore.entities.find(en => en.id === h.refId) ?? normalizeEntity(fetched.find(r => r?.id === h.refId)!),
+  })).filter(r => r.entity)
 
   const rulesHits: SearchResult[] = rulesRows.map(e => ({
     kind: 'rules' as const,
@@ -538,31 +528,31 @@ async function runSearch(q: string) {
     _subtitle: `${RULES_KIND_CONFIG[e.kind].label}${RULES_KIND_CONFIG[e.kind].hasLevel ? ` ${e.level}` : ''}${e.game === 'both' ? '' : ` · ${GAME_CONFIG[e.game].short}`}`,
   }))
 
-  const encounters: SearchResult[] = encounterRows.map((e: any) => ({
+  const encounters: SearchResult[] = hits.encounter.map(h => ({
     kind: 'encounter' as const,
-    id: e.id!,
-    name: e.name,
-    campaignId: e.campaign_id,
-    _subtitle: `Campaign ${e.campaign_id}`,
+    id: h.refId,
+    name: h.name,
+    campaignId: h.campaignId,
+    _subtitle: `Campaign ${h.campaignId}`,
   }))
 
-  const graphs: SearchResult[] = graphRows.map((g: any) => ({
+  const graphs: SearchResult[] = hits.graph.map(h => ({
     kind: 'graph' as const,
-    id: g.id!,
-    name: g.name ?? 'Default',
-    campaignId: g.campaign_id,
-    _subtitle: `Campaign ${g.campaign_id}`,
+    id: h.refId,
+    name: h.name,
+    campaignId: h.campaignId,
+    _subtitle: `Campaign ${h.campaignId}`,
   }))
 
-  const sessionName = (id: number | null) => notesStore.entities.find(e => e.id === id)?.name ?? 'Session'
-  const panels: SearchResult[] = panelRows.map(p => ({
+  const sessionName = (id: number | undefined) => notesStore.entities.find(e => e.id === id)?.name ?? 'Session'
+  const panels: SearchResult[] = hits.panel.map(h => ({
     kind: 'panel' as const,
-    id: p.id!,
-    name: p.title || p.content.slice(0, 60),
-    type: p.kind,
-    campaignId: p.campaign_id,
-    sessionId: p.session_id ?? undefined,
-    _subtitle: `${PANEL_KINDS[p.kind].label} · ${sessionName(p.session_id)}`,
+    id: h.refId,
+    name: h.name,
+    type: h.type,
+    campaignId: h.campaignId,
+    sessionId: h.sessionId,
+    _subtitle: `${PANEL_KINDS[h.type as SessionPanelKind].label} · ${sessionName(h.sessionId)}`,
   }))
 
   results.value = { campaigns, entities, rules: rulesHits, encounters, graphs, panels }

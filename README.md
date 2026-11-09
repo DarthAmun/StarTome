@@ -20,7 +20,8 @@ StarTome is unofficial and not affiliated with Paizo Inc. Pathfinder and Starfin
 | State | Pinia |
 | Canvas / VTT | PixiJS v8 |
 | Knowledge Graph | Vue Flow + Cytoscape |
-| Markdown | markdown-it + DOMPurify |
+| Markdown | markdown-it + DOMPurify; editor: CodeMirror 6 |
+| Search | MiniSearch (in-memory full-text index, word starts and typos) |
 | Import / Export | JSZip |
 | Sync | BroadcastChannel API |
 | Tests | Vitest (logic), Playwright (browser smoke tests) |

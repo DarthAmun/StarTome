@@ -116,6 +116,9 @@ export interface PanelNodeInfo {
     missing?: string
 }
 
+// Vue Flow hands every node field over as attributes; the node draws several root elements (handles, body)
+defineOptions({ inheritAttrs: false })
+
 const props = defineProps<{
     selected?: boolean
     data: {

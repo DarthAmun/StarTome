@@ -1,6 +1,7 @@
 import { dbApi, getDb, parseJsonObject, type DbEntity } from '~/composables/useDb'
 import { useEntities } from '~/composables/useEntities'
 import { rulesSearch } from '~/composables/useRules'
+import { searchApp } from '~/composables/useSearchIndex'
 import { adjustDc, DC_STEPS, parseDcQuery } from '~/rules/dcs'
 import { RULES_KIND_CONFIG, RULES_KINDS } from '~/types/rules'
 import { lsKey } from '~/utils/appNamespace'
@@ -11,7 +12,14 @@ import { lsKey } from '~/utils/appNamespace'
  * matches of other types can't crowd out the wanted ones.
  */
 async function findEntities(name: string, type: string, campaignId?: number, limit = 8): Promise<(DbEntity & { id: number })[]> {
-  const rows = await dbApi.entities.search(name.toLowerCase(), limit * 4, { type })
+  let rows: DbEntity[]
+  if (name.trim()) {
+    // The search index: word starts and typos, best first; names only, the palette opens entries by name
+    const hits = (await searchApp(name, 'entity', limit * 6)).filter(h => h.type === type && h.match === 'name')
+    rows = (await getDb().entities.bulkGet(hits.map(h => h.refId))).filter((r): r is DbEntity => !!r)
+  } else {
+    rows = await dbApi.entities.search('', limit * 4, { type })
+  }
   const here = campaignId != null ? rows.filter(r => r.campaign_id === campaignId) : []
   return (here.length ? here : rows).slice(0, limit) as (DbEntity & { id: number })[]
 }

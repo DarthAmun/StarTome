@@ -36,6 +36,21 @@ test.describe('dialogs, search and pickers', () => {
     await expect(search).toBeHidden()
   })
 
+  test('search forgives typos and looks into entry text', async ({ page }) => {
+    await openSeeded(page)
+    await expect(page.locator('.gs-pill-trigger')).toBeVisible()
+    await page.keyboard.press('Control+k')
+    const search = page.getByRole('dialog', { name: 'Search' })
+    const input = search.locator('input').first()
+
+    await input.fill('aldirc')   // two letters swapped
+    await expect(search.getByText('Aldric Vane').first()).toBeVisible()
+
+    // Only in the faction's text, not in any name
+    await input.fill('fugitive')
+    await expect(search.getByText('The Obsidian Circle').first()).toBeVisible()
+  })
+
   test('filter pills: ticking a value keeps the menu open', async ({ page }) => {
     await openSeeded(page)
     const { campaignId } = await seededIds(page)

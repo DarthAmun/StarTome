@@ -24,6 +24,9 @@
 import { BaseEdge, Position, getSmoothStepPath, getStraightPath, type EdgeProps, type GraphNode } from '@vue-flow/core'
 import { computed } from 'vue'
 
+// Vue Flow hands every edge field over as attributes; BaseEdge draws several elements
+defineOptions({ inheritAttrs: false })
+
 const props = defineProps<EdgeProps<{ kind?: string }>>()
 
 interface Box { x: number; y: number; w: number; h: number }

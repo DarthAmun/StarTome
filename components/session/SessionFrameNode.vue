@@ -29,6 +29,9 @@ import type { SessionPanel } from '~/composables/useSessionBoard'
 
 const FRAME_COLORS = ['#5fc98a', '#4ab8e8', '#b87de8', '#e8924a', '#e05555', '#e8c44a', '#8fa3b8']
 
+// Vue Flow hands every node field over as attributes; the node draws several root elements (handles, body)
+defineOptions({ inheritAttrs: false })
+
 const props = defineProps<{
     selected?: boolean
     data: {
