@@ -641,7 +641,7 @@ class StarTomeDb extends Dexie {
       sessionPanels:      '++id, campaign_id, session_id, [campaign_id+session_id], kind',
     })
     // Sessions from before v19 get their board once the database is open: the
-    // old prep and notes become scenes and a log (kept in the attributes for now).
+    // old prep and notes become scenes and a log, and the old fields are dropped.
     // Not an upgrade function: an upgrade from far back runs in a transaction
     // that doesn't include tables created on the way.
     this.on('ready', (vip) => {

@@ -192,7 +192,7 @@ For each session entity that has no `board.migrated`:
 1. Split `scriptContent` at headings (`#`, `##`, `###`). Each heading and its text becomes a **Scene** with status `planned`, or `played` if the session's mode was `finished` or `running`. Text before the first heading becomes a **Note** titled "Prep".
 2. Scenes are laid out left to right in a row, joined by **plan** connections in their original order.
 3. `notesContent` (or `content` if that's set and `notesContent` isn't) becomes one **Log** of type `happened`, titled "Notes (from the old editor)", placed below the row, not attached.
-4. Set `board.migrated`. `scriptContent` and `notesContent` are **kept** for one release as a fallback and removed in the release after.
+4. Set `board.migrated` and drop `scriptContent` / `notesContent` (see §16).
 
 Import paths that need the converter:
 - Backups from before v19 ([backup.ts](sync/backup.ts) import).
@@ -290,6 +290,9 @@ Tests (vitest): the migration converter (heading splitting, edge cases: no headi
 
 ### Left for later
 
-- Remove `scriptContent` / `notesContent` from session attributes in the release after this one (§8). The importer keeps accepting `scriptContent`.
 - Treasure from Reward panels (§13).
 - The GM screen rework itself.
+
+## 16. Old fields removed (2026-11-09)
+
+`scriptContent` / `notesContent` (and a campaign file's `panels`) are no longer kept on sessions: the conversion drops them once they're panels, and sessions converted earlier lose them the next time the database opens. Only the converter reads them now (imports of older backups, campaign files, DM's Tome). LinkBar's separate "Script Links / Notes Links" block for sessions is gone; sessions show the normal links, built from the board's text.

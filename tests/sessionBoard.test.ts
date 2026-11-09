@@ -71,8 +71,9 @@ describe('v19 upgrade and imports', () => {
     expect(panels.map(p => [p.kind, p.title, p.status])).toEqual([['scene', 'Road', 'played'], ['log', 'Notes (from the old editor)', undefined]])
     const session = (await db.entities.get(1))!
     expect((session.attributes as any).board.migrated).toBe(true)
-    // The old fields stay for one release
-    expect((session.attributes as any).scriptContent).toContain('Road')
+    // The old fields are gone once they're panels
+    expect(session.attributes).not.toHaveProperty('scriptContent')
+    expect(session.attributes).not.toHaveProperty('notesContent')
     expect(session.content).toContain('Meet {{npc: Vex}}')
     const links = await db.entityLinks.where('source_id').equals(1).toArray()
     expect(links.map(l => l.target_name).sort()).toEqual(['Kib', 'Vex'])
@@ -185,5 +186,20 @@ describe('campaign file panels', () => {
     ])
     expect(panels[3].attrs.xp).toBe(40)
     expect(edges).toEqual([])
+  })
+})
+
+describe('old session fields', () => {
+  it('are dropped from sessions that were converted while they were still kept', async () => {
+    const { convertLegacySessions } = await import('~/utils/sessionBoard')
+    const db = getDb()
+    await db.open()
+    const id = await db.entities.add({ campaign_id: 1, type: 'session', name: 'Kept', content: '', attributes: { mode: 'finished', scriptContent: '## X', notesContent: 'n', board: { edges: [], viewport: { x: 0, y: 0, zoom: 1 }, migrated: true } }, created_at: '', updated_at: '' }) as number
+    const before = await db.sessionPanels.count()
+    await convertLegacySessions(db)
+    const row = (await db.entities.get(id))!
+    expect(row.attributes).toEqual({ mode: 'finished', board: { edges: [], viewport: { x: 0, y: 0, zoom: 1 }, migrated: true } })
+    // Not converted a second time
+    expect(await db.sessionPanels.count()).toBe(before)
   })
 })

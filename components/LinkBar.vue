@@ -1,8 +1,7 @@
 <template>
-    <!-- Non-session links -->
+    <!-- Links, backlinks, map pins -->
     <div
         v-if="
-            entityType !== 'session' &&
             (outgoingLinks.length > 0 ||
                 backlinks.length > 0 ||
                 pinnedOn.length > 0 ||
@@ -140,48 +139,6 @@
         </div>
     </div>
 
-    <!-- Session links -->
-    <div
-        v-else-if="
-            entityType === 'session' && (scriptLinks.length > 0 || outgoingLinks.length > 0)
-        "
-        class="links-panel"
-    >
-        <div v-if="scriptLinks.length > 0" class="links-section">
-            <span class="links-label">Script Links</span>
-            <div class="links-list">
-                <button
-                    v-for="link in scriptLinks"
-                    :key="`${link.type}:${link.name}`"
-                    class="link-chip"
-                    :style="{
-                        borderColor: (typeColorMap[link.type] ?? '#888') + '44',
-                    }"
-                    @click="$emit('navigate', link.type, link.name)"
-                >
-                    <span>{{ link.name }}</span>
-                    <span class="link-sub">{{ link.type }}</span>
-                </button>
-            </div>
-        </div>
-        <div v-if="outgoingLinks.length > 0" class="links-section">
-            <span class="links-label">Notes Links</span>
-            <div class="links-list">
-                <button
-                    v-for="link in outgoingLinks"
-                    :key="link.id"
-                    class="link-chip"
-                    :style="{
-                        borderColor: (typeColorMap[link.targetType] ?? '#888') + '44',
-                    }"
-                    @click="$emit('navigate', link.targetType, link.targetName)"
-                >
-                    <span>{{ link.targetName }}</span>
-                    <span class="link-sub">{{ link.targetType }}</span>
-                </button>
-            </div>
-        </div>
-    </div>
 </template>
 
 <script setup lang="ts">
@@ -292,19 +249,6 @@ const backlinks = computed(() => {
 const pinnedOn = computed(() =>
     entity.value && props.content === undefined ? store.pinnedLocationsFor(entity.value.id) : [],
 );
-
-const scriptLinks = computed(() => {
-    if (props.entityType !== "session") return [];
-    const seen = new Set<string>();
-    return extractLinks(
-        (entity.value?.attributes as any)?.scriptContent ?? "",
-    ).filter((l) => {
-        const key = `${l.type}:${l.name.toLowerCase()}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-    });
-});
 
 // ── Event: linked snapshots ───────────────────────────────────────────────────
 const linkedSnapshots = ref<any[]>([]);

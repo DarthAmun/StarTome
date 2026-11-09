@@ -206,10 +206,15 @@ function objectOf(v: unknown): Record<string, any> {
   return {}
 }
 
+/** The prep and notes fields of the two-editor sessions; only the conversion reads them. */
+const OLD_FIELDS = ['scriptContent', 'notesContent', 'panels'] as const
+
 /**
  * Every session without a board gets one from its old prep and notes: on
  * opening the database (v19), imports (backups, campaign files, DM's Tome) and the demo campaign.
- * Its `content` and links are rebuilt from the panels. Returns how many were converted.
+ * Its `content` and links are rebuilt from the panels, and the old fields are
+ * dropped (sessions converted before that lose them on the next pass).
+ * Returns how many were converted.
  */
 export async function convertLegacySessions(t: BoardTables, campaignId?: number): Promise<number> {
   const sessions: { id: number; campaign_id: number; content?: string; attributes: unknown }[] =
@@ -218,11 +223,14 @@ export async function convertLegacySessions(t: BoardTables, campaignId?: number)
   for (const row of sessions) {
     if (campaignId != null && row.campaign_id !== campaignId) continue
     const attrs = objectOf(row.attributes)
-    if (attrs.board?.migrated) continue
+    const rest = Object.fromEntries(Object.entries(attrs).filter(([k]) => !(OLD_FIELDS as readonly string[]).includes(k)))
+    if (attrs.board?.migrated) {
+      if (Object.keys(rest).length !== Object.keys(attrs).length) await t.entities.update(row.id, { attributes: rest })
+      continue
+    }
     const { panels, edges } = legacySessionToBoard({ ...attrs, content: row.content }, row.campaign_id, row.id)
     if (panels.length) await t.sessionPanels.bulkAdd(panels)
     const content = boardText(panels)
-    const { panels: _filePanels, ...rest } = attrs
     await t.entities.update(row.id, {
       content,
       attributes: { ...rest, board: { edges, viewport: { x: 40, y: 40, zoom: 0.9 }, migrated: true } },

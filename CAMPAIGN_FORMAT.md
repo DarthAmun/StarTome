@@ -129,7 +129,7 @@ A session is a board of panels. Write the scenes in `scriptContent`: every `#`, 
 - `kind`: `scene`, `beat` (a one-line idea), `clue` (a secret or clue that can come up anywhere), `note` (session-wide reminders), `reward` (with `xp`), `log` (what happened, for sessions already played; `logType`: `happened`, `changed`, `improvised`, `consequence`; `playersShouldKnow`: `true` for the next session's recap).
 - `title`, `content` (markdown), `tags`, and optionally `status` (`scene`: `planned`/`played`/`continued`/`skipped`; `beat`: `open`/`done`; `clue`: `hidden`/`revealed`; `reward`: `pending`/`awarded`).
 
-Leave `content` as `""`: StarTome fills it from the board. `mode`: `planning`, `running`, `finished`.
+Leave `content` as `""`: StarTome fills it from the board. `scriptContent` and `panels` are only read on import; once they're panels they aren't kept. `mode`: `planning`, `running`, `finished`.
 
 **note** (lore, history, setting primers)
 ```json

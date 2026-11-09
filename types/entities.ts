@@ -71,8 +71,8 @@ export interface SessionAttributes {
   mode?: 'planning' | 'running' | 'finished'
   sessionNumber?: string
   date?: string
-  scriptContent?: string   // the session script / prep
-  notesContent?: string    // live notes taken during session
+  // The prep and notes live on the session board (sessionPanels, SESSION_BOARD_PLAN.md);
+  // old scriptContent / notesContent are turned into panels and dropped (utils/sessionBoard.ts)
 }
 
 // Shape reference — used via EntityAttributes union
