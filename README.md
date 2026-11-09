@@ -51,6 +51,10 @@ campaign and never sees your own data. Once per machine, fetch the browser:
 `pnpm exec playwright install chromium`. `pnpm test:e2e --ui` steps through
 them; a failure keeps a trace and screenshot in `test-results/`.
 
+On GitHub, every push to `main` runs the typecheck and both suites first;
+the Pages deploy only happens when they pass (a failed run keeps the
+browser test traces as an artifact for a week).
+
 ## Production Build
 
 ```bash
