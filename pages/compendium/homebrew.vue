@@ -26,8 +26,7 @@
             @click="setGame(g.id)"
           >{{ g.label }}</button>
           <span class="hb-muted hb-pack-label">and go into the pack</span>
-          <input v-model="pack" class="hb-pack" list="hb-packs" placeholder="none" title="Entries that name their own pack (publication.title) keep it" @change="rawEntries && check()" />
-          <datalist id="hb-packs"><option v-for="p in packNames" :key="p" :value="p" /></datalist>
+          <AppCombobox v-model="pack" :options="packNames" input-class="hb-pack" placeholder="none" title="Entries that name their own pack (publication.title) keep it" @commit="rawEntries && check()" />
         </div>
 
         <template v-if="!rows">

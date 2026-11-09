@@ -9,9 +9,9 @@
 
     <div class="body">
       <span class="name">{{ entry.name }}</span>
-      <div v-if="hasMeta" class="meta">
-        <span v-if="attrs.mode" class="mode-badge" :style="{ color: modeColor, borderColor: modeColor + '66' }">
-          {{ attrs.mode }}
+      <div class="meta">
+        <span class="mode-badge" :style="{ color: modeColor, borderColor: modeColor + '66' }">
+          {{ attrs.mode ?? 'planning' }}
         </span>
         <span v-if="attrs.date" class="sess-date">{{ fmtDate(attrs.date) }}</span>
       </div>
@@ -35,9 +35,8 @@ const props = defineProps<{ entry: Entity; deletable?: boolean }>()
 defineEmits<{ open: []; delete: [id: number] }>()
 const attrs = computed(() => (props.entry.attributes ?? {}) as SessionAttributes)
 
-const modeColor = computed(() => SESSION_MODE_COLORS[attrs.value.mode ?? ''] ?? '#b87de8')
+const modeColor = computed(() => SESSION_MODE_COLORS[attrs.value.mode ?? 'planning'] ?? '#b87de8')
 
-const hasMeta = computed(() => !!(attrs.value.mode || attrs.value.date))
 
 function fmtDate(d: string): string {
   const dt = new Date(d)

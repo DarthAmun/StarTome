@@ -3,36 +3,15 @@
         <!-- Toolbar (hidden in player view) -->
         <div v-if="!playerView" class="graph-toolbar">
             <!-- Entity search -->
-            <div class="graph-search" ref="searchWrapRef">
-                <input
+            <div class="graph-search">
+                <AppCombobox
                     v-model="searchQuery"
-                    class="graph-search-input"
+                    :options="searchOptions"
+                    :filter="false"
+                    input-class="graph-search-input"
                     placeholder="Add entity to graph…"
-                    @input="onSearchInput"
-                    @focus="onSearchInput"
+                    @select="onSearchPick"
                 />
-                <div
-                    v-if="searchResults.length > 0"
-                    class="graph-search-dropdown"
-                >
-                    <div
-                        v-for="entity in searchResults"
-                        :key="entity.id"
-                        class="graph-search-item"
-                        @mousedown.prevent="
-                            addEntityToGraph(entity);
-                            searchQuery = '';
-                            searchResults = [];
-                        "
-                    >
-                        <span
-                            class="gsi-type"
-                            :style="{ color: typeColor(entity.type) }"
-                            >{{ entity.type }}</span
-                        >
-                        {{ entity.name }}
-                    </div>
-                </div>
             </div>
 
             <!-- Type filters -->
@@ -188,8 +167,6 @@ const connections = ref<DbEntityConnection[]>([]);
 const imageCache = new Map<string, string>();
 
 const searchQuery = ref("");
-const searchResults = ref<Entity[]>([]);
-const searchWrapRef = ref<HTMLElement | null>(null);
 
 const connModal = ref({
     show: false,
@@ -428,20 +405,24 @@ async function addEntityToGraph(entity: Entity) {
 }
 
 // ── Search ────────────────────────────────────────────────────────────────────
-function onSearchInput() {
+const searchOptions = computed(() => {
     const q = searchQuery.value.toLowerCase().trim();
-    if (!q) {
-        searchResults.value = [];
-        return;
-    }
-    searchResults.value = store.entities
+    if (!q) return [];
+    return store.entities
         .filter(
             (e) =>
                 e.campaignId === props.campaignId &&
                 !canvasEntityIds.value.has(e.id!) &&
                 e.name.toLowerCase().includes(q),
         )
-        .slice(0, 8);
+        .slice(0, 8)
+        .map((e) => ({ value: e.id!, label: e.name, tag: e.type }));
+});
+
+function onSearchPick(id: string | number) {
+    const entity = store.entities.find((e) => e.id === id);
+    if (entity) addEntityToGraph(entity);
+    searchQuery.value = "";
 }
 
 // ── Type visibility ───────────────────────────────────────────────────────────
@@ -670,40 +651,8 @@ onUnmounted(() => {
     border-color: var(--accent);
 }
 
-.graph-search-dropdown {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    width: 240px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--r2);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24);
-    z-index: 100;
-    overflow: hidden;
-}
 
-.graph-search-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 10px;
-    font-size: 12px;
-    color: var(--text);
-    cursor: pointer;
-    transition: background 0.1s;
-}
-.graph-search-item:hover {
-    background: var(--surface-hi);
-}
 
-.gsi-type {
-    font-size: 9px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    flex-shrink: 0;
-}
 
 .type-filters {
     display: flex;

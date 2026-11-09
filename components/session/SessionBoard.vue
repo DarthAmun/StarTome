@@ -14,22 +14,32 @@
                 <span>{{ PANEL_KINDS[k].label }}</span>
             </button>
             <span class="sb-spacer" />
-            <button v-if="mode === 'finished'" class="sb-tool" title="Carry unused prep over to the next session or the drawer" @click="openFinish()">
-                <OhVueIcon name="md-importexport" scale="0.8" /> Review
-            </button>
-            <button v-if="running" class="sb-tool" title="What the players should know from last session" @click="$emit('recap')">
-                <OhVueIcon name="md-history" scale="0.8" /> Recap
-            </button>
-            <button class="sb-tool" :class="{ active: showParty }" title="Party: Perception, saves, hero points" @click="toggleParty">
-                <OhVueIcon name="gi-meeple-group" scale="0.8" /> Party
-            </button>
-            <button class="sb-tool" title="Fit everything into view" @click="fit()">
-                <OhVueIcon name="md-fitscreen" scale="0.8" /> Fit
-            </button>
-            <button class="sb-tool" :class="{ active: showDrawer }" title="Unused panels of this campaign" @click="showDrawer = !showDrawer">
-                <OhVueIcon name="md-folder" scale="0.8" /> Drawer
-                <span v-if="board.drawer.value.length" class="sb-count">{{ board.drawer.value.length }}</span>
-            </button>
+            <AppTooltip v-if="mode === 'finished'" text="Carry unused prep over to the next session or the drawer">
+              <button class="sb-tool" @click="openFinish()">
+                  <OhVueIcon name="md-importexport" scale="0.8" /> Review
+              </button>
+            </AppTooltip>
+            <AppTooltip v-if="running" text="What the players should know from last session">
+              <button class="sb-tool" @click="$emit('recap')">
+                  <OhVueIcon name="md-history" scale="0.8" /> Recap
+              </button>
+            </AppTooltip>
+            <AppTooltip text="Party: Perception, saves, hero points">
+              <button class="sb-tool" :class="{ active: showParty }" @click="toggleParty">
+                  <OhVueIcon name="gi-meeple-group" scale="0.8" /> Party
+              </button>
+            </AppTooltip>
+            <AppTooltip text="Fit everything into view">
+              <button class="sb-tool" @click="fit()">
+                  <OhVueIcon name="md-fitscreen" scale="0.8" /> Fit
+              </button>
+            </AppTooltip>
+            <AppTooltip text="Unused panels of this campaign">
+              <button class="sb-tool" :class="{ active: showDrawer }" @click="showDrawer = !showDrawer">
+                  <OhVueIcon name="md-folder" scale="0.8" /> Drawer
+                  <span v-if="board.drawer.value.length" class="sb-count">{{ board.drawer.value.length }}</span>
+              </button>
+            </AppTooltip>
         </div>
 
         <div class="sb-body">
@@ -109,6 +119,7 @@
                     v-model:nodes="nodes"
                     :edges="flowEdges"
                     :node-types="nodeTypes"
+                    :edge-types="edgeTypes"
                     :default-viewport="board.viewport.value"
                     :connection-mode="ConnectionMode.Loose"
                     :delete-key-code="null"
@@ -139,36 +150,36 @@
                 </div>
 
                 <!-- Right-click: add a panel here -->
-                <div v-if="paneMenu" class="sb-menu" :style="{ left: paneMenu.x + 'px', top: paneMenu.y + 'px' }">
+                <AppContextMenu v-if="paneMenu" open :x="paneMenu.x" :y="paneMenu.y" class="sb-menu" @close="paneMenu = null">
                     <div class="sb-menu-label">Add here</div>
-                    <button
+                    <DropdownMenuItem
                         v-for="k in PANEL_KIND_ORDER"
                         :key="k"
                         class="sb-menu-item"
-                        @click="addAt(k, paneMenu.flow)"
+                        @select="addAt(k, paneMenu.flow)"
                     >
                         <OhVueIcon :name="PANEL_KINDS[k].icon" scale="0.7" :style="{ color: PANEL_KINDS[k].color }" />
                         {{ PANEL_KINDS[k].label }}
-                    </button>
-                </div>
+                    </DropdownMenuItem>
+                </AppContextMenu>
 
                 <!-- Click on a connection: change or remove it -->
-                <div v-if="edgeMenu" class="sb-menu" :style="{ left: edgeMenu.x + 'px', top: edgeMenu.y + 'px' }">
+                <AppContextMenu v-if="edgeMenu" open :x="edgeMenu.x" :y="edgeMenu.y" class="sb-menu" @close="edgeMenu = null">
                     <div class="sb-menu-label">Connection</div>
-                    <button
+                    <DropdownMenuItem
                         v-for="k in EDGE_KINDS"
                         :key="k.kind"
                         class="sb-menu-item"
                         :class="{ on: edgeMenu.kind === k.kind }"
-                        @click="setEdgeKind(k.kind)"
+                        @select="setEdgeKind(k.kind)"
                     >
                         <span class="sb-edge-swatch" :class="`sb-edge-swatch--${k.kind}`" />
                         {{ k.label }}
-                    </button>
-                    <button class="sb-menu-item sb-menu-item--danger" @click="removeEdge()">
+                    </DropdownMenuItem>
+                    <DropdownMenuItem class="sb-menu-item sb-menu-item--danger" @select="removeEdge()">
                         <OhVueIcon name="md-delete" scale="0.7" /> Remove
-                    </button>
-                </div>
+                    </DropdownMenuItem>
+                </AppContextMenu>
             </div>
 
             <!-- Running: log what happens -->
@@ -208,10 +219,12 @@
 
 <script setup lang="ts">
 import { markRaw } from 'vue'
-import { VueFlow, ConnectionMode, MarkerType, type Node, type Edge, type Connection, type VueFlowStore, type NodeDragEvent, type EdgeMouseEvent, type NodeTypesObject } from '@vue-flow/core'
+import { DropdownMenuItem } from 'reka-ui'
+import { VueFlow, ConnectionMode, MarkerType, type Node, type Edge, type Connection, type VueFlowStore, type NodeDragEvent, type EdgeMouseEvent, type NodeTypesObject, type EdgeTypesObject } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import SessionPanelNode, { type PanelNodeInfo } from '~/components/session/SessionPanelNode.vue'
+import SessionFloatingEdge from '~/components/session/SessionFloatingEdge.vue'
 import SessionFrameNode from '~/components/session/SessionFrameNode.vue'
 import { useSessionBoard, type SessionPanel } from '~/composables/useSessionBoard'
 import { useEntities } from '~/composables/useEntities'
@@ -239,6 +252,8 @@ const party = useParty()
 
 const flowId = computed(() => `session-board-${props.sessionId}`)
 const nodeTypes = { panel: markRaw(SessionPanelNode), frame: markRaw(SessionFrameNode) } as unknown as NodeTypesObject
+// Edges attach to the facing sides of their panels, whichever handles they were drawn between
+const edgeTypes = { floating: markRaw(SessionFloatingEdge) } as unknown as EdgeTypesObject
 
 const EDGE_KINDS: { kind: SessionBoardEdge['kind']; label: string }[] = [
     { kind: 'plan', label: 'Plan (leads to)' },
@@ -360,7 +375,7 @@ const flowEdges = computed<Edge[]>(() => {
             const st = EDGE_KIND_STYLE[e.kind]
             return {
                 id: e.id, source: ids.get(e.source)!, target: ids.get(e.target)!,
-                type: e.kind === 'attach' ? 'straight' : 'smoothstep',
+                type: 'floating',
                 label: e.kind === 'sequence' ? String(board.sequenceNumbers.value.get(e.id) ?? '') : e.label,
                 labelStyle: e.kind === 'sequence' ? { fill: 'var(--accent-l)', fontWeight: 700, fontSize: '11px' } : undefined,
                 labelBgStyle: e.kind === 'sequence' ? { fill: 'var(--bg2)' } : undefined,
@@ -380,7 +395,8 @@ function onConnect(c: Connection) {
 
 const edgeMenu = ref<{ id: string; kind: SessionBoardEdge['kind']; x: number; y: number } | null>(null)
 function onEdgeClick({ edge, event }: EdgeMouseEvent) {
-    const pos = localPoint(event as MouseEvent)
+    const ev = event as MouseEvent
+    const pos = { x: ev.clientX, y: ev.clientY }
     paneMenu.value = null
     edgeMenu.value = { id: edge.id, kind: (edge.data as { kind: SessionBoardEdge['kind'] }).kind, ...pos }
 }
@@ -396,11 +412,6 @@ function removeEdge() {
 // ── Adding panels ────────────────────────────────────────────────────────
 const paneMenu = ref<{ x: number; y: number; flow: { x: number; y: number } } | null>(null)
 
-function localPoint(e: MouseEvent) {
-    const r = canvasRef.value!.getBoundingClientRect()
-    return { x: Math.max(4, Math.min(e.clientX - r.left, r.width - 190)), y: Math.max(4, Math.min(e.clientY - r.top, r.height - 370)) }
-}
-
 function toFlow(clientX: number, clientY: number) {
     return flow ? flow.screenToFlowCoordinate({ x: clientX, y: clientY }) : { x: 0, y: 0 }
 }
@@ -408,7 +419,7 @@ function toFlow(clientX: number, clientY: number) {
 function onPaneContextMenu(e: MouseEvent) {
     e.preventDefault()
     edgeMenu.value = null
-    paneMenu.value = { ...localPoint(e), flow: toFlow(e.clientX, e.clientY) }
+    paneMenu.value = { x: e.clientX, y: e.clientY, flow: toFlow(e.clientX, e.clientY) }
 }
 
 function closeMenus() {
@@ -649,10 +660,9 @@ async function onFinish(choices: FinishChoice[]) {
     })
 }
 
-// Switching the session to finished opens the review
-watch(() => props.mode, (now, was) => {
-    if (now === 'finished' && was && was !== 'finished') openFinish()
-})
+// Switching the session to finished opens the review: SessionEditor calls this on the click,
+// so loading an already finished session doesn't
+defineExpose({ openFinish })
 
 // ── View ─────────────────────────────────────────────────────────────────
 function onPaneReady(api: VueFlowStore) {
@@ -764,7 +774,7 @@ watch(() => props.sessionId, async () => {
 .sb-empty b { color: var(--text2); }
 
 .sb-menu {
-    position: absolute; z-index: 20; min-width: 170px; padding: 4px;
+    min-width: 170px; padding: 4px;
     background: var(--surface-hi); border: 1px solid var(--border-hi); border-radius: var(--r1);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); display: flex; flex-direction: column;
 }
@@ -773,7 +783,7 @@ watch(() => props.sessionId, async () => {
     display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 4px;
     font-size: 12.5px; color: var(--text); background: none; border: none; cursor: pointer; text-align: left;
 }
-.sb-menu-item:hover { background: var(--bg2); }
+.sb-menu-item:hover, .sb-menu-item[data-highlighted] { background: var(--bg2); outline: none; }
 .sb-menu-item.on { color: var(--accent-l); }
 .sb-menu-item--danger:hover { color: var(--danger); background: var(--danger-bg); }
 .sb-edge-swatch { width: 22px; height: 0; border-top: 2px solid; display: inline-block; }

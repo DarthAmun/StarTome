@@ -1,16 +1,11 @@
 <template>
     <div class="rnp">
-        <input
-            class="pv-input"
-            :value="modelValue ?? ''"
-            :list="listId"
+        <AppCombobox
+            :model-value="modelValue ?? ''"
+            :options="names"
             :placeholder="placeholder"
-            autocomplete="off"
-            @input="emit('update:modelValue', inputValue($event))"
+            @update:model-value="emit('update:modelValue', $event)"
         />
-        <datalist :id="listId">
-            <option v-for="n in suggestions" :key="n" :value="n" />
-        </datalist>
         <span
             v-if="custom"
             class="rnp-custom"
@@ -47,18 +42,11 @@ const custom = computed(() => {
     const v = props.modelValue?.trim().toLowerCase();
     return !!v && names.value.length > 0 && !names.value.some((n) => n.toLowerCase() === v);
 });
-
-// The browser filters the list as you type; this keeps it to 50 names that match
-const listId = useId();
-const suggestions = computed(() => {
-    const q = (props.modelValue ?? "").trim().toLowerCase();
-    return (q ? names.value.filter((n) => n.toLowerCase().includes(q)) : names.value).slice(0, 50);
-});
 </script>
 
 <style scoped>
 .rnp { position: relative; }
-.rnp .pv-input { width: 100%; }
+.rnp :deep(.pv-input) { width: 100%; }
 .rnp-custom {
     position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none;
     font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text2);

@@ -32,22 +32,14 @@
                 <button class="tem-clear-link tem-clear-link--danger" @click="clearLink">× Clear</button>
               </div>
               <div v-else>
-                <input
+                <AppCombobox
                   v-model="linkSearch"
-                  class="tem-text-input"
+                  :options="linkResults.map(o => ({ value: o.id, label: o.name, tag: `${o.kind} ${o.level}${otherGameTag(o.game, game)}` }))"
+                  :filter="false"
+                  input-class="tem-text-input"
                   placeholder="Search creatures and hazards…"
+                  @select="(id: string | number) => { const o = linkResults.find(r => r.id === id); if (o) selectEntry(o) }"
                 />
-                <div v-if="linkResults.length" class="tem-dropdown">
-                  <button
-                    v-for="opt in linkResults"
-                    :key="opt.id"
-                    class="tem-dropdown-row"
-                    @click="selectEntry(opt)"
-                  >
-                    <span class="tem-rec-type">{{ opt.kind }} {{ opt.level }}{{ otherGameTag(opt.game, game) }}</span>
-                    {{ opt.name }}
-                  </button>
-                </div>
               </div>
               <label v-if="linkChanged" class="tem-sync-row">
                 <input type="checkbox" v-model="syncHpAc" class="tem-checkbox" />
@@ -673,41 +665,6 @@ async function save() {
 .tem-clear-link--danger:hover { color: var(--blood); border-color: var(--blood); }
 
 /* Dropdown list */
-.tem-dropdown {
-  border: 1px solid var(--parch-line);
-  border-top: none;
-  border-radius: 0 0 2px 2px;
-  background: var(--parch);
-  max-height: 160px;
-  overflow-y: auto;
-}
-.tem-dropdown-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 10px;
-  background: none;
-  border: none;
-  text-align: left;
-  font-family: var(--font-body);
-  font-size: 13px;
-  color: var(--ink);
-  cursor: pointer;
-  transition: background 0.1s;
-}
-.tem-dropdown-row:hover { background: rgba(184,134,11,0.08); }
-.tem-rec-type {
-  font-family: var(--font-head);
-  font-size: 8px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-ghost);
-  background: rgba(28,20,16,0.06);
-  padding: 1px 5px;
-  border-radius: 2px;
-  flex-shrink: 0;
-}
 
 /* Sync checkbox */
 .tem-sync-row {

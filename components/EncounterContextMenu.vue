@@ -1,30 +1,23 @@
 <template>
-  <Teleport to="body">
-    <div
-      v-if="open"
-      ref="menuEl"
-      class="ctx-menu"
-      :style="{ left: adjustedX + 'px', top: adjustedY + 'px' }"
-      @keydown.esc="$emit('close')"
-    >
+  <AppContextMenu :open="open" :x="x" :y="y" class="ctx-menu" @close="$emit('close')">
       <!-- Empty canvas click -->
       <template v-if="!targetToken">
-        <button class="ctx-item" @click="emit('add-token-here', gridX, gridY); emit('close')">
+        <DropdownMenuItem class="ctx-item" @select="emit('add-token-here', gridX, gridY)">
           <OhVueIcon name="md-add" scale="0.85" class="ctx-icon" />
           Add Token Here
-        </button>
-        <button class="ctx-item" @click="emit('quick-add-here', gridX, gridY); emit('close')">
+        </DropdownMenuItem>
+        <DropdownMenuItem class="ctx-item" @select="emit('quick-add-here', gridX, gridY)">
           <OhVueIcon name="fa-dragon" scale="0.85" class="ctx-icon" />
           Add Creature Here…
-        </button>
+        </DropdownMenuItem>
       </template>
 
       <!-- Token click -->
       <template v-else>
-        <button class="ctx-item" @click="emit('edit-token', targetToken.id); emit('close')">
+        <DropdownMenuItem class="ctx-item" @select="emit('edit-token', targetToken.id)">
           <OhVueIcon name="md-editnote" scale="0.85" class="ctx-icon" />
           Edit Token
-        </button>
+        </DropdownMenuItem>
         <!-- Quick conditions -->
         <div class="ctx-quick-conditions">
           <button
@@ -36,10 +29,10 @@
             @click="emit('quick-condition', targetToken.id, cond); emit('close')"
           >{{ cond }}</button>
         </div>
-        <button class="ctx-item" @click="emit('add-condition', targetToken.id); emit('close')">
+        <DropdownMenuItem class="ctx-item" @select="emit('add-condition', targetToken.id)">
           <OhVueIcon name="gi-poison" scale="0.85" class="ctx-icon" />
           All Conditions…
-        </button>
+        </DropdownMenuItem>
 
         <!-- Inline initiative -->
         <div class="ctx-inline-row">
@@ -53,6 +46,7 @@
             @keyup.enter="commitInit"
             @keyup.esc="emit('close')"
             @click.stop
+            @keydown.stop
           />
         </div>
 
@@ -72,6 +66,7 @@
             @keyup.enter="commitDamage"
             @keyup.esc="emit('close')"
             @click.stop
+            @keydown.stop
           />
         </div>
 
@@ -91,6 +86,7 @@
             @keyup.enter="commitTemp"
             @keyup.esc="emit('close')"
             @click.stop
+            @keydown.stop
           />
         </div>
 
@@ -105,6 +101,7 @@
             @keyup.enter="commitTimer"
             @keyup.esc="emit('close')"
             @click.stop
+            @keydown.stop
           />
           <input
             v-model.number="timerTurns"
@@ -116,69 +113,67 @@
             @keyup.enter="commitTimer"
             @keyup.esc="emit('close')"
             @click.stop
+            @keydown.stop
           />
         </div>
 
-        <button
+        <DropdownMenuItem
           v-if="targetToken.linkedRulesId"
           class="ctx-item"
-          @click="emit('view-record', targetToken.id); emit('close')"
+          @select="emit('view-record', targetToken.id)"
         >
           <OhVueIcon name="md-menubook" scale="0.85" class="ctx-icon" />
           View Entry
-        </button>
-        <button
+        </DropdownMenuItem>
+        <DropdownMenuItem
           v-if="targetToken.linkedEntityId"
           class="ctx-item"
-          @click="emit('view-npc', targetToken.id); emit('close')"
+          @select="emit('view-npc', targetToken.id)"
         >
           <OhVueIcon name="gi-person" scale="0.85" class="ctx-icon" />
           View NPC
-        </button>
-        <button class="ctx-item" @click="emit('toggle-visibility', targetToken.id); emit('close')">
+        </DropdownMenuItem>
+        <DropdownMenuItem class="ctx-item" @select="emit('toggle-visibility', targetToken.id)">
           <OhVueIcon :name="targetToken.isVisible ? 'md-visibilityoff' : 'md-visibility'" scale="0.85" class="ctx-icon" />
           {{ targetToken.isVisible ? 'Hide from Players' : 'Show to Players' }}
-        </button>
-        <button
+        </DropdownMenuItem>
+        <DropdownMenuItem
           v-if="!targetToken.isVisible"
           class="ctx-item"
           title="Whether this hidden token still takes its turn"
-          @click="emit('toggle-acts-while-hidden', targetToken.id); emit('close')"
+          @select="emit('toggle-acts-while-hidden', targetToken.id)"
         >
           <OhVueIcon name="gi-sands-of-time" scale="0.85" class="ctx-icon" />
           {{ targetToken.actsWhileHidden ? 'Skip Turns While Hidden' : 'Keep in Turn Order' }}
-        </button>
-        <button class="ctx-item" @click="emit('toggle-player-token', targetToken.id); emit('close')">
+        </DropdownMenuItem>
+        <DropdownMenuItem class="ctx-item" @select="emit('toggle-player-token', targetToken.id)">
           <OhVueIcon name="gi-crowned-heart" scale="0.85" class="ctx-icon" />
           {{ targetToken.isPlayerToken ? 'Unmark Player Character' : 'Mark as Player Character' }}
-        </button>
-        <button
+        </DropdownMenuItem>
+        <DropdownMenuItem
           v-if="!targetToken.isPlayerToken"
           class="ctx-item"
           title="Allies fight with the party and add no XP to the difficulty meter"
-          @click="emit('toggle-ally', targetToken.id); emit('close')"
+          @select="emit('toggle-ally', targetToken.id)"
         >
           <OhVueIcon name="gi-shaking-hands" scale="0.85" class="ctx-icon" />
           {{ targetToken.isAlly ? 'Unmark Ally' : 'Mark as Ally' }}
-        </button>
-        <button class="ctx-item" @click="emit('toggle-dead', targetToken.id); emit('close')">
+        </DropdownMenuItem>
+        <DropdownMenuItem class="ctx-item" @select="emit('toggle-dead', targetToken.id)">
           <OhVueIcon name="fa-skull-crossbones" scale="0.85" class="ctx-icon" />
           {{ targetToken.isDead ? 'Mark Alive' : 'Mark Dead' }}
-        </button>
+        </DropdownMenuItem>
         <div class="ctx-divider" />
-        <button class="ctx-item ctx-item--danger" @click="emit('remove-token', targetToken.id); emit('close')">
+        <DropdownMenuItem class="ctx-item ctx-item--danger" @select="emit('remove-token', targetToken.id)">
           <OhVueIcon name="md-delete" scale="0.85" class="ctx-icon" />
           Remove Token
-        </button>
+        </DropdownMenuItem>
       </template>
-    </div>
-
-    <!-- Click-outside overlay -->
-    <div v-if="open" class="ctx-backdrop" @click="$emit('close')" @contextmenu.prevent="$emit('close')" />
-  </Teleport>
+  </AppContextMenu>
 </template>
 
 <script setup lang="ts">
+import { DropdownMenuItem } from 'reka-ui'
 import type { EncounterToken } from '~/stores/encounter'
 
 const props = defineProps<{
@@ -219,7 +214,6 @@ const activeConditions = computed(() =>
   new Set(props.targetToken?.conditions?.map(c => c.name) ?? [])
 )
 
-const menuEl = ref<HTMLElement | null>(null)
 
 const initValue = ref<number | null>(null)
 const dmgValue = ref<number | null>(null)
@@ -227,33 +221,8 @@ const tempValue = ref<number | null>(null)
 const timerName = ref('')
 const timerTurns = ref<number | null>(null)
 
-// Kept inside the window: measured while the menu is open (its size depends on the token)
-const size = ref({ w: 220, h: 450 })
-let resizeObs: ResizeObserver | null = null
-onBeforeUnmount(() => resizeObs?.disconnect())
-
-const adjustedX = computed(() => {
-  const max = window.innerWidth - size.value.w - 8
-  return Math.max(8, Math.min(props.x, max))
-})
-
-const adjustedY = computed(() => {
-  const max = window.innerHeight - Math.min(size.value.h, window.innerHeight - 16) - 8
-  return Math.max(8, Math.min(props.y, max))
-})
-
 watch(() => props.open, (val) => {
   if (!val) return
-  void nextTick(() => {
-    const el = menuEl.value
-    if (!el) return
-    const measure = () => { const r = el.getBoundingClientRect(); size.value = { w: r.width, h: r.height } }
-    measure()
-    // The menu can grow after it opens (sections, inputs): keep it inside the window
-    resizeObs?.disconnect()
-    resizeObs = new ResizeObserver(measure)
-    resizeObs.observe(el)
-  })
   initValue.value = props.targetToken?.initiative ?? null
   dmgValue.value = null
   tempValue.value = null
@@ -289,24 +258,11 @@ function commitDamage() {
   }
   emit('close')
 }
-
-useEventListener(window, 'keydown', onKey)
-
-function onKey(e: KeyboardEvent) {
-  if (e.key === 'Escape' && props.open) emit('close')
-}
 </script>
 
 <style scoped>
-.ctx-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-modal);
-}
 
 .ctx-menu {
-  position: fixed;
-  z-index: var(--z-modal-top); /* must exceed backdrop's --z-modal so clicks reach buttons */
   min-width: 200px;
   background-color: var(--parch);
   background-image: var(--paper);
@@ -339,7 +295,8 @@ function onKey(e: KeyboardEvent) {
   transition: background 0.1s;
   white-space: nowrap;
 }
-.ctx-item:hover {
+.ctx-item:hover, .ctx-item[data-highlighted] {
+  outline: none;
   background: rgba(28, 20, 16, 0.06);
 }
 

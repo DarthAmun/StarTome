@@ -6,19 +6,16 @@
       <button class="tlp-clear" @click="$emit('clear')">× Clear</button>
     </div>
     <div v-else>
-      <input class="pv-input"
-        :value="search"
+      <AppCombobox
+        :model-value="search"
+        :options="results.map(r => ({ value: r.id, label: r.name, tag: r.tag }))"
+        :filter="false"
         :placeholder="placeholder"
         style="width:100%"
-        @input="$emit('update:search', inputValue($event))"
+        @update:model-value="$emit('update:search', $event)"
         @focus="$emit('focus')"
+        @select="$emit('select', $event)"
       />
-      <div v-if="results.length" class="tlp-dropdown">
-        <button v-for="r in results" :key="r.id" class="tlp-option" @click="$emit('select', r.id)">
-          <span class="tlp-tag">{{ r.tag }}</span>
-          {{ r.name }}
-        </button>
-      </div>
     </div>
   </div>
 </template>
@@ -64,19 +61,4 @@ defineEmits<{ 'update:search': [value: string]; focus: []; select: [id: number |
   transition: color 0.15s, border-color 0.15s;
 }
 .tlp-clear:hover { color: var(--blood); border-color: var(--blood); }
-.tlp-dropdown {
-  border: 1px solid var(--parch-line);
-  border-top: none;
-  background: var(--parch);
-  border-radius: 0 0 2px 2px;
-  max-height: 140px;
-  overflow-y: auto;
-}
-.tlp-option {
-  display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 10px;
-  background: none; border: none; text-align: left;
-  font-family: var(--font-body); font-size: 13px; color: var(--ink); cursor: pointer;
-}
-.tlp-option:hover { background: var(--accent-bg); }
-.tlp-tag { font-size: 10px; color: var(--ink-ghost); text-transform: uppercase; letter-spacing: 0.05em; }
 </style>

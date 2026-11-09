@@ -35,8 +35,7 @@
         </label>
         <label v-if="local.origin === 'user'" class="red-field red-span-3" title="Groups your homebrew: filter by it in the lists, export it from Import & Export">
           <span>Pack <em>e.g. Homebrew: Conduit; empty = no pack</em></span>
-          <input class="red-input" :value="local.publication?.title ?? ''" list="red-packs" @focus="loadPacks" @change="setPack(str($event))" />
-          <datalist id="red-packs"><option v-for="p in packNames" :key="p" :value="p" /></datalist>
+          <AppCombobox v-model="packDraft" :options="packNames" input-class="red-input" @focus="loadPacks" @commit="setPack" />
         </label>
       </div>
     </section>
@@ -469,7 +468,11 @@ const packNames = ref<string[]>([])
 async function loadPacks() {
   packNames.value = summarizePacks(await rulesUserEntries()).map(p => p.title).filter(Boolean)
 }
+// The field's text; written to the entry on blur, Enter or a pick (as @change did)
+const packDraft = ref('')
+watch(() => local.value.publication?.title ?? '', t => { packDraft.value = t }, { immediate: true })
 function setPack(title: string) {
+  if (title === (local.value.publication?.title ?? '')) return
   set('publication', withPack(local.value, title).publication)
 }
 const tagsOrNone = (e: Event) => { const t = parseTraits(str(e)); return t.length ? t : undefined }

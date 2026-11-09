@@ -14,12 +14,13 @@
           <OhVueIcon name="md-redo" scale="0.85" />
         </button>
       </div>
-      <div ref="mapMenuEl" class="mm-menu-wrap">
-        <button class="mm-btn" :class="{ active: mapMenuOpen }" :aria-expanded="mapMenuOpen" @click="mapMenuOpen = !mapMenuOpen">
-          <OhVueIcon name="md-gridon" scale="0.75" /> {{ map ? `${map.cols} × ${map.rows}` : 'Map' }}
-          <OhVueIcon name="md-arrowdropdown" scale="0.8" />
-        </button>
-        <div v-if="mapMenuOpen" class="mm-popover" role="dialog" aria-label="Map size">
+      <AppPopover v-model:open="mapMenuOpen" class="mm-popover" aria-label="Map size">
+        <template #trigger>
+          <button class="mm-btn mm-menu-btn" :class="{ active: mapMenuOpen }">
+            <OhVueIcon name="md-gridon" scale="0.75" /> {{ map ? `${map.cols} × ${map.rows}` : 'Map' }}
+            <OhVueIcon name="md-arrowdropdown" scale="0.8" />
+          </button>
+        </template>
           <span class="mm-label">Size in squares</span>
           <div class="mm-size">
             <input v-model.number="sizeCols" type="number" :min="MIN_SIZE" :max="MAX_SIZE" aria-label="Columns" @keydown.enter="applySize" />
@@ -31,8 +32,7 @@
           <div class="mm-divider" />
           <button class="mm-btn mm-danger mm-wide" @click="clearMap(); mapMenuOpen = false">Start over</button>
           <p class="mm-hint">Clears every tile and asset. Undo brings it back.</p>
-        </div>
-      </div>
+      </AppPopover>
       <button class="mm-btn" :class="{ active: assetsOpen }" title="Asset library" :aria-pressed="assetsOpen" @click="assetsOpen = !assetsOpen">
         <OhVueIcon name="md-photolibrary" scale="0.75" /> <span class="mm-hide-narrow">Assets</span>
       </button>
@@ -50,24 +50,26 @@
     <div class="mm-body" :class="{ 'mm-drawer-open': assetsOpen }">
       <nav class="mm-rail" aria-label="Tools and tiles">
         <div class="mm-rail-grid">
-          <button
-            v-for="t in TOOLS" :key="t.id"
-            class="mm-rail-btn" :class="{ active: tool === t.id && !placing }"
-            :title="`${t.label} (${t.key.toUpperCase()}): ${t.hint}`" :aria-label="t.label"
-            @click="setTool(t.id)"
-          >
-            <OhVueIcon :name="t.icon" scale="0.9" />
-          </button>
+          <AppTooltip v-for="t in TOOLS" :key="t.id" :text="`${t.label} (${t.key.toUpperCase()}): ${t.hint}`">
+            <button
+              class="mm-rail-btn" :class="{ active: tool === t.id && !placing }"
+              :aria-label="t.label"
+              @click="setTool(t.id)"
+            >
+              <OhVueIcon :name="t.icon" scale="0.9" />
+            </button>
+          </AppTooltip>
         </div>
         <div class="mm-rail-sep" />
         <div class="mm-rail-grid">
-          <button
-            v-for="t in TILES" :key="t.id"
-            class="mm-rail-btn mm-rail-tile" :class="{ active: tileId === t.id }" :title="t.label" :aria-label="t.label"
-            @click="pickTile(t.id)"
-          >
-            <canvas :ref="el => swatchRefs[t.id] = el as HTMLCanvasElement | null" width="28" height="28" class="mm-swatch" />
-          </button>
+          <AppTooltip v-for="t in TILES" :key="t.id" :text="t.label">
+            <button
+              class="mm-rail-btn mm-rail-tile" :class="{ active: tileId === t.id }" :aria-label="t.label"
+              @click="pickTile(t.id)"
+            >
+              <canvas :ref="el => swatchRefs[t.id] = el as HTMLCanvasElement | null" width="28" height="28" class="mm-swatch" />
+            </button>
+          </AppTooltip>
         </div>
       </nav>
 
@@ -227,7 +229,6 @@ const redoStack = shallowRef<BattleMap[]>([])
 
 const canvasEl = ref<HTMLCanvasElement | null>(null)
 const viewEl = ref<HTMLElement | null>(null)
-const mapMenuEl = ref<HTMLElement | null>(null)
 const mapMenuOpen = ref(false)
 const assetsOpen = ref(readPref('mm-assets-open', 'true') === 'true')
 watch(assetsOpen, (v) => { writePref('mm-assets-open', String(v)); nextTick(onViewResize) })
@@ -316,10 +317,6 @@ function startPan(e: PointerEvent) {
   panDrag = { sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y }
   panning.value = true
   canvasEl.value?.setPointerCapture(e.pointerId)
-}
-
-function onDocPointerDown(e: PointerEvent) {
-  if (mapMenuOpen.value && !mapMenuEl.value?.contains(e.target as Node)) mapMenuOpen.value = false
 }
 
 function onKeyUp(e: KeyboardEvent) {
@@ -577,7 +574,6 @@ onMounted(async () => {
   window.addEventListener('keydown', onKey)
   window.addEventListener('keyup', onKeyUp)
   window.addEventListener('blur', onWindowBlur)
-  document.addEventListener('pointerdown', onDocPointerDown)
   window.addEventListener('beforeunload', onBeforeUnload)
 })
 
@@ -591,7 +587,6 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   window.removeEventListener('keyup', onKeyUp)
   window.removeEventListener('blur', onWindowBlur)
-  document.removeEventListener('pointerdown', onDocPointerDown)
   window.removeEventListener('beforeunload', onBeforeUnload)
 })
 
@@ -1092,11 +1087,8 @@ async function save() {
 }
 
 /* Map size popover */
-.mm-menu-wrap { position: relative; flex-shrink: 0; }
+.mm-menu-btn { flex-shrink: 0; }
 .mm-popover {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
   width: 260px;
   padding: 12px 14px;
   border: 1px solid var(--border-hi);

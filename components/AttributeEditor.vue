@@ -304,49 +304,16 @@
                         </button>
                     </div>
                     <!-- Search + free-text picker -->
-                    <div ref="giverAnchorRef" v-else class="giver-picker">
-                        <input
+                    <div v-else class="giver-picker">
+                        <AppCombobox
                             v-model="giverSearch"
-                            class="giver-input"
+                            :options="giverOptions"
+                            :filter="false"
+                            input-class="giver-input"
                             placeholder="Search NPC or Faction…"
-                            @focus="openGiverPicker"
-                            @blur="onGiverBlur"
+                            @select="selectGiverId"
+                            @commit="onGiverCommit"
                         />
-                        <Teleport to="body">
-                            <div
-                                v-if="giverOpen && filteredGivers.length"
-                                class="giver-dropdown"
-                                :style="giverDropdownStyle"
-                            >
-                                <button
-                                    v-for="ent in filteredGivers"
-                                    :key="ent.id"
-                                    class="giver-item"
-                                    @mousedown.prevent="selectGiver(ent)"
-                                >
-                                    <span
-                                        class="giver-type-badge"
-                                        :style="{
-                                            color:
-                                                ent.type === 'npc'
-                                                    ? '#7cc44e'
-                                                    : '#e05555',
-                                            borderColor:
-                                                (ent.type === 'npc'
-                                                    ? '#7cc44e'
-                                                    : '#e05555') + '55',
-                                        }"
-                                    >
-                                        {{
-                                            ent.type === "npc"
-                                                ? "NPC"
-                                                : "FACTION"
-                                        }}
-                                    </span>
-                                    {{ ent.name }}
-                                </button>
-                            </div>
-                        </Teleport>
                     </div>
                 </div>
                 <div class="field">
@@ -425,18 +392,6 @@ const giverSearch = ref(
         ? ""
         : (props.modelValue as any).questGiver || "",
 );
-const giverOpen = ref(false);
-// The dropdown is teleported to <body> (so panels can't clip it) and placed under the input
-const giverAnchorRef = ref<HTMLElement | null>(null);
-const giverDropdownStyle = ref<Record<string, string>>({});
-
-function openGiverPicker() {
-    const r = giverAnchorRef.value?.getBoundingClientRect();
-    giverDropdownStyle.value = r
-        ? { position: "fixed", top: `${r.bottom + 4}px`, left: `${r.left}px`, width: `${r.width}px`, right: "auto", zIndex: "1000" }
-        : {};
-    giverOpen.value = true;
-}
 
 watch(
     () => (props.modelValue as any).questGiverId,
@@ -458,6 +413,14 @@ const filteredGivers = computed(() => {
         .slice(0, 15);
 });
 
+const giverOptions = computed(() =>
+    filteredGivers.value.map((e) => ({ value: e.id, label: e.name, tag: e.type === "npc" ? "NPC" : "Faction" })),
+);
+function selectGiverId(id: string | number) {
+    const ent = filteredGivers.value.find((e) => e.id === id);
+    if (ent) selectGiver(ent);
+}
+
 const giverTypeColor = computed(() =>
     (props.modelValue as any).questGiverType === "npc" ? "#7cc44e" : "#e05555",
 );
@@ -470,8 +433,6 @@ function selectGiver(ent: any) {
         questGiverType: ent.type,
     });
     giverSearch.value = "";
-    giverOpen.value = false;
-    giverDropdownStyle.value = {};
 }
 
 function clearQuestGiver() {
@@ -484,21 +445,19 @@ function clearQuestGiver() {
     giverSearch.value = "";
 }
 
-function onGiverBlur() {
-    setTimeout(() => {
-        giverOpen.value = false;
-        giverDropdownStyle.value = {};
-        const current = (props.modelValue as any).questGiver || "";
-        if (giverSearch.value !== current) {
-            emit("update:modelValue", {
-                ...props.modelValue,
-                questGiver: giverSearch.value || undefined,
-                questGiverId: undefined,
-                questGiverType: undefined,
-            });
-        }
-    }, 150);
+/** Typed text without picking: a quest giver that isn't an entry */
+function onGiverCommit(text: string) {
+    if ((props.modelValue as any).questGiverId && !text) return;
+    const current = (props.modelValue as any).questGiver || "";
+    if (text === current) return;
+    emit("update:modelValue", {
+        ...props.modelValue,
+        questGiver: text || undefined,
+        questGiverId: undefined,
+        questGiverType: undefined,
+    });
 }
+
 const currentTags = computed(() => (attrs.value.tags ?? []) as string[]);
 
 const locationTypes = [
@@ -821,40 +780,4 @@ function sourcePlaceholder(src: string | undefined): string {
     color: var(--ink-ghost);
 }
 
-.giver-dropdown {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    right: 0;
-    background: var(--parch);
-    border: 1px solid var(--parch-line);
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    z-index: 100;
-    max-height: 200px;
-    overflow-y: auto;
-}
-
-.giver-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    padding: 7px 12px;
-    background: none;
-    border: none;
-    border-bottom: 1px solid var(--parch-line);
-    text-align: left;
-    font-size: 13px;
-    color: var(--ink);
-    font-family: "DM Sans", sans-serif;
-    cursor: pointer;
-    transition: background 0.12s;
-}
-.giver-item:last-child {
-    border-bottom: none;
-}
-.giver-item:hover {
-    background: var(--parch-dark);
-}
 </style>

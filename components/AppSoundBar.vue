@@ -153,32 +153,32 @@
             </button>
 
             <!-- Output device -->
-            <div class="sp-dev-wrap" ref="devWrapRef">
-              <button
-                class="sp-btn sp-btn--sm"
-                :class="{ active: selectedDeviceId }"
-                title="Local audio output device"
-                @click="toggleDevicePicker"
-              >⇥ Output</button>
-
-              <div v-if="showDevicePicker" class="sp-dev-menu">
+            <div class="sp-dev-wrap">
+              <AppMenu v-model:open="showDevicePicker" class="sp-dev-menu" side="top" align="end" @update:open="(v: boolean) => v && !outputDevices.length && loadOutputDevices()">
+                <template #trigger>
+                  <button
+                    class="sp-btn sp-btn--sm"
+                    :class="{ active: selectedDeviceId }"
+                    title="Local audio output device"
+                  >⇥ Output</button>
+                </template>
                 <div class="sp-dev-label">Output Device</div>
                 <div v-if="!outputDevices.length" class="sp-dev-empty">
                   No devices found.
                   <button class="sp-dev-refresh" @click="loadOutputDevices">Refresh</button>
                 </div>
-                <button
+                <DropdownMenuItem
                   v-for="d in outputDevices"
                   :key="d.deviceId"
                   class="sp-dev-item"
                   :class="{ active: selectedDeviceId === d.deviceId }"
-                  @click="selectDevice(d.deviceId)"
+                  @select="selectDevice(d.deviceId)"
                 >
                   <span class="sp-dev-check">{{ selectedDeviceId === d.deviceId ? '✓' : '' }}</span>
                   {{ d.label || `Device ${d.deviceId.slice(0, 8)}` }}
-                </button>
+                </DropdownMenuItem>
                 <div class="sp-dev-note">Routes audio to a local output (sound card, USB DAC). Use Cast for network speakers.</div>
-              </div>
+              </AppMenu>
             </div>
           </div>
         </template>
@@ -191,6 +191,7 @@
 </template>
 
 <script setup lang="ts">
+import { DropdownMenuItem } from 'reka-ui'
 import { useSoundPlayer } from '~/composables/useSoundPlayer'
 import { useSounds } from '~/composables/useSounds'
 import { useEncounterStore } from '~/stores/encounter'
@@ -252,23 +253,12 @@ async function playLinkedPlaylist() {
 
 // ── Device picker ──────────────────────────────────────────────────────────
 const showDevicePicker = ref(false)
-const devWrapRef = ref<HTMLElement | null>(null)
-
-async function toggleDevicePicker() {
-  if (!showDevicePicker.value) {
-    if (!outputDevices.value.length) await loadOutputDevices()
-    showDevicePicker.value = true
-  } else {
-    showDevicePicker.value = false
-  }
-}
 
 async function selectDevice(deviceId: string) {
   await setOutputDevice(deviceId)
   showDevicePicker.value = false
 }
 
-onClickOutside(devWrapRef, () => { showDevicePicker.value = false })
 </script>
 
 <style scoped>
@@ -484,18 +474,17 @@ onClickOutside(devWrapRef, () => { showDevicePicker.value = false })
 .sp-footer { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 8px; }
 
 /* Device picker */
-.sp-dev-wrap { position: relative; margin-left: auto; }
+.sp-dev-wrap { margin-left: auto; }
 .sp-dev-menu {
-  position: absolute; bottom: calc(100% + 6px); right: 0;
   width: 240px; background: var(--surface); border: 1px solid var(--border);
-  border-radius: 8px; padding: 6px 0; box-shadow: 0 4px 20px rgba(0,0,0,0.25); z-index: 10;
+  border-radius: 8px; padding: 6px 0; box-shadow: 0 4px 20px rgba(0,0,0,0.25);
 }
 .sp-dev-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); font-family: var(--fm); padding: 4px 12px 6px; }
 .sp-dev-empty { font-size: 12px; color: var(--text3); padding: 8px 12px; text-align: center; }
 .sp-dev-refresh { display: inline-block; margin-top: 6px; font-size: 11px; background: none; border: 1px solid var(--border); border-radius: 4px; padding: 3px 10px; cursor: pointer; color: var(--text2); }
 .sp-dev-refresh:hover { color: var(--text); }
 .sp-dev-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 12px; background: none; border: none; cursor: pointer; font-size: 12px; color: var(--text2); text-align: left; transition: background 0.1s; }
-.sp-dev-item:hover { background: var(--bg); color: var(--text); }
+.sp-dev-item:hover, .sp-dev-item[data-highlighted] { background: var(--bg); color: var(--text); outline: none; }
 .sp-dev-item.active { color: var(--accent-l, var(--accent)); }
 .sp-dev-check { width: 14px; font-size: 11px; flex-shrink: 0; }
 .sp-dev-note { font-size: 10px; color: var(--text3); padding: 8px 12px 4px; border-top: 1px solid var(--border); margin-top: 4px; line-height: 1.5; }

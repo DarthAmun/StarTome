@@ -3,7 +3,7 @@
     <div class="ws-meta">
       <span v-if="session.sessionNumber" class="ws-tag">Session {{ session.sessionNumber }}</span>
       <span v-if="session.date" class="ws-tag">{{ session.date }}</span>
-      <span v-if="session.mode" :class="['ws-tag', `ws-tag--${session.mode}`]">{{ session.mode }}</span>
+      <span :class="['ws-tag', `ws-tag--${session.mode ?? 'planning'}`]">{{ session.mode ?? 'planning' }}</span>
       <span class="ws-spacer" />
       <NuxtLink class="ws-open" :to="`/campaign/${entity.campaignId}/sessions/${entity.id}`">Open board →</NuxtLink>
     </div>

@@ -116,11 +116,16 @@ async function loadEntity(id: number) {
   }
 }
 
+/** Attributes every new entry of a type starts with: a new session is being planned */
+const NEW_ENTRY_DEFAULTS: Partial<Record<EntityType, EntityAttributes>> = {
+  session: { mode: 'planning' },
+}
+
 async function createEntity(campaignId: number, type: EntityType, name: string, initialAttributes?: EntityAttributes) {
   try {
     const raw = await dbApi.entities.create({
       campaignId, type, name, content: '',
-      attributes: toPlain(initialAttributes ?? {}),
+      attributes: toPlain({ ...NEW_ENTRY_DEFAULTS[type], ...initialAttributes }),
     })
     const entity = normalizeEntity(raw)
     entities.value.unshift(entity)

@@ -25,11 +25,12 @@
       <button class="dms-top-btn" @click="clearAll" title="Remove all widgets">⌫ Clear</button>
 
       <!-- Layout presets -->
-      <div class="dms-presets" ref="presetsRef">
-        <button class="dms-top-btn dms-presets-trigger" @click="showPresets = !showPresets" title="Saved layouts">
-          <OhVueIcon name="md-tune" scale="0.8" /> Layouts {{ presets.length ? `(${presets.length})` : '' }}
-        </button>
-        <div v-if="showPresets" class="dms-presets-dropdown">
+      <AppPopover v-model:open="showPresets" class="dms-presets-dropdown">
+        <template #trigger>
+          <button class="dms-top-btn dms-presets-trigger" title="Saved layouts">
+            <OhVueIcon name="md-tune" scale="0.8" /> Layouts {{ presets.length ? `(${presets.length})` : '' }}
+          </button>
+        </template>
           <div class="dms-presets-head">
             <span class="dms-presets-title">Saved Layouts</span>
             <button class="dms-presets-save" @click="promptSavePreset">+ Save current</button>
@@ -40,8 +41,7 @@
             <span class="dms-preset-count">{{ p.widgets.length }}w</span>
             <button class="dms-preset-del" @click="deletePreset(p.name)" title="Delete">✕</button>
           </div>
-        </div>
-      </div>
+      </AppPopover>
 
       <NuxtLink :to="`/campaign/${id}`" class="dms-top-btn dms-top-btn--danger">✕ Exit</NuxtLink>
     </div>
@@ -535,7 +535,6 @@ interface LayoutPreset { name: string; widgets: DmWidget[] }
 const LS_PRESETS = lsKey(`dmscreen-presets-${id}`)
 const presets = ref<LayoutPreset[]>([])
 const showPresets = ref(false)
-const presetsRef = ref<HTMLElement | null>(null)
 
 if (import.meta.client) {
   try {
@@ -571,8 +570,7 @@ function deletePreset(name: string) {
   savePresets()
 }
 
-// Close presets dropdown on outside click
-onClickOutside(presetsRef, () => { showPresets.value = false })
+
 
 // ── Widget helpers ─────────────────────────────────────────────────────────
 function getEntity(w: DmWidget) {
@@ -1091,9 +1089,7 @@ const bookmarkPalItems = computed(() =>
 .dms-zoom-pct { min-width: 52px; justify-content: center; font-family: var(--fm); font-size: 11px; }
 
 /* ── Layout presets ── */
-.dms-presets { position: relative; }
 .dms-presets-dropdown {
-  position: absolute; top: calc(100% + 6px); right: 0; z-index: 400;
   min-width: 240px;
   background: var(--surface-solid); border: 1px solid var(--border);
   border-radius: 8px; box-shadow: var(--sh-md); overflow: hidden;

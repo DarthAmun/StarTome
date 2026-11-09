@@ -40,6 +40,7 @@
 
         <SessionBoard
             v-if="entity"
+            ref="boardRef"
             :key="props.entityId"
             :session-id="props.entityId"
             :campaign-id="props.campaignId"
@@ -89,6 +90,7 @@ const showAttributes = ref(false);
 const showRecap = ref(false);
 const recapAuto = ref(false);
 
+const boardRef = ref<{ openFinish: () => Promise<void> } | null>(null);
 const mode = computed(() => (draftAttributes.value as SessionAttributes).mode ?? "planning");
 
 watch(
@@ -106,6 +108,7 @@ function setMode(value: SessionAttributes["mode"]) {
     // Starting the session: it's played today unless a date was set
     if (value === "running" && !next.date) next.date = new Date().toISOString().slice(0, 10);
     const starting = value === "running" && mode.value !== "running";
+    const finishing = value === "finished" && mode.value !== "finished";
     onAttributesChange(next as EntityAttributes);
     attrSave.flush();
     // Starting play: what the players should know from last time, and hero points
@@ -113,6 +116,8 @@ function setMode(value: SessionAttributes["mode"]) {
         recapAuto.value = true;
         showRecap.value = true;
     }
+    // Finishing: review what's left of the prep
+    if (finishing) void boardRef.value?.openFinish();
 }
 
 function onAttributesChange(attrs: EntityAttributes) {

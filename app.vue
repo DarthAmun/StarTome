@@ -1,4 +1,6 @@
 <template>
+  <!-- One provider: moving between tooltips shows the next one at once -->
+  <TooltipProvider :delay-duration="300" :skip-delay-duration="300">
   <div id="app-root" @click="onMagicClick">
 
     <template v-if="!isPlayerRoute">
@@ -22,15 +24,7 @@
     <div id="spark-layer" class="no-print" aria-hidden="true" />
 
     <!-- New Campaign dialog -->
-    <Teleport to="body">
-      <div v-if="showNewCampaign" class="pv-dialog-mask" @click.self="showNewCampaign = false">
-        <div class="pv-dialog">
-          <div class="pv-dialog-header">
-            <span class="pv-dialog-title">Begin a New Campaign</span>
-            <button class="pv-dialog-close" @click="showNewCampaign = false">
-              <OhVueIcon name="md-close" scale="0.85" />
-            </button>
-          </div>
+    <AppDialog v-if="showNewCampaign" title="Begin a New Campaign" @close="showNewCampaign = false">
           <div class="pv-dialog-content">
             <div class="dlg-field">
               <label class="f-label">Title</label>
@@ -52,10 +46,7 @@
             <button class="ghost-btn" @click="showNewCampaign = false">Cancel</button>
             <button class="seal-btn" @click="createCampaign">Begin</button>
           </div>
-        </div>
-      </div>
-
-    </Teleport>
+      </AppDialog>
 
     <Transition name="install">
       <button v-if="installPrompt" class="install-pill no-print" @click="installApp" title="Install StarTome">
@@ -65,9 +56,11 @@
     </Transition>
 
   </div>
+  </TooltipProvider>
 </template>
 
 <script setup lang="ts">
+import { TooltipProvider } from 'reka-ui'
 import { useSettings } from '~/composables/useSettings'
 import { useBookmarks } from '~/composables/useBookmarks'
 import { useAppDialogs } from '~/composables/useAppDialogs'

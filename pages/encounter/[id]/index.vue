@@ -72,18 +72,16 @@
           <OhVueIcon name="md-desktopmac" scale="0.85" />
           {{ playerWindowOpen ? "Close Player View" : "Open Player View" }}
         </button>
-        <div class="pv-prefs-wrap">
-          <button
-            class="back-btn pv-prefs-btn"
-            :class="{ 'back-btn--active': showPlayerViewPrefs }"
-            title="Player view layout"
-            @click="showPlayerViewPrefs = !showPlayerViewPrefs"
-          >
-            <OhVueIcon name="md-tune" scale="0.85" />
-          </button>
-          <template v-if="showPlayerViewPrefs">
-            <div class="ctx-back" @click="showPlayerViewPrefs = false" />
-            <div class="pv-prefs-pop">
+        <AppPopover v-model:open="showPlayerViewPrefs" class="pv-prefs-pop">
+          <template #trigger>
+            <button
+              class="back-btn pv-prefs-btn"
+              :class="{ 'back-btn--active': showPlayerViewPrefs }"
+              title="Player view layout"
+            >
+              <OhVueIcon name="md-tune" scale="0.85" />
+            </button>
+          </template>
               <div class="pv-prefs-label">Turn order position</div>
               <div class="pv-prefs-seg">
                 <button
@@ -127,9 +125,7 @@
                 >Show “?”</button>
               </div>
               <p class="pv-prefs-hint">Names appear in the Left/Right docks. Scales with the player screen; applies live.</p>
-            </div>
-          </template>
-        </div>
+        </AppPopover>
       </header>
 
       <!-- ── Main layout ─────────────────────────────────────────────────────── -->
@@ -336,91 +332,108 @@
 
           <!-- Wall tool submenu -->
           <div v-if="activeTool === 'wall'" class="wall-submenu">
-            <button
-              v-for="ct in COVER_TYPES"
-              :key="ct.value"
-              class="map-tool-btn wall-type-btn"
-              :class="{ active: activeCoverType === ct.value }"
-              :style="{ '--wt-color': ct.color }"
-              :title="ct.title"
-              @click="activeCoverType = ct.value; canvas?.setActiveCoverType(ct.value)"
-            >
-              <span class="wall-type-swatch" />
-              {{ ct.label }}
-            </button>
+            <AppTooltip v-for="ct in COVER_TYPES" :key="ct.value" :text="ct.title">
+              <button
+                class="map-tool-btn wall-type-btn"
+                :class="{ active: activeCoverType === ct.value }"
+                :style="{ '--wt-color': ct.color }"
+                @click="activeCoverType = ct.value; canvas?.setActiveCoverType(ct.value)"
+              >
+                <span class="wall-type-swatch" />
+                {{ ct.label }}
+              </button>
+            </AppTooltip>
             <div class="fog-sep" />
-            <button
-              class="map-tool-btn"
-              title="Undo last wall point (Backspace) or last wall (Ctrl+Z)"
-              @click="store.undoLastWall().then(() => canvas?.redrawWalls())"
-            >
-              <OhVueIcon name="md-autorenew" scale="0.9" />
-            </button>
+            <AppTooltip text="Undo last wall point (Backspace) or last wall (Ctrl+Z)">
+              <button
+                class="map-tool-btn"
+                aria-label="Undo last wall point (Backspace) or last wall (Ctrl+Z)"
+                @click="store.undoLastWall().then(() => canvas?.redrawWalls())"
+              >
+                <OhVueIcon name="md-autorenew" scale="0.9" />
+              </button>
+            </AppTooltip>
           </div>
 
           <!-- Fog tool submenu -->
           <div v-if="activeTool === 'fog'" class="fog-submenu">
-            <button
-              class="map-tool-btn"
-              :class="{ active: fogMode === 'add' }"
-              title="Add fog (paint hidden)"
-              @click="fogMode = 'add'"
-            ><OhVueIcon name="gi-fog" scale="0.9" /></button>
-            <button
-              class="map-tool-btn"
-              :class="{ active: fogMode === 'remove' }"
-              title="Reveal (erase fog)"
-              @click="fogMode = 'remove'"
-            ><OhVueIcon name="md-visibility" scale="0.9" /></button>
+            <AppTooltip text="Add fog (paint hidden)">
+              <button
+                class="map-tool-btn"
+                :class="{ active: fogMode === 'add' }"
+                aria-label="Add fog (paint hidden)"
+                @click="fogMode = 'add'"
+              ><OhVueIcon name="gi-fog" scale="0.9" /></button>
+            </AppTooltip>
+            <AppTooltip text="Reveal (erase fog)">
+              <button
+                class="map-tool-btn"
+                :class="{ active: fogMode === 'remove' }"
+                aria-label="Reveal (erase fog)"
+                @click="fogMode = 'remove'"
+              ><OhVueIcon name="md-visibility" scale="0.9" /></button>
+            </AppTooltip>
 
             <div class="fog-sep" />
 
-            <button
-              class="map-tool-btn fog-size-btn"
-              title="Decrease brush size"
-              @click="fogBrushSize = Math.max(1, fogBrushSize - 1)"
-            >−</button>
+            <AppTooltip text="Decrease brush size">
+              <button
+                class="map-tool-btn fog-size-btn"
+                @click="fogBrushSize = Math.max(1, fogBrushSize - 1)"
+              >−</button>
+            </AppTooltip>
             <span class="fog-brush-label">{{ fogBrushSize }}</span>
-            <button
-              class="map-tool-btn fog-size-btn"
-              title="Increase brush size"
-              @click="fogBrushSize = Math.min(10, fogBrushSize + 1)"
-            >+</button>
+            <AppTooltip text="Increase brush size">
+              <button
+                class="map-tool-btn fog-size-btn"
+                @click="fogBrushSize = Math.min(10, fogBrushSize + 1)"
+              >+</button>
+            </AppTooltip>
 
             <div class="fog-sep" />
 
-            <button
-              class="map-tool-btn fog-text-btn"
-              title="Cover entire map with fog"
-              @click="store.hideAllFog()"
-            ><OhVueIcon name="md-visibilityoff" scale="0.9" /></button>
-            <button
-              class="map-tool-btn fog-text-btn"
-              title="Remove all fog"
-              @click="store.clearAllFog()"
-            ><OhVueIcon name="md-autorenew" scale="0.9" /></button>
+            <AppTooltip text="Cover entire map with fog">
+              <button
+                class="map-tool-btn fog-text-btn"
+                aria-label="Cover entire map with fog"
+                @click="store.hideAllFog()"
+              ><OhVueIcon name="md-visibilityoff" scale="0.9" /></button>
+            </AppTooltip>
+            <AppTooltip text="Remove all fog">
+              <button
+                class="map-tool-btn fog-text-btn"
+                aria-label="Remove all fog"
+                @click="store.clearAllFog()"
+              ><OhVueIcon name="md-autorenew" scale="0.9" /></button>
+            </AppTooltip>
           </div>
 
           <!-- Shape tool submenu — pops up above the shapes button -->
           <div v-if="activeTool === 'shapes'" class="shape-submenu">
-            <button
-              class="map-tool-btn"
-              :class="{ active: shapeType === 'circle' }"
-              title="Circle"
-              @click="shapeType = 'circle'"
-            ><span class="shape-icon shape-icon--circle" /></button>
-            <button
-              class="map-tool-btn"
-              :class="{ active: shapeType === 'square' }"
-              title="Square"
-              @click="shapeType = 'square'"
-            ><span class="shape-icon shape-icon--square" /></button>
-            <button
-              class="map-tool-btn"
-              :class="{ active: shapeType === 'cone' }"
-              title="Cone"
-              @click="shapeType = 'cone'"
-            ><span class="shape-icon shape-icon--cone" /></button>
+            <AppTooltip text="Circle">
+              <button
+                class="map-tool-btn"
+                :class="{ active: shapeType === 'circle' }"
+                aria-label="Circle"
+                @click="shapeType = 'circle'"
+              ><span class="shape-icon shape-icon--circle" /></button>
+            </AppTooltip>
+            <AppTooltip text="Square">
+              <button
+                class="map-tool-btn"
+                :class="{ active: shapeType === 'square' }"
+                aria-label="Square"
+                @click="shapeType = 'square'"
+              ><span class="shape-icon shape-icon--square" /></button>
+            </AppTooltip>
+            <AppTooltip text="Cone">
+              <button
+                class="map-tool-btn"
+                :class="{ active: shapeType === 'cone' }"
+                aria-label="Cone"
+                @click="shapeType = 'cone'"
+              ><span class="shape-icon shape-icon--cone" /></button>
+            </AppTooltip>
             <label class="shape-color-swatch" :style="{ background: shapeColor }" title="Pick color">
               <input v-model="shapeColor" type="color" class="shape-color-input" />
             </label>
@@ -446,55 +459,66 @@
 
           <!-- Floating tool buttons -->
           <div class="map-tool-dock">
-            <button
-              class="map-tool-btn"
-              :class="{ active: activeTool === 'ping' }"
-              title="Ping — click to ping the player view, Shift+click to also center it there. Tip: long-press the map to ping with any tool off."
-              @click="toggleTool('ping')"
-            >
-              <OhVueIcon name="gi-echo-ripples" scale="1.1" />
-            </button>
-            <button
-              class="map-tool-btn"
-              :class="{ active: activeTool === 'fog' }"
-              title="Fog of War"
-              @click="toggleTool('fog')"
-            >
-              <OhVueIcon name="gi-fog" scale="1.1" />
-            </button>
-            <button
-              class="map-tool-btn"
-              :class="{ active: activeTool === 'measure' }"
-              title="Ruler"
-              @click="toggleTool('measure')"
-            >
-              <OhVueIcon name="gi-pencil-ruler" scale="1.1" />
-            </button>
-            <button
-              class="map-tool-btn"
-              :class="{ active: activeTool === 'shapes' }"
-              title="Shape Overlays"
-              @click="toggleTool('shapes')"
-            >
-              <OhVueIcon name="fa-shapes" scale="1.0" />
-            </button>
-            <button
-              class="map-tool-btn"
-              :class="{ active: activeTool === 'area' }"
-              title="Areas: bursts, cones, lines and emanations that know who is inside"
-              @click="toggleTool('area')"
-            >
-              <OhVueIcon name="gi-fire-ring" scale="1.0" />
-            </button>
-            <button
-              v-if="encounter?.fovEnabled"
-              class="map-tool-btn"
-              :class="{ active: activeTool === 'wall' }"
-              title="Draw Walls"
-              @click="toggleTool('wall')"
-            >
-              <OhVueIcon name="gi-brick-wall" scale="0.9" />
-            </button>
+            <AppTooltip text="Ping — click to ping the player view, Shift+click to also center it there. Tip: long-press the map to ping with any tool off.">
+              <button
+                class="map-tool-btn"
+                :class="{ active: activeTool === 'ping' }"
+                aria-label="Ping — click to ping the player view, Shift+click to also center it there. Tip: long-press the map to ping with any tool off."
+                @click="toggleTool('ping')"
+              >
+                <OhVueIcon name="gi-echo-ripples" scale="1.1" />
+              </button>
+            </AppTooltip>
+            <AppTooltip text="Fog of War">
+              <button
+                class="map-tool-btn"
+                :class="{ active: activeTool === 'fog' }"
+                aria-label="Fog of War"
+                @click="toggleTool('fog')"
+              >
+                <OhVueIcon name="gi-fog" scale="1.1" />
+              </button>
+            </AppTooltip>
+            <AppTooltip text="Ruler">
+              <button
+                class="map-tool-btn"
+                :class="{ active: activeTool === 'measure' }"
+                aria-label="Ruler"
+                @click="toggleTool('measure')"
+              >
+                <OhVueIcon name="gi-pencil-ruler" scale="1.1" />
+              </button>
+            </AppTooltip>
+            <AppTooltip text="Shape Overlays">
+              <button
+                class="map-tool-btn"
+                :class="{ active: activeTool === 'shapes' }"
+                aria-label="Shape Overlays"
+                @click="toggleTool('shapes')"
+              >
+                <OhVueIcon name="fa-shapes" scale="1.0" />
+              </button>
+            </AppTooltip>
+            <AppTooltip text="Areas: bursts, cones, lines and emanations that know who is inside">
+              <button
+                class="map-tool-btn"
+                :class="{ active: activeTool === 'area' }"
+                aria-label="Areas: bursts, cones, lines and emanations that know who is inside"
+                @click="toggleTool('area')"
+              >
+                <OhVueIcon name="gi-fire-ring" scale="1.0" />
+              </button>
+            </AppTooltip>
+            <AppTooltip v-if="encounter?.fovEnabled" text="Draw Walls">
+              <button
+                class="map-tool-btn"
+                :class="{ active: activeTool === 'wall' }"
+                aria-label="Draw Walls"
+                @click="toggleTool('wall')"
+              >
+                <OhVueIcon name="gi-brick-wall" scale="0.9" />
+              </button>
+            </AppTooltip>
           </div>
         </main>
 
@@ -605,28 +629,35 @@
                   <button class="init-nav-btn" @click="store.nextTurn()">
                     <OhVueIcon name="md-chevronright" scale="0.8" />
                   </button>
-                  <button class="init-nav-btn" title="Add a creature or empty token to the fight (A)" @click="openQuickAdd()">
-                    <OhVueIcon name="md-add" scale="0.8" />
-                  </button>
-                  <button
-                    class="init-nav-btn init-roll-all-btn"
-                    :title="store.current?.initiativeFormula ? `Roll initiative: ${store.current.initiativeFormula}` : 'Roll d20 for all tokens without initiative'"
-                    @click="store.rollAllInitiative()"
-                  ><OhVueIcon name="gi-dice-six-faces-six" scale="0.85" /></button>
-                  <button
-                    v-if="linkedInEncounter.length"
-                    class="init-nav-btn"
-                    :title="`Ask ${linkedInEncounter.map(c => c.name).join(', ')} to roll initiative in Play Buddy; results fill the turn order`"
-                    @click="askInitiative"
-                  ><OhVueIcon name="gi-sands-of-time" scale="0.8" /></button>
-                  <button
-                    class="init-nav-btn init-formula-btn"
-                    :class="{ active: showInitFormula }"
-                    title="Configure initiative formula"
-                    @click="showInitFormula = !showInitFormula"
-                  >
-                    <OhVueIcon name="md-settings" scale="0.75" />
-                  </button>
+                  <AppTooltip text="Add a creature or empty token to the fight (A)">
+                    <button class="init-nav-btn" aria-label="Add a creature or empty token to the fight (A)" @click="openQuickAdd()">
+                      <OhVueIcon name="md-add" scale="0.8" />
+                    </button>
+                  </AppTooltip>
+                  <AppTooltip :text="store.current?.initiativeFormula ? `Roll initiative: ${store.current.initiativeFormula}` : 'Roll d20 for all tokens without initiative'">
+                    <button
+                      class="init-nav-btn init-roll-all-btn"
+                      :aria-label="store.current?.initiativeFormula ? `Roll initiative: ${store.current.initiativeFormula}` : 'Roll d20 for all tokens without initiative'"
+                      @click="store.rollAllInitiative()"
+                    ><OhVueIcon name="gi-dice-six-faces-six" scale="0.85" /></button>
+                  </AppTooltip>
+                  <AppTooltip v-if="linkedInEncounter.length" :text="`Ask ${linkedInEncounter.map(c => c.name).join(', ')} to roll initiative in Play Buddy; results fill the turn order`">
+                    <button
+                      class="init-nav-btn"
+                      :aria-label="`Ask ${linkedInEncounter.map(c => c.name).join(', ')} to roll initiative in Play Buddy; results fill the turn order`"
+                      @click="askInitiative"
+                    ><OhVueIcon name="gi-sands-of-time" scale="0.8" /></button>
+                  </AppTooltip>
+                  <AppTooltip text="Configure initiative formula">
+                    <button
+                      class="init-nav-btn init-formula-btn"
+                      :class="{ active: showInitFormula }"
+                      aria-label="Configure initiative formula"
+                      @click="showInitFormula = !showInitFormula"
+                    >
+                      <OhVueIcon name="md-settings" scale="0.75" />
+                    </button>
+                  </AppTooltip>
                 </div>
 
                 <!-- Bulk action bar -->
@@ -819,43 +850,33 @@
       />
 
       <!-- ── Shape Context Menu ────────────────────────────────────────────────── -->
-      <Teleport to="body">
-        <template v-if="shapeCtxMenu.open">
-          <div class="ctx-back" @click="shapeCtxMenu.open = false" @contextmenu.prevent="shapeCtxMenu.open = false" />
-          <div class="sh-ctx-menu" :style="{ left: shapeCtxMenu.x + 'px', top: shapeCtxMenu.y + 'px' }">
-            <button class="sh-ctx-item sh-ctx-item--danger" @click="onCtxRemoveShape">
-              <OhVueIcon name="md-delete" scale="0.85" style="opacity:0.7;flex-shrink:0" />
-              Remove Shape
-            </button>
-          </div>
-        </template>
-      </Teleport>
+      <AppContextMenu :open="shapeCtxMenu.open" :x="shapeCtxMenu.x" :y="shapeCtxMenu.y" class="sh-ctx-menu" @close="shapeCtxMenu.open = false">
+          <DropdownMenuItem class="sh-ctx-item sh-ctx-item--danger" @select="onCtxRemoveShape">
+            <OhVueIcon name="md-delete" scale="0.85" style="opacity:0.7;flex-shrink:0" />
+            Remove Shape
+          </DropdownMenuItem>
+      </AppContextMenu>
 
       <!-- ── Area Context Menu ──────────────────────────────────────────────────── -->
-      <Teleport to="body">
-        <template v-if="areaCtxMenu.open && ctxArea">
-          <div class="ctx-back" @click="areaCtxMenu.open = false" @contextmenu.prevent="areaCtxMenu.open = false" />
-          <div class="sh-ctx-menu" :style="{ left: areaCtxMenu.x + 'px', top: areaCtxMenu.y + 'px' }">
-            <div class="sh-ctx-title">{{ ctxArea.label }}<template v-if="ctxArea.effect"> · DC {{ ctxArea.effect.dc }}</template></div>
-            <button class="sh-ctx-item" @click="areaEffectId = ctxArea.id; areaCtxMenu.open = false">
-              <OhVueIcon name="md-editnote" scale="0.85" style="opacity:0.7;flex-shrink:0" />
-              Effect…
-            </button>
-            <button v-if="ctxArea.effect" class="sh-ctx-item" @click="onCtxAreaSaves">
-              <OhVueIcon name="fa-dice-d20" scale="0.85" style="opacity:0.7;flex-shrink:0" />
-              Roll saves
-            </button>
-            <button class="sh-ctx-item" @click="onCtxToggleAreaHidden">
-              <OhVueIcon :name="ctxArea.hidden ? 'md-visibility' : 'md-visibilityoff'" scale="0.85" style="opacity:0.7;flex-shrink:0" />
-              {{ ctxArea.hidden ? 'Show to players' : 'Hide from players' }}
-            </button>
-            <button class="sh-ctx-item sh-ctx-item--danger" @click="onCtxRemoveArea">
-              <OhVueIcon name="md-delete" scale="0.85" style="opacity:0.7;flex-shrink:0" />
-              Remove Area
-            </button>
-          </div>
-        </template>
-      </Teleport>
+      <AppContextMenu v-if="ctxArea" :open="areaCtxMenu.open" :x="areaCtxMenu.x" :y="areaCtxMenu.y" class="sh-ctx-menu" @close="areaCtxMenu.open = false">
+          <div class="sh-ctx-title">{{ ctxArea.label }}<template v-if="ctxArea.effect"> · DC {{ ctxArea.effect.dc }}</template></div>
+          <DropdownMenuItem class="sh-ctx-item" @select="areaEffectId = ctxArea.id; areaCtxMenu.open = false">
+            <OhVueIcon name="md-editnote" scale="0.85" style="opacity:0.7;flex-shrink:0" />
+            Effect…
+          </DropdownMenuItem>
+          <DropdownMenuItem v-if="ctxArea.effect" class="sh-ctx-item" @select="onCtxAreaSaves">
+            <OhVueIcon name="fa-dice-d20" scale="0.85" style="opacity:0.7;flex-shrink:0" />
+            Roll saves
+          </DropdownMenuItem>
+          <DropdownMenuItem class="sh-ctx-item" @select="onCtxToggleAreaHidden">
+            <OhVueIcon :name="ctxArea.hidden ? 'md-visibility' : 'md-visibilityoff'" scale="0.85" style="opacity:0.7;flex-shrink:0" />
+            {{ ctxArea.hidden ? 'Show to players' : 'Hide from players' }}
+          </DropdownMenuItem>
+          <DropdownMenuItem class="sh-ctx-item sh-ctx-item--danger" @select="onCtxRemoveArea">
+            <OhVueIcon name="md-delete" scale="0.85" style="opacity:0.7;flex-shrink:0" />
+            Remove Area
+          </DropdownMenuItem>
+      </AppContextMenu>
 
       <AreaEffectDialog
         :open="areaEffectId !== null"
@@ -865,20 +886,15 @@
       />
 
       <!-- ── Wall Context Menu ────────────────────────────────────────────────────── -->
-      <Teleport to="body">
-        <template v-if="wallCtxMenu.open">
-          <div class="ctx-back" @click="wallCtxMenu.open = false" @contextmenu.prevent="wallCtxMenu.open = false" />
-          <div class="sh-ctx-menu" :style="{ left: wallCtxMenu.x + 'px', top: wallCtxMenu.y + 'px' }">
-            <button v-if="wallCtxMenu.isDoor" class="sh-ctx-item" @click="onWallCtxToggleDoor">
-              {{ wallCtxMenu.isOpen ? 'Close Door' : 'Open Door' }}
-            </button>
-            <button class="sh-ctx-item sh-ctx-item--danger" @click="onWallCtxDelete">
-              <OhVueIcon name="md-delete" scale="0.85" style="opacity:0.7;flex-shrink:0" />
-              Delete Wall
-            </button>
-          </div>
-        </template>
-      </Teleport>
+      <AppContextMenu :open="wallCtxMenu.open" :x="wallCtxMenu.x" :y="wallCtxMenu.y" class="sh-ctx-menu" @close="wallCtxMenu.open = false">
+          <DropdownMenuItem v-if="wallCtxMenu.isDoor" class="sh-ctx-item" @select="onWallCtxToggleDoor">
+            {{ wallCtxMenu.isOpen ? 'Close Door' : 'Open Door' }}
+          </DropdownMenuItem>
+          <DropdownMenuItem class="sh-ctx-item sh-ctx-item--danger" @select="onWallCtxDelete">
+            <OhVueIcon name="md-delete" scale="0.85" style="opacity:0.7;flex-shrink:0" />
+            Delete Wall
+          </DropdownMenuItem>
+      </AppContextMenu>
 
       <!-- ── Canvas Context Menu ───────────────────────────────────────────────── -->
       <QuickAddDialog
@@ -1028,6 +1044,7 @@
 </template>
 
 <script setup lang="ts">
+import { DropdownMenuItem } from 'reka-ui'
 import { lsKey } from '~/utils/appNamespace'
 import { campaignGame, type GameId } from '~/types/game'
 import { useEncounterStore } from "~/stores/encounter";
@@ -3519,12 +3536,8 @@ function getImageUrl(token: any): string {
 .order-timer-x:hover { color: var(--blood); }
 
 /* ── Player view layout popover ── */
-.pv-prefs-wrap { position: relative; }
 .pv-prefs-btn { padding-left: 8px; padding-right: 8px; }
 .pv-prefs-pop {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
   width: 210px;
   padding: 10px 12px;
   background: var(--parch, #f2e8d4);
@@ -3574,15 +3587,8 @@ function getImageUrl(token: any): string {
 .order-vis-btn--hidden:hover { opacity: 0.7; }
 
 /* ── Shape context menu (right-click on a placed shape) ── */
-.ctx-back {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-modal);
-}
 
 .sh-ctx-menu {
-  position: fixed;
-  z-index: var(--z-modal-top);
   min-width: 160px;
   background-color: var(--parch);
   background-image: var(--paper);
@@ -3609,7 +3615,7 @@ function getImageUrl(token: any): string {
   white-space: nowrap;
   transition: background 0.1s;
 }
-.sh-ctx-item:hover { background: rgba(28,20,16,0.06); color: var(--ink); }
+.sh-ctx-item:hover, .sh-ctx-item[data-highlighted] { background: rgba(28,20,16,0.06); color: var(--ink); outline: none; }
 .sh-ctx-item--danger { color: var(--blood); }
 .sh-ctx-item--danger:hover { background: rgba(139,0,0,0.07); }
 

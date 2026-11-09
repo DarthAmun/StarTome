@@ -75,7 +75,7 @@
 
         <!-- Entity card: portrait and name -->
         <div v-if="panel.kind === 'entity'" class="sp-entity">
-            <img v-if="info.imageUrl" :src="info.imageUrl" class="sp-portrait" />
+            <img v-if="info.imageUrl && brokenUrl !== info.imageUrl" :src="info.imageUrl" class="sp-portrait" @error="brokenUrl = info.imageUrl ?? null" />
             <div v-else class="sp-portrait sp-portrait--empty"><OhVueIcon :name="info.icon || 'gi-person'" scale="1" /></div>
             <div class="sp-entity-body">
                 <div class="sp-title">{{ panel.title || 'Pick an entry…' }}</div>
@@ -138,6 +138,8 @@ const props = defineProps<{
 const panel = computed(() => props.data.panel)
 const cfg = computed(() => PANEL_KINDS[panel.value.kind])
 const info = computed(() => props.data.info ?? {})
+// An image that fails to load (a moved file, an offline URL) shows the type icon instead of an empty ring
+const brokenUrl = ref<string | null>(null)
 const previewHtml = computed(() => props.data.previewHtml)
 
 const lastRoll = computed(() => panel.value.attrs.lastRoll as { roll: number; result: string } | undefined)

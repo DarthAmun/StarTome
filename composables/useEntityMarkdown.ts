@@ -82,8 +82,12 @@ mdRich.inline.ruler.after('backticks', 'highlight_mark', (state: any, silent: bo
   return true
 })
 
+// DOMPurify's default list plus blob: — stored images (portraits, logos) are shown
+// through object URLs, which it would otherwise strip from entity-ref avatars
+const URI_RE =
+  /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|matrix|blob):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
 const LOCAL_URI_RE =
-  /^(?:(?:https?|local-file):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
+  /^(?:(?:https?|local-file|blob):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
 
 export function useEntityMarkdown() {
   function renderMarkdown(content: string, options: RenderMarkdownOptions = {}): string {
@@ -96,7 +100,7 @@ export function useEntityMarkdown() {
     const addAttr = ['data-entity-type', 'data-entity-name', 'style', 'class', 'data-roll', 'data-snapshot-label']
     if (options.allowTaskLists) addAttr.push('type', 'checked', 'disabled')
 
-    const sanitizeCfg: any = { ADD_ATTR: addAttr }
+    const sanitizeCfg: any = { ADD_ATTR: addAttr, ALLOWED_URI_REGEXP: URI_RE }
     if (options.allowLocalFileUris) {
       sanitizeCfg.ADD_URI_SAFE_ATTR = ['src']
       sanitizeCfg.ALLOWED_URI_REGEXP = LOCAL_URI_RE
@@ -112,7 +116,7 @@ export function useEntityMarkdown() {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
     const html = renderEntityRefs(escaped, options.entityLookup, options.extraTypes)
-    return DOMPurify.sanitize(html, { ADD_ATTR: ['data-entity-type', 'data-entity-name', 'style', 'class'] })
+    return DOMPurify.sanitize(html, { ADD_ATTR: ['data-entity-type', 'data-entity-name', 'style', 'class'], ALLOWED_URI_REGEXP: URI_RE })
   }
 
   return { renderMarkdown, renderInline }

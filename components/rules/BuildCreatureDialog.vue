@@ -51,7 +51,7 @@
           <section class="bc-section">
             <div class="bc-section-title">Skills</div>
             <div v-for="(sk, i) in build.skills" :key="i" class="bc-stat-row">
-              <input v-model="sk.name" class="bc-input bc-stat-label" list="bc-skill-list" placeholder="Skill" />
+              <AppCombobox v-model="sk.name" :options="skillNames" input-class="bc-input bc-stat-label" placeholder="Skill" />
               <div class="bc-cols">
                 <button v-for="c in columnsFor('skill')" :key="c" class="bc-col" :class="{ on: sk.column === c }" @click="sk.column = c">
                   <span class="bc-col-num">{{ signed(skillValue(c, level)) }}</span>
@@ -60,7 +60,6 @@
               </div>
               <button class="bc-x" title="Remove skill" @click="build.skills.splice(i, 1)">✕</button>
             </div>
-            <datalist id="bc-skill-list"><option v-for="s in skillNames" :key="s" :value="s" /></datalist>
             <button class="bc-add" @click="build.skills.push({ name: '', column: 'moderate' })">+ Skill</button>
           </section>
 

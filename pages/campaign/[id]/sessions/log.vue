@@ -11,10 +11,9 @@
                 <span class="slog-spacer" />
                 <span v-if="attrsOf(sess).date" class="slog-date">{{ formatSessionDate(attrsOf(sess).date!) }}</span>
                 <span
-                    v-if="attrsOf(sess).mode"
                     class="slog-status"
-                    :style="{ color: sessionStatusColor(attrsOf(sess).mode), borderColor: sessionStatusColor(attrsOf(sess).mode) + '55' }"
-                >{{ attrsOf(sess).mode }}</span>
+                    :style="{ color: sessionStatusColor(attrsOf(sess).mode ?? 'planning'), borderColor: sessionStatusColor(attrsOf(sess).mode ?? 'planning') + '55' }"
+                >{{ attrsOf(sess).mode ?? 'planning' }}</span>
                 <button class="slog-open" @click.stop="openEntry(sess)">Open →</button>
             </div>
             <div class="slog-body" :class="{ 'slog-body--expanded': expandedIds.has(sess.id) }">
