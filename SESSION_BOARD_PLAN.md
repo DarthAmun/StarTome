@@ -2,7 +2,7 @@
 
 Goal: a session stops being two markdown editors (Prep / Notes) and becomes a **board**: a canvas of panels (scenes, beats, clues, encounters, log entries …) that you arrange, connect and run from. What actually happened lives on the board next to what was planned. Unused panels go to the next session or to a campaign-wide drawer.
 
-Written 2026-11-09 against `main` at `3f0f95c`. **P1 and P2 built 2026-11-09** (see §12 and §13 for what differs from this plan).
+Written 2026-11-09 against `main` at `3f0f95c`. **P1–P3 built 2026-11-09** (see §12–§14 for what differs from this plan).
 
 ---
 
@@ -226,7 +226,7 @@ Later candidates: HP and conditions (also in the mirror), party wealth, starship
 |---|---|---|
 | **P1 Board and data** ✅ done | `sessionPanels` table, v19 migration + converter, backup/delete wiring, `SessionBoard.vue` with all ten panel types and three connection kinds, palette to add panels, side drawer editor with tab bar and LinkBar, mode switch in the header, link rebuilding, Session Log page | Old sessions open as boards with their scenes and notes; you can prep a new session entirely on the board |
 | **P2 Running** ✅ done | Status toggles per kind, automatic sequence connections, quick capture bar (autocomplete as composable), encounter Run + back + automatic result Logs, random table Roll / Log it, Reward award buttons, recap check | A session can be run from the board without opening another editor |
-| **P3 Finishing** | Finish review, campaign drawer with search, next-session creation, continued scenes across boards | Unused prep flows into the next session or the drawer |
+| **P3 Finishing** ✅ done | Finish review, campaign drawer with search, next-session creation, continued scenes across boards | Unused prep flows into the next session or the drawer |
 | **P4 Extras** | Party floating panel (§9), remove the GM screen session widget, campaign-format `panels` docs, global search into panels, inspiration search across campaigns | – |
 
 Tests (vitest): the migration converter (heading splitting, edge cases: no headings, empty prep, notes only), finish-review defaults, link rebuilding from panels, encounter result detection.
@@ -272,3 +272,10 @@ Tests (vitest): the migration converter (heading splitting, edge cases: no headi
 - **Random tables**: *Roll* shows the result on the panel; *Log it* turns it into a Log.
 - **Rewards**: *Award XP* opens the existing Award XP dialog prefilled; a confirmed award is remembered in `awardIds` and ticks the panel. **Treasure is not awarded from the panel**: the treasure tools live in the Party page's wealth section, which isn't a standalone dialog yet.
 - **Recap** opens when a session switches to running (only if there is something to show) and from the *Recap* button: the previous session's *players should know* Logs to tick off, and *+1 hero point to everyone* for players on Play Buddy.
+
+## 14. P3 as built
+
+- **Finish review** opens when a session switches to finished, and from the *Review* button on a finished board. Rows and defaults come from `finishReviewRows` ([utils/sessionBoard.ts](utils/sessionBoard.ts)); choices are *Next*, *Drawer* and *Leave* (a scene left behind is marked skipped).
+- **Next session**: the session after this one by number (else by creation). If there is none it's created as "Session N+1" in planning mode.
+- **Carried-over panels** land in a new frame "Carried over from …" below the next board's content (`carryOverLayout`). Their connections on the old board go. The next session's text (search, links) is rebuilt.
+- **Continued scenes are copied, not shared**: the scene stays on the old board as *continued*, and a *planned* copy goes to the next board with `attrs.continuedFrom` (shown as "continued from …"). One row per board keeps every board self-contained; `playedIn` from §3 isn't used.

@@ -6,9 +6,9 @@
  */
 import { ref, computed, watch } from 'vue'
 import { getDb, type DbSessionPanel, type SessionBoardEdge, type SessionPanelKind } from '~/composables/useDb'
-import { useEntities } from '~/composables/useEntities'
+import { useEntities, type Entity } from '~/composables/useEntities'
 import { reportError } from '~/composables/useNotices'
-import { blankPanel, boardText, newUid } from '~/utils/sessionBoard'
+import { blankPanel, boardText, carryOverLayout, newUid } from '~/utils/sessionBoard'
 import { toPlain } from '~/utils/json'
 import type { SessionAttributes } from '~/types/entities'
 
@@ -272,6 +272,60 @@ export function useSessionBoard(sessionId: () => number, campaignId: () => numbe
     return new Map(seq.map((e, i) => [e.id, i + 1]))
   })
 
+  // ── Finishing: next session, carrying panels over ───────────────────────
+
+  /** The session after this one (by number, else by creation); created as "Session N+1" when `create` and there is none. */
+  async function nextSession(create: boolean): Promise<Entity | null> {
+    const num = (e: Entity) => parseInt((e.attributes as SessionAttributes).sessionNumber ?? '', 10)
+    const sessions = (store.byType.session ?? []).filter(e => e.campaignId === campaignId()).sort((a, b) => {
+      const na = num(a), nb = num(b)
+      if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb
+      return a.id - b.id
+    })
+    const i = sessions.findIndex(e => e.id === sessionId())
+    if (i >= 0 && i < sessions.length - 1) return sessions[i + 1]
+    if (!create) return null
+    const current = session.value
+    const n = current && !isNaN(num(current)) ? num(current) + 1 : sessions.length + 1
+    const board: BoardState = { edges: [], viewport: { x: 40, y: 40, zoom: 0.9 }, migrated: true }
+    return store.createEntity(campaignId(), 'session', `Session ${n}`, { mode: 'planning', sessionNumber: String(n), board } as SessionAttributes)
+  }
+
+  /**
+   * Puts panels on another session's board, in a new frame below what's
+   * there. `copy` leaves the panel here and puts a fresh "planned" copy there
+   * (a scene that continues); otherwise the panel moves.
+   */
+  async function sendToSession(target: Entity, items: { id: number; copy: boolean }[], frameTitle: string) {
+    if (!items.length) return
+    const db = getDb()
+    const existing = await db.sessionPanels.where('session_id').equals(target.id).toArray()
+    const { frame, spots } = carryOverLayout(existing, items.length)
+    const ts = new Date().toISOString()
+    const frameRow = { ...blankPanel('frame', campaignId(), target.id, { x: frame.x, y: frame.y }, frameTitle), w: frame.w, h: frame.h }
+    await db.sessionPanels.add(toPlain(frameRow))
+    for (const [i, item] of items.entries()) {
+      const panel = panels.value.find(p => p.id === item.id)
+      if (!panel) continue
+      const at = { ...spots[i], parent_uid: frameRow.uid }
+      if (item.copy) {
+        const { id: _id, ...rest } = toPlain(panel)
+        await db.sessionPanels.add({
+          ...rest, ...at, uid: newUid(), session_id: target.id, status: 'planned',
+          attrs: { ...rest.attrs, continuedFrom: { sessionId: sessionId(), uid: panel.uid } },
+          origin_session_id: panel.origin_session_id ?? sessionId(), created_at: ts, updated_at: ts,
+        })
+      } else {
+        updatePanel(item.id, { session_id: target.id, ...at })
+        flushPanel(item.id)
+        detach(panel)
+      }
+    }
+    // The other session's text (search, links) now includes them
+    const theirs = await db.sessionPanels.where('session_id').equals(target.id).toArray()
+    await store.updateEntity(target.id, { content: boardText(theirs) })
+  }
+
   // ── Connections and viewport ────────────────────────────────────────────
 
   function addEdge(source: string, target: string, kind: SessionBoardEdge['kind']) {
@@ -302,5 +356,6 @@ export function useSessionBoard(sessionId: () => number, campaignId: () => numbe
     panels, drawer, edges, viewport, loaded, session, byUid, selectedPanelId, lastTouchedUid, sequenceNumbers,
     load, addPanel, updatePanel, updateAttrs, deletePanel, moveToDrawer, placeFromDrawer, absolutePosition,
     addEdge, updateEdge, removeEdge, setViewport, flushAll, touch, setStatus, select, markLogged,
+    nextSession, sendToSession,
   }
 }

@@ -265,3 +265,48 @@ function countNames(names: string[]): string {
   for (const n of names) counts.set(n, (counts.get(n) ?? 0) + 1)
   return [...counts].map(([n, c]) => (c > 1 ? `${c}× ${n}` : n)).join(', ')
 }
+
+// ── Finishing a session ──────────────────────────────────────────────────
+
+/** What happens to an unused panel when a session is finished. */
+export type FinishChoice = 'next' | 'drawer' | 'leave'
+
+export interface FinishRow<P> {
+  panel: P
+  /** Why it's listed: "not played", "continued" … */
+  reason: string
+  choice: FinishChoice
+  choices: FinishChoice[]
+  /** A continued scene is copied to the next session; it stays on this board as played so far. */
+  copy: boolean
+}
+
+/**
+ * The panels a finish review lists, with their default choice
+ * (SESSION_BOARD_PLAN.md §6): untouched scenes to the drawer, continued
+ * scenes and loose prep (beats, clues, rewards, encounters) to the next session.
+ */
+export function finishReviewRows<P extends Pick<DbSessionPanel, 'kind' | 'status' | 'attrs'>>(panels: P[], encounterResolved: (id: number) => boolean): FinishRow<P>[] {
+  const rows: FinishRow<P>[] = []
+  for (const p of panels) {
+    const row = (reason: string, choice: FinishChoice, choices: FinishChoice[], copy = false) => rows.push({ panel: p, reason, choice, choices, copy })
+    if (p.kind === 'scene' && (p.status ?? 'planned') === 'planned') row('not played', 'drawer', ['drawer', 'next', 'leave'])
+    else if (p.kind === 'scene' && p.status === 'continued') row('continued', 'next', ['next', 'drawer', 'leave'], true)
+    else if (p.kind === 'beat' && p.status !== 'done') row('not done', 'next', ['next', 'drawer', 'leave'])
+    else if (p.kind === 'clue' && p.status !== 'revealed') row('not revealed', 'next', ['next', 'drawer', 'leave'])
+    else if (p.kind === 'reward' && p.status !== 'awarded') row('not awarded', 'next', ['next', 'leave'])
+    else if (p.kind === 'encounter' && typeof p.attrs.encounterId === 'number' && !encounterResolved(p.attrs.encounterId)) row('not run', 'next', ['next', 'drawer', 'leave'])
+  }
+  return rows
+}
+
+/** Where carried-over panels go on the next board: a frame below what's there, four per row. */
+export function carryOverLayout(existing: Pick<DbSessionPanel, 'x' | 'y' | 'h' | 'kind' | 'parent_uid'>[], count: number): { frame: { x: number; y: number; w: number; h: number }; spots: { x: number; y: number }[] } {
+  const top = existing.filter(p => !p.parent_uid)
+  const bottom = top.length ? Math.max(...top.map(p => p.y + (p.kind === 'frame' ? (p.h ?? 320) : 200))) + 80 : 0
+  const left = top.length ? Math.min(...top.map(p => p.x)) : 0
+  const perRow = 4
+  const rowsN = Math.max(1, Math.ceil(count / perRow))
+  const spots = Array.from({ length: count }, (_, i) => ({ x: 30 + (i % perRow) * 290, y: 60 + Math.floor(i / perRow) * 230 }))
+  return { frame: { x: left, y: bottom, w: 30 + Math.min(count, perRow) * 290, h: 60 + rowsN * 230 }, spots }
+}

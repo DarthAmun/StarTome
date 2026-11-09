@@ -14,6 +14,9 @@
                 <span>{{ PANEL_KINDS[k].label }}</span>
             </button>
             <span class="sb-spacer" />
+            <button v-if="mode === 'finished'" class="sb-tool" title="Carry unused prep over to the next session or the drawer" @click="openFinish()">
+                <OhVueIcon name="md-importexport" scale="0.8" /> Review
+            </button>
             <button v-if="running" class="sb-tool" title="What the players should know from last session" @click="$emit('recap')">
                 <OhVueIcon name="md-history" scale="0.8" /> Recap
             </button>
@@ -152,6 +155,14 @@
             />
             </div>
 
+            <SessionFinishDialog
+                v-if="finish"
+                :rows="finish.rows"
+                :next-label="finish.nextLabel"
+                @close="finish = null"
+                @confirm="onFinish"
+            />
+
             <!-- Panel editor -->
             <SessionPanelEditor
                 v-if="editorPanel"
@@ -179,9 +190,10 @@ import { useEntities } from '~/composables/useEntities'
 import { useEntityMarkdown } from '~/composables/useEntityMarkdown'
 import { useEntityRendering } from '~/composables/useEntityRendering'
 import { getDb, type DbEncounter, type SessionBoardEdge, type SessionPanelKind } from '~/composables/useDb'
-import { PANEL_KINDS, PANEL_KIND_ORDER, EDGE_KIND_STYLE, encounterOutcome, rollOnTable } from '~/utils/sessionBoard'
+import { PANEL_KINDS, PANEL_KIND_ORDER, EDGE_KIND_STYLE, encounterOutcome, finishReviewRows, rollOnTable, type FinishChoice, type FinishRow } from '~/utils/sessionBoard'
+import { notify } from '~/composables/useNotices'
 import { useParty } from '~/composables/useParty'
-import { ENTITY_TYPE_CONFIG, type EntityType, type RandomTableAttributes } from '~/types/entities'
+import { ENTITY_TYPE_CONFIG, type EntityType, type RandomTableAttributes, type SessionAttributes } from '~/types/entities'
 import { imageSrc } from '~/rules/images'
 
 const props = defineProps<{ sessionId: number; campaignId: number; mode?: string }>()
@@ -230,6 +242,10 @@ function previewOf(p: SessionPanel): string {
 
 function infoOf(p: SessionPanel): PanelNodeInfo {
     const a = p.attrs as Record<string, any>
+    if (a.continuedFrom && p.kind === 'scene') {
+        const from = store.entities.find(e => e.id === a.continuedFrom.sessionId)
+        return { sub: `continued from ${from?.name ?? 'an earlier session'}` }
+    }
     if (p.kind === 'encounter') {
         if (a.encounterId == null) return {}
         const enc = encounters.value.find(e => e.id === a.encounterId)
@@ -543,6 +559,40 @@ function onWindowFocus() {
     if (!running.value) return
     loadEncounters().then(logEncounterResults)
 }
+
+// ── Finishing ────────────────────────────────────────────────────────────
+const finish = ref<{ rows: FinishRow<SessionPanel>[]; nextLabel: string } | null>(null)
+
+async function openFinish() {
+    board.flushAll()
+    await loadEncounters()
+    const rows = finishReviewRows(board.panels.value, id => encounterRows.get(id)?.status === 'resolved')
+    const next = await board.nextSession(false)
+    const n = parseInt((board.session.value?.attributes as SessionAttributes | undefined)?.sessionNumber ?? '', 10)
+    finish.value = { rows, nextLabel: next ? `"${next.name}"` : `a new session${isNaN(n) ? '' : ` (Session ${n + 1})`}` }
+}
+
+async function onFinish(choices: FinishChoice[]) {
+    const rows = finish.value?.rows ?? []
+    finish.value = null
+    const toNext = rows.filter((_, i) => choices[i] === 'next').map(r => ({ id: r.panel.id, copy: r.copy }))
+    rows.forEach((r, i) => {
+        if (choices[i] === 'drawer') board.moveToDrawer(r.panel.id)
+        else if (choices[i] === 'leave' && r.panel.kind === 'scene') board.updatePanel(r.panel.id, { status: 'skipped' })
+    })
+    if (!toNext.length) return
+    const target = await board.nextSession(true)
+    if (!target) return
+    await board.sendToSession(target, toNext, `Carried over from ${board.session.value?.name ?? 'last session'}`)
+    notify(`${toNext.length} panel${toNext.length === 1 ? '' : 's'} carried over to ${target.name}.`, 'info', {
+        action: { label: 'Open', run: () => router.push(`/campaign/${props.campaignId}/sessions/${target.id}`) },
+    })
+}
+
+// Switching the session to finished opens the review
+watch(() => props.mode, (now, was) => {
+    if (now === 'finished' && was && was !== 'finished') openFinish()
+})
 
 // ── View ─────────────────────────────────────────────────────────────────
 function onPaneReady(api: VueFlowStore) {

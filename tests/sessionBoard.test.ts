@@ -130,3 +130,36 @@ describe('play helpers', () => {
     })).toBe('Resolved {{encounter: Ambush}} after 3 rounds.\n- Defeated: 2× Goblin, Hobgoblin\n- Went down: Zix\n- XP: 80 each\n- Loot to the stash: 2 items and 12 gp')
   })
 })
+
+describe('finishing a session', () => {
+  it('lists unused prep with its defaults', async () => {
+    const { finishReviewRows } = await import('~/utils/sessionBoard')
+    const panels = [
+      { kind: 'scene' as const, status: 'planned', attrs: {} },
+      { kind: 'scene' as const, status: 'played', attrs: {} },
+      { kind: 'scene' as const, status: 'continued', attrs: {} },
+      { kind: 'beat' as const, status: 'open', attrs: {} },
+      { kind: 'clue' as const, status: 'revealed', attrs: {} },
+      { kind: 'reward' as const, status: 'pending', attrs: {} },
+      { kind: 'encounter' as const, attrs: { encounterId: 1 } },
+      { kind: 'encounter' as const, attrs: { encounterId: 2 } },
+      { kind: 'note' as const, attrs: {} },
+    ]
+    const rows = finishReviewRows(panels, id => id === 2)
+    expect(rows.map(r => [r.panel.kind, r.reason, r.choice, r.copy])).toEqual([
+      ['scene', 'not played', 'drawer', false],
+      ['scene', 'continued', 'next', true],
+      ['beat', 'not done', 'next', false],
+      ['reward', 'not awarded', 'next', false],
+      ['encounter', 'not run', 'next', false],
+    ])
+  })
+
+  it('lays carried-over panels out in a frame below the board', async () => {
+    const { carryOverLayout } = await import('~/utils/sessionBoard')
+    const { frame, spots } = carryOverLayout([{ kind: 'scene', x: 100, y: 0 }, { kind: 'frame', x: -50, y: 300, h: 400 }], 5)
+    expect(frame).toEqual({ x: -50, y: 780, w: 1190, h: 520 })
+    expect(spots[4]).toEqual({ x: 30, y: 290 })
+    expect(carryOverLayout([], 1).frame.y).toBe(0)
+  })
+})
