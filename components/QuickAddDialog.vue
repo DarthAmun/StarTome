@@ -31,7 +31,7 @@
         <form v-else class="qa-blank" @submit.prevent="onAddBlank">
           <label class="qa-field">
             <span class="f-label">Name</span>
-            <InputText ref="nameRef" v-model="blank.label" placeholder="Summoned wolf, Guard…" />
+            <input class="pv-input" ref="nameRef" v-model="blank.label" placeholder="Summoned wolf, Guard…" />
           </label>
           <div class="qa-row">
             <label class="qa-field">
@@ -54,8 +54,8 @@
             </label>
           </div>
           <div class="flex justify-end gap-2 mt-4">
-            <Button severity="secondary" type="button" @click="emit('close')">Cancel</Button>
-            <Button type="submit" :disabled="!blank.label.trim()">Add</Button>
+            <button class="pv-btn pv-btn--ghost" type="button" @click="emit('close')">Cancel</button>
+            <button class="pv-btn pv-btn--primary" type="submit" :disabled="!blank.label.trim()">Add</button>
           </div>
         </form>
       </div>
@@ -113,7 +113,7 @@ watch(() => props.open, (open) => {
 watch(tab, async (t) => {
   if (t !== 'blank') return
   await nextTick()
-  nameRef.value?.$el?.focus()
+  nameRef.value?.focus()
 })
 
 function opts(): QuickAddOptions {

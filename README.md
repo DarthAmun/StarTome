@@ -13,8 +13,7 @@ StarTome is unofficial and not affiliated with Paizo Inc. Pathfinder and Starfin
 | App | PWA (installable, offline-capable) |
 | Database | IndexedDB via Dexie.js (database `startome`, schema v4) |
 | Frontend | Nuxt 3 (static/CSR) + Vue 3 |
-| Styling | Tailwind CSS |
-| UI Components | PrimeVue v4 (unstyled) |
+| Styling | Plain CSS (`assets/css`) |
 | Icons | oh-vue-icons |
 | State | Pinia |
 | Canvas / VTT | PixiJS v8 |

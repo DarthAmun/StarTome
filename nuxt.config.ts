@@ -8,8 +8,6 @@ export default defineNuxtConfig({
 
   modules: [
     '@pinia/nuxt',
-    '@nuxtjs/tailwindcss',
-    '@primevue/nuxt-module',
     '@vite-pwa/nuxt',
   ],
 
@@ -59,14 +57,6 @@ export default defineNuxtConfig({
     devOptions: { enabled: false },
   },
 
-  primevue: {
-    options: { unstyled: true },
-    importPT: { from: '~/assets/primevue-preset.ts' },
-    components: {
-      include: ['Button', 'InputText', 'InputNumber', 'Textarea', 'Select', 'Dialog', 'AutoComplete'],
-    },
-  },
-
   runtimeConfig: {
     public: { version: pkg.version },
   },
@@ -90,9 +80,10 @@ export default defineNuxtConfig({
     '@fontsource/jetbrains-mono/latin-500.css',
     '~/assets/css/main.css',
   ],
-  tailwindcss: { configPath: '~/tailwind.config.ts' },
   router: { options: { hashMode: true } },
   components: [{ path: '~/components', pathPrefix: false }],
   imports: { dirs: ['stores', 'composables'] },
+  // Nuxt 4 turns noUncheckedIndexedAccess on by default; the codebase was written without it
+  typescript: { tsConfig: { compilerOptions: { noUncheckedIndexedAccess: false } } },
   compatibilityDate: '2024-04-03',
 })

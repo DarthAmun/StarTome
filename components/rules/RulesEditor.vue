@@ -524,13 +524,15 @@ function setWeaponDamage(key: 'dice' | 'die' | 'type', value: unknown) {
 
 // ── Lists of rows (strikes, spellcasting, heightened) ──────────────────────
 function rows(key: string): any[] { return [...(L.value[key] ?? [])] }
-function editRow(key: string, i: number, field: string, value: unknown) {
+// v-for over the untyped `L` hands back `string | number` indexes, so both take either
+function editRow(key: string, i: number | string, field: string, value: unknown) {
   const list = rows(key)
-  list[i] = { ...list[i], [field]: value }
+  const n = Number(i)
+  list[n] = { ...list[n], [field]: value }
   set(key, list)
 }
 function addRow(key: string, row: object) { set(key, [...rows(key), row]) }
-function removeRow(key: string, i: number) { set(key, rows(key).filter((_, j) => j !== i)) }
+function removeRow(key: string, i: number | string) { set(key, rows(key).filter((_, j) => j !== Number(i))) }
 
 /** "1d6+3 slashing plus 1d4 fire" ⇄ damage rolls */
 function parseDamage(text: string): DamageRoll[] {

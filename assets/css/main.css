@@ -1,9 +1,22 @@
 @import "@vue-flow/core/dist/style.css";
 @import "@vue-flow/core/dist/theme-default.css";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "./reset.css";
+
+/* The few utility classes still used in templates (formerly from Tailwind); kept ahead of
+   the rules below so component classes still override them */
+.flex { display: flex; }
+.flex-1 { flex: 1 1 0%; }
+.justify-end { justify-content: flex-end; }
+.gap-2 { gap: 0.5rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-4 { margin-top: 1rem; }
+.space-y-3 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.75rem; }
+.w-full { width: 100%; }
+.h-full { height: 100%; }
+.object-cover { object-fit: cover; }
+.capitalize { text-transform: capitalize; }
+.italic { font-style: italic; }
 
 /* ═══════════════════════════════════════════════════════════════════════
    DM'S TOME v4 — Modern Glass Design System
@@ -2003,109 +2016,52 @@ select optgroup {
 }
 
 /* Pill buttons */
+/* Same as .ghost-btn / .seal-btn, written out here so --accent still wins over the base pill */
 .pill-btn {
-    @apply ghost-btn;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: transparent;
+    border: 1px solid var(--border);
     border-radius: 99px;
+    color: var(--text2);
+    font-family: var(--fu);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+}
+.pill-btn:hover {
+    border-color: var(--border-hi);
+    color: var(--text);
+    background: var(--surface-hi);
 }
 .pill-btn--accent {
-    @apply seal-btn;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 16px;
+    background: var(--accent);
+    border: 1px solid var(--accent);
     border-radius: 99px;
-}
-.pv-btn-icon {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-}
-.pv-btn-label {
-    line-height: 1;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════
-   DROPDOWNS / SELECTS
-═══════════════════════════════════════════════════════════════════════ */
-
-.pv-select {
-    position: relative;
-    display: flex;
-    align-items: center;
-    width: 100%;
-    min-height: 34px;
-    background: var(--surface-solid);
-    border: 1px solid var(--border);
-    border-radius: var(--r1);
-    cursor: pointer;
-    user-select: none;
-    transition: border-color 0.2s;
-}
-.pv-select:hover {
-    border-color: var(--border-hi);
-}
-.pv-select:focus-within {
-    border-color: var(--accent);
-}
-.pv-select-label {
-    flex: 1;
-    padding: 7px 10px;
-    font-size: 13px;
+    color: #fff;
     font-family: var(--fu);
-    color: var(--text);
-}
-.pv-select-placeholder {
-    color: var(--text3);
-}
-.pv-select-chevron {
-    padding: 0 10px;
-    color: var(--text3);
-    display: flex;
-    align-items: center;
-    font-size: 10px;
-}
-.pv-dropdown {
-    position: fixed;
-    z-index: var(--z-fab);
-    background: var(--surface-solid);
-    border: 1px solid var(--border);
-    border-radius: var(--r2);
-    box-shadow: var(--sh-md);
-    min-width: 160px;
-    animation: fadeIn 0.1s;
-}
-.pv-dropdown-list {
-    padding: 4px;
-    max-height: 240px;
-    overflow-y: auto;
-}
-.pv-option {
-    display: flex;
-    align-items: center;
-    padding: 7px 10px;
-    border-radius: var(--r1);
     font-size: 13px;
-    font-family: var(--fu);
-    color: var(--text2);
+    font-weight: 500;
     cursor: pointer;
-    transition: all 0.1s;
+    transition: all 0.15s;
+    text-decoration: none;
 }
-.pv-option:hover,
-.pv-option--focused {
-    background: var(--surface-hi);
-    color: var(--text);
+.pill-btn--accent:hover {
+    background: var(--accent-l);
+    border-color: var(--accent-l);
 }
-.pv-option--selected {
-    color: var(--accent);
-    background: var(--accent-bg);
+.pill-btn--accent:active {
+    transform: scale(0.97);
 }
-.pv-option-label {
-    flex: 1;
-}
-.pv-autocomplete {
-    display: flex;
-    width: 100%;
-}
-.pv-autocomplete .pv-input {
-    flex: 1;
-}
-
 /* ═══════════════════════════════════════════════════════════════════════
    MODALS / DIALOGS
 ═══════════════════════════════════════════════════════════════════════ */
@@ -2285,8 +2241,7 @@ select optgroup {
     flex: 1;
 }
 
-.nav-pill,
-.pv-toggle {
+.nav-pill {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -2301,23 +2256,16 @@ select optgroup {
     transition: all 0.15s;
     text-decoration: none;
 }
-.nav-pill:hover,
-.pv-toggle:hover {
+.nav-pill:hover {
     border-color: var(--border-hi);
     color: var(--text);
     background: var(--surface-hi);
 }
 .nav-pill.active,
-.nav-pill.router-link-active,
-.pv-toggle--on {
+.nav-pill.router-link-active {
     background: var(--accent-bg);
     color: var(--accent);
     border-color: oklch(58% 0.24 295 / 0.35);
-}
-.pv-toggle-content {
-    display: flex;
-    align-items: center;
-    gap: 6px;
 }
 
 .sidebar-panel {
@@ -2484,27 +2432,6 @@ select optgroup {
 .chrome-shell .pv-input::placeholder {
     color: var(--text3);
 }
-.chrome-shell .pv-select {
-    background: var(--surface-solid);
-    border-color: var(--border);
-}
-.chrome-shell .pv-select-label {
-    color: var(--text);
-}
-.chrome-shell .pv-dropdown {
-    background: var(--surface-solid);
-    border-color: var(--border);
-    box-shadow: var(--sh-lg);
-}
-.chrome-shell .pv-option {
-    color: var(--text2);
-}
-.chrome-shell .pv-option:hover,
-.chrome-shell .pv-option--focused {
-    background: var(--surface-hi);
-    color: var(--text);
-}
-
 /* Settings toggle */
 .sett-toggle,
 .sw {

@@ -1,7 +1,7 @@
 <template>
   <div class="csl">
     <div class="csl-search">
-      <InputText ref="inputRef" v-model="search" placeholder="Search creatures and hazards…" />
+      <input class="pv-input" ref="inputRef" v-model="search" placeholder="Search creatures and hazards…" />
     </div>
     <div class="csl-adjust" role="radiogroup" aria-label="Weak/elite adjustment for placement">
       <button v-for="opt in ADJUSTMENT_OPTIONS" :key="opt.label" class="csl-adjust-btn"
@@ -75,7 +75,7 @@ const { search, results, total, loading, refresh } = useCreatureSearch(toRef(pro
 const inputRef = ref<any>(null)
 async function focus() {
   await nextTick()
-  inputRef.value?.$el?.focus()
+  inputRef.value?.focus()
 }
 
 onMounted(() => { refresh(); focus() })

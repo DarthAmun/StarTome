@@ -155,9 +155,9 @@
               </template>
               <template v-else>No loot planned yet.</template>
             </p>
-            <Button severity="secondary" style="width:100%;justify-content:center;margin-top:6px" @click="showLoot = true">
+            <button type="button" class="pv-btn pv-btn--ghost" style="width:100%;justify-content:center;margin-top:6px" @click="showLoot = true">
               <OhVueIcon name="gi-locked-chest" scale="0.85" /> Edit loot
-            </Button>
+            </button>
           </div>
 
           <!-- Battle Map -->
@@ -172,22 +172,20 @@
               <OhVueIcon name="md-map" scale="2.5" style="opacity:0.12;margin-bottom:8px" />
               <p class="enc-hint">Drop a map image on the canvas, or load one below.</p>
             </div>
-            <Button
-              severity="secondary"
+            <button type="button" class="pv-btn pv-btn--ghost"
               style="width:100%;justify-content:center;margin-top:6px"
               @click="onSetMap"
             >
               <OhVueIcon name="md-map" scale="0.85" />
               {{ encounter?.mapSource ? 'Change Map' : 'Load Map' }}
-            </Button>
-            <Button
-              severity="secondary"
+            </button>
+            <button type="button" class="pv-btn pv-btn--ghost"
               style="width:100%;justify-content:center;margin-top:6px"
               @click="navigateTo(`/encounter/${route.params.id}/map-maker`)"
             >
               <OhVueIcon name="md-edit" scale="0.85" />
               {{ hasBattleMap ? 'Edit in Map Maker' : 'Build a Map' }}
-            </Button>
+            </button>
           </div>
 
           <!-- Grid Settings -->
@@ -221,14 +219,20 @@
                 @change="onGridSizeInput"
               />
               <label class="f-label enc-offset-label">Offset X</label>
-              <InputNumber
-                :model-value="encounter?.gridOffsetX ?? 0"
-                @update:model-value="(val) => onOffsetChange('x', val)"
+              <input
+                type="number"
+                step="1"
+                class="pv-input"
+                :value="encounter?.gridOffsetX ?? 0"
+                @input="onOffsetChange('x', inputValue($event) === '' ? null : Number(inputValue($event)))"
               />
               <label class="f-label">Offset Y</label>
-              <InputNumber
-                :model-value="encounter?.gridOffsetY ?? 0"
-                @update:model-value="(val) => onOffsetChange('y', val)"
+              <input
+                type="number"
+                step="1"
+                class="pv-input"
+                :value="encounter?.gridOffsetY ?? 0"
+                @input="onOffsetChange('y', inputValue($event) === '' ? null : Number(inputValue($event)))"
               />
             </div>
           </div>
@@ -509,7 +513,7 @@
             <template v-if="libSidebarTab === 'tokens'">
             <div class="sidebar-section" style="flex:1;display:flex;flex-direction:column;overflow:hidden;border-bottom:none">
               <div class="token-search">
-                <InputText ref="searchInputRef" v-model="tokenSearch" placeholder="Search tokens…" />
+                <input class="pv-input" ref="searchInputRef" v-model="tokenSearch" placeholder="Search tokens…" />
               </div>
               <div class="token-list" style="flex:1;overflow-y:auto">
                 <!-- PC separator -->
@@ -561,9 +565,9 @@
               </div>
             </div>
             <div class="sidebar-section" style="flex-shrink:0">
-              <Button severity="secondary" style="width:100%;justify-content:center" @click="openAddTokenModal">
+              <button type="button" class="pv-btn pv-btn--ghost" style="width:100%;justify-content:center" @click="openAddTokenModal">
                 <OhVueIcon name="md-add" scale="0.8" /> Add Token
-              </Button>
+              </button>
             </div>
             </template><!-- end tokens tab -->
 
@@ -969,7 +973,7 @@
         >
           <div class="modal-box token-picker-box">
             <div class="modal-title">Place Token</div>
-            <InputText
+            <input class="pv-input"
               v-model="tokenPickerSearch"
               placeholder="Search library…"
               autofocus
@@ -997,7 +1001,7 @@
               <button class="link-btn link-btn--link" @click="openCreateTokenFromPicker">
                 + Create new token
               </button>
-              <Button severity="secondary" @click="showTokenPicker = false">Cancel</Button>
+              <button type="button" class="pv-btn pv-btn--ghost" @click="showTokenPicker = false">Cancel</button>
             </div>
           </div>
         </div>
@@ -1760,7 +1764,7 @@ const searchInputRef = ref<any>(null)
 watch(libSidebarTab, async (tab) => {
   if (tab !== 'tokens') return
   await nextTick()
-  searchInputRef.value?.$el?.focus()
+  searchInputRef.value?.focus()
 })
 
 // ── Shared creature search for Add/Edit Library Token modals ──────────────

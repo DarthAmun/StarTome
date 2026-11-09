@@ -5,16 +5,11 @@
             <div class="field">
                 <label class="f-label">Portrait</label>
                 <div class="input-row">
-                    <InputText
-                        :model-value="urlText(attrs.portraitSource)"
+                    <input
+                        :value="urlText(attrs.portraitSource)"
                         :placeholder="sourcePlaceholder(attrs.portraitSource)"
-                        class="flex-1"
-                        @update:model-value="
-                            (v) => {
-                                set('portraitSource', v);
-                                set('portraitType', 'url');
-                            }
-                        "
+                        class="pv-input flex-1"
+                        @input="setUrl('portraitSource', 'portraitType', inputValue($event))"
                     />
                     <button
                         class="icon-btn-sq"
@@ -27,18 +22,20 @@
             <div class="field-row">
                 <div class="field">
                     <label class="f-label">Title</label>
-                    <InputText
-                        :model-value="attrs.title || ''"
+                    <input
+                        class="pv-input"
+                        :value="attrs.title || ''"
                         placeholder="High Priest, General…"
-                        @update:model-value="(v) => set('title', v)"
+                        @input="set('title', inputValue($event))"
                     />
                 </div>
                 <div class="field">
                     <label class="f-label">Level</label>
-                    <InputText
-                        :model-value="attrs.level || ''"
+                    <input
+                        class="pv-input"
+                        :value="attrs.level || ''"
                         placeholder="5, 12…"
-                        @update:model-value="(v) => set('level', v)"
+                        @input="set('level', inputValue($event))"
                     />
                 </div>
             </div>
@@ -73,10 +70,11 @@
             </div>
             <div class="field">
                 <label class="f-label">Current Status</label>
-                <InputText
-                    :model-value="attrs.status || ''"
+                <input
+                    class="pv-input"
+                    :value="attrs.status || ''"
                     placeholder="At court, Imprisoned…"
-                    @update:model-value="(v) => set('status', v)"
+                    @input="set('status', inputValue($event))"
                 />
             </div>
             <div class="field">
@@ -114,16 +112,11 @@
             <div class="field">
                 <label class="f-label">Logo / Banner</label>
                 <div class="input-row">
-                    <InputText
-                        :model-value="urlText(attrs.logoSource)"
+                    <input
+                        :value="urlText(attrs.logoSource)"
                         :placeholder="sourcePlaceholder(attrs.logoSource)"
-                        class="flex-1"
-                        @update:model-value="
-                            (v) => {
-                                set('logoSource', v);
-                                set('logoType', 'url');
-                            }
-                        "
+                        class="pv-input flex-1"
+                        @input="setUrl('logoSource', 'logoType', inputValue($event))"
                     />
                     <button
                         class="icon-btn-sq"
@@ -136,16 +129,11 @@
             <div class="field">
                 <label class="f-label">Map Image</label>
                 <div class="input-row">
-                    <InputText
-                        :model-value="urlText(attrs.imageSource)"
+                    <input
+                        :value="urlText(attrs.imageSource)"
                         :placeholder="sourcePlaceholder(attrs.imageSource)"
-                        class="flex-1"
-                        @update:model-value="
-                            (v) => {
-                                set('imageSource', v);
-                                set('imageType', 'url');
-                            }
-                        "
+                        class="pv-input flex-1"
+                        @input="setUrl('imageSource', 'imageType', inputValue($event))"
                     />
                     <button
                         class="icon-btn-sq"
@@ -158,25 +146,25 @@
             <div class="field-row">
                 <div class="field">
                     <label class="f-label">Type</label>
-                    <Select
-                        :model-value="attrs.locationType || null"
-                        :options="locationTypes"
-                        option-label="label"
-                        option-value="value"
-                        placeholder="— select —"
-                        @update:model-value="(v) => set('locationType', v)"
-                    />
+                    <select
+                        class="f-input f-select"
+                        :value="attrs.locationType || ''"
+                        @change="set('locationType', inputValue($event) || undefined)"
+                    >
+                        <option value="" disabled>— select —</option>
+                        <option v-for="o in locationTypes" :key="o.value" :value="o.value">{{ o.label }}</option>
+                    </select>
                 </div>
                 <div class="field">
                     <label class="f-label">Status</label>
-                    <Select
-                        :model-value="attrs.status || null"
-                        :options="locationStatuses"
-                        option-label="label"
-                        option-value="value"
-                        placeholder="— select —"
-                        @update:model-value="(v) => set('status', v)"
-                    />
+                    <select
+                        class="f-input f-select"
+                        :value="attrs.status || ''"
+                        @change="set('status', inputValue($event) || undefined)"
+                    >
+                        <option value="" disabled>— select —</option>
+                        <option v-for="o in locationStatuses" :key="o.value" :value="o.value">{{ o.label }}</option>
+                    </select>
                 </div>
             </div>
         </template>
@@ -186,16 +174,11 @@
             <div class="field">
                 <label class="f-label">Symbol / Banner</label>
                 <div class="input-row">
-                    <InputText
-                        :model-value="urlText(attrs.imageSource)"
+                    <input
+                        :value="urlText(attrs.imageSource)"
                         :placeholder="sourcePlaceholder(attrs.imageSource)"
-                        class="flex-1"
-                        @update:model-value="
-                            (v) => {
-                                set('imageSource', v);
-                                set('imageType', 'url');
-                            }
-                        "
+                        class="pv-input flex-1"
+                        @input="setUrl('imageSource', 'imageType', inputValue($event))"
                     />
                     <button
                         class="icon-btn-sq"
@@ -208,25 +191,25 @@
             <div class="field-row">
                 <div class="field">
                     <label class="f-label">Type</label>
-                    <Select
-                        :model-value="attrs.factionType || null"
-                        :options="factionTypes"
-                        option-label="label"
-                        option-value="value"
-                        placeholder="— select —"
-                        @update:model-value="(v) => set('factionType', v)"
-                    />
+                    <select
+                        class="f-input f-select"
+                        :value="attrs.factionType || ''"
+                        @change="set('factionType', inputValue($event) || undefined)"
+                    >
+                        <option value="" disabled>— select —</option>
+                        <option v-for="o in factionTypes" :key="o.value" :value="o.value">{{ o.label }}</option>
+                    </select>
                 </div>
                 <div class="field">
                     <label class="f-label">Size</label>
-                    <Select
-                        :model-value="attrs.size || null"
-                        :options="factionSizes"
-                        option-label="label"
-                        option-value="value"
-                        placeholder="— select —"
-                        @update:model-value="(v) => set('size', v)"
-                    />
+                    <select
+                        class="f-input f-select"
+                        :value="attrs.size || ''"
+                        @change="set('size', inputValue($event) || undefined)"
+                    >
+                        <option value="" disabled>— select —</option>
+                        <option v-for="o in factionSizes" :key="o.value" :value="o.value">{{ o.label }}</option>
+                    </select>
                 </div>
             </div>
             <div class="field">
@@ -245,14 +228,14 @@
         <template v-else-if="type === 'session'">
             <div class="field">
                 <label class="f-label">Status</label>
-                <Select
-                    :model-value="attrs.mode || null"
-                    :options="sessionModes"
-                    option-label="label"
-                    option-value="value"
-                    placeholder="— select —"
-                    @update:model-value="(v) => set('mode', v)"
-                />
+                <select
+                    class="f-input f-select"
+                    :value="attrs.mode || ''"
+                    @change="set('mode', inputValue($event) || undefined)"
+                >
+                    <option value="" disabled>— select —</option>
+                    <option v-for="o in sessionModes" :key="o.value" :value="o.value">{{ o.label }}</option>
+                </select>
             </div>
             <div class="field">
                 <label class="f-label">Icon</label>
@@ -275,14 +258,14 @@
         <template v-else-if="type === 'quest'">
             <div class="field">
                 <label class="f-label">Status</label>
-                <Select
-                    :model-value="attrs.status || null"
-                    :options="questStatuses"
-                    option-label="label"
-                    option-value="value"
-                    placeholder="— select —"
-                    @update:model-value="(v) => set('status', v)"
-                />
+                <select
+                    class="f-input f-select"
+                    :value="attrs.status || ''"
+                    @change="set('status', inputValue($event) || undefined)"
+                >
+                    <option value="" disabled>— select —</option>
+                    <option v-for="o in questStatuses" :key="o.value" :value="o.value">{{ o.label }}</option>
+                </select>
             </div>
             <div class="field">
                 <label class="f-label">Milestone</label>
@@ -368,10 +351,11 @@
                 </div>
                 <div class="field">
                     <label class="f-label">Reward</label>
-                    <InputText
-                        :model-value="attrs.reward || ''"
+                    <input
+                        class="pv-input"
+                        :value="attrs.reward || ''"
                         placeholder="Gold, items, favor…"
-                        @update:model-value="(v) => set('reward', v)"
+                        @input="set('reward', inputValue($event))"
                     />
                 </div>
             </div>
@@ -558,6 +542,10 @@ const questStatuses = [
 
 function set(key: string, value: any) {
     emit("update:modelValue", { ...props.modelValue, [key]: value });
+}
+// One update for both keys: two set() calls in a row would each start from the old attributes
+function setUrl(sourceKey: string, typeKey: string, url: string) {
+    emit("update:modelValue", { ...props.modelValue, [sourceKey]: url, [typeKey]: "url" });
 }
 function addTag() {
     const tag = newTag.value.replace(",", "").trim();

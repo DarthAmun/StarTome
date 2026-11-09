@@ -6,11 +6,11 @@
       <button class="tlp-clear" @click="$emit('clear')">× Clear</button>
     </div>
     <div v-else>
-      <InputText
-        :model-value="search"
+      <input class="pv-input"
+        :value="search"
         :placeholder="placeholder"
         style="width:100%"
-        @update:model-value="$emit('update:search', $event ?? '')"
+        @input="$emit('update:search', inputValue($event))"
         @focus="$emit('focus')"
       />
       <div v-if="results.length" class="tlp-dropdown">

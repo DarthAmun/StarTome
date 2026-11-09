@@ -1,14 +1,16 @@
 <template>
     <div class="rnp">
-        <AutoComplete
-            :model-value="modelValue ?? ''"
-            :suggestions="suggestions"
-            complete-on-focus
-            :show-empty-message="false"
+        <input
+            class="pv-input"
+            :value="modelValue ?? ''"
+            :list="listId"
             :placeholder="placeholder"
-            @complete="onComplete"
-            @update:model-value="(v) => emit('update:modelValue', typeof v === 'string' ? v : String(v ?? ''))"
+            autocomplete="off"
+            @input="emit('update:modelValue', inputValue($event))"
         />
+        <datalist :id="listId">
+            <option v-for="n in suggestions" :key="n" :value="n" />
+        </datalist>
         <span
             v-if="custom"
             class="rnp-custom"
@@ -46,17 +48,17 @@ const custom = computed(() => {
     return !!v && names.value.length > 0 && !names.value.some((n) => n.toLowerCase() === v);
 });
 
-const suggestions = ref<string[]>([]);
-function onComplete(e: { query: string }) {
-    const q = e.query.trim().toLowerCase();
-    suggestions.value = (q ? names.value.filter((n) => n.toLowerCase().includes(q)) : names.value).slice(0, 50);
-}
+// The browser filters the list as you type; this keeps it to 50 names that match
+const listId = useId();
+const suggestions = computed(() => {
+    const q = (props.modelValue ?? "").trim().toLowerCase();
+    return (q ? names.value.filter((n) => n.toLowerCase().includes(q)) : names.value).slice(0, 50);
+});
 </script>
 
 <style scoped>
 .rnp { position: relative; }
-.rnp :deep(.pv-autocomplete) { width: 100%; }
-.rnp :deep(.pv-input) { width: 100%; }
+.rnp .pv-input { width: 100%; }
 .rnp-custom {
     position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none;
     font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text2);

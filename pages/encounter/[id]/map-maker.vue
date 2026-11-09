@@ -39,13 +39,12 @@
       <label class="mm-check" title="Make line-of-sight walls and doors from the wall and door tiles, and turn FOV on">
         <input v-model="makeWalls" type="checkbox" /> Make walls
       </label>
-      <Button
-        size="small" class="mm-save" :loading="saving" :disabled="!map"
+      <button type="button" class="pv-btn pv-btn--primary pv-btn--sm mm-save" :disabled="saving || !map"
         :title="`Draws the map at ${EXPORT_CELL_PX} px per square and sets the encounter's grid to match. Walls you drew by hand on the encounter stay; walls made here are replaced. Assets don't block sight.`"
         @click="save"
       >
         <OhVueIcon name="md-check" scale="0.8" /> Use as encounter map
-      </Button>
+      </button>
     </header>
 
     <div class="mm-body" :class="{ 'mm-drawer-open': assetsOpen }">

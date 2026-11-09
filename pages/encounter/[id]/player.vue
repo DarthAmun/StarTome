@@ -32,7 +32,7 @@
     </div>
 
     <div class="player-overlay">
-      <div class="font-display text-forge-gold-l/70 text-sm tracking-widest uppercase">
+      <div class="player-title">
         {{ store.current?.name }}
       </div>
     </div>
@@ -212,6 +212,14 @@ onUnmounted(() => {
   bottom: 16px;
   right: 16px;
   pointer-events: none;
+}
+.player-title {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  color: rgb(245 203 74 / 0.7);
+  font-size: 14px;
+  line-height: 20px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .player-sensor { position: absolute; top: 10px; left: 12px; right: 12px; z-index: 20; background: #0d1320e6; border: 1px solid #ffffff22; border-radius: 8px; padding: 6px 8px; }

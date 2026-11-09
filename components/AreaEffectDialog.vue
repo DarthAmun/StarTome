@@ -62,9 +62,9 @@
         </div>
 
         <div class="flex justify-end gap-2 mt-4">
-          <Button severity="secondary" type="button" @click="emit('close')">Cancel</Button>
-          <Button severity="secondary" type="submit" :disabled="!valid">Save</Button>
-          <Button type="button" :disabled="!valid || !form.save" @click="save(true)">Save &amp; roll saves</Button>
+          <button class="pv-btn pv-btn--ghost" type="button" @click="emit('close')">Cancel</button>
+          <button class="pv-btn pv-btn--ghost" type="submit" :disabled="!valid">Save</button>
+          <button class="pv-btn pv-btn--primary" type="button" :disabled="!valid || !form.save" @click="save(true)">Save &amp; roll saves</button>
         </div>
       </form>
     </div>

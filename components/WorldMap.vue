@@ -18,32 +18,24 @@
     <div v-if="!playerMode" class="map-toolbar">
       <span class="map-name">{{ currentMapName }}</span>
       <div class="toolbar-gap" />
-      <Button severity="secondary" size="small" @click="openLoadMap">
-        <template #icon><OhVueIcon name="md-map" scale="0.85" /></template>
+      <button type="button" class="pv-btn pv-btn--ghost pv-btn--sm" @click="openLoadMap">
         {{ mapImageUrl ? 'Change Map' : 'Load Map Image' }}
-      </Button>
-      <Button
-        :severity="pinMode ? undefined : 'secondary'"
-        size="small"
+      </button>
+      <button type="button" :class="pinMode ? 'pv-btn--primary' : 'pv-btn--ghost'" class="pv-btn pv-btn--sm"
         :title="pinMode ? 'Click on the map to place a pin' : 'Enable pin placement'"
         @click="pinMode = !pinMode; selectedEntityForPin = null"
       >
-        <template #icon><OhVueIcon name="gi-all-seeing-eye" scale="0.85" /></template>
         {{ pinMode ? 'Cancel Pin' : 'Add Pin' }}
-      </Button>
-      <Button
-        :severity="drawMode ? undefined : 'secondary'"
-        size="small"
+      </button>
+      <button type="button" :class="drawMode ? 'pv-btn--primary' : 'pv-btn--ghost'" class="pv-btn pv-btn--sm"
         :title="drawMode ? 'Click to add vertices, double-click to finish' : 'Draw a map region'"
         @click="drawMode ? cancelDraw() : startDraw()"
       >
-        <template #icon><OhVueIcon name="gi-forest" scale="0.85" /></template>
         {{ drawMode ? 'Cancel Region' : 'Draw Region' }}
-      </Button>
-      <Button severity="secondary" size="small" title="Open player map view" @click="openPlayerView">
-        <template #icon><OhVueIcon name="md-openinnew" scale="0.85" /></template>
+      </button>
+      <button type="button" class="pv-btn pv-btn--ghost pv-btn--sm" title="Open player map view" @click="openPlayerView">
         Player View
-      </Button>
+      </button>
     </div>
 
     <!-- Draw region hint bar (DM only) -->
@@ -227,10 +219,9 @@
       <div v-else class="map-empty">
         <OhVueIcon name="gi-treasure-map" scale="4" style="opacity:0.15;margin-bottom:16px" />
         <p style="color:var(--ink-faded);font-size:14px;margin-bottom:16px">No map image loaded</p>
-        <Button @click="openLoadMap">
-          <template #icon><OhVueIcon name="md-map" scale="0.85" /></template>
+        <button type="button" class="pv-btn pv-btn--primary" @click="openLoadMap">
           Load Map Image
-        </Button>
+        </button>
       </div>
     </div>
 
@@ -271,7 +262,7 @@
             </svg>
           </div>
           <div class="pin-preview-actions">
-            <Button size="small" @click="confirmCreateRegion">Create Region</Button>
+            <button type="button" class="pv-btn pv-btn--primary pv-btn--sm" @click="confirmCreateRegion">Create Region</button>
             <button class="pin-remove-btn" style="margin-left:auto" @click="cancelDraw">
               <OhVueIcon name="md-close" scale="0.85" />
             </button>
@@ -299,10 +290,9 @@
             </svg>
           </div>
           <div class="pin-preview-actions">
-            <Button size="small" severity="secondary" @click="navigateToRegion(previewRegion)">
-              <template #icon><OhVueIcon name="md-editnote" scale="0.85" /></template>
+            <button type="button" class="pv-btn pv-btn--ghost pv-btn--sm" @click="navigateToRegion(previewRegion)">
               Open Notes
-            </Button>
+            </button>
             <button class="pin-remove-btn" title="Delete region" @click="deleteRegion(previewRegion.id)">
               <OhVueIcon name="md-delete" scale="0.85" />
             </button>
@@ -340,19 +330,16 @@
             </button>
           </div>
           <div class="pin-preview-actions">
-            <Button v-if="!playerMode" size="small" severity="secondary" @click="$emit('navigate-entity', previewEntity!); previewPin = null">
-              <template #icon><OhVueIcon name="md-editnote" scale="0.85" /></template>
+            <button type="button" class="pv-btn pv-btn--ghost pv-btn--sm" v-if="!playerMode" @click="$emit('navigate-entity', previewEntity!); previewPin = null">
               Open Note
-            </Button>
+            </button>
             <!-- Drill-down: only for locations with a map image (DM only) -->
-            <Button
+            <button type="button" class="pv-btn pv-btn--primary pv-btn--sm"
               v-if="!playerMode && canDrillDown"
-              size="small"
               @click="drillDown"
             >
-              <template #icon><OhVueIcon name="md-map" scale="0.85" /></template>
               Open Map
-            </Button>
+            </button>
             <!-- Visibility toggle (DM only) -->
             <button
               v-if="!playerMode"

@@ -1,8 +1,7 @@
 # Single-package workspace — no electron native deps to worry about
 packages:
   - '.'
-  
-onlyBuiltDependencies:
-  - '@parcel/watcher'
-  - esbuild
-  - vue-demi
+
+allowBuilds:
+  esbuild: true
+  vue-demi: true

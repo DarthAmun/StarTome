@@ -6,15 +6,15 @@
         <div class="space-y-3">
           <div>
             <label class="f-label">Name</label>
-            <InputText v-model="form.name" placeholder="Goblin, Wizard, etc." autofocus />
+            <input class="pv-input" v-model="form.name" placeholder="Goblin, Wizard, etc." autofocus />
           </div>
           <div>
             <label class="f-label">Image</label>
             <div class="enc-add-condition">
-              <InputText v-model="form.imageSource" placeholder="URL or file path" class="flex-1" />
-              <Button class="icon-btn-sq" @click="emit('browse')">
+              <input v-model="form.imageSource" placeholder="URL or file path" class="pv-input flex-1" />
+              <button type="button" class="pv-btn pv-btn--primary icon-btn-sq" @click="emit('browse')">
                 <OhVueIcon name="fa-folder-open" scale="0.9" />
-              </Button>
+              </button>
             </div>
             <div v-if="form.imageSource" class="mt-2" style="text-align:center">
               <img :src="form.imageSource" style="max-height:80px;border-radius:6px;object-fit:contain" />
@@ -48,8 +48,8 @@
           </label>
         </div>
         <div class="flex justify-end gap-2 mt-4">
-          <Button severity="secondary" @click="emit('close')">Cancel</Button>
-          <Button @click="emit('confirm')">{{ confirmLabel }}</Button>
+          <button type="button" class="pv-btn pv-btn--ghost" @click="emit('close')">Cancel</button>
+          <button type="button" class="pv-btn pv-btn--primary" @click="emit('confirm')">{{ confirmLabel }}</button>
         </div>
       </div>
     </div>
