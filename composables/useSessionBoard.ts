@@ -8,7 +8,7 @@ import { ref, computed, watch } from 'vue'
 import { getDb, type DbSessionPanel, type SessionBoardEdge, type SessionPanelKind } from '~/composables/useDb'
 import { useEntities, type Entity } from '~/composables/useEntities'
 import { reportError } from '~/composables/useNotices'
-import { blankPanel, boardText, carryOverLayout, newUid } from '~/utils/sessionBoard'
+import { PANEL_KINDS, blankPanel, boardText, carryOverLayout, newUid } from '~/utils/sessionBoard'
 import { toPlain } from '~/utils/json'
 import type { SessionAttributes } from '~/types/entities'
 
@@ -272,6 +272,26 @@ export function useSessionBoard(sessionId: () => number, campaignId: () => numbe
     return new Map(seq.map((e, i) => [e.id, i + 1]))
   })
 
+  /** A copy of a panel from anywhere (another campaign's scene) into this campaign's drawer. */
+  async function copyToDrawer(source: DbSessionPanel, extraTags: string[] = []): Promise<SessionPanel | null> {
+    try {
+      const { id: _id, ...rest } = toPlain(source)
+      const ts = new Date().toISOString()
+      const row = {
+        ...rest, uid: newUid(), campaign_id: campaignId(), session_id: null, parent_uid: null,
+        status: PANEL_KINDS[source.kind].statuses?.[0], attrs: {}, origin_session_id: undefined,
+        tags: [...new Set([...(rest.tags ?? []), ...extraTags])], created_at: ts, updated_at: ts,
+      }
+      const id = await getDb().sessionPanels.add(row) as number
+      const panel = { ...row, id } as SessionPanel
+      drawer.value = [panel, ...drawer.value]
+      return panel
+    } catch (err) {
+      reportError('Copying the panel', err)
+      return null
+    }
+  }
+
   // ── Finishing: next session, carrying panels over ───────────────────────
 
   /** The session after this one (by number, else by creation); created as "Session N+1" when `create` and there is none. */
@@ -356,6 +376,6 @@ export function useSessionBoard(sessionId: () => number, campaignId: () => numbe
     panels, drawer, edges, viewport, loaded, session, byUid, selectedPanelId, lastTouchedUid, sequenceNumbers,
     load, addPanel, updatePanel, updateAttrs, deletePanel, moveToDrawer, placeFromDrawer, absolutePosition,
     addEdge, updateEdge, removeEdge, setViewport, flushAll, touch, setStatus, select, markLogged,
-    nextSession, sendToSession,
+    nextSession, sendToSession, copyToDrawer,
   }
 }

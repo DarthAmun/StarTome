@@ -74,8 +74,24 @@ export function blankPanel(kind: SessionPanelKind, campaignId: number, sessionId
 
 // ── Old sessions → board ─────────────────────────────────────────────────
 
+/** A panel written by hand in a campaign file (CAMPAIGN_FORMAT.md). */
+export interface FilePanel {
+  kind?: string
+  title?: string
+  content?: string
+  status?: string
+  tags?: string[]
+  /** log */
+  logType?: string
+  playersShouldKnow?: boolean
+  /** reward */
+  xp?: number
+}
+
 export interface LegacySession {
   mode?: string
+  /** Panels from a campaign file: laid out below the scenes from `scriptContent` */
+  panels?: FilePanel[]
   scriptContent?: string
   notesContent?: string
   /** `content` held the notes before notesContent existed. */
@@ -121,6 +137,23 @@ export function legacySessionToBoard(s: LegacySession, campaignId: number, sessi
       attrs: { logType: 'happened', at: ts }, x: 0, y: rowY + (sections.length ? 260 : 0),
     })
   }
+
+  // Panels written in a campaign file, four to a row below the rest
+  const FILE_KINDS = new Set<SessionPanelKind>(['scene', 'beat', 'clue', 'log', 'note', 'reward'])
+  const fileTop = panels.length ? Math.max(...panels.map(p => p.y)) + 280 : 0
+  ;(Array.isArray(s.panels) ? s.panels : []).forEach((f, i) => {
+    const kind = (FILE_KINDS.has(f?.kind as SessionPanelKind) ? f.kind : 'note') as SessionPanelKind
+    const statuses = PANEL_KINDS[kind].statuses
+    const attrs: Record<string, unknown> = {}
+    if (kind === 'log') Object.assign(attrs, { logType: (LOG_TYPES as readonly string[]).includes(f.logType ?? '') ? f.logType : 'happened', at: ts }, f.playersShouldKnow ? { playersShouldKnow: true } : {})
+    if (kind === 'reward' && typeof f.xp === 'number') attrs.xp = f.xp
+    panels.push({
+      ...base, uid: newUid(), kind, title: String(f.title ?? ''), content: String(f.content ?? ''),
+      status: statuses ? (statuses.includes(f.status ?? '') ? f.status : statuses[0]) : undefined,
+      attrs, tags: Array.isArray(f.tags) ? f.tags.map(String) : [],
+      x: (i % 4) * 290, y: fileTop + Math.floor(i / 4) * 240,
+    })
+  })
 
   const scenes = panels.filter(p => p.kind === 'scene')
   const edges: SessionBoardEdge[] = scenes.slice(1).map((p, i) => ({ id: newUid(), source: scenes[i].uid, target: p.uid, kind: 'plan' }))
@@ -189,9 +222,10 @@ export async function convertLegacySessions(t: BoardTables, campaignId?: number)
     const { panels, edges } = legacySessionToBoard({ ...attrs, content: row.content }, row.campaign_id, row.id)
     if (panels.length) await t.sessionPanels.bulkAdd(panels)
     const content = boardText(panels)
+    const { panels: _filePanels, ...rest } = attrs
     await t.entities.update(row.id, {
       content,
-      attributes: { ...attrs, board: { edges, viewport: { x: 40, y: 40, zoom: 0.9 }, migrated: true } },
+      attributes: { ...rest, board: { edges, viewport: { x: 40, y: 40, zoom: 0.9 }, migrated: true } },
     })
     await t.entityLinks.where('source_id').equals(row.id).delete()
     const links = extractLinks(content).map(l => ({ source_id: row.id, target_type: l.type, target_name: l.name, metadata: l.metadata ?? {} }))

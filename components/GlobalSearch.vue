@@ -229,6 +229,25 @@
                     </div>
                   </div>
                 </div>
+                <!-- Session panels -->
+                <div v-if="results.panels.length" class="gs-group">
+                  <div class="gs-group-label">Session panels</div>
+                  <div
+                    v-for="(item, i) in results.panels"
+                    :key="`p-${item.id}`"
+                    class="gs-result"
+                    :class="{ 'gs-result--active': flatIndex(5, i) === cursor }"
+                    @click="navigate(item)"
+                    @mouseenter="cursor = flatIndex(5, i)"
+                  >
+                    <span class="gs-result-icon" :style="{ color: PANEL_KINDS[item.type as SessionPanelKind]?.color }">
+                      <OhVueIcon :name="PANEL_KINDS[item.type as SessionPanelKind]?.icon ?? 'gi-book-aura'" scale="0.8" />
+                    </span>
+                    <span class="gs-result-name">{{ item.name }}</span>
+                    <span class="gs-result-sub">{{ item._subtitle }}</span>
+                  </div>
+                </div>
+
               </template>
             </div>
 
@@ -250,6 +269,15 @@ import { RULES_KIND_CONFIG, type RulesKind } from '~/types/rules'
 import { GAME_CONFIG } from '~/types/game'
 import { dbApi } from '~/composables/useDb'
 import { ENTITY_TYPE_CONFIG } from '~/types/entities'
+import { PANEL_KINDS, type SessionPanelKind } from '~/utils/sessionBoard'
+import { getDb } from '~/composables/useDb'
+
+/** Panels on session boards whose title or text matches (drawer panels have no page to open). */
+async function searchPanels(lq: string, limit: number) {
+  return getDb().sessionPanels
+    .filter(p => p.session_id != null && p.kind !== 'frame' && (p.title.toLowerCase().includes(lq) || p.content.toLowerCase().includes(lq)))
+    .limit(limit).toArray()
+}
 import type { EntityType } from '~/types/entities'
 import { useEntities } from '~/composables/useEntities'
 import type { Entity } from '~/composables/useEntities'
@@ -371,7 +399,9 @@ function execPickItem(item: Extract<CmdItem, { kind: 'pick' }>) {
 // ── Normal search state ───────────────────────────────────────────────────────
 
 interface SearchResult {
-  kind: 'campaign' | 'entity' | 'rules' | 'encounter' | 'graph'
+  kind: 'campaign' | 'entity' | 'rules' | 'encounter' | 'graph' | 'panel'
+  /** panel: the session whose board it's on */
+  sessionId?: number
   id: number | string
   rulesKind?: RulesKind
   name: string
@@ -381,25 +411,27 @@ interface SearchResult {
   entity?: Entity
 }
 
-const results = ref<{ campaigns: SearchResult[]; entities: SearchResult[]; rules: SearchResult[]; encounters: SearchResult[]; graphs: SearchResult[] }>({
+const results = ref<{ campaigns: SearchResult[]; entities: SearchResult[]; rules: SearchResult[]; encounters: SearchResult[]; graphs: SearchResult[]; panels: SearchResult[] }>({
   campaigns: [],
   entities: [],
   rules: [],
   encounters: [],
   graphs: [],
+  panels: [],
 })
 
 const totalCount = computed(() =>
-  results.value.campaigns.length + results.value.entities.length + results.value.rules.length + results.value.encounters.length + results.value.graphs.length
+  results.value.campaigns.length + results.value.entities.length + results.value.rules.length + results.value.encounters.length + results.value.graphs.length + results.value.panels.length
 )
 
-function flatIndex(group: 0 | 1 | 2 | 3 | 4, i: number): number {
+function flatIndex(group: 0 | 1 | 2 | 3 | 4 | 5, i: number): number {
   const offsets = [
     0,
     results.value.campaigns.length,
     results.value.campaigns.length + results.value.entities.length,
     results.value.campaigns.length + results.value.entities.length + results.value.rules.length,
     results.value.campaigns.length + results.value.entities.length + results.value.rules.length + results.value.encounters.length,
+    results.value.campaigns.length + results.value.entities.length + results.value.rules.length + results.value.encounters.length + results.value.graphs.length,
   ]
   return offsets[group] + i
 }
@@ -410,6 +442,7 @@ const flatResults = computed((): SearchResult[] => [
   ...results.value.rules,
   ...results.value.encounters,
   ...results.value.graphs,
+  ...results.value.panels,
 ])
 
 // ── Watchers ──────────────────────────────────────────────────────────────────
@@ -428,7 +461,7 @@ watch(query, (val) => {
     if (searchTimer) clearTimeout(searchTimer)
     cmdItems.value = []
     if (!val.trim()) {
-      results.value = { campaigns: [], entities: [], rules: [], encounters: [], graphs: [] }
+      results.value = { campaigns: [], entities: [], rules: [], encounters: [], graphs: [], panels: [] }
       return
     }
     loading.value = true
@@ -455,7 +488,7 @@ async function runSearch(q: string) {
   if (q.startsWith('#')) {
     const tag = q.slice(1).toLowerCase()
     if (!tag) {
-      results.value = { campaigns: [], entities: [], rules: [], encounters: [], graphs: [] }
+      results.value = { campaigns: [], entities: [], rules: [], encounters: [], graphs: [], panels: [] }
       loading.value = false
       return
     }
@@ -469,7 +502,7 @@ async function runSearch(q: string) {
       campaignId: r.campaign_id,
       entity: notesStore.entities.find(en => en.id === r.id) ?? normalizeEntity(r),
     }))
-    results.value = { campaigns: [], entities, rules: [], encounters: [], graphs: [] }
+    results.value = { campaigns: [], entities, rules: [], encounters: [], graphs: [], panels: [] }
     cursor.value = 0
     loading.value = false
     return
@@ -478,12 +511,13 @@ async function runSearch(q: string) {
   const lq = q.toLowerCase()
 
   // All sources at once (PERF-04)
-  const [allCampaigns, entityDbRows, rulesRows, encounterRows, graphRows] = await Promise.all([
+  const [allCampaigns, entityDbRows, rulesRows, encounterRows, graphRows, panelRows] = await Promise.all([
     campaignNames(),
     dbApi.entities.search(lq, 5),
     rulesSearch(lq, 6),
     dbApi.encounters.search(lq, 5),
     dbApi.graphLayout.searchAll(lq, 5),
+    searchPanels(lq, 6),
   ])
   if (seq !== searchSeq) return
   const campaigns: SearchResult[] = allCampaigns
@@ -524,7 +558,18 @@ async function runSearch(q: string) {
     _subtitle: `Campaign ${g.campaign_id}`,
   }))
 
-  results.value = { campaigns, entities, rules: rulesHits, encounters, graphs }
+  const sessionName = (id: number | null) => notesStore.entities.find(e => e.id === id)?.name ?? 'Session'
+  const panels: SearchResult[] = panelRows.map(p => ({
+    kind: 'panel' as const,
+    id: p.id!,
+    name: p.title || p.content.slice(0, 60),
+    type: p.kind,
+    campaignId: p.campaign_id,
+    sessionId: p.session_id ?? undefined,
+    _subtitle: `${PANEL_KINDS[p.kind].label} · ${sessionName(p.session_id)}`,
+  }))
+
+  results.value = { campaigns, entities, rules: rulesHits, encounters, graphs, panels }
   cursor.value = 0
   loading.value = false
 }
@@ -566,6 +611,7 @@ function getRoute(item: SearchResult): string {
   if (item.kind === 'rules') return `/compendium/${RULES_KIND_CONFIG[item.rulesKind!].segment}?id=${item.id}`
   if (item.kind === 'encounter') return `/encounter/${item.id}`
   if (item.kind === 'graph') return `/campaign/${item.campaignId}/graphs?graph=${item.id}`
+  if (item.kind === 'panel') return `/campaign/${item.campaignId}/sessions/${item.sessionId}?panel=${item.id}`
   return '/'
 }
 
@@ -661,7 +707,7 @@ function scrollResultIntoView() {
 function close() {
   open.value = false
   query.value = ''
-  results.value = { campaigns: [], entities: [], rules: [], encounters: [], graphs: [] }
+  results.value = { campaigns: [], entities: [], rules: [], encounters: [], graphs: [], panels: [] }
   cmdItems.value = []
   cursor.value = 0
   cmdCursorId.value = null

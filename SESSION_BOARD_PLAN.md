@@ -2,7 +2,7 @@
 
 Goal: a session stops being two markdown editors (Prep / Notes) and becomes a **board**: a canvas of panels (scenes, beats, clues, encounters, log entries …) that you arrange, connect and run from. What actually happened lives on the board next to what was planned. Unused panels go to the next session or to a campaign-wide drawer.
 
-Written 2026-11-09 against `main` at `3f0f95c`. **P1–P3 built 2026-11-09** (see §12–§14 for what differs from this plan).
+Written 2026-11-09 against `main` at `3f0f95c`. **All four phases built 2026-11-09** (see §12–§15 for what differs from this plan; §15 lists what is left).
 
 ---
 
@@ -227,7 +227,7 @@ Later candidates: HP and conditions (also in the mirror), party wealth, starship
 | **P1 Board and data** ✅ done | `sessionPanels` table, v19 migration + converter, backup/delete wiring, `SessionBoard.vue` with all ten panel types and three connection kinds, palette to add panels, side drawer editor with tab bar and LinkBar, mode switch in the header, link rebuilding, Session Log page | Old sessions open as boards with their scenes and notes; you can prep a new session entirely on the board |
 | **P2 Running** ✅ done | Status toggles per kind, automatic sequence connections, quick capture bar (autocomplete as composable), encounter Run + back + automatic result Logs, random table Roll / Log it, Reward award buttons, recap check | A session can be run from the board without opening another editor |
 | **P3 Finishing** ✅ done | Finish review, campaign drawer with search, next-session creation, continued scenes across boards | Unused prep flows into the next session or the drawer |
-| **P4 Extras** | Party floating panel (§9), remove the GM screen session widget, campaign-format `panels` docs, global search into panels, inspiration search across campaigns | – |
+| **P4 Extras** ✅ done | Party floating panel (§9), remove the GM screen session widget, campaign-format `panels` docs, global search into panels, inspiration search across campaigns | – |
 
 Tests (vitest): the migration converter (heading splitting, edge cases: no headings, empty prep, notes only), finish-review defaults, link rebuilding from panels, encounter result detection.
 
@@ -279,3 +279,17 @@ Tests (vitest): the migration converter (heading splitting, edge cases: no headi
 - **Next session**: the session after this one by number (else by creation). If there is none it's created as "Session N+1" in planning mode.
 - **Carried-over panels** land in a new frame "Carried over from …" below the next board's content (`carryOverLayout`). Their connections on the old board go. The next session's text (search, links) is rebuilt.
 - **Continued scenes are copied, not shared**: the scene stays on the old board as *continued*, and a *planned* copy goes to the next board with `attrs.continuedFrom` (shown as "continued from …"). One row per board keeps every board self-contained; `playedIn` from §3 isn't used.
+
+## 15. P4 as built
+
+- **Party panel**: *Party* button on the board toolbar. A floating card over the board (not part of the canvas) with each PC's level, Perception, Fortitude, Reflex, Will and hero points, from the Play Buddy mirror; *+1* offers a hero point through Play Buddy. It can be collapsed and moved between the four corners; both are remembered per browser.
+- **GM screen session widget is not removed but replaced**: saved GM screen layouts can contain it, so removing the kind would break them. It now shows a read-only summary of the board (plan with statuses, latest Logs) and an *Open board* link, and no longer reads `scriptContent` / `notesContent`.
+- **Campaign files** can give a session a `panels` list (scene, beat, clue, note, reward, log) next to `scriptContent`; it's turned into panels below the scenes and dropped from the stored attributes. Documented in [CAMPAIGN_FORMAT.md](CAMPAIGN_FORMAT.md).
+- **Global search** has a *Session panels* group (title or text matches, panels on a board only). A result opens the session with `?panel=<id>`: the panel is centred, selected and open in the editor.
+- **Inspiration search**: the drawer's *Other campaigns* tab searches the scenes of every other campaign (title, text, tags); *Copy* puts a planned copy in this campaign's drawer, tagged "from <campaign>".
+
+### Left for later
+
+- Remove `scriptContent` / `notesContent` from session attributes in the release after this one (§8). The importer keeps accepting `scriptContent`.
+- Treasure from Reward panels (§13).
+- The GM screen rework itself.

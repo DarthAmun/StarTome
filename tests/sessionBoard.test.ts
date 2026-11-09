@@ -163,3 +163,27 @@ describe('finishing a session', () => {
     expect(carryOverLayout([], 1).frame.y).toBe(0)
   })
 })
+
+describe('campaign file panels', () => {
+  it('turns a session\'s panels list into panels below the scenes', () => {
+    const { panels, edges } = legacySessionToBoard({
+      mode: 'planning',
+      scriptContent: '## Docks\nSmugglers.',
+      panels: [
+        { kind: 'clue', title: 'The cargo is alive', content: 'Crates breathe.' },
+        { kind: 'beat', title: 'Vex lies', status: 'done' },
+        { kind: 'reward', title: 'Smuggler bounty', xp: 40 },
+        { kind: 'bogus', title: 'Unknown kind' },
+      ],
+    }, 1, 2)
+    expect(panels.map(p => [p.kind, p.title, p.status, p.y > 0])).toEqual([
+      ['scene', 'Docks', 'planned', false],
+      ['clue', 'The cargo is alive', 'hidden', true],
+      ['beat', 'Vex lies', 'done', true],
+      ['reward', 'Smuggler bounty', 'pending', true],
+      ['note', 'Unknown kind', undefined, true],
+    ])
+    expect(panels[3].attrs.xp).toBe(40)
+    expect(edges).toEqual([])
+  })
+})

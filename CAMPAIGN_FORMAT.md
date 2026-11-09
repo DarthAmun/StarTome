@@ -115,9 +115,21 @@ The timeline sorts `date` as text, so use zero-padded `YYYY-MM-DD` (Starfinder y
 
 **session**
 ```json
-{ "mode": "planning", "sessionNumber": "1", "date": "2026-11-07", "scriptContent": "## Opening\n…" }
+{
+  "mode": "planning", "sessionNumber": "1", "date": "2026-11-07",
+  "scriptContent": "## Opening\nThe tavern burns…\n\n## The Docks\n…",
+  "panels": [
+    { "kind": "clue", "title": "The cargo is alive", "content": "The crates breathe; {{npc: Vex}} knows." },
+    { "kind": "beat", "title": "Vex lies about the cargo" },
+    { "kind": "reward", "title": "Smuggler bounty", "xp": 40 }
+  ]
+}
 ```
-Session prep goes in `scriptContent`; leave `content` as `""` (it holds my notes from play). `mode`: `planning`, `running`, `finished`.
+A session is a board of panels. Write the scenes in `scriptContent`: every `#`, `##` or `###` heading starts a **Scene** (title = the heading, text = what follows), and text before the first heading becomes a "Prep" note. Add anything else as `panels`:
+- `kind`: `scene`, `beat` (a one-line idea), `clue` (a secret or clue that can come up anywhere), `note` (session-wide reminders), `reward` (with `xp`), `log` (what happened, for sessions already played; `logType`: `happened`, `changed`, `improvised`, `consequence`; `playersShouldKnow`: `true` for the next session's recap).
+- `title`, `content` (markdown), `tags`, and optionally `status` (`scene`: `planned`/`played`/`continued`/`skipped`; `beat`: `open`/`done`; `clue`: `hidden`/`revealed`; `reward`: `pending`/`awarded`).
+
+Leave `content` as `""`: StarTome fills it from the board. `mode`: `planning`, `running`, `finished`.
 
 **note** (lore, history, setting primers)
 ```json
@@ -125,7 +137,7 @@ Session prep goes in `scriptContent`; leave `content` as `""` (it holds my notes
 ```
 `icon`: `gi-scroll-unfurled`, `gi-book-aura`, `gi-death-note` (secret), `gi-magic-hat`, `gi-house-keys`, `gi-sands-of-time`, `gi-all-seeing-eye`, `gi-castle`, `gi-coins`, `gi-broadsword`.
 
-## Text (`content`, `scriptContent`, `reward`, table results)
+## Text (`content`, `scriptContent`, session panels, `reward`, table results)
 
 Markdown, plus:
 

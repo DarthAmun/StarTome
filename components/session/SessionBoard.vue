@@ -20,6 +20,9 @@
             <button v-if="running" class="sb-tool" title="What the players should know from last session" @click="$emit('recap')">
                 <OhVueIcon name="md-history" scale="0.8" /> Recap
             </button>
+            <button class="sb-tool" :class="{ active: showParty }" title="Party: Perception, saves, hero points" @click="toggleParty">
+                <OhVueIcon name="gi-meeple-group" scale="0.8" /> Party
+            </button>
             <button class="sb-tool" title="Fit everything into view" @click="fit()">
                 <OhVueIcon name="md-fitscreen" scale="0.8" /> Fit
             </button>
@@ -36,7 +39,29 @@
                     <span class="sb-drawer-title">Drawer</span>
                     <span class="sb-drawer-hint">Drag onto the board</span>
                 </div>
-                <input v-model="drawerQuery" class="sb-drawer-search" placeholder="Search text or tag…" />
+                <input v-model="drawerQuery" class="sb-drawer-search" :placeholder="inspire ? 'Search scenes in other campaigns…' : 'Search text or tag…'" />
+                <div class="sb-drawer-scope">
+                    <button :class="{ on: !inspire }" @click="inspire = false">This campaign</button>
+                    <button :class="{ on: inspire }" title="Scenes from your other campaigns, for inspiration" @click="inspire = true">Other campaigns</button>
+                </div>
+                <div v-if="inspire" class="sb-drawer-list">
+                    <div v-for="r in inspireResults" :key="r.panel.id" class="sb-drawer-item" :style="{ '--kind': PANEL_KINDS.scene.color }">
+                        <div class="sb-drawer-item-head">
+                            <OhVueIcon :name="PANEL_KINDS.scene.icon" scale="0.65" />
+                            <span>{{ r.campaign }}</span>
+                            <span class="sb-spacer" />
+                            <button class="sb-drawer-place" :disabled="copied.has(r.panel.id!)" title="Copy into this campaign's drawer" @click="copyScene(r)">
+                                {{ copied.has(r.panel.id!) ? 'Copied' : 'Copy' }}
+                            </button>
+                        </div>
+                        <div class="sb-drawer-item-title">{{ r.panel.title || 'Untitled' }}</div>
+                        <div v-if="r.panel.content" class="sb-drawer-item-text">{{ snippet(r.panel.content) }}</div>
+                    </div>
+                    <p v-if="!inspireResults.length" class="sb-drawer-empty">
+                        {{ drawerQuery.trim().length < 2 ? 'Type at least two letters to search the scenes of your other campaigns.' : 'No scenes match.' }}
+                    </p>
+                </div>
+                <template v-else>
                 <div class="sb-drawer-kinds">
                     <button
                         v-for="k in drawerKinds"
@@ -73,6 +98,7 @@
                         {{ board.drawer.value.length ? 'Nothing matches.' : 'Nothing in the drawer. Panels you move here from any session show up for every session of this campaign.' }}
                     </p>
                 </div>
+                </template>
             </aside>
 
             <div class="sb-main">
@@ -104,6 +130,8 @@
                     <Background pattern-color="var(--text)" :gap="20" />
                     <Controls :show-interactive="false" />
                 </VueFlow>
+
+                <SessionPartyPanel v-if="showParty" :campaign-id="campaignId" />
 
                 <div v-if="board.loaded.value && !board.panels.value.length" class="sb-empty">
                     <OhVueIcon name="gi-book-aura" scale="2.2" style="opacity: 0.15" />
@@ -189,9 +217,10 @@ import { useSessionBoard, type SessionPanel } from '~/composables/useSessionBoar
 import { useEntities } from '~/composables/useEntities'
 import { useEntityMarkdown } from '~/composables/useEntityMarkdown'
 import { useEntityRendering } from '~/composables/useEntityRendering'
-import { getDb, type DbEncounter, type SessionBoardEdge, type SessionPanelKind } from '~/composables/useDb'
+import { getDb, type DbEncounter, type DbSessionPanel, type SessionBoardEdge, type SessionPanelKind } from '~/composables/useDb'
 import { PANEL_KINDS, PANEL_KIND_ORDER, EDGE_KIND_STYLE, encounterOutcome, finishReviewRows, rollOnTable, type FinishChoice, type FinishRow } from '~/utils/sessionBoard'
 import { notify } from '~/composables/useNotices'
+import { lsKey } from '~/utils/appNamespace'
 import { useParty } from '~/composables/useParty'
 import { ENTITY_TYPE_CONFIG, type EntityType, type RandomTableAttributes, type SessionAttributes } from '~/types/entities'
 import { imageSrc } from '~/rules/images'
@@ -205,6 +234,7 @@ const board = useSessionBoard(() => props.sessionId, () => props.campaignId, () 
 const { renderMarkdown } = useEntityMarkdown()
 const { entityLookup, campaignGameId } = useEntityRendering(() => props.campaignId)
 const router = useRouter()
+const route = useRoute()
 const party = useParty()
 
 const flowId = computed(() => `session-board-${props.sessionId}`)
@@ -448,6 +478,29 @@ const drawerItems = computed(() => {
         (!drawerKind.value || p.kind === drawerKind.value) &&
         (!q || p.title.toLowerCase().includes(q) || p.content.toLowerCase().includes(q) || p.tags.some(t => t.toLowerCase().includes(q))))
 })
+// Inspiration: scenes of the other campaigns
+const inspire = ref(false)
+const copied = ref(new Set<number>())
+const otherScenes = ref<{ panel: DbSessionPanel; campaign: string }[] | null>(null)
+watch(inspire, async (on) => {
+    if (!on || otherScenes.value) return
+    const db = getDb()
+    const names = new Map((await db.campaigns.toArray()).map(c => [c.id!, c.name]))
+    const rows = await db.sessionPanels.where('kind').equals('scene').filter(p => p.campaign_id !== props.campaignId).toArray()
+    otherScenes.value = rows.map(panel => ({ panel, campaign: names.get(panel.campaign_id) ?? 'Another campaign' }))
+})
+const inspireResults = computed(() => {
+    const q = drawerQuery.value.trim().toLowerCase()
+    if (q.length < 2) return []
+    return (otherScenes.value ?? [])
+        .filter(r => r.panel.title.toLowerCase().includes(q) || r.panel.content.toLowerCase().includes(q) || r.panel.tags.some(t => t.toLowerCase().includes(q)))
+        .slice(0, 40)
+})
+async function copyScene(r: { panel: DbSessionPanel; campaign: string }) {
+    const copy = await board.copyToDrawer(r.panel, [`from ${r.campaign}`])
+    if (copy) copied.value = new Set([...copied.value, r.panel.id!])
+}
+
 function originName(p: SessionPanel) {
     if (p.origin_session_id == null) return ''
     return store.entities.find(e => e.id === p.origin_session_id)?.name ?? ''
@@ -560,6 +613,14 @@ function onWindowFocus() {
     loadEncounters().then(logEncounterResults)
 }
 
+// ── Party panel ──────────────────────────────────────────────────────────
+const PARTY_KEY = lsKey('session.showParty')
+const showParty = ref((() => { try { return localStorage.getItem(PARTY_KEY) === '1' } catch { return false } })())
+function toggleParty() {
+    showParty.value = !showParty.value
+    try { localStorage.setItem(PARTY_KEY, showParty.value ? '1' : '0') } catch { /* private mode */ }
+}
+
 // ── Finishing ────────────────────────────────────────────────────────────
 const finish = ref<{ rows: FinishRow<SessionPanel>[]; nextLabel: string } | null>(null)
 
@@ -598,17 +659,21 @@ watch(() => props.mode, (now, was) => {
 function onPaneReady(api: VueFlowStore) {
     flow = api
 }
-/** Fits once every panel has its size (a few frames after the nodes are set). */
-async function fitWhenMeasured(tries = 30) {
+/** Waits (a few frames at most) until every panel has its size. */
+async function waitMeasured(tries = 30): Promise<boolean> {
     for (let i = 0; i < tries; i++) {
         await new Promise(r => requestAnimationFrame(r))
         const ns = flow?.getNodes.value ?? []
-        if (ns.length && ns.every(n => n.dimensions.width > 0)) {
-            await fit()
-            board.setViewport(flow!.getViewport())
-            return
-        }
+        if (ns.length && ns.every(n => n.dimensions.width > 0)) return true
     }
+    return false
+}
+
+/** Fits once every panel has its size. */
+async function fitWhenMeasured() {
+    if (!(await waitMeasured())) return
+    await fit()
+    board.setViewport(flow!.getViewport())
 }
 async function fit() {
     await flow?.fitView({ padding: 0.15, maxZoom: 1.1 })
@@ -628,7 +693,18 @@ onMounted(async () => {
     const vp = board.viewport.value
     const fitOnOpen = board.panels.value.length > 0 && vp.x === 40 && vp.y === 40 && vp.zoom === 0.9
     buildNodes()
-    if (fitOnOpen) fitWhenMeasured()
+    if (fitOnOpen && !route.query.panel) fitWhenMeasured()
+    // Opened from search (?panel=): that panel, centred, in the editor
+    const fromSearch = Number(route.query.panel)
+    const found = fromSearch ? board.panels.value.find(p => p.id === fromSearch) : undefined
+    if (found) {
+        board.select(found.id)
+        openEditor(found.id)
+        await waitMeasured()
+        const abs = board.absolutePosition(found)
+        flow?.setCenter(abs.x + PANEL_KINDS[found.kind].width / 2, abs.y + 60, { zoom: 1 })
+        board.setViewport(flow!.getViewport())
+    }
     // Back from an encounter: the panel you ran it from is selected again
     if (board.selectedPanelId.value != null) {
         await nextTick()
@@ -721,6 +797,9 @@ watch(() => props.sessionId, async () => {
     color: var(--text); font-size: 12.5px; padding: 5px 8px; outline: none;
 }
 .sb-drawer-search:focus { border-color: var(--accent); }
+.sb-drawer-scope { display: flex; margin: 2px 10px 6px; border: 1px solid var(--border); border-radius: var(--r1); overflow: hidden; }
+.sb-drawer-scope button { flex: 1; font-size: 11px; padding: 4px 6px; background: none; border: none; color: var(--text3); cursor: pointer; }
+.sb-drawer-scope button.on { background: var(--accent-bg); color: var(--accent-l); }
 .sb-drawer-kinds { display: flex; flex-wrap: wrap; gap: 3px; padding: 2px 10px 6px; }
 .sb-drawer-kinds button {
     --kind: var(--accent);
