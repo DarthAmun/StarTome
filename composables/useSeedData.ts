@@ -5,6 +5,7 @@
 import { getDb } from '~/composables/useDb'
 import { extractLinks } from '~/composables/useEntityParser'
 import { lsKey } from '~/utils/appNamespace'
+import { convertSessions } from '~/sync/backup'
 
 const SEED_KEY = lsKey('seeded')
 
@@ -293,36 +294,7 @@ They found the letter. Carol spent 10 minutes translating the Goblin — turns o
 - The cave entrance under Echo Bridge needs a proper description
 - Carol is at 3 HP — do they short rest before continuing?`,
     },
-    content: `# Session Entries
-
-Session entries track individual play sessions — your prep notes beforehand and what actually happened during play.
-
-## Two Documents Per Session
-
-Each session has **two separate markdown areas** accessible from the sidebar:
-
-- **Script / Prep** — written before the session: scenes, NPC stats, boxed read-aloud text, encounter triggers, potential hooks. Only the GM ever sees this.
-- **Live Notes** — written during or after: what the players actually did, surprising decisions, notes for next time.
-
-Keeping them separate means your prep isn't cluttered with in-session chaos, and your session record isn't buried in prep you never used.
-
-## The Status Toggle
-
-Use the **Mode** dropdown in the sidebar to move sessions through states:
-- *Planning* — you're still prepping; shown with a quill icon
-- *Running* — the session is live; shown with a sword icon
-- *Finished* — archived; shown with a book icon
-
-## Tips for Good Session Notes
-
-- Reference entries liberally: {{npc: Aldric Vane}}, {{quest: The Lost Seal}}, {{location: The Shattered Vale}} — these backlinks let you reconstruct context later
-- Use checklists in your script to track scene progress during play
-- In live notes, record *surprising* player decisions first — those are the ones you'll forget
-- Note what prep you didn't use; it might fit next session
-
-## The Battlefield Tab
-
-For tactical encounters, use the **Encounters** section (sword icon on the campaign spine). Each encounter gets its own map, token grid, fog of war, and HP tracker — completely separate from these session notes.`,
+    content: '',
   },
 ]
 
@@ -402,5 +374,26 @@ export async function seedIfEmpty() {
     updated_at: ts,
   })
 
+  // The session's prep and notes become its board, plus a panel explaining it
+  await convertSessions()
+  const session = await db.entities.where('campaign_id').equals(campaignId).filter(e => e.type === 'session').first()
+  if (session?.id) {
+    await db.sessionPanels.add({
+      uid: crypto.randomUUID(), campaign_id: campaignId, session_id: session.id, origin_session_id: session.id,
+      kind: 'note', title: 'How session boards work', content: SESSION_BOARD_HELP, attrs: {}, tags: [],
+      x: 0, y: -280, created_at: ts, updated_at: ts,
+    })
+  }
+
   localStorage.setItem(SEED_KEY, '1')
 }
+
+const SESSION_BOARD_HELP = `A session is a **board** of panels you arrange and connect.
+
+- **Scene** for detailed prep, **Beat** for a quick one-liner, **Clue** for secrets that can come up anywhere
+- **Encounter**, **Entity** and **Random table** panels link to what you already have
+- **Log** panels hold what actually happened; attach them to the panel they belong to
+- **Note** for session-wide reminders, **Reward** for planned XP and loot, **Frame** to group panels
+
+Add panels from the toolbar or by right-clicking the board. Double-click a panel to edit it.
+Switch **Planning · Running · Finished** in the header.`

@@ -7,6 +7,18 @@
             @rename="onRename"
         >
             <template #actions>
+                <div class="mode-switch" role="radiogroup" aria-label="Session mode">
+                    <button
+                        v-for="m in MODES"
+                        :key="m.value"
+                        class="mode-btn"
+                        role="radio"
+                        :aria-checked="mode === m.value"
+                        :class="{ active: mode === m.value }"
+                        :style="mode === m.value ? { '--mode': SESSION_MODE_COLORS[m.value] } : {}"
+                        @click="setMode(m.value)"
+                    >{{ m.label }}</button>
+                </div>
                 <button
                     class="hdr-btn"
                     :class="{ active: showAttributes }"
@@ -26,57 +38,20 @@
             />
         </div>
 
-        <div v-if="entity" class="session-split">
-            <!-- Left: Script / Prep -->
-            <div class="session-pane">
-                <div class="session-pane-label" style="--pane-accent: #b87de8">
-                    <span class="session-pane-label-text">Script / Prep</span>
-                </div>
-                <MarkdownEditor
-                    :entity-id="props.entityId"
-                    :campaign-id="props.campaignId"
-                    :content="draftScript"
-                    :show-tab-bar="false"
-                    initial-view-mode="mixed"
-                    @update:content="onScriptUpdate"
-                    @navigate="(t, n) => $emit('navigate', t, n)"
-                >
-                    <template #below-content>
-                        <LinkBar
-                            :entity-id="props.entityId"
-                            :campaign-id="props.campaignId"
-                            entity-type="session"
-                            @navigate="(t, n) => $emit('navigate', t, n)"
-                        />
-                    </template>
-                </MarkdownEditor>
-            </div>
-
-            <div class="session-split-divider" />
-
-            <!-- Right: Session Notes -->
-            <div class="session-pane">
-                <div class="session-pane-label" style="--pane-accent: var(--accent)">
-                    <span class="session-pane-label-text">Session Notes</span>
-                </div>
-                <MarkdownEditor
-                    :entity-id="props.entityId"
-                    :campaign-id="props.campaignId"
-                    :content="draftNotes"
-                    :show-tab-bar="false"
-                    initial-view-mode="mixed"
-                    @update:content="onNotesUpdate"
-                    @navigate="(t, n) => $emit('navigate', t, n)"
-                />
-            </div>
-        </div>
+        <SessionBoard
+            v-if="entity"
+            :key="props.entityId"
+            :session-id="props.entityId"
+            :campaign-id="props.campaignId"
+            @navigate="(t, n) => $emit('navigate', t, n)"
+        />
     </div>
 </template>
 
 <script setup lang="ts">
 import { useAttributeDraft } from "~/composables/useAttributeDraft";
 import { useEntities } from "~/composables/useEntities";
-import type { EntityAttributes } from "~/types/entities";
+import { SESSION_MODE_COLORS, type EntityAttributes, type SessionAttributes } from "~/types/entities";
 
 const props = defineProps<{ entityId: number; campaignId: number }>();
 const emit = defineEmits<{
@@ -84,46 +59,42 @@ const emit = defineEmits<{
     deleted: [];
 }>();
 
+const MODES = [
+    { value: "planning", label: "Planning" },
+    { value: "running", label: "Running" },
+    { value: "finished", label: "Finished" },
+] as const;
+
 const store = useEntities();
 
 const entity = computed(
     () => store.entities.find((e) => e.id === props.entityId) ?? store.currentEntity,
 );
 
-const draftScript = ref("");
-const draftNotes = ref("");
 // Follows the stored entity; a save writes only the keys edited here
 const attrDraft = useAttributeDraft(entity, () => false);
 const draftAttributes = attrDraft.draft;
 const attrSave = useDebouncedSave(500);
 const showAttributes = ref(false);
 
+const mode = computed(() => (draftAttributes.value as SessionAttributes).mode ?? "planning");
+
 watch(
     () => props.entityId,
     async (id) => {
         showAttributes.value = false;
         await store.loadEntity(id);
-        const attrs = entity.value?.attributes as any;
-        draftScript.value = attrs?.scriptContent ?? "";
-        draftNotes.value = attrs?.notesContent ?? entity.value?.content ?? "";
         attrDraft.reset(entity.value?.attributes);
     },
     { immediate: true },
 );
 
-function onScriptUpdate(value: string) {
-    draftScript.value = value;
-    store.updateEntity(props.entityId, {
-        attributes: { ...(entity.value?.attributes as any), scriptContent: value },
-    });
-}
-
-function onNotesUpdate(value: string) {
-    draftNotes.value = value;
-    store.updateEntity(props.entityId, {
-        attributes: { ...(entity.value?.attributes as any), notesContent: value },
-        content: value,
-    });
+function setMode(value: SessionAttributes["mode"]) {
+    const next: SessionAttributes = { ...(draftAttributes.value as SessionAttributes), mode: value };
+    // Starting the session: it's played today unless a date was set
+    if (value === "running" && !next.date) next.date = new Date().toISOString().slice(0, 10);
+    onAttributesChange(next as EntityAttributes);
+    attrSave.flush();
 }
 
 function onAttributesChange(attrs: EntityAttributes) {
@@ -141,7 +112,6 @@ async function onDelete() {
     await store.deleteEntity(props.entityId);
     emit("deleted");
 }
-
 </script>
 
 <style scoped>
@@ -159,40 +129,30 @@ async function onDelete() {
     border-bottom: 1px solid var(--border);
     max-height: 40vh;
 }
-.session-split {
-    flex: 1;
+.mode-switch {
     display: flex;
+    border: 1px solid var(--border);
+    border-radius: var(--r1);
     overflow: hidden;
-    min-height: 0;
-}
-.session-split-divider {
-    width: 1px;
-    background: var(--border);
-    flex-shrink: 0;
-}
-.session-pane {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-width: 0;
-    min-height: 0;
-}
-.session-pane-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 14px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
     background: var(--bg2);
 }
-.session-pane-label-text {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.09em;
-    color: var(--pane-accent, var(--text3));
+.mode-btn {
+    --mode: var(--accent);
+    padding: 4px 11px;
+    font-size: 12px;
+    color: var(--text3);
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.12s;
+}
+.mode-btn:last-child { border-right: none; }
+.mode-btn:hover { color: var(--text); }
+.mode-btn.active {
+    color: var(--text);
+    background: color-mix(in oklch, var(--mode) 20%, transparent);
+    box-shadow: inset 0 -2px 0 var(--mode);
 }
 .hdr-btn {
     display: flex; align-items: center; gap: 5px; padding: 4px 10px;

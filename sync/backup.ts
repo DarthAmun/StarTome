@@ -23,9 +23,10 @@ import {
   getDb, now, parseJsonObject, rowValues,
   type DbCampaign, type DbCharacter, type DbEncounter, type DbEncounterToken, type DbEncounterWall, type DbEntity,
   type DbEntityConnection, type DbEntityLink, type DbEntitySnapshot, type DbGraphLayout, type DbInventory, type DbLevelUp,
-  type DbMapAsset, type DbPurse, type DbStarship, type DbToken, type DbTreasureAward, type DbXpAward,
+  type DbMapAsset, type DbPurse, type DbSessionPanel, type DbStarship, type DbToken, type DbTreasureAward, type DbXpAward,
 } from '~/composables/useDb'
 import { propImages } from '~/rules/battlemap'
+import { convertLegacySessions } from '~/utils/sessionBoard'
 import { extractLinks } from '~/composables/useEntityParser'
 import { imageIdsOf, planRulesImport, rulesForExport, type ExportedImage, type RulesOverlay } from '~/converters/export'
 import { blobToDataUrl, dataUrlToBlob, entityImageIds, imageRefId, isImageRef, splitInlineImages, type NewImageRow } from '~/rules/images'
@@ -52,6 +53,7 @@ export interface CampaignRows {
   inventory: DbInventory[]
   purses: DbPurse[]
   starships: DbStarship[]
+  sessionPanels: DbSessionPanel[]
 }
 export type CampaignTable = keyof CampaignRows
 
@@ -59,14 +61,14 @@ export type CampaignTable = keyof CampaignRows
 export const CAMPAIGN_TABLES: CampaignTable[] = [
   'campaigns', 'entities', 'tokens', 'mapAssets', 'encounters', 'encounterTokens', 'encounterWalls',
   'entityLinks', 'entitySnapshots', 'entityConnections', 'graphLayouts',
-  'characters', 'levelUps', 'xpAwards', 'treasureAwards', 'inventory', 'purses', 'starships',
+  'characters', 'levelUps', 'xpAwards', 'treasureAwards', 'inventory', 'purses', 'starships', 'sessionPanels',
 ]
 
 export const TABLE_LABELS: Record<CampaignTable | 'rules' | 'rulesOverlays', string> = {
   campaigns: 'Campaigns', encounters: 'Encounters', encounterTokens: 'Encounter Tokens', encounterWalls: 'Encounter Walls',
   entities: 'Notes & Entities', entityLinks: 'Entity Links', entitySnapshots: 'Entity Snapshots', entityConnections: 'Entity Connections',
   graphLayouts: 'Graphs', tokens: 'Tokens', mapAssets: 'Map assets', characters: 'Party members', levelUps: 'Level-ups', xpAwards: 'XP awards',
-  treasureAwards: 'Treasure awards', inventory: 'Inventory', purses: 'Purses', starships: 'Starships',
+  treasureAwards: 'Treasure awards', inventory: 'Inventory', purses: 'Purses', starships: 'Starships', sessionPanels: 'Session panels',
   rules: 'Own compendium entries', rulesOverlays: 'Portraits, notes & edits on synced entries',
 }
 
@@ -138,11 +140,11 @@ export async function collectCampaignRows(campaignIds?: number[]): Promise<Campa
   const campaigns = campaignIds ? (await db.campaigns.bulkGet(campaignIds)).filter((c): c is DbCampaign => !!c) : await db.campaigns.toArray()
   const ids = campaigns.map(c => c.id!)
   const byCampaign = <T>(table: string) => (ids.length ? db.table(table).where('campaign_id').anyOf(ids).toArray() : Promise.resolve([])) as Promise<T[]>
-  const [encounters, entities, entityConnections, graphLayouts, characters, levelUps, xpAwards, treasureAwards, inventory, purses, starships] = await Promise.all([
+  const [encounters, entities, entityConnections, graphLayouts, characters, levelUps, xpAwards, treasureAwards, inventory, purses, starships, sessionPanels] = await Promise.all([
     byCampaign<DbEncounter>('encounters'), byCampaign<DbEntity>('entities'), byCampaign<DbEntityConnection>('entityConnections'),
     byCampaign<DbGraphLayout>('graphLayouts'), byCampaign<DbCharacter>('characters'), byCampaign<DbLevelUp>('levelUps'),
     byCampaign<DbXpAward>('xpAwards'), byCampaign<DbTreasureAward>('treasureAwards'), byCampaign<DbInventory>('inventory'), byCampaign<DbPurse>('purses'),
-    byCampaign<DbStarship>('starships'),
+    byCampaign<DbStarship>('starships'), byCampaign<DbSessionPanel>('sessionPanels'),
   ])
   const encIds = encounters.map(e => e.id!)
   const entIds = entities.map(e => e.id!)
@@ -160,7 +162,7 @@ export async function collectCampaignRows(campaignIds?: number[]): Promise<Campa
   const mapAssets = placed.size ? await db.mapAssets.filter(a => placed.has(a.image)).toArray() : []
   return {
     campaigns, encounters, encounterTokens, encounterWalls, entities, entityLinks, entitySnapshots,
-    entityConnections, graphLayouts, tokens, mapAssets, characters, levelUps, xpAwards, treasureAwards, inventory, purses, starships,
+    entityConnections, graphLayouts, tokens, mapAssets, characters, levelUps, xpAwards, treasureAwards, inventory, purses, starships, sessionPanels,
   }
 }
 
@@ -351,6 +353,20 @@ async function writeMerged(rows: Partial<CampaignRows>, opts: MergeOptions, coun
     })
   }
 
+  // Session panels: their session, the entries and encounters they show. Their
+  // uids (which the boards' connections use) stay as they are
+  for (const p of (rows.sessionPanels ?? []).filter(p => camp.has(p.campaign_id))) {
+    const a = { ...parseJsonObject(p.attrs) }
+    if (typeof a.entityId === 'number') a.entityId = ent.get(a.entityId) ?? null
+    if (typeof a.encounterId === 'number') a.encounterId = enc.get(a.encounterId) ?? null
+    if (!opts.history) delete a.awardIds
+    await add('sessionPanels', {
+      ...withoutId(p), campaign_id: camp.get(p.campaign_id)!, attrs: a,
+      session_id: p.session_id != null ? ent.get(p.session_id) ?? null : null,
+      origin_session_id: p.origin_session_id != null ? ent.get(p.origin_session_id) : undefined,
+    })
+  }
+
   // Resolution records point at characters, the XP log and inventory rows
   if (opts.history) {
     for (const e of rows.encounters ?? []) {
@@ -374,6 +390,12 @@ async function writeMerged(rows: Partial<CampaignRows>, opts: MergeOptions, coun
     }
   }
   return camp
+}
+
+/** Sessions without a board get one (utils/sessionBoard.ts). */
+export async function convertSessions() {
+  const db = getDb()
+  await db.transaction('rw', [db.entities, db.sessionPanels, db.entityLinks], () => convertLegacySessions(db))
 }
 
 function campaignTables() {
@@ -476,6 +498,8 @@ export async function importPayload(payload: BackupPayload, opts: ImportOptions)
     counts.rules = rulesEntries.length
     counts.rulesOverlays = rulesOverlays.length - plan.missing.length
   })
+  // Sessions from before the board (older backups, campaign files): prep and notes become panels
+  await convertSessions()
   const legacy = (Array.isArray(payload.systems) ? payload.systems.length : 0) + (Array.isArray(payload.records) ? payload.records.length : 0)
   return { counts, missingOverlays: plan.missing.length, skippedLegacyLibrary: legacy }
 }

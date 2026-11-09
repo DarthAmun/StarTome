@@ -44,7 +44,7 @@ describe('v4 upgrade', () => {
 
     const db = getDb()
     await db.open()
-    expect(db.verno).toBe(18)
+    expect(db.verno).toBe(19)
     // DM's Tome system data isn't kept (v14 also drops the old backup table)
     expect(db.tables.map(t => t.name)).not.toContain('records')
     expect(db.tables.map(t => t.name)).not.toContain('systems')

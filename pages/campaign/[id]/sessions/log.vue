@@ -6,28 +6,48 @@
         </div>
         <div v-for="sess in logSessions" :key="sess.id" class="slog-chapter">
             <div class="slog-header" @click="toggleExpand(sess.id)">
-                <span class="slog-num">{{ (sess.attributes as any)?.sessionNumber ? 'Session ' + (sess.attributes as any).sessionNumber : '—' }}</span>
+                <span class="slog-num">{{ attrsOf(sess).sessionNumber ? 'Session ' + attrsOf(sess).sessionNumber : '—' }}</span>
                 <span class="slog-title">{{ sess.name }}</span>
                 <span class="slog-spacer" />
-                <span v-if="(sess.attributes as any)?.date" class="slog-date">{{ formatSessionDate((sess.attributes as any).date) }}</span>
+                <span v-if="attrsOf(sess).date" class="slog-date">{{ formatSessionDate(attrsOf(sess).date!) }}</span>
                 <span
-                    v-if="(sess.attributes as any)?.mode"
+                    v-if="attrsOf(sess).mode"
                     class="slog-status"
-                    :style="{ color: sessionStatusColor((sess.attributes as any)?.mode), borderColor: sessionStatusColor((sess.attributes as any)?.mode) + '55' }"
-                >{{ (sess.attributes as any).mode }}</span>
+                    :style="{ color: sessionStatusColor(attrsOf(sess).mode), borderColor: sessionStatusColor(attrsOf(sess).mode) + '55' }"
+                >{{ attrsOf(sess).mode }}</span>
                 <button class="slog-open" @click.stop="openEntry(sess)">Open →</button>
             </div>
             <div class="slog-body" :class="{ 'slog-body--expanded': expandedIds.has(sess.id) }">
-                <div
-                    v-if="(sess.attributes as any)?.scriptContent"
-                    class="slog-content"
-                    v-html="renderSessionNotes((sess.attributes as any).scriptContent)"
-                />
-                <div v-else class="slog-no-notes">No script recorded for this session.</div>
-                <div v-if="!expandedIds.has(sess.id) && (sess.attributes as any)?.scriptContent" class="slog-fade" />
+                <template v-if="logsOf(sess).length">
+                    <div
+                        v-for="{ log, attachedTo } in logsOf(sess)"
+                        :key="log.id"
+                        class="slog-entry"
+                        :style="{ '--log': LOG_TYPE_COLORS[logTypeOf(log)] }"
+                    >
+                        <div class="slog-entry-head">
+                            <span class="slog-entry-type">{{ logTypeOf(log) }}</span>
+                            <span v-if="attachedTo.length" class="slog-entry-anchor">↳ {{ attachedTo.map(p => p.title || PANEL_KINDS[p.kind].label).join(', ') }}</span>
+                            <span v-if="log.attrs.playersShouldKnow" class="slog-entry-flag" title="Players should know">players should know</span>
+                        </div>
+                        <div v-if="log.title" class="slog-entry-title">{{ log.title }}</div>
+                        <div v-if="log.content" class="slog-content" v-html="render(log.content)" />
+                    </div>
+                </template>
+                <div v-else class="slog-no-notes">Nothing logged for this session.</div>
+
+                <div v-if="expandedIds.has(sess.id) && planOf(sess).length" class="slog-plan">
+                    <div class="slog-plan-label">Plan</div>
+                    <div v-for="p in planOf(sess)" :key="p.id" class="slog-plan-row">
+                        <span class="slog-plan-kind" :style="{ color: PANEL_KINDS[p.kind].color }">{{ PANEL_KINDS[p.kind].label }}</span>
+                        <span class="slog-plan-title" :class="{ 'slog-plan-title--skipped': p.status === 'skipped' }">{{ p.title || 'Untitled' }}</span>
+                        <span v-if="p.status" class="slog-plan-status">{{ p.status }}</span>
+                    </div>
+                </div>
+                <div v-if="!expandedIds.has(sess.id) && (logsOf(sess).length || planOf(sess).length)" class="slog-fade" />
             </div>
             <button
-                v-if="(sess.attributes as any)?.scriptContent"
+                v-if="logsOf(sess).length || planOf(sess).length"
                 class="slog-expand-btn"
                 @click="toggleExpand(sess.id)"
             >{{ expandedIds.has(sess.id) ? '▲ Collapse' : '▼ Read more' }}</button>
@@ -37,7 +57,11 @@
 
 <script setup lang="ts">
 import { useEntityMarkdown } from '~/composables/useEntityMarkdown'
-import { useEntities } from '~/composables/useEntities'
+import { useEntities, type Entity } from '~/composables/useEntities'
+import { useEntityRendering } from '~/composables/useEntityRendering'
+import { getDb, type DbSessionPanel } from '~/composables/useDb'
+import { LOG_TYPE_COLORS, PANEL_KINDS, logsInOrder, type LogType, type SessionBoardEdge } from '~/utils/sessionBoard'
+import type { SessionAttributes } from '~/types/entities'
 
 const route = useRoute()
 const router = useRouter()
@@ -46,28 +70,45 @@ const store = useEntities()
 const campaignId = computed(() => Number(route.params.id))
 
 const { renderMarkdown } = useEntityMarkdown()
-const notesStore = useEntities()
+const { entityLookup } = useEntityRendering(campaignId)
 
-const SESSION_TYPE_COLORS: Record<string, string> = {
-    npc: '#7cc44e', location: '#a87de8', faction: '#e05555',
-    quest: '#e8924a', event: '#4ab8e8', note: '#6b9fe8', session: '#b87de8',
-}
-
-function sessionEntityLookup(type: string, name: string) {
-    const ent = notesStore.findByTypeAndName(type, name)
-    if (!ent) return null
-    return { color: SESSION_TYPE_COLORS[ent.type] ?? '#888' }
-}
+const attrsOf = (s: Entity) => (s.attributes ?? {}) as SessionAttributes & { board?: { edges?: SessionBoardEdge[] } }
 
 const logSessions = computed(() => {
     const sessions = store.byType.session ?? []
     return [...sessions].sort((a, b) => {
-        const na = parseInt((a.attributes as any)?.sessionNumber ?? '', 10)
-        const nb = parseInt((b.attributes as any)?.sessionNumber ?? '', 10)
+        const na = parseInt(attrsOf(a).sessionNumber ?? '', 10)
+        const nb = parseInt(attrsOf(b).sessionNumber ?? '', 10)
         if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb
         return a.id - b.id
     })
 })
+
+// Every board of the campaign, by session
+const panelsBySession = ref(new Map<number, DbSessionPanel[]>())
+async function loadPanels() {
+    const rows = await getDb().sessionPanels.where('campaign_id').equals(campaignId.value).toArray()
+    const map = new Map<number, DbSessionPanel[]>()
+    for (const p of rows) {
+        if (p.session_id == null) continue
+        if (!map.has(p.session_id)) map.set(p.session_id, [])
+        map.get(p.session_id)!.push(p)
+    }
+    panelsBySession.value = map
+}
+
+function logsOf(s: Entity) {
+    return logsInOrder(panelsBySession.value.get(s.id) ?? [], attrsOf(s).board?.edges ?? [])
+}
+
+const PLAN_KINDS = new Set(['scene', 'beat', 'clue', 'encounter', 'reward'])
+function planOf(s: Entity) {
+    return (panelsBySession.value.get(s.id) ?? [])
+        .filter(p => PLAN_KINDS.has(p.kind))
+        .sort((a, b) => a.y - b.y || a.x - b.x)
+}
+
+const logTypeOf = (p: DbSessionPanel) => ((p.attrs.logType as LogType) ?? 'happened')
 
 const expandedIds = ref<Set<number>>(new Set())
 
@@ -77,8 +118,8 @@ function toggleExpand(id: number) {
     expandedIds.value = s
 }
 
-function renderSessionNotes(content: string): string {
-    return renderMarkdown(content || '', { rich: true, entityLookup: sessionEntityLookup })
+function render(content: string): string {
+    return renderMarkdown(content || '', { rich: true, entityLookup })
 }
 
 function sessionStatusColor(mode: string | undefined): string {
@@ -94,12 +135,12 @@ function formatSessionDate(dateStr: string): string {
     return d.toLocaleDateString('en-US', opts)
 }
 
-function openEntry(sess: any) {
+function openEntry(sess: Entity) {
     router.push(`/campaign/${campaignId.value}/sessions/${sess.id}`)
 }
 
 onMounted(async () => {
-    await store.loadAll(campaignId.value)
+    await Promise.all([store.loadAll(campaignId.value), loadPanels()])
 })
 </script>
 
@@ -247,4 +288,19 @@ onMounted(async () => {
     transition: color 0.12s, background 0.12s;
 }
 .slog-expand-btn:hover { color: var(--accent-l); background: var(--accent-bg); }
+
+.slog-entry { border-left: 3px solid var(--log); padding: 2px 0 2px 10px; margin-bottom: 12px; }
+.slog-entry-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.slog-entry-type { font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--log); }
+.slog-entry-anchor { font-size: 11px; color: var(--text3); }
+.slog-entry-flag { font-size: 9.5px; color: var(--text2); border: 1px solid var(--border-hi); border-radius: 99px; padding: 0 6px; }
+.slog-entry-title { font-size: 13.5px; font-weight: 600; color: var(--text); margin: 2px 0; }
+.slog-entry .slog-content { padding-bottom: 0; }
+.slog-plan { border-top: 1px dashed var(--border); padding: 10px 0 12px; }
+.slog-plan-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); margin-bottom: 6px; }
+.slog-plan-row { display: flex; gap: 10px; align-items: baseline; font-size: 12.5px; padding: 2px 0; }
+.slog-plan-kind { width: 74px; flex-shrink: 0; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+.slog-plan-title { color: var(--text2); }
+.slog-plan-title--skipped { text-decoration: line-through; opacity: 0.6; }
+.slog-plan-status { margin-left: auto; font-size: 10.5px; color: var(--text3); }
 </style>

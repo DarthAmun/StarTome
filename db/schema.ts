@@ -25,6 +25,8 @@ import type { SensorMap } from '~/rules/sensorMap'
 import Dexie, { type Table } from 'dexie'
 import { DB_NAME } from '~/utils/appNamespace'
 import { parseJson } from '~/utils/json'
+// Only awaits Dexie calls: safe inside a transaction
+import { convertLegacySessions } from '~/utils/sessionBoard'
 import type { CampaignRules, GameId } from '~/types/game'
 import type { RulesEntity, Runes } from '~/types/rules'
 import type { Adjustment } from '~/rules/combat'
@@ -372,6 +374,45 @@ export interface DbSoundPlaylist {
 }
 
 /** The party's starship (STARFINDER_PLAN.md P4; rules/playerStarship.ts). */
+/** Panel kinds on a session board (SESSION_BOARD_PLAN.md). */
+export type SessionPanelKind = 'scene' | 'beat' | 'clue' | 'encounter' | 'log' | 'note' | 'entity' | 'random-table' | 'reward' | 'frame'
+
+/** A panel on a session board, or in the campaign drawer (`session_id` null). */
+export interface DbSessionPanel {
+  id?: number
+  /** Stable per board: connections and frames point at it, so imports needn't remap them. */
+  uid: string
+  campaign_id: number
+  session_id: number | null
+  kind: SessionPanelKind
+  title: string
+  content: string
+  /** Per kind: planned/played/continued/skipped, open/done, hidden/revealed, pending/awarded */
+  status?: string
+  /** Per kind: log {logType, at, playersShouldKnow}, encounter {encounterId}, entity {entityId, entityType}, random-table {entityId, lastResult}, reward {xp}, frame {color} */
+  attrs: Record<string, unknown>
+  tags: string[]
+  x: number
+  y: number
+  w?: number
+  h?: number
+  /** The frame it sits in (its uid); its x/y are then relative to the frame. */
+  parent_uid?: string | null
+  /** The session it was first planned for. */
+  origin_session_id?: number
+  created_at: string
+  updated_at: string
+}
+
+/** A connection on a session board, stored in the session's `attributes.board`. */
+export interface SessionBoardEdge {
+  id: string
+  source: string   // panel uid
+  target: string   // panel uid
+  kind: 'plan' | 'sequence' | 'attach'
+  label?: string
+}
+
 export interface DbStarship {
   id?: number
   campaign_id: number
@@ -456,6 +497,7 @@ class StarTomeDb extends Dexie {
   linkOffers!:        Table<DbLinkOffer>
   mapAssets!:         Table<DbMapAsset>
   starships!:         Table<DbStarship>
+  sessionPanels!:     Table<DbSessionPanel>
 
   constructor() {
     super(DB_NAME)
@@ -560,6 +602,8 @@ class StarTomeDb extends Dexie {
     // to be readable by DM's Tome (only its campaigns come in, converted on import)
     this.version(13).stores({}).upgrade(async (tx) => {
       for (const t of Object.keys(VALUE_COLUMNS)) {
+        // Tables from later versions (sessionPanels) don't exist yet
+        if (!(tx as unknown as { idbtrans: IDBTransaction }).idbtrans.objectStoreNames.contains(t)) continue
         await tx.table(t).toCollection().modify((r: Record<string, unknown>) => { Object.assign(r, rowValues(t, r)) })
       }
     })
@@ -591,6 +635,19 @@ class StarTomeDb extends Dexie {
     // v18: the party's starships (STARFINDER_PLAN.md P4)
     this.version(18).stores({
       starships:          '++id, campaign_id',
+    })
+    // v19: sessions become boards of panels (SESSION_BOARD_PLAN.md)
+    this.version(19).stores({
+      sessionPanels:      '++id, campaign_id, session_id, [campaign_id+session_id], kind',
+    })
+    // Sessions from before v19 get their board once the database is open: the
+    // old prep and notes become scenes and a log (kept in the attributes for now).
+    // Not an upgrade function: an upgrade from far back runs in a transaction
+    // that doesn't include tables created on the way.
+    this.on('ready', (vip) => {
+      const db = vip as unknown as StarTomeDb
+      return db.transaction('rw', [db.entities, db.sessionPanels, db.entityLinks], () =>
+        convertLegacySessions({ entities: db.entities, sessionPanels: db.sessionPanels, entityLinks: db.entityLinks }))
     })
   }
 }
@@ -646,6 +703,7 @@ export const VALUE_COLUMNS: Record<string, Record<string, unknown>> = {
   entitySnapshots: { attributes: {} },
   entityLinks: { metadata: {} },
   graphLayouts: { positions: {}, hidden_nodes: [], player_hidden_nodes: [] },
+  sessionPanels: { attrs: {}, tags: [] },
   levelUps: { changes: [] },
   xpAwards: { character_ids: [] },
   soundTracks: { tags: [] },

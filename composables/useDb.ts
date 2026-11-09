@@ -47,7 +47,7 @@ export const dbApi = {
       const db = getDb()
       await db.transaction('rw', [db.campaigns, db.encounters, db.encounterTokens, db.encounterWalls, db.entities, db.entityLinks,
         db.entitySnapshots, db.entityConnections, db.graphLayouts, db.characters, db.levelUps, db.xpAwards,
-        db.treasureAwards, db.inventory, db.purses, db.tokens, db.starships], async () => {
+        db.treasureAwards, db.inventory, db.purses, db.tokens, db.starships, db.sessionPanels], async () => {
         const encIds = await db.encounters.where('campaign_id').equals(id).primaryKeys() as number[]
         if (encIds.length) {
           await db.encounterTokens.where('encounter_id').anyOf(encIds).delete()
@@ -63,7 +63,7 @@ export const dbApi = {
           await db.tokens.filter(t => t.linked_entity_id != null && ents.has(t.linked_entity_id)).modify({ linked_entity_id: null })
         }
         await db.entities.where('campaign_id').equals(id).delete()
-        for (const table of [db.entityConnections, db.graphLayouts, db.characters, db.levelUps, db.xpAwards, db.treasureAwards, db.inventory, db.purses, db.starships]) {
+        for (const table of [db.entityConnections, db.graphLayouts, db.characters, db.levelUps, db.xpAwards, db.treasureAwards, db.inventory, db.purses, db.starships, db.sessionPanels]) {
           await table.where('campaign_id').equals(id).delete()
         }
         await db.campaigns.delete(id)
@@ -429,8 +429,10 @@ export const dbApi = {
     async delete(id: number) {
       const db = getDb()
       await db.transaction('rw', [db.entities, db.entityLinks, db.entitySnapshots, db.entityConnections, db.characters,
-        db.tokens, db.encounterTokens], async () => {
+        db.tokens, db.encounterTokens, db.sessionPanels], async () => {
         const row = await db.entities.get(id)
+        // A session's board goes with it (drawer panels stay in the campaign)
+        if (row?.type === 'session') await db.sessionPanels.where('session_id').equals(id).delete()
         await db.entityLinks.where('source_id').equals(id).delete()
         await db.entitySnapshots.where('entity_id').equals(id).delete()
         await db.entitySnapshots.where('event_id').equals(id).modify({ event_id: null, event_name: null })

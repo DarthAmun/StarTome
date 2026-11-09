@@ -142,5 +142,7 @@ export async function applyLegacy(bundle: LegacyBundle, opts: { onProgress?: (p:
   await structureColumns()
   // …and so do portraits, location maps and banners inside the entries' attributes
   await moveInlineEntityImages()
+  // DM's Tome sessions (prep and notes) become session boards
+  await (await import('~/sync/backup')).convertSessions()
   return { written, monsterTokens: res.monsterTokens, issues: res.issues, durationMs: Date.now() - t0 }
 }

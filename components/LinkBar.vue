@@ -199,6 +199,8 @@ const props = defineProps<{
     entityId: number;
     campaignId: number;
     entityType: string;
+    /** Lists the links in this text instead of the entry's (a session panel's content); no backlinks then. */
+    content?: string;
 }>();
 
 const emit = defineEmits<{
@@ -264,7 +266,10 @@ function linkAvatar(type: string, name: string) {
 // ── Link computeds ────────────────────────────────────────────────────────────
 const outgoingLinks = computed(() => {
     const seen = new Set<string>();
-    return store.linksFrom(props.entityId).filter((l) => {
+    const all = props.content !== undefined
+        ? extractLinks(props.content).map((l) => ({ id: `${l.type}:${l.name}`, sourceId: props.entityId, targetType: l.type, targetName: l.name, metadata: l.metadata }))
+        : store.linksFrom(props.entityId);
+    return all.filter((l) => {
         const key = `${l.targetType}:${l.targetName.toLowerCase()}`;
         if (seen.has(key)) return false;
         seen.add(key);
@@ -273,7 +278,7 @@ const outgoingLinks = computed(() => {
 });
 
 const backlinks = computed(() => {
-    if (!entity.value) return [];
+    if (!entity.value || props.content !== undefined) return [];
     const seen = new Set<number>();
     return store
         .backlinksTo(entity.value.type, entity.value.name)
@@ -285,7 +290,7 @@ const backlinks = computed(() => {
 });
 
 const pinnedOn = computed(() =>
-    entity.value ? store.pinnedLocationsFor(entity.value.id) : [],
+    entity.value && props.content === undefined ? store.pinnedLocationsFor(entity.value.id) : [],
 );
 
 const scriptLinks = computed(() => {
