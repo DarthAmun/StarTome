@@ -29,6 +29,7 @@ import { parseJson, toPlain } from '~/utils/json'
 
 const plain = toPlain
 import { reportError } from '~/composables/useNotices'
+import { partyPcFlag } from '~/composables/useParty'
 import { ImageChannel, toPlayerToken } from '~/utils/playerPayload'
 
 function buildTokenScope(token: EncounterToken, entry?: RulesEntity): Record<string, number> {
@@ -896,7 +897,6 @@ export const useEncounterStore = defineStore('encounter', () => {
 
   /** A token that stands for a party member is a PC exactly when the party says so (ARCH-01). */
   async function withPartyPcFlag(id: number | null, input: LibraryTokenInput): Promise<LibraryTokenInput> {
-    const { partyPcFlag } = await import('~/composables/useParty')
     const fromParty = await partyPcFlag(id, input.linkedEntityId)
     return fromParty == null ? input : { ...input, isPlayerCharacter: fromParty }
   }
