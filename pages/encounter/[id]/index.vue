@@ -3091,8 +3091,11 @@ function getImageUrl(token: any): string {
 
 /* ── Inline HP quick-damage input ── */
 .order-hp-quick-input {
-  width: 44px;
-  padding: 1px 4px;
+  /* Shrinks before the row overflows (3-digit HP, temp HP, hidden-token buttons) */
+  width: 40px;
+  min-width: 26px;
+  flex: 0 1 auto;
+  padding: 1px 3px;
   background: rgba(0,0,0,0.05);
   border: 1px solid var(--parch-line);
   border-radius: 2px;
@@ -3103,13 +3106,14 @@ function getImageUrl(token: any): string {
   outline: none;
   opacity: 0;
   transition: opacity 0.15s;
-  flex-shrink: 0;
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
 .order-token-row:hover .order-hp-quick-input,
 .order-hp-quick-input:focus { opacity: 1; }
 .order-hp-quick-input:focus { border-color: var(--gold); background: rgba(0,0,0,0.03); }
 .order-hp-quick-input::-webkit-inner-spin-button,
-.order-hp-quick-input::-webkit-outer-spin-button { opacity: 0.4; }
+.order-hp-quick-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
 /* ── Multi-select bulk bar ── */
 .order-token-row--bulk { background: rgba(184,134,11,0.08) !important; }
@@ -3382,7 +3386,8 @@ function getImageUrl(token: any): string {
 .order-row-2 {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  min-width: 0;
   padding-left: 33px; /* 26px thumb + 7px gap */
   width: 100%;
   margin-top: 4px;
