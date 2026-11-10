@@ -16,7 +16,11 @@
       <span v-for="t in entity.traits" :key="t" class="rsb-trait">{{ formatTrait(t) }}</span>
     </div>
 
-    <RecallKnowledgeLine v-if="creature || hazard" :entity="entity" :game="game" />
+    <div v-if="creature || hazard" class="rsb-rk">
+      <RecallKnowledgeLine :entity="entity" :game="game" />
+      <button v-if="creature" class="rsb-place rsb-notes-btn" title="The stat block as sentences without numbers, to copy to a player (Monstrumologist monster page)" @click.stop="notesOpen = true">Field notes</button>
+    </div>
+    <FieldNotesDialog v-if="creature && notesOpen" :open="notesOpen" :creature="creature" @close="notesOpen = false" />
 
     <!-- ── Item ───────────────────────────────────────────────── -->
     <template v-if="item">
@@ -418,6 +422,8 @@ const ABILITY_KEYS: AbilityKey[] = ['str', 'dex', 'con', 'int', 'wis', 'cha']
 const ORIGIN_LABEL = { foundry: 'Foundry compendium', user: 'Homebrew', legacy: "Imported from DM's Tome" } as const
 
 const cfg = computed(() => RULES_KIND_CONFIG[props.entity.kind])
+const notesOpen = ref(false)
+watch(() => props.entity.id, () => { notesOpen.value = false })
 const item = computed(() => props.entity.kind === 'item' ? props.entity as Item : null)
 const creature = computed(() => props.entity.kind === 'creature' ? props.entity as Creature : null)
 const hazard = computed(() => props.entity.kind === 'hazard' ? props.entity as Hazard : null)
@@ -724,6 +730,9 @@ async function onClick(e: MouseEvent) {
   background: rgba(184, 134, 11, 0.1); color: var(--gold, #d4b54a); font-size: 0.8em; font-family: var(--fh); letter-spacing: 0.04em; text-transform: uppercase;
 }
 .rsb-place:hover { background: rgba(184, 134, 11, 0.25); }
+.rsb-rk { display: flex; align-items: center; gap: 6px; }
+.rsb-rk > :first-child { flex: 1; }
+.rsb-notes-btn { margin: 4px 0 8px; padding: 2px 8px; white-space: nowrap; }
 .rsb-roll:focus-visible { outline: 2px solid var(--gold, #d4b54a); outline-offset: 1px; }
 .rsb-sub { margin: 10px 0 2px; font-family: var(--fh); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--kind-color); }
 .rsb-muted { color: var(--text3); }

@@ -155,6 +155,49 @@ export function spellDc(column: Column, level: number): { dc: number; attack: nu
   return { dc, attack: dc - 8 }
 }
 
+// ── Reverse lookup: which column a value falls in ─────────────────────────
+
+export type RatedStat = 'perception' | 'ac' | 'fort' | 'ref' | 'will' | 'hp' | 'attack' | 'damage' | 'spell'
+
+/** Average of a damage formula such as "2d8+5" or "1d6+2 1d4" (every NdM and ±k term). */
+export function averageDamage(formula: string): number {
+  let total = 0
+  for (const m of formula.matchAll(/([+-]?)\s*(\d+)\s*(?:d\s*(\d+))?/gi)) {
+    const sign = m[1] === '-' ? -1 : 1
+    const n = Number(m[2])
+    total += sign * (m[3] ? n * (Number(m[3]) + 1) / 2 : n)
+  }
+  return total
+}
+
+/** The table's value for each column it has at this level (HP: range midpoint; damage: average). */
+function columnValues(stat: RatedStat, level: number): [Column, number][] {
+  if (stat === 'hp') return HP_COLUMNS.map((c, i) => { const [max, min] = row(HP_RANGES, level)[i]; return [c, (max + min) / 2] })
+  if (stat === 'damage') return (['extreme', 'high', 'moderate', 'low'] as Column[]).map((c, i) => [c, averageDamage(row(DAMAGE, level)[i])])
+  const table = stat === 'ac' ? AC : stat === 'attack' ? ATTACK : stat === 'spell' ? SPELL_DC : PERCEPTION_SAVES
+  return COLUMNS.flatMap((c, i) => {
+    const v = row(table, level)[i]
+    return v === null || v === undefined ? [] : [[c, v] as [Column, number]]
+  })
+}
+
+/**
+ * The column a creature's value is closest to at its level (ties go to the
+ * higher column). Values past either end of the table rate as that end.
+ * Spell DCs below moderate rate as low, though the table has no low column.
+ */
+export function columnOf(stat: RatedStat, value: number, level: number): Column {
+  const cols = columnValues(stat, level)
+  for (let i = 0; i < cols.length - 1; i++) {
+    const [c, v] = cols[i]!
+    const next = cols[i + 1]![1]
+    if (value >= (v + next) / 2) return c
+  }
+  const [lastCol, lastVal] = cols[cols.length - 1]!
+  if (stat === 'spell' && value < lastVal - 2) return 'low'
+  return lastCol
+}
+
 // ── Road maps ──────────────────────────────────────────────────────────────
 
 export interface Roadmap {
