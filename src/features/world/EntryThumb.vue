@@ -3,7 +3,8 @@
 import type { Entry } from '@/domain/schema'
 import { ENTRY_TYPE_INFO } from '@/ui/entryTypes'
 import { useImageUrl } from '@/ui/imageUrl'
-import { entryImage } from './facts'
+import GameIcon from '@/ui/components/GameIcon.vue'
+import { entryIconName, entryImage } from '@/features/shared/facts'
 
 const props = defineProps<{ entry: Entry }>()
 const url = useImageUrl(() => entryImage(props.entry))
@@ -12,6 +13,7 @@ const url = useImageUrl(() => entryImage(props.entry))
 <template>
   <span class="thumb" :class="entry.type" :style="{ '--type': ENTRY_TYPE_INFO[entry.type].color }">
     <img v-if="url" :src="url" alt="" loading="lazy" />
+    <GameIcon v-else-if="entryIconName(entry)" :name="entryIconName(entry) ?? ''" :size="20" />
     <component :is="ENTRY_TYPE_INFO[entry.type].icon" v-else :size="17" />
   </span>
 </template>

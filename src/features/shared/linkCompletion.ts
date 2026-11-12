@@ -1,7 +1,8 @@
 /** What an open `{{` offers while typing: the types first, then names of that type. */
 import { canonicalType, isEntryTypeName } from '@/domain/links'
 import { ENTRY_TYPES } from '@/domain/schema'
-import { entries, rulesNamesLike } from '@/data/repo'
+import { graphs } from '@/data/graphs'
+import { encounterNames, entries, rulesNamesLike } from '@/data/repo'
 import type { CompleteFn, EditorCompletion } from '@/ui/components/CodeEditor.vue'
 import { ENTRY_TYPE_INFO } from '@/ui/entryTypes'
 
@@ -18,6 +19,7 @@ export function linkCompletion(campaignId: () => string | null): CompleteFn {
       const items: EditorCompletion[] = [
         ...ENTRY_TYPES.filter(t => t !== 'region' && t.startsWith(q)).map(t => ({ label: ENTRY_TYPE_INFO[t].label, detail: 'entry', apply: `{{${t === 'random-table' ? 'table' : t}: `, color: ENTRY_TYPE_INFO[t].color })),
         ...RULES_KINDS.filter(k => k.startsWith(q)).map(k => ({ label: k, detail: 'compendium', apply: `{{${k}: ` })),
+        ...['encounter', 'graph'].filter(k => k.startsWith(q)).map(k => ({ label: k, detail: 'campaign', apply: `{{${k}: ` })),
         ...('roll'.startsWith(q) ? [{ label: 'roll', detail: 'dice', apply: '{{roll: ' }] : []),
       ]
       return items.length ? { from: open, items } : null
@@ -32,6 +34,10 @@ export function linkCompletion(campaignId: () => string | null): CompleteFn {
       if (!camp) return null
       color = ENTRY_TYPE_INFO[type].color
       names = (await entries.ofType(camp, type)).map(e => e.name).filter(n => n.toLowerCase().includes(q)).sort((a, b) => Number(b.toLowerCase().startsWith(q)) - Number(a.toLowerCase().startsWith(q)) || a.localeCompare(b)).slice(0, 12)
+    } else if (type === 'encounter' || type === 'graph') {
+      if (!camp) return null
+      const all = type === 'encounter' ? await encounterNames(camp) : (await graphs.ofCampaign(camp)).map(g => g.name)
+      names = all.filter(n => n.toLowerCase().includes(q)).slice(0, 12)
     } else if (RULES_KINDS.includes(type)) {
       names = await rulesNamesLike(type, q, 12)
     }

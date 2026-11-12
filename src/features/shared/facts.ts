@@ -57,3 +57,31 @@ export function isArchived(e: Entry): boolean {
   return (e.type === 'npc' && !e.data.alive) || (e.type === 'location' && e.data.status === 'destroyed')
     || (e.type === 'quest' && (e.data.status === 'completed' || e.data.status === 'failed')) || (e.type === 'rumor' && e.data.statuses.includes('false'))
 }
+
+/** The fields entries of a type can be filtered and grouped by, with the entry's value(s) for each. */
+export function entryFacets(e: Entry): Record<string, string | string[]> {
+  switch (e.type) {
+    case 'npc': return { Vital: e.data.alive ? 'Alive' : 'Dead', Status: cap(e.data.status), Ancestry: cap(e.data.ancestry), Class: [e.data.class, e.data.class2].filter(Boolean).map(cap), Level: e.data.level }
+    case 'location': return { Type: cap(e.data.kind), Discovery: cap(e.data.status), Map: e.data.map ? 'Has a map' : 'No map' }
+    case 'faction': return { Type: cap(e.data.kind), Size: cap(e.data.size), Visibility: e.data.secret ? 'Secret' : 'Public' }
+    case 'quest': return { Status: cap(e.data.status), 'Given by': e.data.giver.name, Milestone: e.data.milestone ? 'Milestone' : '' }
+    case 'event': return { Significance: cap(e.data.significance), Location: e.data.location }
+    case 'session': return { Mode: cap(e.data.mode) }
+    case 'rumor': return { Status: e.data.statuses.map(cap), Source: e.data.source }
+    case 'random-table': return { Die: e.data.die }
+    case 'region': return { Map: e.data.mapEntryId ? 'On a map' : 'Not placed yet' }
+    case 'note': return {}
+  }
+}
+
+/** Note icons offered by the picker (stored by name, as v0.42 did). */
+export const NOTE_ICONS: [name: string, label: string][] = [
+  ['gi-scroll-unfurled', 'Scroll'], ['gi-book-aura', 'Lore'], ['gi-death-note', 'Secret'], ['gi-magic-hat', 'Magic'], ['gi-house-keys', 'Key'],
+  ['gi-sands-of-time', 'Timeline'], ['gi-all-seeing-eye', 'Mystery'], ['gi-castle', 'Location'], ['gi-coins', 'Treasure'], ['gi-broadsword', 'Combat'],
+]
+
+/** The Game Icon an entry carries by name, if any (a note's icon; events and sessions kept one from older versions). */
+export function entryIconName(e: Entry): string | null {
+  const name = e.type === 'note' ? e.data.icon : e.data.extra.icon
+  return typeof name === 'string' && name.startsWith('gi-') ? name : null
+}

@@ -27,7 +27,7 @@ function widgetHtml(kind: string, args: string, clockIndex: number): string {
   return `<button class="widget clock" data-widget="clock" data-index="${clockIndex}" title="${esc(first)}: ${filled}/${total}. Click to advance">${esc(first)} <span class="pips">${pips}</span></button>`
 }
 
-function esc(s: string): string {
+export function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
@@ -42,12 +42,14 @@ export function renderMarkdown(source: string, opts: RenderOptions = {}): string
   let clocks = 0
   const hold = (html: string) => { refs.push(html); return `\u0001${refs.length - 1}\u0002` }
   const withWidgets = source.replace(WIDGET, (_all, kind: string, args: string) => hold(widgetHtml(kind, args, kind === 'clock' ? clocks++ : 0)))
-  const text = withWidgets.replace(REF, (_all, rawType: string, name: string) => {
+  const text = withWidgets.replace(REF, (_all, rawType: string, name: string, _state: string | undefined, options: string | undefined) => {
     const type = ALIASES[rawType.toLowerCase()] ?? rawType.toLowerCase()
     if (type === 'roll') return hold(widgetHtml('dice', name, 0))
     const color = isEntryType(type) ? ENTRY_TYPE_INFO[type].color : 'var(--accent)'
     const missing = opts.resolves && !opts.resolves(type, name.trim()) ? ' unresolved' : ''
-    refs.push(`<a class="ref${missing}" data-ref-type="${esc(type)}" data-ref-name="${esc(name.trim())}" style="--ref-color:${color}">${esc(name.trim())}</a>`)
+    // `| entry` asks for the entry's card instead of a plain link; the editor fills the card in
+    const embed = !missing && /(^|,)\s*entry\s*(,|$)/.test(options ?? '') ? ' embed' : ''
+    refs.push(`<a class="ref${missing}${embed}" data-ref-type="${esc(type)}" data-ref-name="${esc(name.trim())}" style="--ref-color:${color}">${esc(name.trim())}</a>`)
     return `\u0001${refs.length - 1}\u0002`
   })
   let html = md.render(text)

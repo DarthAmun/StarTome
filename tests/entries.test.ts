@@ -120,3 +120,24 @@ describe('entry writes', () => {
     expect(all[1]?.body).toBe('old')
   })
 })
+
+describe('relations derived from links', () => {
+  it('an NPC gets factions, places (linked or pinned) and the last session; a faction its members', async () => {
+    const { relationsOf } = await import('@/data/relations')
+    const db = getDb()
+    const kib = await createEntry(C, 'npc', 'Kib'), ledger = await createEntry(C, 'faction', 'Ledger')
+    const keep = await createEntry(C, 'location', 'Keep'), docks = await createEntry(C, 'location', 'Docks')
+    await saveEntry(kib.id, { body: 'Works for {{faction: Ledger}}.' })
+    await saveEntry(keep.id, { body: 'Home of {{npc: Kib}}.' })
+    await db.rows('mapPins').put({ id: 'p1', campaignId: C, mapEntryId: docks.id, entryId: kib.id, x: 0, y: 0, hidden: false })
+    const s1 = await createEntry(C, 'session', 'One'), s2 = await createEntry(C, 'session', 'Two')
+    await saveEntry(s1.id, { body: '{{npc: Kib}} appears', data: { number: '1' } })
+    await saveEntry(s2.id, { body: '{{npc: Kib}} again', data: { number: '12' } })
+
+    const r = await relationsOf((await db.rows('entries').get(kib.id))!)
+    expect(r.factions.map(e => e.name)).toEqual(['Ledger'])
+    expect(r.locations.map(e => e.name)).toEqual(['Docks', 'Keep'])
+    expect(r.lastSession?.name).toBe('Two')
+    expect((await relationsOf((await db.rows('entries').get(ledger.id))!)).members.map(e => e.name)).toEqual(['Kib'])
+  })
+})

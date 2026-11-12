@@ -6,6 +6,8 @@ import { evaluateFormula } from '@/domain/formula'
 import { taskProgress } from '@/domain/markdownBlocks'
 import type { Entry } from '@/domain/schema'
 import { addCharacterFor, characterOfEntry, removeCharacter } from '@/data/party'
+import { relationsOf, type Relations } from '@/data/relations'
+import { peek } from '@/ui/workbench'
 import { sessionPanelsOf } from '@/data/repo'
 import { confirmDialog } from '@/ui/dialogs'
 import { renderMarkdown } from '@/ui/markdown'
@@ -37,6 +39,9 @@ async function togglePc() {
   if (await confirmDialog({ title: `Remove ${props.entry.name} from the party?`, body: 'The NPC entry stays. Their items and coins go to the party stash.', confirmLabel: 'Remove' })) await removeCharacter(character.value.id)
 }
 
+// ── What links say: an NPC's factions, places and last session; a faction's members ──
+const relations = useLive<Relations | null>(() => (props.entry.type === 'npc' || props.entry.type === 'faction' ? relationsOf(props.entry) : Promise.resolve(null)), null, [() => props.entry.id, () => props.entry.updatedAt])
+
 // ── Quest objectives, region shape, session panels ──
 const progress = computed(() => (props.entry.type === 'quest' ? taskProgress(props.entry.body) : null))
 const polygon = computed(() => {
@@ -54,6 +59,17 @@ const panels = useLive(async () => (props.entry.type === 'session' ? sessionPane
   <div v-if="entry.type === 'npc'" class="extra line">
     <label class="check"><input type="checkbox" :checked="!!character" @change.prevent="togglePc" /> Player character</label>
     <span v-if="character" class="faint">In the party at level {{ character.level }}</span>
+    <template v-if="relations">
+      <span v-if="relations.factions.length" class="rel"><span class="eyebrow">Faction</span><button v-for="f in relations.factions" :key="f.id" class="chip" @click="peek({ kind: 'entry', id: f.id })">{{ f.name }}</button></span>
+      <span v-if="relations.locations.length" class="rel"><span class="eyebrow">Found at</span><button v-for="l in relations.locations" :key="l.id" class="chip" @click="peek({ kind: 'entry', id: l.id })">{{ l.name }}</button></span>
+      <span class="rel"><span class="eyebrow">Last seen</span>
+        <button v-if="relations.lastSession" class="chip" @click="peek({ kind: 'entry', id: relations.lastSession.id })">{{ relations.lastSession.data.number ? `Session ${relations.lastSession.data.number}` : relations.lastSession.name }}</button>
+        <span v-else class="faint">not yet met</span></span>
+    </template>
+  </div>
+
+  <div v-else-if="entry.type === 'faction' && relations?.members.length" class="extra line">
+    <span class="rel"><span class="eyebrow">{{ relations.members.length }} {{ relations.members.length === 1 ? 'member' : 'members' }}</span><button v-for="m in relations.members" :key="m.id" class="chip" @click="peek({ kind: 'entry', id: m.id })">{{ m.name }}</button></span>
   </div>
 
   <div v-else-if="entry.type === 'quest' && progress" class="extra line">
@@ -99,6 +115,9 @@ const panels = useLive(async () => (props.entry.type === 'session' ? sessionPane
 .extra { margin-bottom: 1rem; }
 .line { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; }
 .check { display: flex; align-items: center; gap: .5rem; }
+.rel { display: inline-flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
+.rel .chip { background: none; cursor: pointer; }
+.rel .chip:hover { border-color: var(--accent); color: var(--accent); }
 .bar { flex: 1; max-width: 220px; height: 6px; background: var(--bg-sunken); border: var(--frame); border-radius: 99px; overflow: hidden; }
 .bar i { display: block; height: 100%; background: var(--accent); }
 .table { margin-bottom: .6rem; }

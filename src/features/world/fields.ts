@@ -9,6 +9,7 @@ export type Field =
   | { key: string; label: string; kind: 'statuses'; options: [value: string, label: string][] }
   | { key: string; label: string; kind: 'giver' }
   | { key: string; label: string; kind: 'color' }
+  | { key: string; label: string; kind: 'icon' }
 
 const opts = (...values: string[]): [string, string][] => values.map(v => [v, v.charAt(0).toUpperCase() + v.slice(1)])
 
@@ -52,7 +53,7 @@ export const FIELDS: Record<EntryType, Field[]> = {
     { key: 'date', label: 'Date', kind: 'text', placeholder: '2026-11-14' },
     { key: 'mode', label: 'Mode', kind: 'select', options: opts('planning', 'running', 'finished') },
   ],
-  note: [],
+  note: [{ key: 'icon', label: 'Icon', kind: 'icon' }],
   'random-table': [{ key: 'die', label: 'Die', kind: 'select', options: ['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100'].map(d => [d, d] as [string, string]) }],
   rumor: [
     { key: 'statuses', label: 'Status', kind: 'statuses', options: opts('unheard', 'heard', 'revealed', 'false') },

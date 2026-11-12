@@ -17,7 +17,7 @@ import { closePeek, dock, peek } from '@/ui/workbench'
 import EntryExtras from './EntryExtras.vue'
 import EntryFields from './EntryFields.vue'
 import EntryHistory from './EntryHistory.vue'
-import { entryImage } from './facts'
+import { entryImage } from '@/features/shared/facts'
 import { FIELDS } from './fields'
 
 const props = withDefaults(defineProps<{ entryId: string; full?: boolean }>(), { full: false })

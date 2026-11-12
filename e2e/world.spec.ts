@@ -94,3 +94,48 @@ test('a graph takes entries and the timeline lists events', async ({ page }) => 
   await page.getByRole('link', { name: 'Timeline' }).click()
   await expect(page.locator('.line h3')).toHaveText('The Fire')
 })
+
+test('commands, field filters, table view and an embedded card', async ({ page }) => {
+  await newCampaign(page, 'Leftovers')
+  const bar = page.getByPlaceholder('Go to a place, find an entry, look up a rule…')
+  for (const [name, ancestry] of [['Zed', 'Goblin'], ['Ana', 'Elf']] as const) {
+    await page.keyboard.press('Control+k')
+    await bar.fill(`new npc ${name}`)
+    await page.keyboard.press('Enter')
+    const dock = page.getByLabel('Peek')
+    await expect(dock.locator('h1')).toHaveText(name)
+    await dock.getByTitle('Fields').click()
+    await dock.getByLabel('Ancestry').fill(ancestry)
+    await dock.getByLabel('Ancestry').press('Tab')
+    await dock.getByTitle('Fields').click()
+  }
+  // One type chosen: its fields can be filtered
+  await page.locator('.filters').getByRole('button', { name: /NPCs/ }).click()
+  await page.locator('.filters').getByRole('button', { name: /Goblin/ }).click()
+  await expect(page.locator('.row-name')).toHaveText(['Zed'])
+  await page.locator('.tools').getByTitle('Table').click()
+  await expect(page.locator('table.table tbody tr')).toHaveCount(1)
+  await expect(page.locator('table.table th', { hasText: 'Ancestry' })).toBeVisible()
+  await page.getByRole('button', { name: 'Clear filters' }).click()
+  await page.locator('.tools').getByTitle('Gallery').click()
+  await expect(page.locator('.card-name')).toHaveCount(2)
+
+  // An embedded card shows the entry's facts in place
+  await page.keyboard.press('Control+k')
+  await bar.fill('new note Cast')
+  await page.keyboard.press('Enter')
+  const dock = page.getByLabel('Peek')
+  await dock.getByRole('radio', { name: 'Source' }).click()
+  await dock.locator('.cm-content').click()
+  await page.keyboard.type('{{npc: Zed | entry')
+  await page.keyboard.press('Escape')
+  await page.keyboard.type('}}')
+  await dock.getByRole('radio', { name: 'Read' }).click()
+  await expect(dock.locator('a.embed .embed-meta')).toHaveText('Goblin')
+
+  // A command on the open entry
+  await page.keyboard.press('Control+k')
+  await bar.fill('rename Dramatis Personae')
+  await page.keyboard.press('Enter')
+  await expect(dock.locator('h1')).toHaveText('Dramatis Personae')
+})

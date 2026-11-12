@@ -130,12 +130,12 @@ Checkbox = verified in the rework (all empty now). IDs are for reference in late
 ### C. Lore entries (10 types: session, note, NPC, location, faction, quest, event, random table, rumor, region)
 
 Common
-- [ ] C1 Overview per type: search (`/` focuses, typing anywhere starts a search, Esc clears), filter pills with counts, active-filter chips, clear all
-- [ ] C2 Group by (per-type keys), sort (per-type keys) with reverse, three densities (gallery, compact, table); table header click sorts
+- [x] C1 Overview per type: search (`/` focuses, typing anywhere starts a search, Esc clears), filter pills with counts, active-filter chips, clear all
+- [x] C2 Group by (per-type keys), sort (per-type keys) with reverse, three densities (gallery, compact, table); table header click sorts
 - [ ] C3 Collapsible groups with thumbnail previews; favourites group; paged rendering with "more load as you scroll"; A–Z jump rail above 24 entries
-- [ ] C4 Archive mode per type (show / dim / hide): dead NPCs, destroyed locations, closed quests, false rumors
-- [ ] C5 Keyboard: arrows move, Enter opens, Space favourites; hover or focus shows a peek card (facts, excerpt, last edited)
-- [ ] C6 Empty states ("no matches" with clear, "none yet" with create); view preferences remembered per type
+- [x] C4 Archive mode per type (show / dim / hide): dead NPCs, destroyed locations, closed quests, false rumors
+- [x] C5 Keyboard: arrows move, Enter opens, Space favourites; hover or focus shows a peek card (facts, excerpt, last edited)
+- [x] C6 Empty states ("no matches" with clear, "none yet" with create); view preferences remembered per type
 - [ ] C7 Entry page: list column (collapsible to a rail, search, favourites, filters shared with the overview) beside the editor
 - [x] C8 Entry header: click-to-rename, favourite, delete with confirm
 - [x] C9 Collapsible attributes panel; edits merge onto the stored entry so changes made elsewhere are not overwritten
@@ -145,14 +145,14 @@ Common
 
 Per type
 - [ ] C13 NPC: portrait, title, level, ancestry and class (compendium suggestions or free text), second class (dual-class), status text, alive/dead, Player Character switch (adds/removes the party member; removing asks and moves their items to the stash)
-- [ ] C14 NPC card above the text; derived "last seen in session N", factions and locations from links and map pins
+- [x] C14 NPC card above the text; derived "last seen in session N", factions and locations from links and map pins
 - [ ] C15 NPC Progression panel: class features and feat slots by level (dual-class aware), click a slot for the matching feats, legacy tag, custom class fallback, show levels above current
 - [x] C16 Location: banner/logo, map image, type, discovery status, Map button; table shows pin and region counts
-- [ ] C17 Faction: emblem, type, size, secret flag, headquarters; member count from links
+- [x] C17 Faction: emblem, type, size, secret flag, headquarters; member count from links
 - [x] C18 Quest: status, quest giver picker (NPC or faction, or typed text), reward, tags, milestone flag; objectives counted from task-list items
 - [ ] C19 Completing a quest prompts a party level-up (milestone flag) or accomplishment XP
 - [x] C20 Event: date (text), location, significance; Timeline view
-- [ ] C21 Note: icon (10 choices), tags
+- [x] C21 Note: icon (10 choices), tags
 - [x] C22 Rumor: several statuses at once (unheard, heard, revealed, false), source, tags
 - [x] C23 Random table: die (d4–d100), rows (min, max, result with link completion), Roll with rendered result
 - [x] C24 Region: creatable in World without a map, placed or drawn on a map later (decision F19; in v0.41 the list offers no "New" for regions); polygon preview, colour, parent map
@@ -168,8 +168,8 @@ History (flag F4)
 - [x] D1 Three view modes: Edit, Mixed (click a block to edit it), Preview; choice remembered (flag F7)
 - [x] D2 Toolbar: bold, italic, heading, list, task, quote; Ctrl+B / Ctrl+I; undo covers toolbar actions
 - [x] D3 Lists continue on Enter; Tab / Shift+Tab indent; spellcheck
-- [ ] D4 `{{type: Name}}` links with autocomplete: campaign entries, encounters, graphs, compendium entries, historical states
-- [ ] D5 `{{type: Name | entry}}` embeds the entry's card
+- [x] D4 `{{type: Name}}` links with autocomplete: campaign entries, encounters, graphs, compendium entries, historical states
+- [x] D5 `{{type: Name | entry}}` embeds the entry's card
 - [ ] D6 `{{roll: 2d6+3}}`, `::dice[…]`, `::button[Label | dice]`, `::table[Name]`, `::choose[a | b]`, `::clock[Name | 0/6]` (click advances and saves); widget reference panel inserts them
 - [x] D7 GM-only blocks (`> [!hidden]`) toggled per block; styled for the GM, stripped from everything players get
 - [ ] D8 Task lists, callouts
@@ -844,6 +844,19 @@ Not done in this phase, by item:
 - **Removed as decided:** per-type JSON export (F9), event links of historical states and the timeline strip (F4).
 
 Checklist: C8–C10, C12, C16, C18, C20, C22–C24, D1–D3, D7, D9–D11, O1–O5, P1–P5, M6, M7 verified.
+
+**Phase 2 leftovers (done 2026-11-12).** Of the list above, now in:
+
+- **World list:** with one type chosen, its fields become filters with counts (an NPC's vital status, status, ancestry, class, level; a location's type and discovery; and so on) and choices for grouping. Grouping by type or first tag works across types. Three views: rows, gallery, table (the table's columns are the chosen type's fields). Space toggles favourite, a letter rail jumps through long name-sorted lists, and sort, grouping, view and the archive switch are remembered per campaign.
+- **Icons:** `scripts/build-icons.mjs` bundles the 130 Game Icons v0.42 used or offered (204 KB, loaded apart from the first load) instead of the whole 6.7 MB set. Notes have their icon picker back, and stored icon names show in lists.
+- **Embedded cards:** `{{npc: Name | entry}}` shows the entry's picture, facts and first lines in place.
+- **Link completion** also offers encounters and graphs; a graph link opens the graph.
+- **NPC and faction relations:** an NPC shows its factions, where it is found (linked or pinned on a map) and the last session that names it; a faction shows its members.
+- **Command bar commands:** `new npc Name` (any type), `roll 2d6+3` or just `d20+7`, and on the entry open in the dock `rename …`, `append …`, `favourite`, `delete`; `light` and `dark`.
+
+Still open from the list: collapsible groups with previews and paged rendering (C3; lists of a few hundred entries render at once without trouble), filters by an NPC's faction or location, completion and links for historical states, the old "edit attribute" and DC commands (the DC table arrives in Phase 3), and everything listed as waiting for a later phase.
+
+Tests added: 3 for command parsing, 1 for relations, 1 browser test (commands, field filter, table and gallery, embedded card). Totals: 52 unit tests and 6 browser tests.
 
 ---
 

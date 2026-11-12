@@ -5,7 +5,7 @@ import { Eye, EyeOff, X } from 'lucide-vue-next'
 import type { Entry } from '@/domain/schema'
 import { ENTRY_TYPE_INFO } from '@/ui/entryTypes'
 import EntryThumb from './EntryThumb.vue'
-import { entryFacts } from './facts'
+import { entryFacts } from '@/features/shared/facts'
 
 export interface GraphNodeData {
   entry: Entry

@@ -151,3 +151,7 @@ export async function mapsPinning(entryId: string): Promise<Entry[]> {
   const maps = await Promise.all([...new Set(pins.map(p => p.mapEntryId))].map(id => entries.get(id)))
   return maps.filter((e): e is Entry => !!e)
 }
+
+export async function encounterNames(campaignId: string): Promise<string[]> {
+  return (await getDb().rows('encounters').where('campaignId').equals(campaignId).toArray()).map(e => e.name)
+}

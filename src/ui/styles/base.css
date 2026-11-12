@@ -74,3 +74,9 @@ button { cursor: pointer; }
   body { overflow: visible; background: #fff; color: #000; }
   .no-print { display: none !important; }
 }
+.prose a.ref.embed[data-filled] { display: flex; gap: .8rem; align-items: center; padding: .6rem .8rem; margin: .4rem 0; border: 1px solid color-mix(in srgb, var(--ref-color) 40%, var(--line)); border-left: 3px solid var(--ref-color); background: var(--bg-sunken); color: var(--text); font-style: normal; font-family: var(--font-ui); }
+.prose a.ref.embed img { width: 56px; height: 56px; object-fit: cover; border-radius: var(--radius); flex: none; }
+.prose .embed-text { display: flex; flex-direction: column; min-width: 0; }
+.prose .embed-type { font-size: .68rem; letter-spacing: .12em; text-transform: uppercase; color: var(--ref-color); }
+.prose .embed-meta, .prose .embed-body { font-size: .85rem; color: var(--text-dim); }
+.prose .embed-body { color: var(--text-faint); }

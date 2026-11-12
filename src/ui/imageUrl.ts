@@ -26,3 +26,9 @@ export function useImageUrl(source: () => ImageRef | null | undefined, full = fa
   })
   return url
 }
+
+/** The same outside a component: resolves to the URL, or null when there is no image. */
+export async function imageUrlOf(r: ImageRef | null | undefined, full = false): Promise<string | null> {
+  if (!r) return null
+  return 'url' in r ? r.url : urlOf(r.imageId, full)
+}

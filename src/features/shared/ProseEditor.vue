@@ -8,17 +8,20 @@
  * a task or advancing a clock changes the text.
  */
 import { computed, nextTick, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { Bold, EyeOff, Heading2, Italic, List, ListChecks, Printer, Quote } from 'lucide-vue-next'
 import { evaluateFormula } from '@/domain/formula'
 import { stripGmOnly } from '@/domain/gmContent'
 import { isEntryTypeName } from '@/domain/links'
 import { advanceClock, isHiddenBlock, joinBlocks, splitBlocks, toggleHiddenBlock, toggleTask } from '@/domain/markdownBlocks'
+import { graphs } from '@/data/graphs'
 import { findEntryByName, rulesByName, workspace } from '@/data/repo'
 import CodeEditor from '@/ui/components/CodeEditor.vue'
 import { notify } from '@/ui/dialogs'
 import { ENTRY_TYPE_INFO } from '@/ui/entryTypes'
 import { renderMarkdown } from '@/ui/markdown'
 import { peek } from '@/ui/workbench'
+import { fillEmbeds } from './embeds'
 import { linkCompletion } from './linkCompletion'
 
 type Mode = 'live' | 'source' | 'read'
@@ -35,6 +38,7 @@ function setMode(m: Mode) {
 }
 const shownMode = computed<Mode>(() => (props.readonly ? 'read' : mode.value))
 
+const routerRef = useRouter()
 const complete = linkCompletion(() => props.campaignId)
 const blocks = ref<string[]>(splitBlocks(props.modelValue))
 const editing = ref<number | null>(null)
@@ -49,6 +53,13 @@ watch(() => props.modelValue, (text) => { if (editing.value === null && text !==
 const render = (text: string) => renderMarkdown(text, { resolves: props.resolves })
 const rendered = computed(() => blocks.value.map(render))
 const whole = computed(() => render(props.modelValue))
+
+// `| entry` links become cards once the rendered text is on screen
+const root = ref<HTMLElement | null>(null)
+watch([rendered, whole, shownMode, editing], async () => {
+  await nextTick()
+  if (root.value) void fillEmbeds(root.value, props.campaignId)
+}, { immediate: true, flush: 'post' })
 
 function commit(next: string[]) {
   blocks.value = next
@@ -99,6 +110,7 @@ const tool = (before: string, after = '') => editor?.insert(before, after)
 
 /** Clicks in rendered text: links, dice, tables, pickers, clocks, tasks. Returns true when it handled the click. */
 async function onRenderedClick(e: MouseEvent, blockIndex: number | null): Promise<boolean> {
+  const router = routerRef
   const target = e.target as HTMLElement
   const change = (fn: (text: string) => string) => {
     if (props.readonly) return
@@ -113,6 +125,12 @@ async function onRenderedClick(e: MouseEvent, blockIndex: number | null): Promis
       const found = await findEntryByName(props.campaignId, type, name)
       if (found) peek({ kind: 'entry', id: found.id })
       else notify(`No ${ENTRY_TYPE_INFO[type].label.toLowerCase()} named “${name}” in this campaign.`)
+    } else if (type === 'graph') {
+      const g = (await graphs.ofCampaign(props.campaignId)).find(x => x.name.toLowerCase() === name.toLowerCase())
+      if (g) void router.push({ name: 'graphs', params: { campaignId: props.campaignId, graphId: g.id } })
+      else notify(`No graph named “${name}”.`)
+    } else if (type === 'encounter') {
+      notify('Encounters open from here once the Encounters phase is built.')
     } else {
       const rules = await rulesByName(name, type)
       if (rules) peek({ kind: 'rules', id: rules.id })
@@ -169,7 +187,7 @@ defineExpose({ finish })
 </script>
 
 <template>
-  <div class="prose-editor">
+  <div ref="root" class="prose-editor">
     <div class="bar no-print">
       <div v-if="!readonly" class="seg" role="radiogroup" aria-label="Editor mode">
         <button v-for="m in (['live', 'source', 'read'] as const)" :key="m" class="seg-btn" :class="{ on: mode === m }" role="radio" :aria-checked="mode === m" @click="setMode(m)">{{ m === 'live' ? 'Live' : m === 'source' ? 'Source' : 'Read' }}</button>
