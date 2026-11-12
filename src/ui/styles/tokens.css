@@ -1,0 +1,93 @@
+/*
+ * Design tokens. One layout, two skins chosen by the campaign's game
+ * (REWORK_PLAN.md §6): Tome for Pathfinder, Star for Starfinder, each in a
+ * dark and a light mode. Components use these variables and nothing else for
+ * colour, type and shape, so a skin is this file and no component CSS.
+ */
+
+:root {
+  --font-ui: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --size: 14px;
+  --rail-w: 58px;
+  --bar-h: 46px;
+  --tray-h: 38px;
+  --dock-w: min(460px, 38vw);
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --speed: 140ms;
+
+  /* Entry types keep one colour each in both skins, tuned per mode below */
+  --t-session: #a98be0; --t-note: #7fa6e0; --t-npc: #86c06a; --t-location: #c79be0; --t-faction: #e0706a;
+  --t-quest: #e59a55; --t-event: #5dbbe0; --t-random-table: #e0c35a; --t-rumor: #d182b4; --t-region: #6ccf9c;
+}
+
+:root[data-size='compact'] { --size: 13px; }
+:root[data-size='large'] { --size: 16px; }
+:root[data-motion='reduced'] { --speed: 0ms; }
+
+/* ── Tome: ink, paper, brass ─────────────────────────────────────────────── */
+:root[data-skin='tome'] {
+  --font-title: 'Cinzel', 'Times New Roman', serif;
+  --font-read: 'IM Fell English', Georgia, serif;
+  --title-transform: none;
+  --title-tracking: .04em;
+  --title-weight: 600;
+  --radius: 3px;
+  --frame: 1px solid var(--line);
+  --skin-accent: #c9973a;
+  --accent-2: #a3423a;
+}
+:root[data-skin='tome'][data-mode='dark'] {
+  --bg: #15120f; --bg-raised: #1e1a15; --bg-sunken: #0f0d0a; --bg-hover: #29231b;
+  --line: #322a20; --line-strong: #54462f;
+  --text: #ebe1cd; --text-dim: #b5a78d; --text-faint: #7d705b;
+  --shadow: 0 10px 30px rgb(0 0 0 / .55);
+  --ok: #86c06a; --warn: #e0b04a; --danger: #d9614f;
+  --wash: radial-gradient(1200px 500px at 20% -10%, rgb(201 151 58 / .07), transparent 60%);
+}
+:root[data-skin='tome'][data-mode='light'] {
+  --bg: #efe6d2; --bg-raised: #f8f1e1; --bg-sunken: #e3d8c0; --bg-hover: #e8dcc2;
+  --line: #d2c5a8; --line-strong: #a8956c;
+  --text: #2b2117; --text-dim: #5d5040; --text-faint: #8b7c66;
+  --skin-accent: #8a5a10; --accent-2: #7d2a25;
+  --shadow: 0 10px 30px rgb(60 40 10 / .18);
+  --ok: #3f7a2a; --warn: #9a6a08; --danger: #a8372b;
+  --wash: radial-gradient(1200px 500px at 20% -10%, rgb(138 90 16 / .08), transparent 60%);
+  --t-session: #6b4bb0; --t-note: #3a66ad; --t-npc: #3f7a2a; --t-location: #8a4bb0; --t-faction: #a8372b;
+  --t-quest: #a85a14; --t-event: #1f7fa8; --t-random-table: #8a6d08; --t-rumor: #a0437f; --t-region: #1f8a57;
+}
+
+/* ── Star: console, signal colours, hairlines ────────────────────────────── */
+:root[data-skin='star'] {
+  --font-title: 'Chakra Petch', 'DM Sans', sans-serif;
+  --font-read: 'DM Sans', system-ui, sans-serif;
+  --title-transform: uppercase;
+  --title-tracking: .09em;
+  --title-weight: 600;
+  --radius: 1px;
+  --frame: 1px solid var(--line);
+  --skin-accent: #4cc9f0;
+  --accent-2: #f5a524;
+}
+:root[data-skin='star'][data-mode='dark'] {
+  --bg: #070b12; --bg-raised: #0d141f; --bg-sunken: #04070c; --bg-hover: #142032;
+  --line: #1a2738; --line-strong: #2f4662;
+  --text: #d8e4f2; --text-dim: #8fa4bb; --text-faint: #586a80;
+  --shadow: 0 10px 30px rgb(0 0 0 / .6);
+  --ok: #5fe0a0; --warn: #f5a524; --danger: #ff5d6c;
+  --wash: linear-gradient(180deg, rgb(76 201 240 / .05), transparent 220px);
+}
+:root[data-skin='star'][data-mode='light'] {
+  --bg: #e8eef5; --bg-raised: #f6f9fc; --bg-sunken: #dbe4ee; --bg-hover: #dfe8f2;
+  --line: #c2cfdd; --line-strong: #8ea3ba;
+  --text: #0e1926; --text-dim: #44576b; --text-faint: #74879b;
+  --skin-accent: #0a7ea6; --accent-2: #b86a00;
+  --shadow: 0 10px 30px rgb(20 40 70 / .16);
+  --ok: #0f8a55; --warn: #a86200; --danger: #c22a3b;
+  --wash: linear-gradient(180deg, rgb(10 126 166 / .06), transparent 220px);
+  --t-session: #6b4bb0; --t-note: #3a66ad; --t-npc: #3f7a2a; --t-location: #8a4bb0; --t-faction: #a8372b;
+  --t-quest: #a85a14; --t-event: #1f7fa8; --t-random-table: #8a6d08; --t-rumor: #a0437f; --t-region: #1f8a57;
+}
+
+/* Your accent colour, when set, replaces the skin's own */
+:root { --accent: var(--user-accent, var(--skin-accent)); --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent); --accent-ink: var(--bg); }

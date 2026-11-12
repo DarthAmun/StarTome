@@ -1,6 +1,6 @@
 # StarTome rework plan
 
-Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0); Phase 1 is next.
+Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phase 1 is done on the `rework` branch (see section 11a). Phase 2 is next.
 
 How this was produced: the schema, types, format docs, backup/import code, the Play Buddy port and the app shell were read line by line. The large UI files (encounter page, GM screen, map maker, editors, session board) were read by extracting their templates, handlers, shortcuts and storage keys rather than every line. The app was started (`pnpm dev`), the main screens were opened, `pnpm test` (557 passed, 2 skipped) and `pnpm typecheck` ran clean. A real backup (`~/Downloads/startome-all-2026-11-03.json`, 578 MB) was inspected for its actual shape. Anything in the inventory I could not confirm by running it is still listed; Phase 3 verifies each line.
 
@@ -106,9 +106,9 @@ Checkbox = verified in the rework (all empty now). IDs are for reference in late
 - [ ] A8 Bookmark ribbon: bookmark the current page or entity, drag to reorder, remove, jump; light/dark quick toggle (flag F8)
 - [ ] A9 Floating Dice, Music and Search buttons on every GM page
 - [ ] A10 Player routes (encounter player view, map player, graph player) render without any GM chrome
-- [ ] A11 Notices (toasts) bottom right: failed saves, storage quota errors, sticky notices with an action
+- [x] A11 Notices (toasts) bottom right: failed saves, storage quota errors, sticky notices with an action
 - [ ] A12 "Updated in another tab" notice with Reload; "waiting for other tabs to close" notice during a schema upgrade
-- [ ] A13 New Campaign dialog reachable from sidebar and home (name, description, game)
+- [x] A13 New Campaign dialog reachable from sidebar and home (name, description, game)
 - [ ] A14 PWA install button when the browser offers it
 - [ ] A15 Old routes redirect: `/dm-screen` → `/gm-screen`, `/graph` → `/graphs`, `/map` → `/locations` (flag F12)
 - [ ] A16 Click sparks and ink-write heading animation (flag F1)
@@ -363,8 +363,8 @@ Map maker
 - [ ] M1 One drop zone (also file picker and paste) that recognises backups, campaign files, token files, homebrew, Play Buddy share files, DM's Tome exports and Foundry zips, and opens the right importer
 - [ ] M2 Files beyond the 512 MB string limit are read as a stream
 - [ ] M3 Import dialog: sections to include, merge (new ids, nothing overwritten) or replace (with confirm), progress log; one transaction, all or nothing
-- [ ] M4 Full backup export: campaigns, tokens, own compendium entries, overlays on synced entries, images
-- [ ] M5 Campaign export (one or all) with the library tokens and map assets it uses
+- [x] M4 Full backup export: campaigns, tokens, own compendium entries, overlays on synced entries, images
+- [x] M5 Campaign export (one or all) with the library tokens and map assets it uses
 - [ ] M6 Markdown zip of a campaign (frontmatter, wiki links, GM-only switch); "Export for Claude" single file (GM-only switch) (flag F9)
 - [ ] M7 Quest board export for players
 - [ ] M8 Token templates export (flag F10)
@@ -373,7 +373,7 @@ Map maker
 - [ ] M11 Image folder import: match files to compendium entries by name, review matches, set portraits or token art, optional JPEG conversion
 - [ ] M12 Re-compress stored images; clean up unused images (flag F11)
 - [ ] M13 DM's Tome import: from a file or straight from its database in the same browser; summary, already-imported warning, report (flag F3)
-- [ ] M14 Wipe all data with two confirms
+- [x] M14 Wipe all data with two confirms
 
 ### N. GM screen
 
@@ -422,7 +422,7 @@ Map maker
 
 - [ ] S1 Everything works without a network after the first load (service worker caches the app, fonts are bundled)
 - [ ] S2 The only network calls: the GitHub latest-release check on the sync page, URL images and tracks, Play Buddy on `127.0.0.1`
-- [ ] S3 All data in IndexedDB; storage is asked to persist during the big imports
+- [x] S3 All data in IndexedDB; storage is asked to persist during the big imports
 - [ ] S4 StarTome and DM's Tome can share an origin without sharing data (prefixed names)
 - [ ] S5 Changes written in one tab or a worker show up in the others
 
@@ -786,7 +786,7 @@ The new app is built on a `rework` branch and published to a second path (for ex
 | Phase | Builds | Checklist sections | You can do at the end |
 |---|---|---|---|
 | **0 Safety net** (on `main`) ✅ | v0.42.0: the full backup includes the sound library and the localStorage state (layouts, bookmarks, settings; never the Play Buddy token), and a restore puts them back. "Wipe all data" clears every table. Tests in `tests/backup.test.ts`. The synthetic legacy fixture moves to Phase 1. | M4, M14 | Take a complete backup. |
-| **1 Foundation** | Vite + Vue + strict TypeScript project, lint rules, design tokens and both skins, shell (rail, command bar, dock, tray), domain schemas, database, repositories, backup v3, legacy import with tests, backup folder. Pure rules and their tests moved over. | S, parts of A, M3–M5 | Import everything, switch campaigns, search, open any entry read-only in the dock, export and restore a backup. |
+| **1 Foundation** ✅ | Vite + Vue + strict TypeScript project, lint rules, design tokens and both skins, shell (rail, command bar, dock, tray), domain schemas, database, repositories, backup v3, legacy import with tests, backup folder. Pure rules and their tests moved over. | S, parts of A, M3–M5 | Import everything, switch campaigns, search, open any entry read-only in the dock, export and restore a backup. |
 | **2 World** | Entry browser, editors for all ten types, markdown editor with links and widgets, backlinks, history, favourites and tray pins, maps with pins and regions, player map, graphs, timeline, lore exports. | C, D, E1–E4, O, P, M6–M7 | Do all campaign writing in the new app. |
 | **3 Compendium** | Browser, stat blocks with rolls, entry editor, creature builder, homebrew import and packs, Foundry sync, image folder import, field notes, dice panel. | L, E5–E7, M9–M11 | Look up and maintain rules content. |
 | **4 Party and loot** | Roster, ledger (XP, milestones, level-ups), inventory, wealth, treasure roll, earn income, companions. | H, I, J1–J2 | Track the party between sessions. |
@@ -798,6 +798,28 @@ The new app is built on a `rework` branch and published to a second path (for ex
 Order reasoning: data safety first; then the parts every later phase leans on (entries, compendium); party before encounters because resolution writes to the ledger and the stash; sessions after encounters because the table bar and board run encounters; Starfinder after its dependencies; the character link last because it touches party, inventory and encounters and has a mock server to test against.
 
 During the build your live data is in the old app. Each time you try a phase you re-import (the import replaces the new app's database), so nothing has to be kept in step until the cut-over.
+
+### 11a. Phase log
+
+**Phase 1, Foundation (done 2026-11-12, branch `rework`).**
+
+What exists: the new app in `src/` (Vite, Vue, strict TypeScript, ESLint with the layer rules of section 8), the old app moved to `legacy/` as reference with its 560 unit tests still running (`pnpm test:legacy`). Every collection of section 9 has a Zod schema and a store. The legacy import (`src/services/v042/`) works from a file and from the old database in the same browser. Backup version 3 exports, restores and adds. The backup folder writes a zip when the last backup is a day old. The shell has both skins, the rail, the command bar, the peek dock and the tray; Tonight and World are read-only views of the imported data.
+
+Checked against real data: the backup of 2026-11-12 (591 MB: 2 campaigns, 295 entries, 23 encounters, 204 placed tokens, 2,702 map assets, 5,255 images) imports in the browser in about 5 seconds with nothing dropped, no reference pointing at nothing and no image missing. The 2026-11-03 backup (older row shapes) converts the same way.
+
+Tests added: 23 for the legacy conversion on a synthetic backup with every table and awkward shape, 1 that runs against a real backup when `STARTOME_LEGACY_EXPORT` points at one, 7 for backup round trips, 2 browser tests (new campaign and skins and command bar; backup download and restore).
+
+Differences from the plan as written:
+
+- **Pure rules move with their feature, not all in Phase 1.** `rules/`, `converters/`, `partylink/` stay in `legacy/` (tests running) until the phase that uses them moves them into `src/domain/`. Several of them take v0.42 row types as input, so moving them before their feature's new types exist would mean adapting them twice.
+- **The backup folder holds zips, not an unpacked folder.** Simpler and each file is a complete backup, at the cost of writing all images each time (about 450 MB per backup for your data, three kept). Sharing images between backups, as BACKUP_V3.md describes, is still open.
+- **No reference screenshots** (decision in section 0).
+- **Editing is not in yet.** Tonight and World show data; the editors come in Phase 2. The only writes are: new campaign, settings, tray pins, imports.
+- **The preview is not published yet.** Putting the rework at `/StarTome/next/` needs a change to the deploy workflow on `main` (build both branches). Until then it runs locally with `pnpm dev`, and the import "from v0.42 in this browser" only finds the old database on the same address.
+
+Checklist: A11, A13, M4, M5, M14, S3 verified. Section S1–S2 (offline) wait for the cut-over build check in Phase 8.
+
+How to try it: `git switch rework && pnpm install && pnpm dev`, open http://localhost:3001, Import & Backup, "From a v0.42 backup file…".
 
 ---
 

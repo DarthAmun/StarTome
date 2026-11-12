@@ -48,3 +48,6 @@ local/
 # Playwright
 test-results/
 playwright-report/
+
+# Rework: build output
+dev-dist/

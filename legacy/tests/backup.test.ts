@@ -1,0 +1,320 @@
+import 'fake-indexeddb/auto'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { parseJson } from '~/utils/json'
+import { dbApi, getDb } from '~/composables/useDb'
+import { CAMPAIGN_TABLES, exportAllPayload, exportCampaignsPayload, importPayload, jsonBlob, readLocalState, writeLocalState, type BackupPayload } from '~/sync/backup'
+
+const ALL = new Set<string>([...CAMPAIGN_TABLES, 'rules', 'rulesOverlays'])
+
+/** A small campaign with every kind of cross-reference the import must remap. */
+async function seed(name: string) {
+  const db = getDb()
+  const id = await db.campaigns.add({ name, description: '', game: 'pf2e', created_at: '', updated_at: '' }) as number
+  const loc = await db.entities.add({ campaign_id: id, type: 'location', name: `${name} Keep`, content: '', attributes: '{}', created_at: '', updated_at: '' }) as number
+  const npc = await db.entities.add({ campaign_id: id, type: 'npc', name: `${name} Kib`, content: '', attributes: '{"isPlayerCharacter":true}', created_at: '', updated_at: '' }) as number
+  await db.entities.update(loc, { attributes: JSON.stringify({ mapPins: [{ entityId: npc, x: 0.5, y: 0.5 }] }) })
+  await db.entityLinks.add({ source_id: loc, target_type: 'npc', target_name: `${name} Kib`, metadata: '{}' })
+  await db.entityConnections.add({ campaign_id: id, source_entity_id: loc, target_entity_id: npc, label: '', direction: 'none', color: null })
+  const token = await db.tokens.add({ name: `${name} token`, image_source: null, image_type: 'file', is_template: 1, is_player_character: 1, linked_entity_id: npc, created_at: '' }) as number
+  const enc = await db.encounters.add({ campaign_id: id, name: `${name} fight`, created_at: '', updated_at: '' } as any) as number
+  await db.encounterTokens.add({ encounter_id: enc, token_id: token, linked_entity_id: npc } as any)
+  await db.encounterWalls.add({ encounter_id: enc, points: '[]', coverType: 'full', isOpen: false })
+  const chr = await db.characters.add({ campaign_id: id, name: 'Kib', role: 'pc', level: 1, xp: 0, treat_as_pc: 1, str_mod: null, npc_entity_id: npc, token_id: token, created_at: '', updated_at: '' }) as number
+  const xp = await db.xpAwards.add({ campaign_id: id, at: '', source: 'encounter', ref_type: 'encounter', ref_id: enc, amount: 80, character_ids: JSON.stringify([chr]), reason: '' }) as number
+  await db.encounters.update(enc, { status: 'resolved', resolution: JSON.stringify({ loot: { entries: [], cp: 0 }, participants: [chr], xpAwardId: xp, accomplishment: 0 }) })
+  const bag = await db.inventory.add({ campaign_id: id, owner: `character:${chr}`, item_id: null, quantity: 1, name_override: 'Bag', notes: '', identified: 1 } as any) as number
+  await db.inventory.add({ campaign_id: id, owner: `character:${chr}`, item_id: null, quantity: 2, name_override: 'Potion', notes: '', identified: 1, container_id: bag } as any)
+  await db.purses.add({ campaign_id: id, owner: `encounter:${enc}`, cp: 50, updated_at: '' })
+  await db.starships.add({
+    campaign_id: id, name: `${name} Wing`, active: 1, frame_id: null, level_pinned: null, stations: [{ slot: 1, stationId: null, isDefault: false, upgradeIds: [] }],
+    bays: [], hp_current: null, sp_current: null, conditions: [], crew: [{ characterId: chr, slot: 1, activity: 'fly-the-ship' }],
+    presets: [{ name: 'Dogfight', crew: [{ characterId: chr, slot: 1 }] }], interior_encounter_id: enc, notes: '', img: null, created_at: '', updated_at: '',
+  })
+  return { id, loc, npc, token, enc, chr, xp }
+}
+
+async function readBack(payload: BackupPayload): Promise<BackupPayload> {
+  return JSON.parse(await jsonBlob(payload).text())
+}
+
+describe('backup and import', () => {
+  beforeEach(async () => {
+    const db = getDb()
+    await Promise.all([...CAMPAIGN_TABLES.map(t => db.table(t).clear()), db.rules.clear(), db.images.clear()])
+  })
+
+  it('writes a JSON file that parses back to the same rows', async () => {
+    await seed('Codex')
+    const payload = await exportAllPayload()
+    const back = await readBack(payload)
+    for (const t of CAMPAIGN_TABLES) expect(back[t]).toEqual(payload[t])
+    expect(back.type).toBe('all')
+  })
+
+  it('merges a campaign file into a non-empty database without touching existing rows', async () => {
+    const theirs = await seed('Theirs')
+    const file = await readBack(await exportCampaignsPayload([theirs.id]))
+    expect(file.tokens).toHaveLength(1)
+
+    // Another browser: wipe, then make an unrelated campaign that reuses the same ids
+    const db = getDb()
+    await Promise.all(CAMPAIGN_TABLES.map(t => db.table(t).clear()))
+    const mine = await seed('Mine')
+    const before = await db.campaigns.get(mine.id)
+
+    const result = await importPayload(file, { mode: 'merge', sections: ALL })
+    expect(result.counts.campaigns).toBe(1)
+    expect(await db.campaigns.get(mine.id)).toEqual(before)
+    expect(await db.campaigns.count()).toBe(2)
+
+    const imported = (await db.campaigns.toArray()).find(c => c.name === 'Theirs')!
+    const ents = await db.entities.where('campaign_id').equals(imported.id!).toArray()
+    const npc = ents.find(e => e.type === 'npc')!
+    const loc = ents.find(e => e.type === 'location')!
+    expect(parseJson<any>(loc.attributes, {}).mapPins[0].entityId).toBe(npc.id)
+    expect((await db.entityLinks.where('source_id').equals(loc.id!).toArray())).toHaveLength(1)
+    expect((await db.entityConnections.where('campaign_id').equals(imported.id!).first())).toMatchObject({ source_entity_id: loc.id, target_entity_id: npc.id })
+
+    const enc = await db.encounters.where('campaign_id').equals(imported.id!).first()
+    const placed = await db.encounterTokens.where('encounter_id').equals(enc!.id!).first()
+    const token = await db.tokens.get(placed!.token_id!)
+    expect(token).toMatchObject({ name: 'Theirs token', linked_entity_id: npc.id })
+    expect(placed!.linked_entity_id).toBe(npc.id)
+    expect(await db.encounterWalls.where('encounter_id').equals(enc!.id!).count()).toBe(1)
+
+    const chr = await db.characters.where('campaign_id').equals(imported.id!).first()
+    expect(chr).toMatchObject({ npc_entity_id: npc.id, token_id: token!.id })
+    const award = await db.xpAwards.where('campaign_id').equals(imported.id!).first()
+    expect(award).toMatchObject({ ref_id: enc!.id, character_ids: [chr!.id] })
+    expect(parseJson<any>(enc!.resolution!, {})).toMatchObject({ participants: [chr!.id], xpAwardId: award!.id })
+
+    const items = await db.inventory.where('campaign_id').equals(imported.id!).toArray()
+    const bag = items.find(i => i.name_override === 'Bag')!
+    expect(items.map(i => i.owner)).toEqual([`character:${chr!.id}`, `character:${chr!.id}`])
+    expect(items.find(i => i.name_override === 'Potion')!.container_id).toBe(bag.id)
+    expect(await db.purses.where('campaign_id').equals(imported.id!).first()).toMatchObject({ owner: `encounter:${enc!.id}`, cp: 50 })
+    expect(await db.starships.where('campaign_id').equals(imported.id!).first()).toMatchObject({
+      name: 'Theirs Wing', interior_encounter_id: enc!.id,
+      crew: [{ characterId: chr!.id, slot: 1, activity: 'fly-the-ship' }], presets: [{ name: 'Dogfight', crew: [{ characterId: chr!.id, slot: 1 }] }],
+    })
+  })
+
+  it('replaces everything with a full backup, keeping its ids', async () => {
+    const theirs = await seed('Theirs')
+    const file = await readBack(await exportAllPayload())
+    const db = getDb()
+    await Promise.all(CAMPAIGN_TABLES.map(t => db.table(t).clear()))
+    await seed('Mine')
+    await seed('Mine too')
+
+    await importPayload(file, { mode: 'replace', sections: ALL })
+    expect((await db.campaigns.toArray()).map(c => c.name)).toEqual(['Theirs'])
+    expect((await db.campaigns.get(theirs.id))!.name).toBe('Theirs')
+    expect(await db.entities.count()).toBe(2)
+  })
+
+  it('changes nothing when an import fails halfway', async () => {
+    await seed('Mine')
+    const db = getDb()
+    const before = await Promise.all(CAMPAIGN_TABLES.map(t => db.table(t).count()))
+    // Valid campaigns, then an entity whose key IndexedDB rejects: the clear and the writes roll back
+    const bad = {
+      version: 1, app: 'startome', type: 'all', exportedAt: '',
+      campaigns: [{ id: 99, name: 'Broken', description: '', created_at: '', updated_at: '' }],
+      entities: [{ id: { not: 'a key' }, campaign_id: 99, type: 'npc', name: 'x', content: '', attributes: '{}' }],
+    } as unknown as BackupPayload
+    await expect(importPayload(bad, { mode: 'replace', sections: ALL })).rejects.toThrow()
+    expect(await Promise.all(CAMPAIGN_TABLES.map(t => db.table(t).count()))).toEqual(before)
+    expect((await db.campaigns.toArray()).map(c => c.name)).toEqual(['Mine'])
+  })
+
+  it('clones a campaign with shared library tokens and remapped owners', async () => {
+    const c = await seed('Codex')
+    const copy = await dbApi.campaigns.clone(c.id)
+    const db = getDb()
+    expect(copy!.name).toBe('Codex (Copy)')
+    expect(await db.tokens.count()).toBe(1)
+    const enc = await db.encounters.where('campaign_id').equals(copy!.id!).first()
+    expect(enc!.resolution).toBeNull()
+    expect((await db.encounterTokens.where('encounter_id').equals(enc!.id!).first())!.token_id).toBe(c.token)
+    expect(await db.xpAwards.where('campaign_id').equals(copy!.id!).count()).toBe(0)
+  })
+
+  it('imports a DM\'s Tome file: JSON text becomes values, inline maps become images', async () => {
+    const db = getDb()
+    const map = 'data:image/png;base64,iVBORw0KGgo='
+    const file = {
+      version: 1, app: 'dmstome', type: 'campaigns', exportedAt: '',
+      campaigns: [{ id: 7, name: 'Old', description: '', created_at: '', updated_at: '' }],
+      entities: [{ id: 1, campaign_id: 7, type: 'npc', name: 'Vos', content: '', attributes: '{"role":"guard"}', created_at: '', updated_at: '' }],
+      encounters: [{ id: 3, campaign_id: 7, name: 'Cave', map_source: map, map_type: 'file', fog_data: '{"1,1":"revealed"}', combat_log: '[]', created_at: '', updated_at: '' }],
+      encounterWalls: [{ id: 5, encounter_id: 3, points: '[{"x":0,"y":0},{"x":1,"y":0}]', coverType: 'half', isOpen: false }],
+    } as unknown as BackupPayload
+    await importPayload(file, { mode: 'merge', sections: ALL })
+    const enc = (await db.encounters.toArray())[0]
+    expect(enc.map_source).toMatch(/^img:/)
+    expect(enc.fog_data).toEqual({ '1,1': 'revealed' })
+    expect(await db.images.get(enc.map_source!.slice(4))).toBeDefined()
+    expect((await db.entities.toArray())[0].attributes).toEqual({ role: 'guard' })
+    // 5e half cover is PF2e standard cover
+    expect((await db.encounterWalls.toArray())[0]).toMatchObject({ coverType: 'standard', points: [{ x: 0, y: 0 }, { x: 1, y: 0 }] })
+  })
+
+  it('round-trips a StarTome file with its map images alongside', async () => {
+    const db = getDb()
+    const c = await seed('Codex')
+    const ref = await dbApi.encounters.update({ id: c.enc, map_source: 'data:image/png;base64,iVBORw0KGgo=' }).then(e => e!.map_source!)
+    const file = await readBack(await exportCampaignsPayload([c.id]))
+    expect(file.version).toBe(2)
+    expect(file.encounters![0].map_source).toBe(ref)
+    expect(file.images!.map(i => i.id)).toEqual([ref.slice(4)])
+
+    await Promise.all([...CAMPAIGN_TABLES.map(t => db.table(t).clear()), db.images.clear()])
+    await importPayload(file, { mode: 'replace', sections: ALL })
+    expect((await db.encounters.get(c.enc))!.map_source).toBe(ref)
+    expect(await db.images.get(ref.slice(4))).toBeDefined()
+  })
+
+  it('keeps encounter maps when cleaning up unused images', async () => {
+    const { cleanUpUnusedImages, storeImage, dataUrlToBlob } = await import('~/rules/images')
+    const db = getDb()
+    const c = await seed('Codex')
+    const ref = await storeImage(dataUrlToBlob('data:image/png;base64,iVBORw0KGgo='))
+    await db.encounters.update(c.enc, { map_source: ref })
+    await storeImage(dataUrlToBlob('data:image/png;base64,AAAA'))
+    expect(await cleanUpUnusedImages()).toBe(1)
+    expect(await db.images.get(ref.slice(4))).toBeDefined()
+  })
+
+  it('moves a new map out of the row when an encounter is saved', async () => {
+    const db = getDb()
+    const c = await seed('Codex')
+    await dbApi.encounters.update({ id: c.enc, map_source: 'data:image/png;base64,iVBORw0KGgo=' })
+    expect((await db.encounters.get(c.enc))!.map_source).toMatch(/^img:/)
+  })
+
+  it('keeps structured columns as values, in files too', async () => {
+    const db = getDb()
+    const c = await seed('Codex')
+    await db.encounters.update(c.enc, { fog_data: { '1,1': 'revealed' }, combat_log: [{ id: 1, type: 'damage' }] })
+    const file = await readBack(await exportAllPayload())
+    const enc = file.encounters!.find(e => e.name === 'Codex fight')!
+    expect(enc.fog_data).toEqual({ '1,1': 'revealed' })
+    await db.entities.update(c.loc, { attributes: { mapPins: [{ entityId: c.npc, x: 0.5, y: 0.5 }] } })
+    const again = await readBack(await exportAllPayload())
+    expect(again.entities!.find(e => e.type === 'location')!.attributes).toEqual({ mapPins: [{ entityId: c.npc, x: 0.5, y: 0.5 }] })
+
+    await importPayload(file, { mode: 'replace', sections: ALL })
+    expect((await db.encounters.get(c.enc))!.combat_log).toEqual([{ id: 1, type: 'damage' }])
+  })
+
+  it('turns JSON text left in structured columns into values', async () => {
+    const { structureColumns } = await import('~/composables/useDb')
+    const db = getDb()
+    const c = await seed('Codex')
+    await db.encounters.update(c.enc, { fog_data: '{"2,2":"hidden"}', viewport: '{"x":1,"y":2,"scale":1}' })
+    await db.entities.update(c.npc, { attributes: '{"role":"spy"}' })
+    await structureColumns()
+    expect((await db.entities.get(c.npc))!.attributes).toEqual({ role: 'spy' })
+    expect((await db.encounters.get(c.enc))!.fog_data).toEqual({ '2,2': 'hidden' })
+    expect((await db.encounters.get(c.enc))!.viewport).toEqual({ x: 1, y: 2, scale: 1 })
+  })
+  it('imports a hand-written campaign file (CAMPAIGN_FORMAT.md) and derives its links', async () => {
+    const ts = '2026-10-30T12:00:00.000Z'
+    const ent = (id: number, type: string, name: string, content: string, attributes: Record<string, unknown> = {}) =>
+      ({ id, campaign_id: 1, type, name, content, attributes, is_favorite: 0, created_at: ts, updated_at: ts })
+    const file = {
+      version: 2, app: 'startome', type: 'campaigns', exportedAt: ts,
+      campaigns: [{ id: 1, name: 'Embers', description: '', game: 'sf2e', rules: { advancement: 'milestone' }, created_at: ts, updated_at: ts }],
+      entities: [
+        ent(1, 'npc', 'Ilsa Varn', 'Captain of {{faction: Dawn Company}}.\n\n> [!hidden] Secret\n> Traitor.', { level: '6', isAlive: true }),
+        ent(2, 'faction', 'Dawn Company', 'Led by {{npc: Ilsa Varn}}; based on {{location: Absalom Station}}.', { factionType: 'mercenary' }),
+        ent(3, 'location', 'Absalom Station', '', { locationType: 'city' }),
+        ent(4, 'quest', 'Lost Cargo', 'Find it.', { status: 'active', questGiver: 'Ilsa Varn', questGiverId: 1, questGiverType: 'npc' }),
+      ],
+      entityConnections: [{ id: 1, campaign_id: 1, source_entity_id: 1, target_entity_id: 2, label: 'leads', direction: 'one-way', color: null }],
+    } as unknown as BackupPayload
+    const db = getDb()
+    await seed('Mine')
+    await importPayload(file, { mode: 'merge', sections: ALL })
+
+    const camp = (await db.campaigns.toArray()).find(c => c.name === 'Embers')!
+    expect(camp.game).toBe('sf2e')
+    const ents = await db.entities.where('campaign_id').equals(camp.id!).toArray()
+    const byName = (n: string) => ents.find(e => e.name === n)!
+    expect((byName('Lost Cargo').attributes as any).questGiverId).toBe(byName('Ilsa Varn').id)
+    const links = await db.entityLinks.where('source_id').equals(byName('Dawn Company').id!).toArray()
+    expect(links.map(l => `${l.target_type}:${l.target_name}`).sort()).toEqual(['location:Absalom Station', 'npc:Ilsa Varn'])
+    expect(await db.entityConnections.where('campaign_id').equals(camp.id!).first())
+      .toMatchObject({ source_entity_id: byName('Ilsa Varn').id, target_entity_id: byName('Dawn Company').id })
+  })
+
+  it('keeps the links of an exported file as they are', async () => {
+    const theirs = await seed('Theirs')
+    const db = getDb()
+    await db.entities.update(theirs.loc, { content: '{{npc: Someone Else}}' })
+    const file = await readBack(await exportCampaignsPayload([theirs.id]))
+    await importPayload(file, { mode: 'merge', sections: ALL })
+    const camp = (await db.campaigns.toArray()).filter(c => c.name === 'Theirs')[1]
+    const loc = (await db.entities.where('campaign_id').equals(camp.id!).toArray()).find(e => e.type === 'location')!
+    expect((await db.entityLinks.where('source_id').equals(loc.id!).toArray()).map(l => l.target_name)).toEqual(['Theirs Kib'])
+  })
+})
+
+describe('what a full backup carries besides the campaign tables (v0.42)', () => {
+  beforeEach(async () => {
+    const db = getDb()
+    for (const t of [...CAMPAIGN_TABLES, 'soundTracks', 'soundPlaylists']) await db.table(t).clear()
+  })
+
+  function memoryStorage(init: Record<string, string> = {}) {
+    const map = new Map(Object.entries(init))
+    return {
+      get length() { return map.size },
+      key: (i: number) => [...map.keys()][i] ?? null,
+      getItem: (k: string) => map.get(k) ?? null,
+      setItem: (k: string, v: string) => { map.set(k, v) },
+      removeItem: (k: string) => { map.delete(k) },
+      dump: () => Object.fromEntries(map),
+    }
+  }
+
+  it('reads the app\'s own localStorage keys and leaves out the Play Buddy token and other apps', () => {
+    const storage = memoryStorage({
+      'startome.settings': '{"theme":"void"}', 'startome.dmscreen-v4-1': '[]', 'startome.playbuddy': '{"token":"secret"}', 'dmstome.settings': '{}',
+    })
+    expect(readLocalState(storage)).toEqual({ 'startome.settings': '{"theme":"void"}', 'startome.dmscreen-v4-1': '[]' })
+  })
+
+  it('writing local state replaces the app\'s keys, keeps the pairing token and never takes one from a file', () => {
+    const storage = memoryStorage({ 'startome.bookmarks': '[1]', 'startome.playbuddy': 'mine', 'other': 'x' })
+    const n = writeLocalState(storage, { 'startome.settings': 'S', 'startome.playbuddy': 'theirs', 'evil': 'y' })
+    expect(n).toBe(1)
+    expect(storage.dump()).toEqual({ 'startome.settings': 'S', 'startome.playbuddy': 'mine', 'other': 'x' })
+  })
+
+  it('exports the sound library without file handles and restores it', async () => {
+    const db = getDb()
+    await seed('Sound')
+    const track = await db.soundTracks.add({ name: 'Tavern', type: 'file', src: '', fileHandle: { name: 'tavern.mp3' }, tags: ['ambient'], createdAt: '', updatedAt: '' }) as number
+    await db.soundTracks.add({ name: 'Stream', type: 'url', src: 'https://example.test/a.mp3', createdAt: '', updatedAt: '' })
+    await db.soundPlaylists.add({ name: 'Night', trackIds: [track], loop: 1, shuffle: 0, createdAt: '', updatedAt: '' })
+
+    const file = await readBack(await exportAllPayload())
+    expect(file.soundTracks).toHaveLength(2)
+    expect(file.soundTracks![0]).toMatchObject({ name: 'Tavern', fileName: 'tavern.mp3' })
+    expect(file.soundTracks![0]).not.toHaveProperty('fileHandle')
+    expect(file.localState).toEqual({})
+
+    await db.soundTracks.clear(); await db.soundPlaylists.clear()
+    const sections = new Set([...ALL, 'soundTracks', 'soundPlaylists', 'localState'])
+    const merged = await importPayload(file, { mode: 'merge', sections })
+    expect(await db.soundTracks.count()).toBe(0)           // ids aren't remapped in a merge, so sounds only come with a restore
+    expect(merged.counts.soundTracks).toBeUndefined()
+
+    const restored = await importPayload(file, { mode: 'replace', sections })
+    expect(restored.counts.soundTracks).toBe(2)
+    expect((await db.soundPlaylists.toArray())[0]).toMatchObject({ name: 'Night', trackIds: [track] })
+    expect((await db.soundTracks.get(track))!.fileName).toBe('tavern.mp3')
+  })
+})
