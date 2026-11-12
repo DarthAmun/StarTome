@@ -48,3 +48,16 @@ export function pickImage(): Promise<File | null> {
     input.click()
   })
 }
+
+/** The image as a JPEG (smaller, no transparency). Only on request: by itself the app never changes a format. */
+export async function toJpeg(file: Blob, quality = 0.88): Promise<Blob> {
+  const bitmap = await createImageBitmap(file)
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return file
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, bitmap.width, bitmap.height)
+  ctx.drawImage(bitmap, 0, 0)
+  bitmap.close()
+  return canvas.convertToBlob({ type: 'image/jpeg', quality })
+}

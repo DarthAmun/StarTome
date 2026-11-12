@@ -32,3 +32,10 @@ export async function imageUrlOf(r: ImageRef | null | undefined, full = false): 
   if (!r) return null
   return 'url' in r ? r.url : urlOf(r.imageId, full)
 }
+
+/** Compendium rows keep an image as `img:<id>` (a stored blob) or a web address. */
+export function rulesImageRef(value: string | null | undefined): ImageRef | null {
+  if (!value) return null
+  const m = /^img:(.+)$/.exec(value)
+  return m?.[1] ? { imageId: m[1] } : { url: value }
+}

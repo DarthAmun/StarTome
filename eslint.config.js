@@ -59,5 +59,10 @@ export default tseslint.config(
       { selector: "ImportDeclaration[source.value='dexie']", message: 'domain/ is pure.' },
       { selector: "ImportDeclaration[source.value='vue']", message: 'domain/ is pure: no Vue.' }] },
   },
+  {
+    // Foundry and pf2ools documents are other people's JSON: no types of ours describe them
+    files: ['src/domain/foundry/**', 'src/domain/pf2ools/**', 'tests/rules/**'],
+    rules: { '@typescript-eslint/no-explicit-any': 'off' },
+  },
   { files: ['tests/**'], rules: { 'max-lines': 'off' } },
 )

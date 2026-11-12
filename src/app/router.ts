@@ -2,6 +2,10 @@ import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-rou
 import DataPage from '@/features/data/DataPage.vue'
 import SettingsPage from '@/features/settings/SettingsPage.vue'
 import ComingPage from '@/features/shared/ComingPage.vue'
+import ArtPage from '@/features/compendium/ArtPage.vue'
+import CompendiumPage from '@/features/compendium/CompendiumPage.vue'
+import HomebrewPage from '@/features/compendium/HomebrewPage.vue'
+import SyncPage from '@/features/compendium/SyncPage.vue'
 import TonightPage from '@/features/tonight/TonightPage.vue'
 import EntryPage from '@/features/world/EntryPage.vue'
 import GraphsPage from '@/features/world/GraphsPage.vue'
@@ -14,7 +18,7 @@ import WorldPage from '@/features/world/WorldPage.vue'
 import { PLACES, UTILITIES } from './places'
 import WelcomePage from './WelcomePage.vue'
 
-const built: Record<string, RouteRecordRaw['component']> = { tonight: TonightPage, world: WorldPage, data: DataPage, settings: SettingsPage }
+const built: Record<string, RouteRecordRaw['component']> = { tonight: TonightPage, world: WorldPage, compendium: CompendiumPage, data: DataPage, settings: SettingsPage }
 
 const placeRoutes: RouteRecordRaw[] = [...PLACES, ...UTILITIES].map((p) => {
   const path = p.campaign ? `/c/:campaignId/${p.name}` : `/${p.name}`
@@ -34,6 +38,9 @@ export const router = createRouter({
     { path: '/c/:campaignId/map/:entryId', name: 'map', component: MapPage, props: true },
     { path: '/c/:campaignId/graphs/:graphId?', name: 'graphs', component: GraphsPage, props: true },
     { path: '/c/:campaignId/timeline', name: 'timeline', component: TimelinePage, props: true },
+    { path: '/compendium/sync', name: 'compendium-sync', component: SyncPage },
+    { path: '/compendium/homebrew', name: 'compendium-homebrew', component: HomebrewPage },
+    { path: '/compendium/art', name: 'compendium-art', component: ArtPage },
     // Windows for the players: no shell, nothing of the GM's
     { path: '/player/map', name: 'player-map', component: PlayerMapPage, meta: { player: true } },
     { path: '/player/graph', name: 'player-graph', component: PlayerGraphPage, meta: { player: true } },

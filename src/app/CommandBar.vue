@@ -9,11 +9,14 @@ import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Search } from 'lucide-vue-next'
 import { parseCommand } from '@/domain/commands'
-import { evaluateFormula } from '@/domain/formula'
+import { rollDice } from '@/ui/dice'
 import type { Entry } from '@/domain/schema'
 import { createEntry, deleteEntry, saveEntry } from '@/data/entries'
 import { confirmDialog, notify, reportError } from '@/ui/dialogs'
-import { entries as entryRepo, rulesByPrefix } from '@/data/repo'
+import { entries as entryRepo } from '@/data/repo'
+import { rulesSearch } from '@/data/rules'
+import { DC_STEPS } from '@/domain/rules/dcs'
+import { RULES_KIND_CONFIG, type RulesEntity } from '@/domain/rules/types'
 import { ENTRY_TYPE_INFO } from '@/ui/entryTypes'
 import { campaign, campaignId, campaigns, closePeek, commandBarOpen, dock, patchSettings, peek } from '@/ui/workbench'
 import { PLACES, UTILITIES } from './places'
@@ -25,7 +28,7 @@ const dialog = ref<HTMLDialogElement | null>(null)
 const input = ref<HTMLInputElement | null>(null)
 const query = ref('')
 const cursor = ref(0)
-const rules = ref<{ id: string; name: string; kind: string; level: number }[]>([])
+const rules = shallowRef<RulesEntity[]>([])
 let index: MiniSearch<Entry> | null = null
 const byId = shallowRef(new Map<string, Entry>())
 
@@ -44,7 +47,9 @@ watch(commandBarOpen, async (open) => {
 
 watch(query, async (q) => {
   cursor.value = 0
-  rules.value = await rulesByPrefix(q, 8)
+  const game = campaign.value?.game
+  const found = q.trim().length < 2 ? [] : await rulesSearch(q, 8, game ? [game] : undefined)
+  if (query.value === q) rules.value = found
 })
 
 /** The entry open in the dock: what rename, append, delete and favourite act on. */
@@ -52,13 +57,18 @@ const docked = computed(() => { const t = dock.open ? dock.stack[dock.active] : 
 
 /** A typed command, as the first thing offered. */
 function commandHit(): Hit | null {
-  const cmd = parseCommand(query.value)
+  const cmd = parseCommand(query.value, campaign.value?.game)
   if (!cmd) return null
   const hit = (label: string, sub: string, run: () => void | Promise<unknown>): Hit => ({ key: `cmd:${cmd.kind}`, group: 'Do', label, sub, color: 'var(--accent-2)', run: () => { void Promise.resolve(run()).catch(err => reportError(label, err)) } })
   const e = docked.value
   switch (cmd.kind) {
     case 'new': return campaignId.value ? hit(`New ${ENTRY_TYPE_INFO[cmd.type].label}${cmd.name ? `: ${cmd.name}` : ''}`, 'creates it and opens it beside', async () => { peek({ kind: 'entry', id: (await createEntry(campaignId.value ?? '', cmd.type, cmd.name || undefined)).id }) }) : null
-    case 'roll': return hit(`Roll ${cmd.expr}`, 'dice', () => { try { notify(`${cmd.expr} → ${evaluateFormula(cmd.expr)}`, 'ok', 12000) } catch { notify(`“${cmd.expr}” is not a dice expression.`, 'error') } })
+    case 'roll': return hit(`Roll ${cmd.expr}`, 'dice', () => { if (!rollDice(cmd.expr)) notify(`“${cmd.expr}” is not a dice expression.`, 'error') })
+    case 'dc': {
+      const step = cmd.dc.step ? ` ${DC_STEPS.find(x => x.key === cmd.dc.step)?.label.toLowerCase() ?? cmd.dc.step}` : ''
+      const what = cmd.dc.kind === 'level' ? `level ${cmd.dc.level}${step}` : `${cmd.dc.rank}${step}`
+      return hit(`DC ${cmd.dc.dc}`, what, () => notify(`DC ${cmd.dc.dc} (${what})`, 'ok', 15000))
+    }
     case 'mode': return hit(`${cmd.mode === 'light' ? 'Light' : 'Dark'} mode`, 'settings', () => patchSettings({ mode: cmd.mode }))
     case 'rename': return e ? hit(`Rename “${e.name}” to “${cmd.name}”`, 'texts that name it are rewritten', () => saveEntry(e.id, { name: cmd.name })) : null
     case 'append': return e ? hit(`Add to “${e.name}”`, cmd.text, () => saveEntry(e.id, { body: `${e.body.trimEnd()}${e.body.trim() ? '\n\n' : ''}${cmd.text}` })) : null
@@ -97,7 +107,7 @@ const hits = computed<Hit[]>(() => {
         run: full => (full ? void router.push({ name: 'entry', params: { campaignId: e.campaignId, entryId: e.id } }) : peek({ kind: 'entry', id: e.id })),
       })
     }
-    for (const r of rules.value) out.push({ key: `rules:${r.id}`, group: 'Compendium', label: r.name, sub: `${r.kind} ${r.level}`, color: 'var(--accent-2)', run: () => peek({ kind: 'rules', id: r.id }) })
+    for (const r of rules.value) out.push({ key: `rules:${r.id}`, group: 'Compendium', label: r.name, sub: `${RULES_KIND_CONFIG[r.kind].label}${RULES_KIND_CONFIG[r.kind].hasLevel ? ` ${r.level}` : ''}`, color: RULES_KIND_CONFIG[r.kind].color, run: full => (full ? void router.push({ name: 'compendium', query: { kind: r.kind, id: r.id } }) : peek({ kind: 'rules', id: r.id })) })
   }
   for (const c of campaigns.value) {
     if (c.id !== campaignId.value && (!q || c.name.toLowerCase().includes(q))) {
@@ -126,7 +136,7 @@ function onKey(e: KeyboardEvent) {
   <dialog ref="dialog" class="bar" @close="commandBarOpen = false" @click.self="commandBarOpen = false">
     <label class="field">
       <Search :size="17" />
-      <input ref="input" v-model="query" placeholder="Go to a place, find an entry, look up a rule…" title="Also: new npc Name · roll 2d6+3 · rename … · append … · favourite · delete · light · dark" autocomplete="off" spellcheck="false" @keydown="onKey" />
+      <input ref="input" v-model="query" placeholder="Go to a place, find an entry, look up a rule…" title="Also: new npc Name · roll 2d6+3 · dc 5 hard · dc expert · rename … · append … · favourite · delete · light · dark" autocomplete="off" spellcheck="false" @keydown="onKey" />
       <span class="kbd">Esc</span>
     </label>
     <div class="hits">
@@ -138,7 +148,7 @@ function onKey(e: KeyboardEvent) {
       </template>
       <p v-if="!hits.length" class="empty">Nothing found for “{{ query }}”.</p>
     </div>
-    <footer class="faint"><span class="kbd">Enter</span> opens beside your work · <span class="kbd">Shift</span>+<span class="kbd">Enter</span> opens the page · commands: <code>new npc Name</code>, <code>roll 2d6</code>, <code>rename …</code>, <code>append …</code>, <code>favourite</code>, <code>delete</code></footer>
+    <footer class="faint"><span class="kbd">Enter</span> opens beside your work · <span class="kbd">Shift</span>+<span class="kbd">Enter</span> opens the page · commands: <code>new npc Name</code>, <code>roll 2d6</code>, <code>dc 5 hard</code>, <code>rename …</code>, <code>append …</code>, <code>favourite</code>, <code>delete</code></footer>
   </dialog>
 </template>
 

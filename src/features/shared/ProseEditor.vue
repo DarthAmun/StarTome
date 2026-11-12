@@ -11,6 +11,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Bold, EyeOff, Heading2, Italic, List, ListChecks, Printer, Quote } from 'lucide-vue-next'
 import { evaluateFormula } from '@/domain/formula'
+import { rollDice } from '@/ui/dice'
 import { stripGmOnly } from '@/domain/gmContent'
 import { isEntryTypeName } from '@/domain/links'
 import { advanceClock, isHiddenBlock, joinBlocks, splitBlocks, toggleHiddenBlock, toggleTask } from '@/domain/markdownBlocks'
@@ -144,7 +145,7 @@ async function onRenderedClick(e: MouseEvent, blockIndex: number | null): Promis
     const kind = widget.dataset.widget
     if (kind === 'dice') {
       const expr = widget.dataset.expr ?? 'd20'
-      try { notify(`${widget.dataset.label ? `${widget.dataset.label}: ` : ''}${expr} → ${evaluateFormula(expr)}`, 'ok') } catch { notify(`“${expr}” is not a dice expression.`, 'error') }
+      if (!rollDice(expr, widget.dataset.label)) notify(`“${expr}” is not a dice expression.`, 'error')
     } else if (kind === 'choose') {
       const options = (widget.dataset.options ?? '').split('|').filter(Boolean)
       notify(options[Math.floor(Math.random() * options.length)] ?? 'Nothing to pick from', 'ok')

@@ -1,0 +1,34 @@
+/* The stat block: rules text set like a printed one, numbers you can click to roll. */
+.stat { font-family: var(--font-read); font-size: 1.02rem; line-height: 1.5; user-select: text; }
+.stat-head { display: flex; align-items: baseline; gap: 1rem; border-bottom: 2px solid var(--kind-color, var(--accent)); padding-bottom: .25rem; margin-bottom: .5rem; }
+.stat-head h2 { flex: 1; font-size: 1.35rem; }
+.stat-kind { font-family: var(--font-title); letter-spacing: .08em; text-transform: uppercase; font-size: .9rem; color: var(--text-dim); white-space: nowrap; }
+.stat-portrait { float: right; width: 132px; max-height: 180px; object-fit: cover; margin: 0 0 .6rem .9rem; border: var(--frame); border-radius: var(--radius); }
+.stat-traits { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: .55rem; }
+.stat-trait { padding: 0 .5em; font-family: var(--font-ui); font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; background: var(--bg-sunken); border: 1px solid var(--line-strong); color: var(--text-dim); }
+.stat-trait.rarity { color: #fff; border-color: transparent; }
+.stat .line { margin: 0 0 .22rem; }
+.stat .line.action { padding-left: 1em; text-indent: -1em; }
+.stat .line.subhead { margin-top: .6rem; color: var(--accent); }
+.stat .abilities { display: flex; flex-wrap: wrap; gap: 0 .9em; }
+.stat hr { border: 0; border-top: 1px solid var(--line-strong); margin: .45rem 0; clear: none; }
+.stat .glyph { font-family: var(--font-ui); color: var(--accent); }
+.stat .roll { padding: 0 .3em; margin: 0 1px; font-family: var(--font-mono); font-size: .88em; background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: var(--radius); color: var(--text); }
+.stat .roll:hover { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.stat .roll.crit { border-color: color-mix(in srgb, var(--accent-2) 60%, transparent); background: color-mix(in srgb, var(--accent-2) 12%, transparent); }
+.stat .place { padding: 0 .45em; margin: 0 .2em; font-family: var(--font-ui); font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; background: none; border: 1px solid var(--line-strong); border-radius: var(--radius); color: var(--text-dim); }
+.stat .place:hover { color: var(--text); border-color: var(--accent); }
+.stat .ref { color: var(--accent); cursor: pointer; }
+.stat .prose { font-size: inherit; line-height: inherit; }
+.stat .prose.inline > p:first-child { display: inline; }
+.stat .prose.inline > p:last-child, .stat .prose.line > p:last-child { margin-bottom: 0; }
+.stat .prose .ref { text-indent: 0; }
+.stat-sub { font-family: var(--font-title); font-size: .78rem; letter-spacing: .14em; text-transform: uppercase; color: var(--text-faint); margin: .8rem 0 .25rem; }
+.stat-gm { margin-top: .7rem; padding: .5rem .7rem; border: 1px dashed color-mix(in srgb, var(--accent-2) 60%, transparent); border-left-width: 3px; background: color-mix(in srgb, var(--accent-2) 8%, transparent); }
+.stat-gm-title { font-family: var(--font-ui); font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-2); }
+.stat-rk { display: flex; align-items: baseline; gap: .8rem; margin-bottom: .45rem; font-size: .92rem; color: var(--text-dim); }
+.stat-rk p { flex: 1; margin: 0; }
+.stat-table { border-collapse: collapse; margin: .5rem 0; font-family: var(--font-ui); font-size: .85rem; }
+.stat-table th, .stat-table td { border: var(--frame); padding: .15rem .5rem; text-align: left; }
+.stat-foot { display: flex; justify-content: space-between; margin-top: .9rem; padding-top: .35rem; border-top: var(--frame); font-family: var(--font-ui); font-size: .78rem; color: var(--text-faint); clear: both; }
+.stat .muted { color: var(--text-faint); }

@@ -1,4 +1,6 @@
 /** What a line typed into the command bar asks for, when it is a command and not a search. Pure. */
+import type { GameId } from './game'
+import { parseDcQuery, type DcQuery } from './rules/dcs'
 import { ENTRY_TYPES, type EntryType } from './schema'
 
 export type Command =
@@ -9,13 +11,14 @@ export type Command =
   | { kind: 'delete' }
   | { kind: 'favorite' }
   | { kind: 'mode'; mode: 'light' | 'dark' }
+  | { kind: 'dc'; dc: DcQuery }
 
 const TYPE_WORDS: Record<string, EntryType> = {
   npc: 'npc', character: 'npc', location: 'location', place: 'location', faction: 'faction', guild: 'faction', quest: 'quest', mission: 'quest',
   event: 'event', note: 'note', rumor: 'rumor', rumour: 'rumor', table: 'random-table', 'random-table': 'random-table', region: 'region',
 }
 
-export function parseCommand(input: string): Command | null {
+export function parseCommand(input: string, game: GameId = 'pf2e'): Command | null {
   const text = input.trim().replace(/^>\s*/, '')
   const [first = '', ...rest] = text.split(/\s+/)
   const verb = first.toLowerCase()
@@ -26,6 +29,7 @@ export function parseCommand(input: string): Command | null {
   }
   if (verb === 'roll') return tail ? { kind: 'roll', expr: tail } : null
   if (/^\d*d\d+/i.test(text) && !/[a-ce-z]{2}/i.test(text)) return { kind: 'roll', expr: text }
+  if (verb === 'dc') { const dc = parseDcQuery(tail, game); return dc ? { kind: 'dc', dc } : null }
   if (verb === 'rename') return tail ? { kind: 'rename', name: tail } : null
   if (verb === 'append') return tail ? { kind: 'append', text: tail } : null
   if (verb === 'delete' && !tail) return { kind: 'delete' }

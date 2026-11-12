@@ -5,16 +5,21 @@
  * database untouched when it fails.
  */
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { Download, FolderOpen, HardDriveUpload, Trash2 } from 'lucide-vue-next'
 import { countRows, wipeDatabase } from '@/data/snapshot'
 import { BackupError, backupFileName, exportBackupBlob, importBackup } from '@/services/backup'
 import { backupFolderState, backupFolderSupported, backupToFolder, chooseBackupFolder, forgetBackupFolder, type FolderState } from '@/services/backup/folder'
 import { importLegacyFile, importLegacyFromBrowser, legacyDbExists, type LegacyImportResult } from '@/services/v042/import'
 import { confirmDialog, notify, reportError } from '@/ui/dialogs'
+import { handOver } from '@/ui/pendingImport'
 import { campaign } from '@/ui/workbench'
 import LoreExport from './LoreExport.vue'
+import campaignGuide from '../../../CAMPAIGN_FORMAT.md?raw'
+import homebrewGuide from '../../../HOMEBREW_FORMAT.md?raw'
 
 const emit = defineEmits<{ changed: [] }>()
+const router = useRouter()
 const version = __APP_VERSION__
 
 const busy = ref<string | null>(null)
@@ -52,8 +57,23 @@ async function legacyFromBrowser() {
   legacy.value = await run('Importing from v0.42', () => importLegacyFromBrowser(step => { busy.value = step })) ?? legacy.value
 }
 
+/** Files that are not backups go to the screen that reads them: a Foundry release, a homebrew file. */
+async function elsewhere(file: File, isZip: boolean): Promise<boolean> {
+  let name: 'compendium-sync' | 'compendium-homebrew' | null = null
+  if (isZip) name = /json-assets/i.test(file.name) ? 'compendium-sync' : null
+  else {
+    const head = await file.slice(0, 4096).text()
+    if (/"type"\s*:\s*"homebrew"/.test(head) || /^\s*(\[\s*)?\{[^{}]*"kind"\s*:/.test(head)) name = 'compendium-homebrew'
+  }
+  if (!name) return false
+  handOver(file)
+  await router.push({ name })
+  return true
+}
+
 async function onFile(file: File) {
   const isZip = /\.zip$/i.test(file.name)
+  if (await elsewhere(file, isZip)) return
   if (!isZip) {
     if (hasData() && !await confirmDialog({ title: `Import ${file.name}?`, body: replaceWarning, confirmLabel: 'Replace and import', danger: true })) return
     legacy.value = await run('Importing the v0.42 file', () => importLegacyFile(file, step => { busy.value = step })) ?? legacy.value
@@ -119,6 +139,17 @@ function onDrop(e: DragEvent) {
 }
 
 const SHOWN = ['campaigns', 'entries', 'encounters', 'combatants', 'characters', 'inventory', 'sessionPanels', 'rules', 'images'] as const
+const others = () => Object.entries(counts.value).filter(([k, n]) => n > 0 && !(SHOWN as readonly string[]).includes(k)).sort(([a], [b]) => a.localeCompare(b))
+
+// Storage the browser reports for this app, and the format guides for whoever writes files for it
+const storage = ref<{ usage: number; quota: number; persisted: boolean } | null>(null)
+onMounted(async () => {
+  const est = await navigator.storage?.estimate?.()
+  if (est) storage.value = { usage: est.usage ?? 0, quota: est.quota ?? 0, persisted: await navigator.storage.persisted?.() ?? false }
+})
+const size = (bytes: number) => (bytes >= 1073741824 ? `${(bytes / 1073741824).toFixed(1)} GB` : `${Math.round(bytes / 1048576).toLocaleString()} MB`)
+const downloadGuide = (file: string, text: string) => download(new Blob([text], { type: 'text/markdown' }), file)
+const GUIDES: [string, string, string][] = [['HOMEBREW_FORMAT.md', 'Homebrew format', homebrewGuide], ['CAMPAIGN_FORMAT.md', 'Campaign format', campaignGuide]]
 </script>
 
 <template>
@@ -174,8 +205,16 @@ const SHOWN = ['campaigns', 'entries', 'encounters', 'combatants', 'characters',
     <LoreExport />
 
     <section class="panel block">
+      <h2>Format guides</h2>
+      <p class="dim">For files written outside the app (by you or by Claude): what a homebrew file and a campaign file look like.</p>
+      <div class="actions"><button v-for="[file, label, text] in GUIDES" :key="file" class="btn" @click="downloadGuide(file, text)"><Download :size="15" /> {{ label }}</button></div>
+    </section>
+
+    <section class="panel block">
       <h2>In this app now</h2>
       <div class="stats"><div v-for="k in SHOWN" :key="k"><span class="num">{{ (counts[k] ?? 0).toLocaleString() }}</span> {{ k }}</div></div>
+      <p class="faint"><template v-for="([k, n], i) in others()" :key="k">{{ i ? ' · ' : 'Also: ' }}{{ n.toLocaleString() }} {{ k }}</template></p>
+      <p v-if="storage" class="dim">Storage used: <span class="num">{{ size(storage.usage) }}</span> of {{ size(storage.quota) }} the browser allows · {{ storage.persisted ? 'protected from automatic clean-up' : 'not yet protected from automatic clean-up' }}</p>
       <div class="actions"><button class="btn btn-danger" :disabled="!!busy" @click="wipe"><Trash2 :size="15" /> Wipe this app's data</button></div>
     </section>
   </div>

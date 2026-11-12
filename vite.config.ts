@@ -11,6 +11,8 @@ export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   worker: { format: 'es' },
+  // Only the sync worker uses jszip; found late, the dev server would reload the page under a sync in progress
+  optimizeDeps: { include: ['jszip'] },
   plugins: [
     vue(),
     VitePWA({

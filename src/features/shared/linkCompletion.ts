@@ -1,12 +1,15 @@
 /** What an open `{{` offers while typing: the types first, then names of that type. */
 import { canonicalType, isEntryTypeName } from '@/domain/links'
+import { RULES_KINDS } from '@/domain/rules/types'
 import { ENTRY_TYPES } from '@/domain/schema'
 import { graphs } from '@/data/graphs'
 import { encounterNames, entries, rulesNamesLike } from '@/data/repo'
 import type { CompleteFn, EditorCompletion } from '@/ui/components/CodeEditor.vue'
 import { ENTRY_TYPE_INFO } from '@/ui/entryTypes'
 
-const RULES_KINDS = ['creature', 'item', 'spell', 'hazard', 'feat', 'action', 'condition', 'ancestry', 'background', 'class', 'deity', 'vehicle', 'starship']
+/** Compendium kinds as they are typed in a reference (lower case) → the kind. */
+const KIND_BY_WORD = new Map(RULES_KINDS.map(k => [k.toLowerCase(), k]))
+const KIND_WORDS = [...KIND_BY_WORD.keys()]
 
 export function linkCompletion(campaignId: () => string | null): CompleteFn {
   return async (before) => {
@@ -18,7 +21,7 @@ export function linkCompletion(campaignId: () => string | null): CompleteFn {
       const q = inside.trim().toLowerCase()
       const items: EditorCompletion[] = [
         ...ENTRY_TYPES.filter(t => t !== 'region' && t.startsWith(q)).map(t => ({ label: ENTRY_TYPE_INFO[t].label, detail: 'entry', apply: `{{${t === 'random-table' ? 'table' : t}: `, color: ENTRY_TYPE_INFO[t].color })),
-        ...RULES_KINDS.filter(k => k.startsWith(q)).map(k => ({ label: k, detail: 'compendium', apply: `{{${k}: ` })),
+        ...KIND_WORDS.filter(k => k.startsWith(q)).map(k => ({ label: KIND_BY_WORD.get(k) ?? k, detail: 'compendium', apply: `{{${KIND_BY_WORD.get(k) ?? k}: ` })),
         ...['encounter', 'graph'].filter(k => k.startsWith(q)).map(k => ({ label: k, detail: 'campaign', apply: `{{${k}: ` })),
         ...('roll'.startsWith(q) ? [{ label: 'roll', detail: 'dice', apply: '{{roll: ' }] : []),
       ]
@@ -38,8 +41,8 @@ export function linkCompletion(campaignId: () => string | null): CompleteFn {
       if (!camp) return null
       const all = type === 'encounter' ? await encounterNames(camp) : (await graphs.ofCampaign(camp)).map(g => g.name)
       names = all.filter(n => n.toLowerCase().includes(q)).slice(0, 12)
-    } else if (RULES_KINDS.includes(type)) {
-      names = await rulesNamesLike(type, q, 12)
+    } else if (KIND_BY_WORD.has(type)) {
+      names = await rulesNamesLike(KIND_BY_WORD.get(type) ?? type, q, 12)
     }
     return names.length ? { from: open, items: names.map(n => ({ label: n, detail: type, apply: `{{${typed}: ${n}}}`, color })) } : null
   }

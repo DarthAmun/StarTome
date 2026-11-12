@@ -10,6 +10,7 @@ import { useLive } from '@/ui/useLive'
 import { campaign, campaignId, campaigns, closeDock, commandBarOpen, dock, patchSettings, settings } from '@/ui/workbench'
 import AppRail from './AppRail.vue'
 import CommandBar from './CommandBar.vue'
+import DicePanel from './DicePanel.vue'
 import PeekDock from './PeekDock.vue'
 import PinTray from './PinTray.vue'
 
@@ -83,6 +84,7 @@ function switchCampaign(e: Event) {
     <main class="main"><RouterView :key="String(route.params.campaignId ?? '')" /></main>
     <PeekDock />
     <PinTray />
+    <DicePanel />
     <CommandBar />
     <DialogHost />
   </div>

@@ -127,7 +127,7 @@ export async function findEntryByName(campaign: string, type: EntryType, name: s
 
 export async function rulesByName(name: string, kind?: string): Promise<RulesRow | undefined> {
   const rows = await getDb().rows('rules').where('sortName').equals(name.trim().toLowerCase()).toArray()
-  return rows.find(r => !kind || r.kind === kind) ?? rows[0]
+  return rows.find(r => !kind || r.kind.toLowerCase() === kind.toLowerCase()) ?? (kind ? undefined : rows[0])
 }
 
 export const characters = {

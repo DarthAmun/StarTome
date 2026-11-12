@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'
 import { Maximize2, Pin, PinOff, X } from 'lucide-vue-next'
 import { entries, getRow } from '@/data/repo'
 import EntryView from '@/features/world/EntryView.vue'
-import RulesPeek from '@/features/world/RulesPeek.vue'
+import RulesView from '@/features/compendium/RulesView.vue'
 import { ENTRY_TYPE_INFO } from '@/ui/entryTypes'
 import { useLive } from '@/ui/useLive'
 import { closeDock, closePeek, dock, isPinned, togglePin, type PeekTarget } from '@/ui/workbench'
@@ -35,8 +35,8 @@ function pinCurrent() {
 
 function openFull() {
   const t = current.value
-  if (t?.kind !== 'entry') return
-  void entries.get(t.id).then((e) => { if (e) void router.push({ name: 'entry', params: { campaignId: e.campaignId, entryId: e.id } }) })
+  if (t?.kind === 'rules') { void getRow('rules', t.id).then((r) => { if (r) void router.push({ name: 'compendium', query: { kind: r.kind, id: r.id } }) }); return }
+  if (t) void entries.get(t.id).then((e) => { if (e) void router.push({ name: 'entry', params: { campaignId: e.campaignId, entryId: e.id } }) })
 }
 </script>
 
@@ -49,12 +49,12 @@ function openFull() {
       </button>
       <span class="grow" />
       <button class="btn btn-ghost btn-icon" :title="isPinned(current) ? 'Unpin from the tray' : 'Pin to the tray'" @click="pinCurrent"><component :is="isPinned(current) ? PinOff : Pin" :size="15" /></button>
-      <button v-if="current.kind === 'entry'" class="btn btn-ghost btn-icon" title="Open as a page" @click="openFull"><Maximize2 :size="15" /></button>
+      <button class="btn btn-ghost btn-icon" title="Open as a page" @click="openFull"><Maximize2 :size="15" /></button>
       <button class="btn btn-ghost btn-icon" title="Close the dock (Esc)" @click="closeDock"><X :size="16" /></button>
     </div>
     <div class="body">
       <EntryView v-if="current.kind === 'entry'" :key="current.id" :entry-id="current.id" />
-      <RulesPeek v-else :key="current.id" :rules-id="current.id" />
+      <RulesView v-else :key="current.id" :rules-id="current.id" @gone="closePeek(dock.active)" />
     </div>
   </aside>
 </template>

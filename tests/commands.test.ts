@@ -25,4 +25,11 @@ describe('command bar commands', () => {
     expect(parseCommand('delete everything')).toBeNull()
     expect(parseCommand('tibbin')).toBeNull()
   })
+
+  it('answers DC questions for the campaign\'s game', () => {
+    expect(parseCommand('dc 5')).toMatchObject({ kind: 'dc', dc: { kind: 'level', level: 5, dc: 20 } })
+    expect(parseCommand('dc level 5 hard')).toMatchObject({ kind: 'dc', dc: { dc: 22 } })
+    expect(parseCommand('dc expert')).toMatchObject({ kind: 'dc', dc: { kind: 'simple', rank: 'expert', dc: 20 } })
+    expect(parseCommand('dc of doom')).toBeNull()
+  })
 })

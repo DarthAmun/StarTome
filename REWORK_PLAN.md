@@ -1,6 +1,6 @@
 # StarTome rework plan
 
-Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phases 1 and 2 are done on the `rework` branch (see section 11a). Phase 3 is next.
+Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phases 1 to 3 are done on the `rework` branch (see section 11a). Phase 4 is next.
 
 How this was produced: the schema, types, format docs, backup/import code, the Play Buddy port and the app shell were read line by line. The large UI files (encounter page, GM screen, map maker, editors, session board) were read by extracting their templates, handlers, shortcuts and storage keys rather than every line. The app was started (`pnpm dev`), the main screens were opened, `pnpm test` (557 passed, 2 skipped) and `pnpm typecheck` ran clean. A real backup (`~/Downloads/startome-all-2026-11-03.json`, 578 MB) was inspected for its actual shape. Anything in the inventory I could not confirm by running it is still listed; Phase 3 verifies each line.
 
@@ -183,9 +183,9 @@ History (flag F4)
 - [ ] E2 `#tag` search; campaign context chip (click to unset)
 - [ ] E3 Result actions: open, open in a new window, bookmark; full keyboard navigation
 - [ ] E4 Command mode (`>`): goto (with aliases), add entry, find, set/unset campaign, theme, delete, edit attribute, append paragraph, rename, roll dice, DC lookup
-- [ ] E5 Dice panel: build a pool by clicking dice (right-click removes), modifier, roll, natural 20 / natural 1 callouts, history with clear
-- [ ] E6 Rolls from text and stat blocks land in the dice panel with their follow-up buttons (apply damage and so on)
-- [ ] E7 Formula evaluator (dice, arithmetic, floor/ceil/min/max, field references) for initiative formulas
+- [x] E5 Dice panel: build a pool by clicking dice (right-click removes), modifier, roll, natural 20 / natural 1 callouts, history with clear
+- [x] E6 Rolls from text and stat blocks land in the dice panel with their follow-up buttons (apply damage and so on)
+- [x] E7 Formula evaluator (dice, arithmetic, floor/ceil/min/max, field references) for initiative formulas
 
 ### F. Sessions
 
@@ -345,18 +345,18 @@ Map maker
 
 ### L. Compendium
 
-- [ ] L1 List per kind: search, game filter, level range, rarity, traits, source, pack, favourites only, superseded legacy, removed upstream; sort; paging; preferences per kind
-- [ ] L2 Stat blocks for all 19 kinds, with clickable rolls: saves, Perception, skills, Strikes with the multiple attack penalty, damage, critical and two-hand damage, spell attacks
-- [ ] L3 "Place area" from abilities and spells; GM-only callouts; unidentified name; class features and subclasses; heightened entries; legacy tags
-- [ ] L4 Field notes dialog: a creature as numberless sentences to copy to a player
-- [ ] L5 Recall Knowledge line for creatures and hazards
-- [ ] L6 Edit any entry; edits to synced entries are kept as local edits that survive re-syncs ("edited" badge, reset edits with confirm)
-- [ ] L7 New entry per kind, duplicate as homebrew, delete with confirm, favourite, portrait and token art
-- [ ] L8 Creature builder: road maps, table columns with typed overrides, Strikes, spellcasting, copy abilities from a creature, rebuild at another level
-- [ ] L9 Foundry sync: drop `json-assets.zip`, choose packs, sync in a worker with progress, report (new, updated, unchanged, removed upstream, conflicts with local edits, conversion notes), older-release warning, latest-release check on GitHub, licences and attribution
-- [ ] L10 Homebrew import: drop, pick or paste (a fenced `json` block works); every entry checked, small slips fixed and listed, unreadable entries left out; pick entries; default game and pack; copy the problem list; pf2ools relic gifts read as they are
-- [ ] L11 Homebrew packs: export selected packs, rename, delete a pack with its portraits
-- [ ] L12 `{{kind: Name}}` references to compendium entries in every editor
+- [x] L1 List per kind: search, game filter, level range, rarity, traits, source, pack, favourites only, superseded legacy, removed upstream; sort; paging; preferences per kind
+- [x] L2 Stat blocks for all 19 kinds, with clickable rolls: saves, Perception, skills, Strikes with the multiple attack penalty, damage, critical and two-hand damage, spell attacks
+- [x] L3 "Place area" from abilities and spells; GM-only callouts; unidentified name; class features and subclasses; heightened entries; legacy tags
+- [x] L4 Field notes dialog: a creature as numberless sentences to copy to a player
+- [x] L5 Recall Knowledge line for creatures and hazards
+- [x] L6 Edit any entry; edits to synced entries are kept as local edits that survive re-syncs ("edited" badge, reset edits with confirm)
+- [x] L7 New entry per kind, duplicate as homebrew, delete with confirm, favourite, portrait and token art
+- [x] L8 Creature builder: road maps, table columns with typed overrides, Strikes, spellcasting, copy abilities from a creature, rebuild at another level
+- [x] L9 Foundry sync: drop `json-assets.zip`, choose packs, sync in a worker with progress, report (new, updated, unchanged, removed upstream, conflicts with local edits, conversion notes), older-release warning, latest-release check on GitHub, licences and attribution
+- [x] L10 Homebrew import: drop, pick or paste (a fenced `json` block works); every entry checked, small slips fixed and listed, unreadable entries left out; pick entries; default game and pack; copy the problem list; pf2ools relic gifts read as they are
+- [x] L11 Homebrew packs: export selected packs, rename, delete a pack with its portraits
+- [x] L12 `{{kind: Name}}` references to compendium entries in every editor
 
 ### M. Import, export, data
 
@@ -368,9 +368,9 @@ Map maker
 - [x] M6 Markdown zip of a campaign (frontmatter, wiki links, GM-only switch); "Export for Claude" single file (GM-only switch) (flag F9)
 - [x] M7 Quest board export for players
 - [ ] M8 Token templates export (flag F10)
-- [ ] M9 Format guides to download (campaign and homebrew formats)
-- [ ] M10 Database statistics
-- [ ] M11 Image folder import: match files to compendium entries by name, review matches, set portraits or token art, optional JPEG conversion
+- [x] M9 Format guides to download (campaign and homebrew formats)
+- [x] M10 Database statistics
+- [x] M11 Image folder import: match files to compendium entries by name, review matches, set portraits or token art, optional JPEG conversion
 - [ ] M12 Re-compress stored images; clean up unused images (flag F11)
 - [ ] M13 DM's Tome import: from a file or straight from its database in the same browser; summary, already-imported warning, report (flag F3)
 - [x] M14 Wipe all data with two confirms
@@ -788,7 +788,7 @@ The new app is built on a `rework` branch and published to a second path (for ex
 | **0 Safety net** (on `main`) ✅ | v0.42.0: the full backup includes the sound library and the localStorage state (layouts, bookmarks, settings; never the Play Buddy token), and a restore puts them back. "Wipe all data" clears every table. Tests in `tests/backup.test.ts`. The synthetic legacy fixture moves to Phase 1. | M4, M14 | Take a complete backup. |
 | **1 Foundation** ✅ | Vite + Vue + strict TypeScript project, lint rules, design tokens and both skins, shell (rail, command bar, dock, tray), domain schemas, database, repositories, backup v3, legacy import with tests, backup folder. Pure rules and their tests moved over. | S, parts of A, M3–M5 | Import everything, switch campaigns, search, open any entry read-only in the dock, export and restore a backup. |
 | **2 World** ✅ | Entry browser, editors for all ten types, markdown editor with links and widgets, backlinks, history, favourites and tray pins, maps with pins and regions, player map, graphs, timeline, lore exports. | C, D, E1–E4, O, P, M6–M7 | Do all campaign writing in the new app. |
-| **3 Compendium** | Browser, stat blocks with rolls, entry editor, creature builder, homebrew import and packs, Foundry sync, image folder import, field notes, dice panel. | L, E5–E7, M9–M11 | Look up and maintain rules content. |
+| **3 Compendium** ✅ | Browser, stat blocks with rolls, entry editor, creature builder, homebrew import and packs, Foundry sync, image folder import, field notes, dice panel. | L, E5–E7, M9–M11 | Look up and maintain rules content. |
 | **4 Party and loot** | Roster, ledger (XP, milestones, level-ups), inventory, wealth, treasure roll, earn income, companions. | H, I, J1–J2 | Track the party between sessions. |
 | **5 Encounters** | List, builder, VTT engine (prepare and run), tokens, conditions and automation, areas, resolve, player view, map maker, token library. | G, J3–J4 | Run a fight. |
 | **6 Sessions and the table** | Session board, capture, recap and finish, session log, table bar, Tonight, Desk with all widgets, sounds. | F, N, Q, B | Run a whole Pathfinder session in the new app. |
@@ -857,6 +857,31 @@ Checklist: C8–C10, C12, C16, C18, C20, C22–C24, D1–D3, D7, D9–D11, O1–
 Still open from the list: collapsible groups with previews and paged rendering (C3; lists of a few hundred entries render at once without trouble), filters by an NPC's faction or location, completion and links for historical states, the old "edit attribute" and DC commands (the DC table arrives in Phase 3), and everything listed as waiting for a later phase.
 
 Tests added: 3 for command parsing, 1 for relations, 1 browser test (commands, field filter, table and gallery, embedded card). Totals: 52 unit tests and 6 browser tests.
+
+**Phase 3, Compendium (done 2026-11-12, branch `rework`).**
+
+What exists: Compendium is one place with four views. **Browse** lists every kind in one list (or one kind), filtered by game, level range, rarity, traits, source, pack, favourites, superseded legacy and removed upstream, sorted by name or level, with the filters remembered per kind; the entry you pick shows beside the list. **Stat blocks** cover all 19 kinds; Perception, saves, skills, Strikes (three attacks with the multiple attack penalty, damage, critical, two-hand) and spell attacks are buttons; names of other entries are links; Recall Knowledge and Field notes are on creatures. The same view opens in the dock from links, the command bar and the tray. **Editing** works for every kind from one field list per kind (`features/compendium/editorFields.ts`); an edit to a synced entry is kept as a local edit ("edited" badge, Reset). New entry, duplicate as homebrew, delete, favourite, portrait and token art are on the entry. The **creature builder** builds from the tables and rebuilds at another level. **Foundry sync** (drop the zip, choose packs, worker, progress, report with conflicts and conversion notes, older-release warning, latest-release check, licences), **Homebrew** (drop, pick or paste; checks and fixes listed; pick entries; default game and pack; copy the problem list; packs exported, renamed, deleted) and **Art** (a folder of images matched to entries by name, reviewed, stored as portraits or token art) are the other three views. The **dice panel** sits on the tray: pool, modifier, natural 20 and 1, history; rolls from text, stat blocks and the command bar land in it. The command bar finds compendium entries with word starts and typos and answers `dc 5 hard` and `dc expert`. Import & Backup offers the two format guides, shows every collection's row count and the storage used, and sends a dropped Foundry zip or homebrew file to its screen. NPC ancestry and class fields offer the compendium's names.
+
+Moved from `legacy/` into `src/`, with their tests: rolls, DCs, the registry, formatting and parsing, local edits, the entry factory, packs, the homebrew checker (split into three files to stay under 400 lines), field notes, creature building, subclasses, areas, SF2e gear, the Foundry converters, the pf2ools relic gifts converter, name search, and the Foundry sync. The converters produce the same output as before (checked against the v0.42 snapshots).
+
+Checked against real data: the PF2e 8.7.0 release (21,046 entries from the 30 default packs) and the SF2e 1.7.0 release (5,638 from 15) sync with no failed entry, and a second run changes nothing (`STARTOME_FOUNDRY_ZIP=<zip> pnpm test tests/rules/realRelease`). The 2,281 homebrew entries imported from v0.42 browse and render.
+
+Tests added: 210 unit tests moved over with the rules (rolls, DCs, parsing, homebrew, field notes, creature building, subclasses, packs, converters, search, the compendium repository, the sync), 3 for the editor's fields (every field of every kind reads back what it shows), 3 for image name matching, 1 for the DC command, 2 browser tests (sync a small release, find, read, roll, edit and reset, look up from the command bar; import homebrew from pasted text, build a creature, create an entry). Totals: 269 unit tests and 8 browser tests in the new app.
+
+Bug found by the browser tests and fixed: the development server reloaded the page the first time the sync worker loaded its zip library, dropping the chosen file.
+
+Differences from v0.42, and what is left:
+
+- **"Place area"** (L3) is built into the stat block but only appears where a map can take the area: the encounter of Phase 5. The starship "Zone area" button comes with Phase 7.
+- **Images that are replaced or whose entry is deleted stay in storage.** Decision F11 says unused images are removed automatically; that clean-up is not written yet (it must know every place an image is used, which is complete only once all phases have their data). Until then nothing is lost, storage only grows a little.
+- **Local edits are kept per field, not per sub-field.** Changing a creature's Fortitude stores your whole "saves" line; a later Foundry change to its Will would be reported as a conflict with your edit instead of merging silently.
+- **Callouts other than GM-only** (`> [!note]`) show as plain quotes.
+- **A sync or import in another window** does not refresh a list that is already open; reload that window.
+- **NPC progression panel** (C15) is not built here: it lists feat slots and choices per level, which belongs with the party's level-ups in Phase 4. Ancestry and class suggestions are in.
+- **Command bar**: the old "edit attribute" command is still not in.
+- **Wealth helpers** that read the compendium (median consumable prices) and the attachment rules move with Phase 4.
+- **Code rules relaxed in two places**, both on purpose: the Foundry and pf2ools converters may use untyped values (they read other people's JSON), and the unit tests moved from v0.42 (`tests/rules/`) are run but not type-checked under the stricter settings.
+- **The sync still uses JSZip**; the plan's switch to fflate applies to backups, which have it.
 
 ---
 

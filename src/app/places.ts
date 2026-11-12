@@ -20,7 +20,7 @@ export const PLACES: Place[] = [
   { name: 'sessions', label: 'Sessions', icon: BookOpen, campaign: true, phase: 6, holds: 'Session boards, capture while you play, recap and review, the session log.', aliases: ['board', 'log'] },
   { name: 'encounters', label: 'Encounters', icon: Swords, campaign: true, phase: 5, holds: 'Encounter list and builder, the battle map with tokens, fog, walls and combat, the map maker.', aliases: ['battle', 'combat', 'vtt', 'builder', 'map maker'] },
   { name: 'party', label: 'Party', icon: Users, campaign: true, phase: 4, holds: 'Roster, levels and XP, inventory, wealth, the starship, the character-app link.', aliases: ['inventory', 'wealth', 'loot', 'starship', 'play buddy'] },
-  { name: 'compendium', label: 'Compendium', icon: Library, campaign: false, phase: 3, holds: 'Items, creatures, spells and every other rules entry with stat blocks and rolls; Foundry sync and homebrew import.', aliases: ['rules', 'items', 'creatures', 'spells', 'feats', 'sync', 'homebrew'] },
+  { name: 'compendium', label: 'Compendium', icon: Library, campaign: false, phase: null, holds: 'Items, creatures, spells and every other rules entry with stat blocks and rolls; Foundry sync and homebrew import.', aliases: ['rules', 'items', 'creatures', 'spells', 'feats', 'sync', 'homebrew'] },
   { name: 'desk', label: 'Desk', icon: LayoutDashboard, campaign: true, phase: 6, holds: 'The widget board for the table: timers, DCs, tables, pinned entries.', aliases: ['gm screen', 'widgets'] },
 ]
 

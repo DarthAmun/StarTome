@@ -2,7 +2,7 @@
 import type { EntryType } from '@/domain/schema'
 
 export type Field =
-  | { key: string; label: string; kind: 'text'; placeholder?: string; wide?: boolean }
+  | { key: string; label: string; kind: 'text'; placeholder?: string; wide?: boolean; suggest?: 'ancestry' | 'class' }
   | { key: string; label: string; kind: 'select'; options: [value: string, label: string][] }
   | { key: string; label: string; kind: 'check'; on: string }
   | { key: string; label: string; kind: 'image' }
@@ -18,9 +18,9 @@ export const FIELDS: Record<EntryType, Field[]> = {
     { key: 'portrait', label: 'Portrait', kind: 'image' },
     { key: 'title', label: 'Title', kind: 'text', placeholder: 'High Priest, General…' },
     { key: 'level', label: 'Level', kind: 'text', placeholder: '5' },
-    { key: 'ancestry', label: 'Ancestry', kind: 'text', placeholder: 'Human, Vesk…' },
-    { key: 'class', label: 'Class / role', kind: 'text', placeholder: 'Fighter, Merchant…' },
-    { key: 'class2', label: 'Second class', kind: 'text', placeholder: 'Dual-class only' },
+    { key: 'ancestry', label: 'Ancestry', kind: 'text', placeholder: 'Human, Vesk…', suggest: 'ancestry' },
+    { key: 'class', label: 'Class / role', kind: 'text', placeholder: 'Fighter, Merchant…', suggest: 'class' },
+    { key: 'class2', label: 'Second class', kind: 'text', placeholder: 'Dual-class only', suggest: 'class' },
     { key: 'status', label: 'Status', kind: 'text', placeholder: 'Friendly, at court, imprisoned…', wide: true },
     { key: 'alive', label: 'Vital status', kind: 'check', on: 'Alive' },
   ],

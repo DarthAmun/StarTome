@@ -4,6 +4,8 @@ import { ref } from 'vue'
 import { ImagePlus, X } from 'lucide-vue-next'
 import type { Entry, ImageRef } from '@/domain/schema'
 import { entriesNamed } from '@/data/entries'
+import { rulesNameList } from '@/data/rules'
+import { campaign } from '@/ui/workbench'
 import { pickImage, storeImage } from '@/services/images'
 import { reportError } from '@/ui/dialogs'
 import { useImageUrl } from '@/ui/imageUrl'
@@ -43,6 +45,13 @@ function setGiver(name: string) {
   set('giver', hit ? { entryId: hit.id, kind: hit.type, name: hit.name } : { entryId: null, kind: null, name: name.trim() })
 }
 const giverName = () => (props.entry.type === 'quest' ? props.entry.data.giver.name : '')
+// Ancestry and class: names from the compendium, for the campaign's game
+const names = ref<Record<string, string[]>>({})
+async function loadNames(kind: 'ancestry' | 'class') {
+  if (names.value[kind]) return
+  const game = campaign.value?.game
+  names.value = { ...names.value, [kind]: [...new Set((await rulesNameList(kind, game ? [game] : undefined)).map(r => r.name))] }
+}
 const isWide = (f: Field) => f.kind === 'image' || f.kind === 'statuses' || f.kind === 'icon' || (f.kind === 'text' && f.wide)
 </script>
 
@@ -50,7 +59,10 @@ const isWide = (f: Field) => f.kind === 'image' || f.kind === 'statuses' || f.ki
   <div class="fields">
     <div v-for="f in FIELDS[entry.type]" :key="f.key" class="field" :class="{ wide: isWide(f) }">
       <label class="label" :for="`f-${f.key}`">{{ f.label }}</label>
-      <input v-if="f.kind === 'text'" :id="`f-${f.key}`" class="input" :value="text(f.key)" :placeholder="f.placeholder" @change="set(f.key, value($event))" />
+      <template v-if="f.kind === 'text'">
+        <input :id="`f-${f.key}`" class="input" :list="f.suggest ? `rules-${f.suggest}` : undefined" :value="text(f.key)" :placeholder="f.placeholder" @focus="f.suggest && loadNames(f.suggest)" @change="set(f.key, value($event))" />
+        <datalist v-if="f.suggest" :id="`rules-${f.suggest}`"><option v-for="n in names[f.suggest] ?? []" :key="n" :value="n" /></datalist>
+      </template>
       <select v-else-if="f.kind === 'select'" :id="`f-${f.key}`" class="input" :value="text(f.key)" @change="set(f.key, value($event) || null)">
         <option v-if="!text(f.key)" value="">—</option>
         <option v-for="[v, l] in f.options" :key="v" :value="v">{{ l }}</option>

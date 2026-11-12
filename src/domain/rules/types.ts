@@ -3,19 +3,19 @@
  *
  * Replaces the user-designed systems/records library. Entries come from three
  * origins: the Foundry sync (phase 3), the legacy DM's Tome import (phase 4) and
- * the user (homebrew). See FORK_PLAN.md §4 for the design.
+ * the user (homebrew). 
  *
  * Ownership rule: the sync owns every rules field of a 'foundry' entry. User
  * edits to such an entry go to `localEdits` (an overlay re-applied after each
  * sync); user-owned fields (img, gmNotes, tags, …) are never touched by sync.
  */
 import type { GameId } from '@/domain/game'
+import type { CreatureBuild } from './creatureBuilding'
 
 // ── Primitives ─────────────────────────────────────────────────────────────
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'unique'
-/** The creature builder's road map and columns; typed in its own module once Phase 3 moves it. */
-export type CreatureBuild = Record<string, unknown>
+export type { CreatureBuild } from './creatureBuilding'
 
 export type Size = 'tiny' | 'sm' | 'med' | 'lg' | 'huge' | 'grg'
 export type Proficiency = 'untrained' | 'trained' | 'expert' | 'master' | 'legendary'
