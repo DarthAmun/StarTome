@@ -23,7 +23,7 @@ import {
   getDb, now, parseJsonObject, rowValues,
   type DbCampaign, type DbCharacter, type DbEncounter, type DbEncounterToken, type DbEncounterWall, type DbEntity,
   type DbEntityConnection, type DbEntityLink, type DbEntitySnapshot, type DbGraphLayout, type DbInventory, type DbLevelUp,
-  type DbMapAsset, type DbPurse, type DbSessionPanel, type DbStarship, type DbToken, type DbTreasureAward, type DbXpAward,
+  type DbMapAsset, type DbPurse, type DbSoundPlaylist, type DbSoundTrack, type DbSessionPanel, type DbStarship, type DbToken, type DbTreasureAward, type DbXpAward,
 } from '~/composables/useDb'
 import { propImages } from '~/rules/battlemap'
 import { convertLegacySessions } from '~/utils/sessionBoard'
@@ -31,7 +31,7 @@ import { extractLinks } from '~/composables/useEntityParser'
 import { imageIdsOf, planRulesImport, rulesForExport, type ExportedImage, type RulesOverlay } from '~/converters/export'
 import { blobToDataUrl, dataUrlToBlob, entityImageIds, imageRefId, isImageRef, splitInlineImages, type NewImageRow } from '~/rules/images'
 import type { RulesEntity } from '~/types/rules'
-import { APP_NS } from '~/utils/appNamespace'
+import { APP_NS, lsKey } from '~/utils/appNamespace'
 import { parseJson } from '~/utils/json'
 
 export interface CampaignRows {
@@ -72,6 +72,48 @@ export const TABLE_LABELS: Record<CampaignTable | 'rules' | 'rulesOverlays', str
   rules: 'Own compendium entries', rulesOverlays: 'Portraits, notes & edits on synced entries',
 }
 
+/** Sections a full backup carries besides the campaign tables; only a restore ("replace") reads them. */
+export const EXTRA_LABELS = {
+  soundTracks: 'Sound tracks (restore only)', soundPlaylists: 'Playlists (restore only)',
+  localState: 'GM screen layouts, bookmarks & settings (restore only)',
+} as const
+
+/** A sound track as a backup holds it: a local file is named, the file itself stays on the device. */
+export type ExportedTrack = Omit<DbSoundTrack, 'fileHandle'> & { fileName?: string }
+
+/** The Play Buddy pairing token is for this browser only and never leaves it. */
+const LOCAL_STATE_SKIP = new Set([lsKey('playbuddy')])
+
+/** Everything the app keeps in localStorage (layouts, bookmarks, settings …), by key. */
+export function readLocalState(storage: Pick<Storage, 'length' | 'key' | 'getItem'>): Record<string, string> {
+  const out: Record<string, string> = {}
+  const prefix = lsKey('')
+  for (let i = 0; i < storage.length; i++) {
+    const key = storage.key(i)
+    if (!key || !key.startsWith(prefix) || LOCAL_STATE_SKIP.has(key)) continue
+    const value = storage.getItem(key)
+    if (value != null) out[key] = value
+  }
+  return out
+}
+
+/** Puts a backup's localStorage state back: the app's own keys are replaced, the pairing token stays. */
+export function writeLocalState(storage: Pick<Storage, 'length' | 'key' | 'getItem' | 'setItem' | 'removeItem'>, state: Record<string, string>): number {
+  const prefix = lsKey('')
+  for (const key of Object.keys(readLocalState(storage))) storage.removeItem(key)
+  let n = 0
+  for (const [key, value] of Object.entries(state)) {
+    if (!key.startsWith(prefix) || LOCAL_STATE_SKIP.has(key) || typeof value !== 'string') continue
+    storage.setItem(key, value)
+    n++
+  }
+  return n
+}
+
+function browserStorage(): Storage | null {
+  try { return typeof localStorage === 'undefined' ? null : localStorage } catch { return null }
+}
+
 export interface BackupPayload extends Partial<CampaignRows> {
   /** 2: StarTome (values, images alongside); 1: DM's Tome and StarTome before v0.15 */
   version: 1 | 2
@@ -81,6 +123,10 @@ export interface BackupPayload extends Partial<CampaignRows> {
   rules?: RulesEntity[]
   rulesOverlays?: RulesOverlay[]
   images?: ExportedImage[]
+  /** Since v0.42, full backups only: the sound library and the app's localStorage state. */
+  soundTracks?: ExportedTrack[]
+  soundPlaylists?: DbSoundPlaylist[]
+  localState?: Record<string, string>
   [key: string]: unknown
 }
 
@@ -119,7 +165,15 @@ export async function exportAllPayload(): Promise<BackupPayload> {
     ...imageIdsOf([...rules, ...rulesOverlays] as unknown as Record<string, unknown>[]),
     ...mapImageIds(rows.encounters, rows.mapAssets), ...entityImageIds([...rows.entities, ...rows.entitySnapshots]),
   ])
-  return { ...header('all'), ...rows, rules, rulesOverlays, images, syncState: await db.syncState.toArray() }
+  // The sound library and what lives in localStorage (GM screen layouts, bookmarks, settings …):
+  // neither belongs to a campaign table, and without them a restored backup lost them
+  const soundTracks = (await db.soundTracks.toArray()).map(({ fileHandle, ...t }): ExportedTrack =>
+    (fileHandle && typeof fileHandle.name === 'string' ? { ...t, fileName: fileHandle.name } : t))
+  const storage = browserStorage()
+  return {
+    ...header('all'), ...rows, rules, rulesOverlays, images, syncState: await db.syncState.toArray(),
+    soundTracks, soundPlaylists: await db.soundPlaylists.toArray(), localState: storage ? readLocalState(storage) : {},
+  }
 }
 
 /** Image-store ids of encounter maps, the assets placed on them and the map asset library. */
@@ -482,7 +536,18 @@ export async function importPayload(payload: BackupPayload, opts: ImportOptions)
   const plan = planRulesImport(existing, rulesEntries, rulesOverlays, now())
 
   const counts: ImportCounts = {}
-  await db.transaction('rw', [...campaignTables(), db.rules, db.images], async () => {
+  // A restore also brings the sound library back (local files have to be picked again: their handles stay on the old device)
+  const restoreSounds = opts.mode === 'replace' && (opts.sections.has('soundTracks') || opts.sections.has('soundPlaylists'))
+  await db.transaction('rw', [...campaignTables(), db.rules, db.images, db.soundTracks, db.soundPlaylists], async () => {
+    if (restoreSounds) {
+      for (const t of ['soundTracks', 'soundPlaylists'] as const) {
+        if (!opts.sections.has(t) || !Array.isArray(payload[t])) continue
+        const list = (payload[t] as object[]).map(r => rowValues(t, r))
+        await db.table(t).clear()
+        if (list.length) await db.table(t).bulkPut(list)
+        counts[t] = list.length
+      }
+    }
     if (opts.mode === 'replace') {
       for (const t of CAMPAIGN_TABLES) await db.table(t).clear()
       for (const t of CAMPAIGN_TABLES) {
@@ -498,6 +563,11 @@ export async function importPayload(payload: BackupPayload, opts: ImportOptions)
     counts.rules = rulesEntries.length
     counts.rulesOverlays = rulesOverlays.length - plan.missing.length
   })
+  // Layout and settings keys carry campaign ids, so they only fit a restore, where ids are kept
+  const storage = browserStorage()
+  if (opts.mode === 'replace' && opts.sections.has('localState') && storage && payload.localState && typeof payload.localState === 'object') {
+    counts.localState = writeLocalState(storage, payload.localState)
+  }
   // Sessions from before the board (older backups, campaign files): prep and notes become panels
   await convertSessions()
   const legacy = (Array.isArray(payload.systems) ? payload.systems.length : 0) + (Array.isArray(payload.records) ? payload.records.length : 0)

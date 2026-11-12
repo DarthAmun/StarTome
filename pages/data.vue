@@ -293,7 +293,7 @@ import { invalidateEntities } from '~/composables/useEntities'
 import { setPendingImport } from '~/composables/usePendingImport'
 import { cleanUpUnusedImages, dataUrlToBlob, imageRefId, isImageRef, resolveImageDataUrl } from '~/rules/images'
 import { buildQuestBoard, itemRefNames } from '~/converters/export'
-import { CAMPAIGN_TABLES, TABLE_LABELS, exportAllPayload, exportCampaignsPayload, exportTokensPayload, importPayload, jsonBlob, type BackupPayload, type ImportMode } from '~/sync/backup'
+import { CAMPAIGN_TABLES, EXTRA_LABELS, TABLE_LABELS, exportAllPayload, exportCampaignsPayload, exportTokensPayload, importPayload, jsonBlob, type BackupPayload, type ImportMode } from '~/sync/backup'
 import { detectImport, detectObject, isZip } from '~/sync/importDetect'
 import { parseJsonStream, STREAM_JSON_ABOVE } from '~/utils/jsonStream'
 import { campaignGame } from '~/types/game'
@@ -839,6 +839,13 @@ function buildImportSections(payload: any) {
     const arr: unknown[] | undefined = payload[key]
     if (arr?.length) sections.push({ key, label: TABLE_LABELS[key], count: arr.length, enabled: true })
   }
+  // Full backups since v0.42: the sound library and the layouts, bookmarks and settings kept outside the database
+  for (const key of ['soundTracks', 'soundPlaylists'] as const) {
+    const arr: unknown[] | undefined = payload[key]
+    if (arr?.length) sections.push({ key, label: EXTRA_LABELS[key], count: arr.length, enabled: true })
+  }
+  const localCount = payload.localState && typeof payload.localState === 'object' ? Object.keys(payload.localState).length : 0
+  if (localCount) sections.push({ key: 'localState', label: EXTRA_LABELS.localState, count: localCount, enabled: true })
   importSections.value = sections
   // A full backup defaults to restoring it; anything else is added alongside
   importMode.value = payload.type === 'all' ? 'replace' : 'merge'

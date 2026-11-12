@@ -206,7 +206,7 @@
           <div class="sett-about-info">
             <div class="sett-about-name">{{ APP_NAME }}</div>
             <div class="sett-about-version">Version {{ version }}</div>
-            <div class="sett-about-desc">Offline-first D&amp;D campaign manager. All data lives in your browser — no account required.</div>
+            <div class="sett-about-desc">Offline-first campaign manager for Pathfinder 2e and Starfinder 2e. All data lives in your browser — no account required.</div>
           </div>
         </div>
       </section>
@@ -280,6 +280,7 @@ async function clearAll() {
     db.campaigns.clear(), db.encounters.clear(), db.encounterTokens.clear(), db.encounterWalls.clear(),
     db.entities.clear(), db.entityLinks.clear(), db.entitySnapshots.clear(), db.entityConnections.clear(), db.graphLayouts.clear(),
     db.tokens.clear(), db.characters.clear(), db.levelUps.clear(), db.xpAwards.clear(), db.treasureAwards.clear(), db.inventory.clear(), db.purses.clear(), db.rules.clear(), db.images.clear(), db.syncState.clear(),
+    db.starships.clear(), db.sessionPanels.clear(), db.linkOffers.clear(), db.mapAssets.clear(), db.soundTracks.clear(), db.soundPlaylists.clear(),
   ])
   invalidateEntities()
   notifyRulesChanged()

@@ -355,6 +355,8 @@ export interface DbSoundTrack {
   type: 'file' | 'url' | 'spotify'
   src: string           // URL for 'url'/'spotify'; empty for 'file'
   fileHandle?: any      // FileSystemFileHandle, stored as IDB structured clone
+  /** A restored backup names the local file a track played; its handle stayed on the old device. */
+  fileName?: string
   duration?: number     // seconds, for display
   tags?: string[] | string
   createdAt: string

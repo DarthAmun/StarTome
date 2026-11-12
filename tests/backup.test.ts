@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { parseJson } from '~/utils/json'
 import { dbApi, getDb } from '~/composables/useDb'
-import { CAMPAIGN_TABLES, exportAllPayload, exportCampaignsPayload, importPayload, jsonBlob, type BackupPayload } from '~/sync/backup'
+import { CAMPAIGN_TABLES, exportAllPayload, exportCampaignsPayload, importPayload, jsonBlob, readLocalState, writeLocalState, type BackupPayload } from '~/sync/backup'
 
 const ALL = new Set<string>([...CAMPAIGN_TABLES, 'rules', 'rulesOverlays'])
 
@@ -258,5 +258,63 @@ describe('backup and import', () => {
     const camp = (await db.campaigns.toArray()).filter(c => c.name === 'Theirs')[1]
     const loc = (await db.entities.where('campaign_id').equals(camp.id!).toArray()).find(e => e.type === 'location')!
     expect((await db.entityLinks.where('source_id').equals(loc.id!).toArray()).map(l => l.target_name)).toEqual(['Theirs Kib'])
+  })
+})
+
+describe('what a full backup carries besides the campaign tables (v0.42)', () => {
+  beforeEach(async () => {
+    const db = getDb()
+    for (const t of [...CAMPAIGN_TABLES, 'soundTracks', 'soundPlaylists']) await db.table(t).clear()
+  })
+
+  function memoryStorage(init: Record<string, string> = {}) {
+    const map = new Map(Object.entries(init))
+    return {
+      get length() { return map.size },
+      key: (i: number) => [...map.keys()][i] ?? null,
+      getItem: (k: string) => map.get(k) ?? null,
+      setItem: (k: string, v: string) => { map.set(k, v) },
+      removeItem: (k: string) => { map.delete(k) },
+      dump: () => Object.fromEntries(map),
+    }
+  }
+
+  it('reads the app\'s own localStorage keys and leaves out the Play Buddy token and other apps', () => {
+    const storage = memoryStorage({
+      'startome.settings': '{"theme":"void"}', 'startome.dmscreen-v4-1': '[]', 'startome.playbuddy': '{"token":"secret"}', 'dmstome.settings': '{}',
+    })
+    expect(readLocalState(storage)).toEqual({ 'startome.settings': '{"theme":"void"}', 'startome.dmscreen-v4-1': '[]' })
+  })
+
+  it('writing local state replaces the app\'s keys, keeps the pairing token and never takes one from a file', () => {
+    const storage = memoryStorage({ 'startome.bookmarks': '[1]', 'startome.playbuddy': 'mine', 'other': 'x' })
+    const n = writeLocalState(storage, { 'startome.settings': 'S', 'startome.playbuddy': 'theirs', 'evil': 'y' })
+    expect(n).toBe(1)
+    expect(storage.dump()).toEqual({ 'startome.settings': 'S', 'startome.playbuddy': 'mine', 'other': 'x' })
+  })
+
+  it('exports the sound library without file handles and restores it', async () => {
+    const db = getDb()
+    await seed('Sound')
+    const track = await db.soundTracks.add({ name: 'Tavern', type: 'file', src: '', fileHandle: { name: 'tavern.mp3' }, tags: ['ambient'], createdAt: '', updatedAt: '' }) as number
+    await db.soundTracks.add({ name: 'Stream', type: 'url', src: 'https://example.test/a.mp3', createdAt: '', updatedAt: '' })
+    await db.soundPlaylists.add({ name: 'Night', trackIds: [track], loop: 1, shuffle: 0, createdAt: '', updatedAt: '' })
+
+    const file = await readBack(await exportAllPayload())
+    expect(file.soundTracks).toHaveLength(2)
+    expect(file.soundTracks![0]).toMatchObject({ name: 'Tavern', fileName: 'tavern.mp3' })
+    expect(file.soundTracks![0]).not.toHaveProperty('fileHandle')
+    expect(file.localState).toEqual({})
+
+    await db.soundTracks.clear(); await db.soundPlaylists.clear()
+    const sections = new Set([...ALL, 'soundTracks', 'soundPlaylists', 'localState'])
+    const merged = await importPayload(file, { mode: 'merge', sections })
+    expect(await db.soundTracks.count()).toBe(0)           // ids aren't remapped in a merge, so sounds only come with a restore
+    expect(merged.counts.soundTracks).toBeUndefined()
+
+    const restored = await importPayload(file, { mode: 'replace', sections })
+    expect(restored.counts.soundTracks).toBe(2)
+    expect((await db.soundPlaylists.toArray())[0]).toMatchObject({ name: 'Night', trackIds: [track] })
+    expect((await db.soundTracks.get(track))!.fileName).toBe('tavern.mp3')
   })
 })
