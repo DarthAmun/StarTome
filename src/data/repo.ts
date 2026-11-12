@@ -46,7 +46,7 @@ export const entries = {
     getDb().rows('entries').where('[campaignId+type]').equals([campaignId, type]).toArray(),
   get: (id: string) => getRow('entries', id),
   recent: (campaignId: string, limit: number): Promise<Entry[]> =>
-    getDb().rows('entries').where('[campaignId+updatedAt]').between([campaignId, ''], [campaignId, '￿']).reverse().limit(limit).toArray(),
+    getDb().rows('entries').where('[campaignId+updatedAt]').between([campaignId, ''], [campaignId, '\uffff']).reverse().limit(limit).toArray(),
   linksFrom: (id: string) => getDb().rows('links').where('sourceId').equals(id).toArray(),
   linksTo: (id: string) => getDb().rows('links').where('targetEntryId').equals(id).toArray(),
 }
@@ -132,4 +132,22 @@ export async function rulesByName(name: string, kind?: string): Promise<RulesRow
 
 export const characters = {
   ofCampaign: (campaignId: string) => getDb().rows('characters').where('campaignId').equals(campaignId).toArray(),
+}
+
+/** Compendium entries of a kind whose name contains the text, for link completion. */
+export async function rulesNamesLike(kind: string, text: string, limit: number): Promise<string[]> {
+  const q = text.trim().toLowerCase()
+  const rows = await getDb().rows('rules').where('[kind+sortName]').between([kind, q], [kind, `${q}\uffff`]).limit(limit).toArray()
+  return rows.map(r => r.name)
+}
+
+export async function sessionPanelsOf(sessionId: string) {
+  return (await getDb().rows('sessionPanels').where('sessionId').equals(sessionId).toArray()).filter(p => p.kind !== 'frame').sort((a, b) => a.y - b.y || a.x - b.x)
+}
+
+/** The locations whose maps carry a pin for this entry. */
+export async function mapsPinning(entryId: string): Promise<Entry[]> {
+  const pins = await getDb().rows('mapPins').where('entryId').equals(entryId).toArray()
+  const maps = await Promise.all([...new Set(pins.map(p => p.mapEntryId))].map(id => entries.get(id)))
+  return maps.filter((e): e is Entry => !!e)
 }

@@ -63,3 +63,14 @@ button { cursor: pointer; }
 .prose .ref { display: inline-flex; align-items: baseline; gap: .3em; padding: 0 .4em; border-radius: var(--radius); background: color-mix(in srgb, var(--ref-color, var(--accent)) 14%, transparent); color: var(--ref-color, var(--accent)); cursor: pointer; text-decoration: none; }
 .prose .ref:hover { background: color-mix(in srgb, var(--ref-color, var(--accent)) 26%, transparent); }
 .prose .ref.unresolved { opacity: .65; border-bottom: 1px dotted currentColor; background: none; }
+.prose .widget { display: inline-flex; align-items: center; gap: .4em; padding: 0 .55em; margin: 0 .1em; border: 1px solid color-mix(in srgb, var(--accent-2) 55%, var(--line)); border-radius: var(--radius); background: color-mix(in srgb, var(--accent-2) 10%, transparent); color: var(--text); font-family: var(--font-mono); font-size: .88em; }
+.prose .widget:hover { border-color: var(--accent-2); }
+.prose .widget .pips { display: inline-flex; gap: 2px; }
+.prose .widget .pips i { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--accent-2); }
+.prose .widget .pips i.on { background: var(--accent-2); }
+.prose li.task { list-style: none; margin-left: -1.2em; }
+.prose li.task input { accent-color: var(--accent); margin-right: .35em; }
+@media print {
+  body { overflow: visible; background: #fff; color: #000; }
+  .no-print { display: none !important; }
+}

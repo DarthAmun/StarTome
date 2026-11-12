@@ -12,7 +12,7 @@ import { campaign, campaignId, peek } from '@/ui/workbench'
 const all = useLive<Entry[]>(() => (campaignId.value ? entryRepo.ofCampaign(campaignId.value) : Promise.resolve([])), [], [campaignId])
 const recent = useLive<Entry[]>(() => (campaignId.value ? entryRepo.recent(campaignId.value, 8) : Promise.resolve([])), [], [campaignId])
 const party = useLive(() => (campaignId.value ? characters.ofCampaign(campaignId.value) : Promise.resolve([])), [], [campaignId])
-const banner = useImageUrl(() => campaign.value?.banner)
+const banner = useImageUrl(() => campaign.value?.banner, true)
 
 const sessions = computed(() => all.value.filter((e): e is EntryOf<'session'> => e.type === 'session')
   .sort((a, b) => (Number(b.data.number) || 0) - (Number(a.data.number) || 0) || b.updatedAt.localeCompare(a.updatedAt)))

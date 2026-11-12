@@ -7,7 +7,8 @@ import { PLACES, UTILITIES, type Place } from './places'
 
 const route = useRoute()
 const logo = `${import.meta.env.BASE_URL}icons/icon-192.png`
-const active = computed(() => (route.name === 'entry' ? 'world' : String(route.name ?? '')))
+const WORLD = ['entry', 'maps', 'map', 'graphs', 'timeline']
+const active = computed(() => (WORLD.includes(String(route.name)) ? 'world' : String(route.name ?? '')))
 
 function to(p: Place) {
   if (!p.campaign) return { name: p.name }

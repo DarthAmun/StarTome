@@ -7,9 +7,9 @@ defineProps<{ campaignId: string; entryId: string }>()
 </script>
 
 <template>
-  <div class="page">
+  <div class="page" style="padding-top:.8rem">
     <RouterLink :to="{ name: 'world', params: { campaignId } }" class="btn btn-ghost"><ArrowLeft :size="14" /> World</RouterLink>
-    <div class="sheet panel"><EntryView :entry-id="entryId" /></div>
+    <div class="sheet panel"><EntryView :entry-id="entryId" full /></div>
   </div>
 </template>
 

@@ -46,7 +46,10 @@ watchEffect(() => {
 
 function onKey(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); commandBarOpen.value = !commandBarOpen.value; return }
-  if (e.key === 'Escape' && dock.open && !commandBarOpen.value && !document.querySelector('dialog[open]')) closeDock()
+  // Escape closes the dock, but not while it is leaving a field or an editor
+  const t = e.target as HTMLElement | null
+  const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)
+  if (e.key === 'Escape' && dock.open && !typing && !commandBarOpen.value && !document.querySelector('dialog[open]')) closeDock()
 }
 onMounted(() => {
   window.addEventListener('keydown', onKey)
@@ -62,7 +65,8 @@ function switchCampaign(e: Event) {
 </script>
 
 <template>
-  <div class="shell" :class="{ docked: dock.open }">
+  <RouterView v-if="route.meta.player" />
+  <div v-else class="shell" :class="{ docked: dock.open }">
     <AppRail />
     <header class="top">
       <label class="switch" title="Switch campaign">

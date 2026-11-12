@@ -12,6 +12,7 @@ import { backupFolderState, backupFolderSupported, backupToFolder, chooseBackupF
 import { importLegacyFile, importLegacyFromBrowser, legacyDbExists, type LegacyImportResult } from '@/services/v042/import'
 import { confirmDialog, notify, reportError } from '@/ui/dialogs'
 import { campaign } from '@/ui/workbench'
+import LoreExport from './LoreExport.vue'
 
 const emit = defineEmits<{ changed: [] }>()
 const version = __APP_VERSION__
@@ -169,6 +170,8 @@ const SHOWN = ['campaigns', 'entries', 'encounters', 'combatants', 'characters',
       </template>
       <p v-else class="faint">This browser cannot write to a folder by itself (it needs Chrome or another Chromium browser). Use “Download a full backup”.</p>
     </section>
+
+    <LoreExport />
 
     <section class="panel block">
       <h2>In this app now</h2>

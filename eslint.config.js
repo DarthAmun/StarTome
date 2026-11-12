@@ -49,7 +49,9 @@ export default tseslint.config(
   {
     // Only data/ opens the database
     files: ['src/domain/**', 'src/services/**', 'src/ui/**', 'src/features/**', 'src/app/**'],
-    rules: { 'no-restricted-syntax': ['error', { selector: "ImportDeclaration[source.value='dexie']", message: 'Only src/data/ talks to IndexedDB.' }] },
+    rules: { 'no-restricted-syntax': ['error',
+      { selector: "ImportDeclaration[source.value='dexie']", message: 'Only src/data/ talks to IndexedDB.' },
+      { selector: "ImportDeclaration[source.value='@/data/db']", message: 'Only src/data/ opens the database; use a repository.' }] },
   },
   {
     files: ['src/domain/**'],

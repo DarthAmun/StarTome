@@ -6,15 +6,18 @@
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Search, Star } from 'lucide-vue-next'
+import { Plus, Search, Star } from 'lucide-vue-next'
 import type { Entry, EntryType } from '@/domain/schema'
+import { createEntry } from '@/data/entries'
 import { entries as entryRepo } from '@/data/repo'
+import { reportError } from '@/ui/dialogs'
 import { ENTRY_TYPE_INFO, ENTRY_TYPE_ORDER } from '@/ui/entryTypes'
 import { excerpt } from '@/ui/markdown'
 import { useLive } from '@/ui/useLive'
 import { campaignId, peek } from '@/ui/workbench'
 import { entryMeta, isArchived } from './facts'
 import EntryThumb from './EntryThumb.vue'
+import WorldTabs from './WorldTabs.vue'
 
 const router = useRouter()
 const all = useLive<Entry[]>(() => (campaignId.value ? entryRepo.ofCampaign(campaignId.value) : Promise.resolve([])), [], [campaignId])
@@ -26,6 +29,17 @@ const showArchived = ref(true)
 const tag = ref<string | null>(null)
 const searchEl = ref<HTMLInputElement | null>(null)
 const focus = ref(0)
+const sort = ref<'name' | 'updated' | 'type'>('name')
+const adding = ref(false)
+
+async function add(t: EntryType) {
+  adding.value = false
+  if (!campaignId.value) return
+  try {
+    const e = await createEntry(campaignId.value, t)
+    peek({ kind: 'entry', id: e.id })
+  } catch (err) { reportError('Creating the entry', err) }
+}
 
 const counts = computed(() => {
   const c: Partial<Record<EntryType, number>> = {}
@@ -47,7 +61,9 @@ const shown = computed(() => {
     && (showArchived.value || !isArchived(e))
     && (!tag.value || e.tags.includes(tag.value))
     && (!q || e.name.toLowerCase().includes(q) || e.tags.some(t => t.toLowerCase().includes(q)) || e.body.toLowerCase().includes(q)),
-  ).sort((a, b) => Number(b.favorite) - Number(a.favorite) || collator.compare(a.name, b.name))
+  ).sort((a, b) => (sort.value === 'updated' ? b.updatedAt.localeCompare(a.updatedAt)
+    : sort.value === 'type' ? ENTRY_TYPE_ORDER.indexOf(a.type) - ENTRY_TYPE_ORDER.indexOf(b.type) || collator.compare(a.name, b.name)
+      : Number(b.favorite) - Number(a.favorite) || collator.compare(a.name, b.name)))
 })
 
 function toggleType(t: EntryType) {
@@ -84,9 +100,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 </script>
 
 <template>
+  <div class="wrap">
+  <WorldTabs />
   <div class="world">
     <aside class="filters">
-      <h1>World</h1>
+      <div class="head"><h1>World</h1>
+        <div class="new">
+          <button class="btn btn-primary" @click="adding = !adding"><Plus :size="14" /> New</button>
+          <div v-if="adding" class="menu panel">
+            <button v-for="t in ENTRY_TYPE_ORDER.filter(x => x !== 'session')" :key="t" class="type" :style="{ '--type': ENTRY_TYPE_INFO[t].color }" @click="add(t)"><component :is="ENTRY_TYPE_INFO[t].icon" :size="14" /> <span>{{ ENTRY_TYPE_INFO[t].label }}</span><span /></button>
+          </div>
+        </div>
+      </div>
       <p class="faint count"><span class="num">{{ shown.length }}</span> of <span class="num">{{ all.length }}</span> entries</p>
       <label class="search">
         <Search :size="14" />
@@ -97,6 +122,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       <button v-for="t in ENTRY_TYPE_ORDER" :key="t" class="type" :class="{ on: types.has(t) }" :style="{ '--type': ENTRY_TYPE_INFO[t].color }" @click="toggleType(t)">
         <component :is="ENTRY_TYPE_INFO[t].icon" :size="14" /> <span>{{ ENTRY_TYPE_INFO[t].plural }}</span> <span class="num faint">{{ counts[t] ?? 0 }}</span>
       </button>
+      <div class="eyebrow">Sort</div>
+      <select v-model="sort" class="input" aria-label="Sort"><option value="name">Name, favourites first</option><option value="updated">Last changed</option><option value="type">Type, then name</option></select>
       <div class="eyebrow">Show</div>
       <label class="check"><input v-model="favoritesOnly" type="checkbox" /> Favourites only</label>
       <label class="check"><input v-model="showArchived" type="checkbox" /> Dead, destroyed, closed, false</label>
@@ -126,11 +153,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
       <p v-if="shown.length" class="hint faint"><span class="kbd">↑</span> <span class="kbd">↓</span> move · <span class="kbd">Enter</span> peek · <span class="kbd">Shift</span>+<span class="kbd">Enter</span> or double-click opens the page</p>
     </div>
   </div>
+  </div>
 </template>
 
 <style scoped>
-.world { display: grid; grid-template-columns: 250px 1fr; height: 100%; }
+.wrap { height: 100%; display: flex; flex-direction: column; }
+.world { display: grid; grid-template-columns: 250px 1fr; flex: 1; min-height: 0; }
 .filters { padding: 1.4rem 1rem 2rem 1.4rem; border-right: var(--frame); overflow: auto; display: flex; flex-direction: column; gap: .15rem; background-image: var(--wash); }
+.head { display: flex; align-items: center; justify-content: space-between; }
+.new { position: relative; }
+.menu { position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; width: 190px; padding: .3rem; display: flex; flex-direction: column; box-shadow: var(--shadow); }
 .count { margin: .2rem 0 .8rem; }
 .search { display: flex; align-items: center; gap: .4rem; color: var(--text-faint); margin-bottom: .4rem; }
 .eyebrow { margin: .9rem 0 .3rem; }

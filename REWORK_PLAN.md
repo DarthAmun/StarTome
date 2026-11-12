@@ -1,6 +1,6 @@
 # StarTome rework plan
 
-Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phase 1 is done on the `rework` branch (see section 11a). Phase 2 is next.
+Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phases 1 and 2 are done on the `rework` branch (see section 11a). Phase 3 is next.
 
 How this was produced: the schema, types, format docs, backup/import code, the Play Buddy port and the app shell were read line by line. The large UI files (encounter page, GM screen, map maker, editors, session board) were read by extracting their templates, handlers, shortcuts and storage keys rather than every line. The app was started (`pnpm dev`), the main screens were opened, `pnpm test` (557 passed, 2 skipped) and `pnpm typecheck` ran clean. A real backup (`~/Downloads/startome-all-2026-11-03.json`, 578 MB) was inspected for its actual shape. Anything in the inventory I could not confirm by running it is still listed; Phase 3 verifies each line.
 
@@ -137,25 +137,25 @@ Common
 - [ ] C5 Keyboard: arrows move, Enter opens, Space favourites; hover or focus shows a peek card (facts, excerpt, last edited)
 - [ ] C6 Empty states ("no matches" with clear, "none yet" with create); view preferences remembered per type
 - [ ] C7 Entry page: list column (collapsible to a rail, search, favourites, filters shared with the overview) beside the editor
-- [ ] C8 Entry header: click-to-rename, favourite, delete with confirm
-- [ ] C9 Collapsible attributes panel; edits merge onto the stored entry so changes made elsewhere are not overwritten
-- [ ] C10 Link bar under every entry: outgoing links, "referenced by" (backlinks), "found in" (maps that pin it)
+- [x] C8 Entry header: click-to-rename, favourite, delete with confirm
+- [x] C9 Collapsible attributes panel; edits merge onto the stored entry so changes made elsewhere are not overwritten
+- [x] C10 Link bar under every entry: outgoing links, "referenced by" (backlinks), "found in" (maps that pin it)
 - [ ] C11 Per-type JSON export from the list column (flag F9)
-- [ ] C12 Images are file uploads or URLs; stored as `img:` references with cached thumbnails
+- [x] C12 Images are file uploads or URLs; stored as `img:` references with cached thumbnails
 
 Per type
 - [ ] C13 NPC: portrait, title, level, ancestry and class (compendium suggestions or free text), second class (dual-class), status text, alive/dead, Player Character switch (adds/removes the party member; removing asks and moves their items to the stash)
 - [ ] C14 NPC card above the text; derived "last seen in session N", factions and locations from links and map pins
 - [ ] C15 NPC Progression panel: class features and feat slots by level (dual-class aware), click a slot for the matching feats, legacy tag, custom class fallback, show levels above current
-- [ ] C16 Location: banner/logo, map image, type, discovery status, Map button; table shows pin and region counts
+- [x] C16 Location: banner/logo, map image, type, discovery status, Map button; table shows pin and region counts
 - [ ] C17 Faction: emblem, type, size, secret flag, headquarters; member count from links
-- [ ] C18 Quest: status, quest giver picker (NPC or faction, or typed text), reward, tags, milestone flag; objectives counted from task-list items
+- [x] C18 Quest: status, quest giver picker (NPC or faction, or typed text), reward, tags, milestone flag; objectives counted from task-list items
 - [ ] C19 Completing a quest prompts a party level-up (milestone flag) or accomplishment XP
-- [ ] C20 Event: date (text), location, significance; Timeline view
+- [x] C20 Event: date (text), location, significance; Timeline view
 - [ ] C21 Note: icon (10 choices), tags
-- [ ] C22 Rumor: several statuses at once (unheard, heard, revealed, false), source, tags
-- [ ] C23 Random table: die (d4–d100), rows (min, max, result with link completion), Roll with rendered result
-- [ ] C24 Region: creatable in World without a map, placed or drawn on a map later (decision F19; in v0.41 the list offers no "New" for regions); polygon preview, colour, parent map
+- [x] C22 Rumor: several statuses at once (unheard, heard, revealed, false), source, tags
+- [x] C23 Random table: die (d4–d100), rows (min, max, result with link completion), Roll with rendered result
+- [x] C24 Region: creatable in World without a map, placed or drawn on a map later (decision F19; in v0.41 the list offers no "New" for regions); polygon preview, colour, parent map
 - [ ] C25 Session: number, date, mode (planning / running / finished); switching to running sets today's date and opens the recap; finishing opens the review
 
 History (flag F4)
@@ -165,17 +165,17 @@ History (flag F4)
 
 ### D. Markdown editor
 
-- [ ] D1 Three view modes: Edit, Mixed (click a block to edit it), Preview; choice remembered (flag F7)
-- [ ] D2 Toolbar: bold, italic, heading, list, task, quote; Ctrl+B / Ctrl+I; undo covers toolbar actions
-- [ ] D3 Lists continue on Enter; Tab / Shift+Tab indent; spellcheck
+- [x] D1 Three view modes: Edit, Mixed (click a block to edit it), Preview; choice remembered (flag F7)
+- [x] D2 Toolbar: bold, italic, heading, list, task, quote; Ctrl+B / Ctrl+I; undo covers toolbar actions
+- [x] D3 Lists continue on Enter; Tab / Shift+Tab indent; spellcheck
 - [ ] D4 `{{type: Name}}` links with autocomplete: campaign entries, encounters, graphs, compendium entries, historical states
 - [ ] D5 `{{type: Name | entry}}` embeds the entry's card
 - [ ] D6 `{{roll: 2d6+3}}`, `::dice[…]`, `::button[Label | dice]`, `::table[Name]`, `::choose[a | b]`, `::clock[Name | 0/6]` (click advances and saves); widget reference panel inserts them
-- [ ] D7 GM-only blocks (`> [!hidden]`) toggled per block; styled for the GM, stripped from everything players get
+- [x] D7 GM-only blocks (`> [!hidden]`) toggled per block; styled for the GM, stripped from everything players get
 - [ ] D8 Task lists, callouts
-- [ ] D9 Print / save as PDF without GM-only blocks
-- [ ] D10 Debounced saving that flushes on leaving the page
-- [ ] D11 Clicking a link opens the campaign entry, or the compendium entry of that name
+- [x] D9 Print / save as PDF without GM-only blocks
+- [x] D10 Debounced saving that flushes on leaving the page
+- [x] D11 Clicking a link opens the campaign entry, or the compendium entry of that name
 
 ### E. Search, commands, dice
 
@@ -365,8 +365,8 @@ Map maker
 - [ ] M3 Import dialog: sections to include, merge (new ids, nothing overwritten) or replace (with confirm), progress log; one transaction, all or nothing
 - [x] M4 Full backup export: campaigns, tokens, own compendium entries, overlays on synced entries, images
 - [x] M5 Campaign export (one or all) with the library tokens and map assets it uses
-- [ ] M6 Markdown zip of a campaign (frontmatter, wiki links, GM-only switch); "Export for Claude" single file (GM-only switch) (flag F9)
-- [ ] M7 Quest board export for players
+- [x] M6 Markdown zip of a campaign (frontmatter, wiki links, GM-only switch); "Export for Claude" single file (GM-only switch) (flag F9)
+- [x] M7 Quest board export for players
 - [ ] M8 Token templates export (flag F10)
 - [ ] M9 Format guides to download (campaign and homebrew formats)
 - [ ] M10 Database statistics
@@ -387,19 +387,19 @@ Map maker
 
 ### O. Graphs
 
-- [ ] O1 Several named graphs per campaign: create, rename, delete with confirm
-- [ ] O2 Add entries by search; show or hide by type; mention edges from text links on/off
-- [ ] O3 Hand-made connections: label, direction (one-way, both, none), line style, colour; edit or delete from the edge
-- [ ] O4 Layout (positions, zoom, pan) saved; fit; node toolbar (open, remove)
-- [ ] O5 Hide nodes or single attributes from players; player view in its own window
+- [x] O1 Several named graphs per campaign: create, rename, delete with confirm
+- [x] O2 Add entries by search; show or hide by type; mention edges from text links on/off
+- [x] O3 Hand-made connections: label, direction (one-way, both, none), line style, colour; edit or delete from the edge
+- [x] O4 Layout (positions, zoom, pan) saved; fit; node toolbar (open, remove)
+- [x] O5 Hide nodes or single attributes from players; player view in its own window
 
 ### P. Maps
 
-- [ ] P1 Every location can carry a map image; pan, zoom, fit
-- [ ] P2 Pin any entry on a map (search, click to place), remove, hide from players
-- [ ] P3 Pin preview with links to the entry and, for locations, its own map; drill-down with breadcrumbs
-- [ ] P4 Regions: draw a polygon (click vertices, double-click or Finish, Esc cancels), name, colour, preview, delete
-- [ ] P5 Player map window that follows the map the GM has open
+- [x] P1 Every location can carry a map image; pan, zoom, fit
+- [x] P2 Pin any entry on a map (search, click to place), remove, hide from players
+- [x] P3 Pin preview with links to the entry and, for locations, its own map; drill-down with breadcrumbs
+- [x] P4 Regions: draw a polygon (click vertices, double-click or Finish, Esc cancels), name, colour, preview, delete
+- [x] P5 Player map window that follows the map the GM has open
 
 ### Q. Sounds
 
@@ -787,7 +787,7 @@ The new app is built on a `rework` branch and published to a second path (for ex
 |---|---|---|---|
 | **0 Safety net** (on `main`) ✅ | v0.42.0: the full backup includes the sound library and the localStorage state (layouts, bookmarks, settings; never the Play Buddy token), and a restore puts them back. "Wipe all data" clears every table. Tests in `tests/backup.test.ts`. The synthetic legacy fixture moves to Phase 1. | M4, M14 | Take a complete backup. |
 | **1 Foundation** ✅ | Vite + Vue + strict TypeScript project, lint rules, design tokens and both skins, shell (rail, command bar, dock, tray), domain schemas, database, repositories, backup v3, legacy import with tests, backup folder. Pure rules and their tests moved over. | S, parts of A, M3–M5 | Import everything, switch campaigns, search, open any entry read-only in the dock, export and restore a backup. |
-| **2 World** | Entry browser, editors for all ten types, markdown editor with links and widgets, backlinks, history, favourites and tray pins, maps with pins and regions, player map, graphs, timeline, lore exports. | C, D, E1–E4, O, P, M6–M7 | Do all campaign writing in the new app. |
+| **2 World** ✅ | Entry browser, editors for all ten types, markdown editor with links and widgets, backlinks, history, favourites and tray pins, maps with pins and regions, player map, graphs, timeline, lore exports. | C, D, E1–E4, O, P, M6–M7 | Do all campaign writing in the new app. |
 | **3 Compendium** | Browser, stat blocks with rolls, entry editor, creature builder, homebrew import and packs, Foundry sync, image folder import, field notes, dice panel. | L, E5–E7, M9–M11 | Look up and maintain rules content. |
 | **4 Party and loot** | Roster, ledger (XP, milestones, level-ups), inventory, wealth, treasure roll, earn income, companions. | H, I, J1–J2 | Track the party between sessions. |
 | **5 Encounters** | List, builder, VTT engine (prepare and run), tokens, conditions and automation, areas, resolve, player view, map maker, token library. | G, J3–J4 | Run a fight. |
@@ -820,6 +820,30 @@ Differences from the plan as written:
 Checklist: A11, A13, M4, M5, M14, S3 verified. Section S1–S2 (offline) wait for the cut-over build check in Phase 8.
 
 How to try it: `git switch rework && pnpm install && pnpm dev`, open http://localhost:3001, Import & Backup, "From a v0.42 backup file…".
+
+**Phase 2, World (done 2026-11-12, branch `rework`).**
+
+What exists: entries can be created, written, renamed and deleted from the World list without leaving it (they open in the dock; Shift+Enter or double-click opens the page). Each of the ten types has its typed fields; images are uploaded or linked and keep their format. The editor has the three modes of decision F7: Live (click a block to edit it), Source (the whole text as one document) and Read, with `{{` completion for entries and compendium entries, the toolbar, GM-only blocks, tasks you can tick and clocks you can advance in rendered text, dice, tables and pickers, and print without GM-only text. Links are stored resolved: a rename rewrites every text that names the entry (bodies, quest rewards, table rows, quest givers), a link written before its target exists starts working when the target is created, and deleting an entry leaves the text that named it and marks the link as missing. History is a list of recorded states with view, restore and delete. World has four views: Entries, Maps (pins, hide from players, step into a pinned location's map, regions drawn as polygons or placed later), Graphs (several per campaign, mention lines, hand-drawn connections with label, direction, line and colour, hiding entries or single facts from players) and Timeline. Maps and graphs each have a players' window that follows what the GM has open. Import & Backup exports the lore as one Markdown file, a folder of Markdown files, or the quest board (version 2).
+
+Tests added: 10 for entry writes and references, 4 for the block editing helpers, 4 for the exports, 3 browser tests (write, link and rename; fields, live editor and a region without a map; graph and timeline). Totals: 48 unit tests and 5 browser tests in the new app.
+
+Bug found by the browser tests and fixed: Escape pressed inside an editor closed the dock and lost sight of the entry.
+
+Not done in this phase, by item:
+
+- **World list (C1–C6):** search, type, tags, favourites, the "dead, destroyed, closed, false" switch and three sort orders are in. Not in: filters per field (status, ancestry, faction …), grouping, the gallery and table densities, the A–Z rail, Space to favourite. The hover card is replaced by the dock.
+- **Note icon (C21)** and all icons stored by name: the icon set is not bundled yet, so the icon cannot be chosen or shown. The stored names are kept.
+- **Embedded cards (D5):** `{{npc: Name | entry}}` shows as a link, not as the entry's card.
+- **Link completion (D4):** entries and compendium entries complete; encounters, graphs and historical states do not.
+- **Command bar commands (E4):** it goes to places and finds things; add, rename, delete, edit, roll and DC commands are not in.
+- **NPC (C13–C15):** ancestry and class are plain text until the compendium phase adds suggestions and the progression panel. "Last seen in session", faction and location derived from links are not shown.
+- **Faction member count (C17)** is not shown.
+- **Quests (C19):** completing one sends the event; the level-up and XP prompts arrive with the party phase.
+- **Sessions (C25):** fields and a read-only list of the imported panels; the board is Phase 6.
+- **Dice results (D6)** appear as notices until the dice panel of Phase 3.
+- **Removed as decided:** per-type JSON export (F9), event links of historical states and the timeline strip (F4).
+
+Checklist: C8–C10, C12, C16, C18, C20, C22–C24, D1–D3, D7, D9–D11, O1–O5, P1–P5, M6, M7 verified.
 
 ---
 
