@@ -31,8 +31,8 @@ const router = useRouter()
 const RARITIES: Rarity[] = ['common', 'uncommon', 'rare', 'unique']
 const build = ref<BuildState>(emptyBuild())
 const ready = ref(false)
-void workspace.get<unknown>(props.campaignId, 'encounterBuilder', null).then((raw) => { build.value = readBuild(raw); ready.value = true })
-watch(build, (b) => { if (ready.value) void workspace.set(props.campaignId, 'encounterBuilder', JSON.parse(JSON.stringify(b))) }, { deep: true })
+void workspace.get<unknown>(props.campaignId, 'builder.draft', null).then((raw) => { build.value = readBuild(raw); ready.value = true })
+watch(build, (b) => { if (ready.value) void workspace.set(props.campaignId, 'builder.draft', JSON.parse(JSON.stringify(b))) }, { deep: true })
 
 const settings = useLive(() => campaignSettings(props.campaignId), null)
 const game = computed(() => settings.value?.game ?? 'pf2e')

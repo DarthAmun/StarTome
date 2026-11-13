@@ -18,6 +18,8 @@ const emit = defineEmits<{ context: [hit: { tokenId: string | null; wallId: stri
 const host = ref<HTMLElement | null>(null)
 let engine: MapEngine | null = null
 let observer: ResizeObserver | null = null
+/** Watchers started after the engine is ready are not the component's own: they are stopped by hand. */
+const stops: (() => void)[] = []
 const undoWalls: string[] = []
 
 function setWalls(walls: ReturnType<typeof wallsOf>) { saveMap({ walls }, true) }
@@ -71,23 +73,23 @@ onMounted(async () => {
   observer = new ResizeObserver(() => e.resize())
   observer.observe(host.value)
 
-  watch(() => live.encounter?.map, async (map) => {
+  stops.push(watch(() => live.encounter?.map, async (map) => {
     await e.setMap(await imageUrlOf(map, true))
     const v = live.map?.viewport
     if (v && (v.x || v.y || v.scale !== 1)) e.setViewport(v)
     else e.fit()
     refreshSight()
-  }, { immediate: true })
-  watch(() => live.encounter?.grid, (g) => { if (g) { e.setGrid(g); refreshSight() } }, { immediate: true, deep: true })
-  watch(() => live.map?.fog, fog => e.setFog(fog ?? {}), { immediate: true })
-  watch(() => live.map?.walls, (walls) => { e.setWalls(walls ?? []); refreshSight() }, { immediate: true })
-  watch(() => [areas(), mapTokens().map(t => [t.id, t.x, t.y, t.size])], () => e.setAreas(areas().map(a => ({ id: a.id, cells: [...areaCells(a)], color: hexNumber(a.color) }))), { immediate: true, deep: true })
-  watch(() => [live.tokens, live.activeId, live.encounter?.status], () => { void refreshTokens(); refreshSight() }, { immediate: true, deep: true })
-  watch(() => [live.fovMode, live.encounter?.fovEnabled], refreshSight)
-  watch(() => tools.tool, () => e.toolChanged())
+  }, { immediate: true }))
+  stops.push(watch(() => live.encounter?.grid, (g) => { if (g) { e.setGrid(g); refreshSight() } }, { immediate: true, deep: true }))
+  stops.push(watch(() => live.map?.fog, fog => e.setFog(fog ?? {}), { immediate: true }))
+  stops.push(watch(() => live.map?.walls, (walls) => { e.setWalls(walls ?? []); refreshSight() }, { immediate: true }))
+  stops.push(watch(() => [areas(), mapTokens().map(t => [t.id, t.x, t.y, t.size])], () => e.setAreas(areas().map(a => ({ id: a.id, cells: [...areaCells(a)], color: hexNumber(a.color) }))), { immediate: true, deep: true }))
+  stops.push(watch(() => [live.tokens, live.activeId, live.encounter?.status], () => { void refreshTokens(); refreshSight() }, { immediate: true, deep: true }))
+  stops.push(watch(() => [live.fovMode, live.encounter?.fovEnabled], refreshSight))
+  stops.push(watch(() => tools.tool, () => e.toolChanged()))
 })
 
-onBeforeUnmount(() => { observer?.disconnect(); engine?.destroy(); engine = null })
+onBeforeUnmount(() => { stops.forEach(stop => stop()); observer?.disconnect(); engine?.destroy(); engine = null })
 
 /** Ctrl+Z while drawing walls takes back the last wall drawn here. */
 function undoWall(): boolean {

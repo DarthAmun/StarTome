@@ -11,6 +11,9 @@ import type { AreaOverlay } from '@/domain/rules/areas'
 import { statLinkOf } from '@/data/encounters'
 import { reopenEncounter } from '@/data/resolution'
 import { storeImage } from '@/services/images'
+import { playPlaylist } from '@/services/soundPlayer'
+import { sounds } from '@/data/sounds'
+import { useLive } from '@/ui/useLive'
 import { confirmDialog, notify, reportError } from '@/ui/dialogs'
 import { activeRollContext } from '@/ui/dice'
 import { peek } from '@/ui/workbench'
@@ -70,7 +73,15 @@ onBeforeUnmount(() => {
   void flushSaves()
 })
 
-function run() { if (mode.value === 'prepare') { startEncounter(); side.value = 'order' } }
+const playlistName = useLive(async () => (enc.value?.playlistId ? (await sounds.playlist(enc.value.playlistId))?.name ?? null : null), null, [() => enc.value?.playlistId])
+/** The linked playlist is offered, not started: the button is in the header while the fight runs. */
+const music = () => { if (enc.value?.playlistId) void playPlaylist(enc.value.playlistId) }
+function run() {
+  if (mode.value !== 'prepare') return
+  startEncounter()
+  side.value = 'order'
+  if (playlistName.value) notify(`Music for this fight: “${playlistName.value}”. Press ♪ in the header to play it.`)
+}
 function prepare() { if (mode.value === 'run') saveEncounter({ status: 'prepared' }) }
 async function reopen() {
   if (!enc.value || !await confirmDialog({ title: 'Re-open this encounter?', body: 'Its XP award is undone and its loot comes back from the stash as far as it is still there. Level-ups that followed stay.', confirmLabel: 'Re-open' })) return
@@ -124,6 +135,7 @@ function onKey(e: KeyboardEvent) {
         <button v-for="[m, label, hint] in FOV" :key="m" :class="{ on: live.fovMode === m }" :title="hint" @click="live.fovMode = m">{{ label }}</button>
       </div>
       <span class="grow" />
+      <button v-if="playlistName" class="btn" :title="`Play “${playlistName}”`" data-test="encounter-music" @click="music">♪ {{ playlistName }}</button>
       <button v-if="mode !== 'resolved'" class="btn" title="Add a creature or token (A while running)" data-test="quick-add" @click="quick = { cell: { col: 6, row: 6 }, start: 'creature' }"><Plus :size="14" /> Add</button>
       <button class="btn btn-icon" title="Fit the map to the window" @click="canvas?.fit()"><Maximize :size="15" /></button>
       <button class="btn" title="Open the players' window" data-test="open-players" @click="openPlayers"><MonitorPlay :size="15" /> Players</button>

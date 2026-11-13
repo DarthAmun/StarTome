@@ -85,7 +85,10 @@ export class MapEngine {
     this.generation++
     if (this.longPress) clearTimeout(this.longPress)
     document.removeEventListener('keydown', this.onKey)
-    if (this.ready) this.app.destroy(true, { children: true })
+    const was = this.ready
+    // Calls that still arrive (a watcher firing late) find nothing to draw on
+    this.ready = false
+    if (was) this.app.destroy(true, { children: true })
   }
 
   // ── What to draw ─────────────────────────────────────────────────────────
@@ -108,11 +111,12 @@ export class MapEngine {
   }
 
   setFog(fog: Record<string, string>): void { this.fog = fog; this.redrawFog() }
-  setWalls(walls: Wall[]): void { this.walls = walls; if (this.gm) drawWalls(this.wallsG, walls, this.grid) }
+  setWalls(walls: Wall[]): void { this.walls = walls; if (this.gm && this.ready) drawWalls(this.wallsG, walls, this.grid) }
   setFov(fov: FovView): void { this.fov = fov; this.redrawSight() }
 
   setAreas(areas: SceneArea[]): void {
     this.areas = areas
+    if (!this.ready) return
     this.areasG.removeChildren().forEach(c => c.destroy())
     for (const a of areas) { const g = new PIXI.Graphics(); drawArea(g, a, this.grid); this.areasG.addChild(g) }
   }

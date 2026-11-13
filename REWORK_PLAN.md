@@ -1,6 +1,6 @@
 # StarTome rework plan
 
-Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phases 1 to 5 are done on the `rework` branch (see section 11a). Phase 6 is next.
+Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phases 1 to 6 are done on the `rework` branch (see section 11a). Phase 7 is next.
 
 How this was produced: the schema, types, format docs, backup/import code, the Play Buddy port and the app shell were read line by line. The large UI files (encounter page, GM screen, map maker, editors, session board) were read by extracting their templates, handlers, shortcuts and storage keys rather than every line. The app was started (`pnpm dev`), the main screens were opened, `pnpm test` (557 passed, 2 skipped) and `pnpm typecheck` ran clean. A real backup (`~/Downloads/startome-all-2026-11-03.json`, 578 MB) was inspected for its actual shape. Anything in the inventory I could not confirm by running it is still listed; Phase 3 verifies each line.
 
@@ -104,7 +104,7 @@ Checkbox = verified in the rework (all empty now). IDs are for reference in late
 - [ ] A6 Footer links: Sounds, Import & Export (stays lit on the importer pages), Settings
 - [ ] A7 Collapsed sidebar: icon rail with tooltips
 - [ ] A8 Bookmark ribbon: bookmark the current page or entity, drag to reorder, remove, jump; light/dark quick toggle (flag F8)
-- [ ] A9 Floating Dice, Music and Search buttons on every GM page
+- [x] A9 Floating Dice, Music and Search buttons on every GM page
 - [x] A10 Player routes (encounter player view, map player, graph player) render without any GM chrome
 - [x] A11 Notices (toasts) bottom right: failed saves, storage quota errors, sticky notices with an action
 - [ ] A12 "Updated in another tab" notice with Reload; "waiting for other tabs to close" notice during a schema upgrade
@@ -115,15 +115,15 @@ Checkbox = verified in the rework (all empty now). IDs are for reference in late
 
 ### B. Home and campaigns
 
-- [ ] B1 Home: greeting by time of day; totals (campaigns, entries, compendium entries)
-- [ ] B2 Campaign cards: name, game, description, per-type count pills (click opens that list), entry count, last updated
-- [ ] B3 Card actions: edit, clone ("(Copy)", shares library tokens, drops history logs), delete with confirm (cascades to everything of the campaign)
-- [ ] B4 Edit campaign: name, description, game, advancement (XP / milestones), three automation switches (tick-down and reminders, dying and recovery, persistent damage)
+- [x] B1 Home: greeting by time of day; totals (campaigns, entries, compendium entries)
+- [x] B2 Campaign cards: name, game, description, per-type count pills (click opens that list), entry count, last updated
+- [x] B3 Card actions: edit, clone ("(Copy)", shares library tokens, drops history logs), delete with confirm (cascades to everything of the campaign)
+- [x] B4 Edit campaign: name, description, game, advancement (XP / milestones), three automation switches (tick-down and reminders, dying and recovery, persistent damage)
 - [ ] B5 Recently updated entries across campaigns (8), active quests across campaigns (8)
-- [ ] B6 Compendium summary with counts and "Update from Foundry"
-- [ ] B7 Empty state with "Begin a Campaign"
-- [ ] B8 First start seeds the demo campaign "Welcome to StarTome" with tutorial entries and a demo encounter (flag F15)
-- [ ] B9 Campaign dashboard: banner upload/remove, count tiles per type, active quests with giver, quick links to Encounters and Graph
+- [x] B6 Compendium summary with counts and "Update from Foundry"
+- [x] B7 Empty state with "Begin a Campaign"
+- [x] B8 First start seeds the demo campaign "Welcome to StarTome" with tutorial entries and a demo encounter (flag F15)
+- [x] B9 Campaign dashboard: banner upload/remove, count tiles per type, active quests with giver, quick links to Encounters and Graph
 - [ ] B10 Opening a campaign loads its entries and starts following its linked Play Buddy game
 - [ ] B11 `/chronicle` page: overview of seven entry types (flag F5)
 
@@ -156,7 +156,7 @@ Per type
 - [x] C22 Rumor: several statuses at once (unheard, heard, revealed, false), source, tags
 - [x] C23 Random table: die (d4–d100), rows (min, max, result with link completion), Roll with rendered result
 - [x] C24 Region: creatable in World without a map, placed or drawn on a map later (decision F19; in v0.41 the list offers no "New" for regions); polygon preview, colour, parent map
-- [ ] C25 Session: number, date, mode (planning / running / finished); switching to running sets today's date and opens the recap; finishing opens the review
+- [x] C25 Session: number, date, mode (planning / running / finished); switching to running sets today's date and opens the recap; finishing opens the review
 
 History (flag F4)
 - [ ] C26 Record a historical state of an NPC, faction, location or quest (label, note, linked event)
@@ -189,22 +189,22 @@ History (flag F4)
 
 ### F. Sessions
 
-- [ ] F1 Session board: free canvas of panels (scene, beat, clue, encounter, log, note, entry, random table, reward) and frames
-- [ ] F2 Add from the toolbar or by right-click at the cursor; double-click edits; drag, resize frames, panels inside frames move with them
-- [ ] F3 Connections between panels (plan, sequence, attach) with labels; arrows run between facing sides
-- [ ] F4 Panel editor: title, markdown, tags, status per kind, encounter picker, entry picker, "players should know", attached-to info
-- [ ] F5 Status per kind (scene planned/played/continued/skipped, beat open/done, clue hidden/revealed, reward pending/awarded)
-- [ ] F6 Drawer: unplaced panels of the campaign, search by text or tag, place, delete; "other campaigns" scenes to copy
+- [x] F1 Session board: free canvas of panels (scene, beat, clue, encounter, log, note, entry, random table, reward) and frames
+- [x] F2 Add from the toolbar or by right-click at the cursor; double-click edits; drag, resize frames, panels inside frames move with them
+- [x] F3 Connections between panels (plan, sequence, attach) with labels; arrows run between facing sides
+- [x] F4 Panel editor: title, markdown, tags, status per kind, encounter picker, entry picker, "players should know", attached-to info
+- [x] F5 Status per kind (scene planned/played/continued/skipped, beat open/done, clue hidden/revealed, reward pending/awarded)
+- [x] F6 Drawer: unplaced panels of the campaign, search by text or tag, place, delete; "other campaigns" scenes to copy
 - [ ] F7 Capture bar while running: type what happened, Enter logs; log types (happened, changed, improvised, consequence); attaches to the selected panel or logs as improvised; `@` and `{{` completion; "players should know" eye
-- [ ] F8 Encounter panel: Run opens the encounter and Back returns; "log it" writes the outcome
-- [ ] F9 Random table panel: roll, turn the result into a log
-- [ ] F10 Reward panel: award its XP to the party
+- [x] F8 Encounter panel: Run opens the encounter and Back returns; "log it" writes the outcome
+- [x] F9 Random table panel: roll, turn the result into a log
+- [x] F10 Reward panel: award its XP to the party
 - [ ] F11 Party panel on the board (movable between corners, collapsible): Perception, saves, hero points from Play Buddy; offer a hero point
-- [ ] F12 Recap dialog when a session starts: last session's "players should know" logs to tick off; hero points for linked players
-- [ ] F13 Finish dialog: prep that did not come up goes to the next session, to the drawer, or stays (scenes marked skipped)
-- [ ] F14 Review and Fit buttons; viewport remembered; Esc closes menus
-- [ ] F15 The session's searchable text is rebuilt from its panels; old two-editor sessions are converted to boards
-- [ ] F16 Session Log page: every session with its logs and plan, expandable
+- [x] F12 Recap dialog when a session starts: last session's "players should know" logs to tick off; hero points for linked players
+- [x] F13 Finish dialog: prep that did not come up goes to the next session, to the drawer, or stays (scenes marked skipped)
+- [x] F14 Review and Fit buttons; viewport remembered; Esc closes menus
+- [x] F15 The session's searchable text is rebuilt from its panels; old two-editor sessions are converted to boards
+- [x] F16 Session Log page: every session with its logs and plan, expandable
 - [ ] F17 Mentions of an NPC in panel text show the portrait
 
 ### G. Encounters and VTT
@@ -227,7 +227,7 @@ Prepare
 - [x] G13 Map: drop an image, load a file or URL, or build one in the map maker
 - [x] G14 Grid: cell size, X/Y offset
 - [x] G15 FOV and walls switch; FOV view modes (GM sees all, active token's vision, all player tokens' vision)
-- [ ] G16 Music: link a playlist; starting the encounter offers to play it
+- [x] G16 Music: link a playlist; starting the encounter offers to play it
 - [x] G17 Player view layout: turn order position and size, token names shown or hidden, hidden combatants' turns left out or shown as "?"
 
 Map tools
@@ -377,13 +377,13 @@ Map maker
 
 ### N. GM screen
 
-- [ ] N1 Free board of widgets: drag, resize, snap, pan, wheel zoom, fit, zoom buttons, density (compact, cozy, loose)
-- [ ] N2 Palette: bookmarks, quick widgets, entries by type, compendium search; drag or double-click to add; collapses to a rail
-- [ ] N3 Shift+click selects several widgets to move as a group; deselect all; configure or remove a widget
-- [ ] N4 Layout saved per campaign; reset to default, clear (scratchpad kept), "suggest a layout", named saved layouts (save, load, delete)
+- [x] N1 Free board of widgets: drag, resize, snap, pan, wheel zoom, fit, zoom buttons, density (compact, cozy, loose)
+- [x] N2 Palette: bookmarks, quick widgets, entries by type, compendium search; drag or double-click to add; collapses to a rail
+- [x] N3 Shift+click selects several widgets to move as a group; deselect all; configure or remove a widget
+- [x] N4 Layout saved per campaign; reset to default, clear (scratchpad kept), "suggest a layout", named saved layouts (save, load, delete)
 - [ ] N5 Entry widgets, editable in place: session summary, NPC, location (details and map with drill-down), faction, quest, event, note, rumor, random table with Roll
-- [ ] N6 Tool widgets: encounter link, conditions grid, scratchpad, compendium entry, compendium lookup, timer (stopwatch, countdown), NPC generator (gender, ancestry, class, name; sources configurable), weather (own list, roll or pick), DC table (by level, adjustments, simple DCs, Recall Knowledge for a pinned creature)
-- [ ] N7 Entry quick-view drawer; Esc leaves the screen
+- [x] N6 Tool widgets: encounter link, conditions grid, scratchpad, compendium entry, compendium lookup, timer (stopwatch, countdown), NPC generator (gender, ancestry, class, name; sources configurable), weather (own list, roll or pick), DC table (by level, adjustments, simple DCs, Recall Knowledge for a pinned creature)
+- [x] N7 Entry quick-view drawer; Esc leaves the screen
 
 ### O. Graphs
 
@@ -403,12 +403,12 @@ Map maker
 
 ### Q. Sounds
 
-- [ ] Q1 Library: all tracks, tags (each tag is an automatic playlist), playlists with a colour
-- [ ] Q2 Tracks: local files (kept as file handles, permission asked again when needed), URLs, Spotify links (opens Spotify)
-- [ ] Q3 Add, edit, delete tracks; create and delete playlists; add from library, remove from playlist
-- [ ] Q4 Player bar everywhere: play/pause, previous, next, seek, volume, shuffle, loop, playlist menu
-- [ ] Q5 Output device picker; cast to a network speaker when the browser supports it
-- [ ] Q6 An encounter's linked playlist is offered when the encounter starts
+- [x] Q1 Library: all tracks, tags (each tag is an automatic playlist), playlists with a colour
+- [x] Q2 Tracks: local files (kept as file handles, permission asked again when needed), URLs, Spotify links (opens Spotify)
+- [x] Q3 Add, edit, delete tracks; create and delete playlists; add from library, remove from playlist
+- [x] Q4 Player bar everywhere: play/pause, previous, next, seek, volume, shuffle, loop, playlist menu
+- [x] Q5 Output device picker; cast to a network speaker when the browser supports it
+- [x] Q6 An encounter's linked playlist is offered when the encounter starts
 
 ### R. Settings
 
@@ -791,7 +791,7 @@ The new app is built on a `rework` branch and published to a second path (for ex
 | **3 Compendium** ✅ | Browser, stat blocks with rolls, entry editor, creature builder, homebrew import and packs, Foundry sync, image folder import, field notes, dice panel. | L, E5–E7, M9–M11 | Look up and maintain rules content. |
 | **4 Party and loot** ✅ | Roster, ledger (XP, milestones, level-ups), inventory, wealth, treasure roll, earn income, companions. | H, I, J1–J2 | Track the party between sessions. |
 | **5 Encounters** ✅ | List, builder, VTT engine (prepare and run), tokens, conditions and automation, areas, resolve, player view, map maker, token library. | G, J3–J4 | Run a fight. |
-| **6 Sessions and the table** | Session board, capture, recap and finish, session log, table bar, Tonight, Desk with all widgets, sounds. | F, N, Q, B | Run a whole Pathfinder session in the new app. |
+| **6 Sessions and the table** ✅ | Session board, capture, recap and finish, session log, table bar, Tonight, Desk with all widgets, sounds. | F, N, Q, B | Run a whole Pathfinder session in the new app. |
 | **7 Starfinder** | Starship page, crew, interior map, sensor map, starship combat, starship encounters. | J5–J15 | Run a Starfinder session. |
 | **8 Link, polish, cut-over** | Character link (Play Buddy), settings, shortcut cheat sheet, offline and install checks, performance pass with measurements, final parity audit, move the new app to the main path, tag the old one. Summary report. | K, R, A, T, the rest | Retire v0.41. |
 
@@ -936,6 +936,40 @@ Differences from v0.42, and what is left:
 - **Bulk "roll for one token"** and a per-token initiative roll are the initiative field and "roll all" (which only fills empty ones).
 - **Not exercised by a browser test:** dropping an image on the map, dragging from the library, importing assets into the map maker, weak and elite stat blocks in the dock, lingering areas, the recovery and persistent damage prompts (their rules are unit-tested).
 - **The Party page's "Build encounter" button** is still not there; the builder is one click away under Encounters.
+
+**Phase 6, Sessions and the table (done 2026-11-13, branch `rework`).**
+
+What exists: **Sessions** lists the campaign's sessions (number, date, state, how much is on the board and in the log) and has the **session log**: every session with what was logged, in order, and its plan. A session opens on its **board**: scenes, beats, clues, encounters, logs, notes, entries, random tables, rewards and frames, added from the toolbar (beside what is there) or by right-click at the pointer; dragged freely; a panel dropped into a frame belongs to it and moves with it; frames resize at their corner. Panels connect by dragging from one to another (planned path, happened next, attached; a label; click a connection to change or remove it). Double-click opens a panel beside the board: title, text in the same editor as everywhere, tags, status, and what its kind links to. Statuses cycle with a click. An encounter panel runs its encounter and, once that is resolved, logs the outcome; a random table panel rolls and logs the result; a reward panel awards its XP. The **drawer** holds panels kept for later, searchable by text or tag, and offers scenes of other campaigns to copy. Switching to **Run** sets today's date, shows the **recap** (what was marked "players should know" last time, to tick off) and brings up the **capture bar**: type what happened, Enter logs it on the selected panel (which then counts as played and joins the numbered "happened next" chain) or on the board as improvised. **Finish** lists what did not come up and sends it to the next session (made if there is none, in a frame), to the drawer, or leaves it; a scene that continues is copied. Review fades what came up. The session's text, which search and backlinks read, is rebuilt from its panels on every change.
+
+The **table bar** sits on top of every screen while a session of the open campaign runs: its name (back to the board), a field that logs from anywhere (Alt+L), the round and who is acting when an encounter is open, and the party with levels.
+
+**Sounds**: tracks from local files (only a link is kept; a file imported from a backup or another device is linked again with one click), web addresses and Spotify links; tags as automatic playlists; playlists with colour, shuffle and loop. The **player** appears on every screen while something is queued: play, pause, previous, next, seek, volume, shuffle, loop, a playlist menu, and the output device picker (the way to send sound to a paired Bluetooth speaker). An encounter with a linked playlist offers it when the fight starts and has a button for it.
+
+The **Desk**: a free board of widgets, moved by their bar, resized at the corner, snapping to a grid; pan by dragging the board, zoom with the wheel or the buttons, fit; three densities; Shift+click to move several at once. The palette (collapsible) has the tools, what you pinned to the tray, and a search over entries and the compendium; double-click or drag to add. Tools: scratchpad (kept apart, so clearing the Desk keeps it), encounters, conditions, DCs by level with the adjustments and simple DCs, timer (stopwatch or countdown), compendium lookup, a pinned compendium entry, NPC generator (name, ancestry and class from the compendium, "keep as an NPC entry"), weather from your own list. Entry widgets show picture, facts and text, and a random table rolls in place. The layout is the campaign's and in the backup; reset, clear, "suggest a layout" and named saved layouts. Layouts imported from v0.42 open as they were.
+
+**Start page and Tonight**: campaign cards with a count per entry type (a count opens World filtered to it), last change, and edit, copy and delete. Campaign settings: name, description, game, XP or milestones, the three automation switches. A copy gets new ids throughout, shares the token library and images, and starts without ledger or combat logs. Delete removes everything of the campaign after one confirm that says how much that is. "Create the demo campaign" is a button. Tonight has the banner (add, change, remove), opens the session's board, and links to the graphs.
+
+Moved from `legacy/` into `src/domain/rules/`: the session board rules and the name generator.
+
+Checked against real data: The Codex's 39 sessions list in order (their number is read from the name when the field is empty), and Session 39 opens with its 12 imported panels, their connections, and its encounter panel linked to "The Fort".
+
+Tests added: 16 unit tests (sessions and their text and links, drawer, logging, carrying over, the board rules, copying and deleting a campaign, settings, sounds, the Desk's layout) and 5 browser tests (plan, run, log, finish and read back; the table bar; the Desk; sounds; demo campaign, copy, settings, delete). Totals: 452 unit tests and 20 browser tests.
+
+Bugs found and fixed on the way: new panels were put on top of each other; the encounter map kept watching the encounter after its page was left (from Phase 5), which threw errors once the page was gone; Tonight's quick links duplicated the rail's.
+
+Differences from v0.42, and what is left:
+
+- **Capture bar:** no `@` or `{{` completion while typing a log line; a link typed in full works. The panel editor has completion.
+- **Party panel on the board (F11)** and hero points in the recap need Play Buddy's numbers: Phase 8. The table bar shows the party's names and levels.
+- **NPC portraits beside mentions in panel text (F17)** are not drawn; an entry panel links the NPC.
+- **Connections** run from a panel's lower dot to another's upper dot, not between the nearest sides.
+- **Desk entry widgets are not edited in place**: the name opens the entry in the dock, where everything is editable. A location widget shows no map with drill-down. The DC widget has no Recall Knowledge line for a pinned creature (the stat block in the dock has it).
+- **Weather** stayed a small widget with your list instead of becoming random tables (decision F13 said tables): nothing had to be converted and nothing is lost. Say if you want the conversion.
+- **A compendium entry on the Desk** is a card that opens the stat block in the dock, not the stat block itself.
+- **Renaming an entry** rewrites the texts that name it, but not yet the text of session panels; the session's own text is rebuilt from the panels, so a renamed NPC shows as a missing link there until the panel is edited.
+- **The cross-campaign home** (recent entries and quests of all campaigns) is gone as decided (F20); the cards carry the counts.
+- **Local sound files** need Chrome's file access, as planned; other browsers can only use web addresses.
+- **Not exercised by a browser test:** dragging panels into frames, drawing connections, the drawer's copy from another campaign, random table and reward panels, playing an actual audio file and switching the output device, saved Desk layouts.
 
 ---
 

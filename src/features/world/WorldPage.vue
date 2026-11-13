@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isEntryTypeName } from '@/domain/links'
 /**
  * World: every lore entry of the campaign in one browser. Type is a filter
  * beside search, favourites, tags and (for one type) its fields. A click
@@ -57,7 +58,12 @@ function onKey(e: KeyboardEvent) {
   else if (e.key === 'Enter' && row) { e.preventDefault(); if (e.shiftKey) openFull(row); else pick(row) }
   else if (e.key === ' ' && row && target !== searchEl.value) { e.preventDefault(); void saveEntry(row.id, { favorite: !row.favorite }) }
 }
-onMounted(() => window.addEventListener('keydown', onKey))
+onMounted(() => {
+  window.addEventListener('keydown', onKey)
+  // A count on the start page links here with its type
+  const wanted = router.currentRoute.value.query.type
+  if (typeof wanted === 'string' && isEntryTypeName(wanted)) setTimeout(() => { state.types = new Set([wanted]) }, 50)
+})
 onUnmounted(() => window.removeEventListener('keydown', onKey))
 </script>
 

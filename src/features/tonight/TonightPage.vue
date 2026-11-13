@@ -1,6 +1,10 @@
 <script setup lang="ts">
 /** Tonight: the campaign's home. The session in hand, open quests, the party, what changed last. */
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { updateCampaign } from '@/data/campaigns'
+import { pickImage, storeImage } from '@/services/images'
+import { reportError } from '@/ui/dialogs'
 import type { Entry, EntryOf } from '@/domain/schema'
 import { characters, entries as entryRepo } from '@/data/repo'
 import { ENTRY_TYPE_INFO, ENTRY_TYPE_ORDER } from '@/ui/entryTypes'
@@ -24,6 +28,12 @@ const partyLevel = computed(() => {
   const pcs = party.value.filter(c => c.role === 'pc' || c.treatAsPc)
   return pcs.length ? Math.floor(pcs.reduce((n, c) => n + c.level, 0) / pcs.length) : null
 })
+const router = useRouter()
+async function setBanner() {
+  const file = await pickImage()
+  if (file && campaign.value) await updateCampaign(campaign.value.id, { banner: await storeImage(file) }).catch(err => reportError('Setting the banner', err))
+}
+const board = (id: string) => router.push({ name: 'session', params: { campaignId: campaign.value?.id, sessionId: id } })
 const MODE: Record<string, string> = { running: 'Running now', planning: 'In preparation', finished: 'Last played' }
 </script>
 
@@ -33,6 +43,11 @@ const MODE: Record<string, string> = { running: 'Running now', planning: 'In pre
       <div class="eyebrow">{{ campaign.game === 'sf2e' ? 'Starfinder 2e' : 'Pathfinder 2e' }} · {{ campaign.rules.advancement === 'milestone' ? 'milestones' : 'experience points' }}</div>
       <h1>{{ campaign.name }}</h1>
       <p v-if="campaign.description" class="dim">{{ campaign.description }}</p>
+      <div class="links">
+        <RouterLink class="btn" :to="{ name: 'graphs', params: { campaignId: campaign.id } }">Relationship graphs</RouterLink>
+        <button class="btn btn-ghost" @click="setBanner">{{ banner ? 'Change banner' : 'Add a banner' }}</button>
+        <button v-if="banner" class="btn btn-ghost" @click="updateCampaign(campaign.id, { banner: null })">Remove banner</button>
+      </div>
     </header>
 
     <div class="grid">
@@ -42,6 +57,7 @@ const MODE: Record<string, string> = { running: 'Running now', planning: 'In pre
           <h2 class="clickable" @click="peek({ kind: 'entry', id: current.id })">{{ current.name }}</h2>
           <p class="faint">{{ [current.data.number && `Session ${current.data.number}`, current.data.date].filter(Boolean).join(' · ') }}</p>
           <p class="dim">{{ excerpt(current.body, 320) || 'Nothing on its board yet.' }}</p>
+          <button class="btn btn-primary" data-test="open-board" @click="board(current.id)">{{ current.data.mode === 'running' ? 'Back to the board' : 'Open the board' }}</button>
         </template>
         <p v-else class="faint">No sessions yet.</p>
       </section>
@@ -84,6 +100,7 @@ const MODE: Record<string, string> = { running: 'Running now', planning: 'In pre
 .hero.has-banner { padding-top: 7rem; }
 .hero h1 { font-size: 2.3rem; margin: .3rem 0 .5rem; }
 .hero p { max-width: 720px; }
+.links { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .8rem; }
 .grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 1rem; }
 .block { padding: 1rem 1.2rem; }
 .block .eyebrow { margin-bottom: .6rem; color: var(--accent); }

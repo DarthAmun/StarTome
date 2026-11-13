@@ -6,6 +6,7 @@ import { ChevronsUpDown, Search } from 'lucide-vue-next'
 import { campaigns as campaignRepo, settings as settingsRepo } from '@/data/repo'
 import { backupIfDue } from '@/services/backup/folder'
 import PartyPrompts from '@/features/party/PartyPrompts.vue'
+import SoundBar from '@/features/sounds/SoundBar.vue'
 import DialogHost from '@/ui/components/DialogHost.vue'
 import { useLive } from '@/ui/useLive'
 import { campaign, campaignId, campaigns, closeDock, commandBarOpen, dock, patchSettings, settings } from '@/ui/workbench'
@@ -14,6 +15,7 @@ import CommandBar from './CommandBar.vue'
 import DicePanel from './DicePanel.vue'
 import PeekDock from './PeekDock.vue'
 import PinTray from './PinTray.vue'
+import TableBar from './TableBar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -82,10 +84,12 @@ function switchCampaign(e: Event) {
       <button class="find" @click="commandBarOpen = true"><Search :size="14" /> <span>Go to, find, look up…</span> <span class="kbd">Ctrl K</span></button>
       <span class="preview chip">rework preview · your live data is in v0.42</span>
     </header>
+    <TableBar />
     <main class="main"><RouterView :key="String(route.params.campaignId ?? '')" /></main>
     <PeekDock />
     <PinTray />
     <DicePanel />
+    <SoundBar />
     <PartyPrompts />
     <CommandBar />
     <DialogHost />
@@ -93,7 +97,7 @@ function switchCampaign(e: Event) {
 </template>
 
 <style scoped>
-.shell { height: 100%; display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr) auto; grid-template-rows: var(--bar-h) minmax(0, 1fr) var(--tray-h); }
+.shell { height: 100%; display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr) auto; grid-template-rows: var(--bar-h) auto minmax(0, 1fr) var(--tray-h); }
 .top { grid-column: 2 / -1; display: flex; align-items: center; gap: 1rem; padding: 0 1rem; border-bottom: var(--frame); background: var(--bg-sunken); }
 .switch { display: flex; align-items: center; gap: .5rem; color: var(--text-faint); }
 .switch select { appearance: none; background: none; border: 0; font-family: var(--font-title); font-size: 1.02rem; letter-spacing: var(--title-tracking); text-transform: var(--title-transform); font-weight: var(--title-weight); color: var(--text); max-width: 320px; cursor: pointer; }
@@ -103,6 +107,8 @@ function switchCampaign(e: Event) {
 .find span:first-of-type { flex: 1; text-align: left; }
 .find:hover { border-color: var(--line-strong); color: var(--text-dim); }
 .preview { font-size: .72rem; color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); }
-.main { grid-column: 2; min-height: 0; min-width: 0; }
-.shell :deep(.dock) { grid-column: 3; grid-row: 2; }
+.top { grid-row: 1; }
+.main { grid-column: 2; grid-row: 3; min-height: 0; min-width: 0; }
+.shell :deep(.tray) { grid-row: 4; }
+.shell :deep(.dock) { grid-column: 3; grid-row: 3; }
 </style>
