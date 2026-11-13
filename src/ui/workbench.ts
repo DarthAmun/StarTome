@@ -10,7 +10,8 @@ import type { Campaign, Settings } from '@/domain/schema'
 import { DEFAULT_SETTINGS } from '@/domain/schema'
 import { settings as settingsRepo, workspace } from '@/data/repo'
 
-export type PeekTarget = { kind: 'entry'; id: string } | { kind: 'rules'; id: string }
+/** `adjustment`: a stat block shown as its weak or elite version (a token's). */
+export type PeekTarget = { kind: 'entry'; id: string } | { kind: 'rules'; id: string; adjustment?: 'weak' | 'elite' | null }
 export interface Pin { kind: PeekTarget['kind']; id: string; label: string; type: string }
 
 export const campaigns = ref<Campaign[]>([])
@@ -30,7 +31,7 @@ const same = (a: PeekTarget, b: PeekTarget) => a.kind === b.kind && a.id === b.i
 
 export function peek(target: PeekTarget): void {
   const at = dock.stack.findIndex(t => same(t, target))
-  if (at >= 0) dock.active = at
+  if (at >= 0) { dock.stack[at] = target; dock.active = at }
   else { dock.stack.push(target); dock.active = dock.stack.length - 1 }
   dock.open = true
 }

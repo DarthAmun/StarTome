@@ -11,7 +11,8 @@ import type { Character } from '@/domain/schema'
 import { awardXp, campaignSettings, levelUp, partyOf } from '@/data/party'
 import AppDialog from '@/ui/components/AppDialog.vue'
 import { notify, reportError } from '@/ui/dialogs'
-import { levelUpPrompt, xpPrompt } from '@/ui/partyPrompts'
+import { levelUpPrompt, lootPrompt, xpPrompt } from '@/ui/partyPrompts'
+import LootDialog from './LootDialog.vue'
 
 const rows = ref<Character[]>([])
 const selected = ref(new Set<string>())
@@ -70,6 +71,7 @@ async function confirmXp() {
 </script>
 
 <template>
+  <LootDialog v-if="lootPrompt" :key="lootPrompt.encounterId" :prompt="lootPrompt" @close="lootPrompt = null" />
   <AppDialog v-if="levelUpPrompt" title="Level up the party?" @close="levelUpPrompt = null">
     <p class="dim">{{ levelUpPrompt.reason }}</p>
     <p v-if="!rows.length" class="faint">No party members yet. Add them on the Party page.</p>

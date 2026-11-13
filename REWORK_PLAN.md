@@ -1,6 +1,6 @@
 # StarTome rework plan
 
-Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phases 1 to 4 are done on the `rework` branch (see section 11a). Phase 5 is next.
+Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phases 1 to 5 are done on the `rework` branch (see section 11a). Phase 6 is next.
 
 How this was produced: the schema, types, format docs, backup/import code, the Play Buddy port and the app shell were read line by line. The large UI files (encounter page, GM screen, map maker, editors, session board) were read by extracting their templates, handlers, shortcuts and storage keys rather than every line. The app was started (`pnpm dev`), the main screens were opened, `pnpm test` (557 passed, 2 skipped) and `pnpm typecheck` ran clean. A real backup (`~/Downloads/startome-all-2026-11-03.json`, 578 MB) was inspected for its actual shape. Anything in the inventory I could not confirm by running it is still listed; Phase 3 verifies each line.
 
@@ -105,7 +105,7 @@ Checkbox = verified in the rework (all empty now). IDs are for reference in late
 - [ ] A7 Collapsed sidebar: icon rail with tooltips
 - [ ] A8 Bookmark ribbon: bookmark the current page or entity, drag to reorder, remove, jump; light/dark quick toggle (flag F8)
 - [ ] A9 Floating Dice, Music and Search buttons on every GM page
-- [ ] A10 Player routes (encounter player view, map player, graph player) render without any GM chrome
+- [x] A10 Player routes (encounter player view, map player, graph player) render without any GM chrome
 - [x] A11 Notices (toasts) bottom right: failed saves, storage quota errors, sticky notices with an action
 - [ ] A12 "Updated in another tab" notice with Reload; "waiting for other tabs to close" notice during a schema upgrade
 - [x] A13 New Campaign dialog reachable from sidebar and home (name, description, game)
@@ -210,78 +210,78 @@ History (flag F4)
 ### G. Encounters and VTT
 
 List and builder
-- [ ] G1 Encounter list per campaign: search, status, details (map, tokens, round, FOV), open, clone, delete with confirm
-- [ ] G2 Resolve and re-open from the list
+- [x] G1 Encounter list per campaign: search, status, details (map, tokens, round, FOV), open, clone, delete with confirm
+- [x] G2 Resolve and re-open from the list
 - [ ] G3 "+ Starship" creates a starship battle on the active ship (SF2e)
-- [ ] G4 Encounter builder: party level (override, reset, mixed-level hint), treasure pace for the level
-- [ ] G5 Builder search: creatures, hazards, starships; level range, rarity, traits; both games' creatures usable
-- [ ] G6 Builder selection: counts, weak/elite, XP per slot, "too strong / too weak" warnings, threat meter with budgets
+- [x] G4 Encounter builder: party level (override, reset, mixed-level hint), treasure pace for the level
+- [x] G5 Builder search: creatures, hazards, starships; level range, rarity, traits; both games' creatures usable
+- [x] G6 Builder selection: counts, weak/elite, XP per slot, "too strong / too weak" warnings, threat meter with budgets
 - [ ] G7 Build creature (GM Core tables) from the builder
 - [ ] G8 Starship encounter switch with small-crew budgets and the concierge variant
-- [ ] G9 "Create encounter" places party tokens and enemies on free squares of a new prepared encounter; the selection is kept per campaign until cleared
+- [x] G9 "Create encounter" places party tokens and enemies on free squares of a new prepared encounter; the selection is kept per campaign until cleared
 
 Prepare
-- [ ] G10 Modes Prepare / Run / Resolved, remembered per encounter; editable name
-- [ ] G11 Difficulty meter in the encounter: party level override, allies excluded, removed enemies' XP kept (clearable), tokens without stat block noted
-- [ ] G12 Loot: entries owned by the encounter, suggestions from the enemies' gear, treasure roll, pace readout
-- [ ] G13 Map: drop an image, load a file or URL, or build one in the map maker
-- [ ] G14 Grid: cell size, X/Y offset
-- [ ] G15 FOV and walls switch; FOV view modes (GM sees all, active token's vision, all player tokens' vision)
+- [x] G10 Modes Prepare / Run / Resolved, remembered per encounter; editable name
+- [x] G11 Difficulty meter in the encounter: party level override, allies excluded, removed enemies' XP kept (clearable), tokens without stat block noted
+- [x] G12 Loot: entries owned by the encounter, suggestions from the enemies' gear, treasure roll, pace readout
+- [x] G13 Map: drop an image, load a file or URL, or build one in the map maker
+- [x] G14 Grid: cell size, X/Y offset
+- [x] G15 FOV and walls switch; FOV view modes (GM sees all, active token's vision, all player tokens' vision)
 - [ ] G16 Music: link a playlist; starting the encounter offers to play it
-- [ ] G17 Player view layout: turn order position and size, token names shown or hidden, hidden combatants' turns left out or shown as "?"
+- [x] G17 Player view layout: turn order position and size, token names shown or hidden, hidden combatants' turns left out or shown as "?"
 
 Map tools
-- [ ] G18 Fog of war: paint, reveal, cover all, clear all
-- [ ] G19 Ruler
-- [ ] G20 Shape overlays: circle, square, cone with colour and size (flag F6)
-- [ ] G21 Areas: burst, cone, line, emanation that know which tokens are inside; placement rules (burst on an intersection, cone in 45° steps from a token's edge)
-- [ ] G22 Area effect: save type, basic save, DC, damage, conditions per degree, lingering until a round
-- [ ] G23 Save prompt: one row per creature inside, NPC saves rolled, player rolls typed, damage rolled once and split by degree, apply to all
-- [ ] G24 Walls: draw with snapping; kinds wall, greater/standard/lesser cover, window, door, hidden door; Backspace removes the last point, Ctrl+Z the last wall; right-click a wall to open/close a door or delete
-- [ ] G25 Ping: click to ping the player view, Shift+click also centres it, long-press on the map
-- [ ] G26 Pan and zoom; viewport remembered per encounter
+- [x] G18 Fog of war: paint, reveal, cover all, clear all
+- [x] G19 Ruler
+- [x] G20 Shape overlays: circle, square, cone with colour and size (flag F6)
+- [x] G21 Areas: burst, cone, line, emanation that know which tokens are inside; placement rules (burst on an intersection, cone in 45° steps from a token's edge)
+- [x] G22 Area effect: save type, basic save, DC, damage, conditions per degree, lingering until a round
+- [x] G23 Save prompt: one row per creature inside, NPC saves rolled, player rolls typed, damage rolled once and split by degree, apply to all
+- [x] G24 Walls: draw with snapping; kinds wall, greater/standard/lesser cover, window, door, hidden door; Backspace removes the last point, Ctrl+Z the last wall; right-click a wall to open/close a door or delete
+- [x] G25 Ping: click to ping the player view, Shift+click also centres it, long-press on the map
+- [x] G26 Pan and zoom; viewport remembered per encounter
 
 Tokens
-- [ ] G27 Token library (shared by all campaigns): search, PCs pinned first, add, edit, remove
-- [ ] G28 Library token: name, image (file/URL), linked creature with weak/elite, linked NPC, image synced with the linked entry, PC flag
-- [ ] G29 Drag library tokens or compendium creatures onto the map; add-to-encounter auto-places on a free square
-- [ ] G30 "Link to stat block?" offer when an unlinked token is placed
-- [ ] G31 Token on the map: portrait or initial, disposition ring, HP arc (GM), condition ring segments, nameplate, hidden badge, elevation badge, timer badge, active-turn ring, dead overlay
-- [ ] G32 Token edit: label, link and adjustment, "update from stat block", HP/max/temp, quick damage and heal, critical hit, uses dying rules, size, elevation, initiative, timers (name, turns, reset, visible to players), PC token (shares vision, exact HP to players), vision range, conditions, GM notes
-- [ ] G33 Right-click menu on a token: edit, quick conditions, all conditions, initiative, damage (to Play Buddy for linked PCs), temp HP, timer, view entry / NPC, visibility, dead, player token, ally, acts while hidden, remove
-- [ ] G34 Right-click on the map: add token here, add creature here
-- [ ] G35 Conditions dialog: search, valued conditions with +/−, persistent damage with formula, custom conditions, hide a condition from players, colour and icon per condition (saved on the compendium entry)
-- [ ] G36 Condition reference panel with the full rules text (or a short reminder without a synced compendium)
-- [ ] G37 Stat block panel for a token: live HP, AC, conditions; pick a target; rolls with apply buttons; Recall Knowledge line; the campaign NPC card or a linked player's shared numbers instead of a stat block
+- [x] G27 Token library (shared by all campaigns): search, PCs pinned first, add, edit, remove
+- [x] G28 Library token: name, image (file/URL), linked creature with weak/elite, linked NPC, image synced with the linked entry, PC flag
+- [x] G29 Drag library tokens or compendium creatures onto the map; add-to-encounter auto-places on a free square
+- [x] G30 "Link to stat block?" offer when an unlinked token is placed
+- [x] G31 Token on the map: portrait or initial, disposition ring, HP arc (GM), condition ring segments, nameplate, hidden badge, elevation badge, timer badge, active-turn ring, dead overlay
+- [x] G32 Token edit: label, link and adjustment, "update from stat block", HP/max/temp, quick damage and heal, critical hit, uses dying rules, size, elevation, initiative, timers (name, turns, reset, visible to players), PC token (shares vision, exact HP to players), vision range, conditions, GM notes
+- [x] G33 Right-click menu on a token: edit, quick conditions, all conditions, initiative, damage (to Play Buddy for linked PCs), temp HP, timer, view entry / NPC, visibility, dead, player token, ally, acts while hidden, remove
+- [x] G34 Right-click on the map: add token here, add creature here
+- [x] G35 Conditions dialog: search, valued conditions with +/−, persistent damage with formula, custom conditions, hide a condition from players, colour and icon per condition (saved on the compendium entry)
+- [x] G36 Condition reference panel with the full rules text (or a short reminder without a synced compendium)
+- [x] G37 Stat block panel for a token: live HP, AC, conditions; pick a target; rolls with apply buttons; Recall Knowledge line; the campaign NPC card or a linked player's shared numbers instead of a stat block
 
 Run
-- [ ] G38 Turn order with round counter, next / previous turn, undo turn
-- [ ] G39 Roll all initiative; initiative formula with presets; ask linked players to roll in Play Buddy
-- [ ] G40 Inline HP field per row (positive = damage, negative = heal); multi-select rows to show, hide or remove
-- [ ] G41 Quick add (`A`): creature or empty token, count, ally/summon, rolled initiative
-- [ ] G42 Condition automation prompts: recovery checks with dying/wounded, persistent damage and its flat check, tick-down of frightened and stunned, action reminders
-- [ ] G43 Temp HP rules (damage takes them first, grants do not stack)
-- [ ] G44 Combat log: damage, healing, temp HP, rolls, conditions, unconscious, revived, notes per token; clear with confirm
-- [ ] G45 Timers count down at the start of the token's turn; click resets
-- [ ] G46 Hidden tokens that still take their turn
+- [x] G38 Turn order with round counter, next / previous turn, undo turn
+- [x] G39 Roll all initiative; initiative formula with presets; ask linked players to roll in Play Buddy
+- [x] G40 Inline HP field per row (positive = damage, negative = heal); multi-select rows to show, hide or remove
+- [x] G41 Quick add (`A`): creature or empty token, count, ally/summon, rolled initiative
+- [x] G42 Condition automation prompts: recovery checks with dying/wounded, persistent damage and its flat check, tick-down of frightened and stunned, action reminders
+- [x] G43 Temp HP rules (damage takes them first, grants do not stack)
+- [x] G44 Combat log: damage, healing, temp HP, rolls, conditions, unconscious, revived, notes per token; clear with confirm
+- [x] G45 Timers count down at the start of the token's turn; click resets
+- [x] G46 Hidden tokens that still take their turn
 
 Resolve
-- [ ] G47 Resolve dialog: enemies and XP at the party level, who took part, accomplishment XP, loot to the party stash; milestone campaigns record XP for pacing only
-- [ ] G48 Re-open undoes the award and brings back loot that is still in the stash
+- [x] G47 Resolve dialog: enemies and XP at the party level, who took part, accomplishment XP, loot to the party stash; milestone campaigns record XP for pacing only
+- [x] G48 Re-open undoes the award and brings back loot that is still in the stash
 
 Player view
-- [ ] G49 Opens in its own window and follows the GM live: map, fog, tokens, turn rail, condition chips, areas, pings
-- [ ] G50 Only player-safe data leaves the GM window: no GM notes, AC, initiative, links, hidden conditions or timers; enemy HP as a health word
-- [ ] G51 Reconnects when either window reloads; large images are sent once per connection
+- [x] G49 Opens in its own window and follows the GM live: map, fog, tokens, turn rail, condition chips, areas, pings
+- [x] G50 Only player-safe data leaves the GM window: no GM notes, AC, initiative, links, hidden conditions or timers; enemy HP as a health word
+- [x] G51 Reconnects when either window reloads; large images are sent once per connection
 
 Map maker
-- [ ] G52 Paint tiles: floors (room, carpet, sand, snow, ice, rubble, swamp, water, fire, magma), walls, doors, windows, hidden doors; room and fill tools
-- [ ] G53 Map size in squares with resize; start over; undo/redo (Ctrl+Z / Ctrl+Y)
-- [ ] G54 View: wheel zoom, `+` `-` `0`, pan with middle-drag, Alt-drag or Space-drag
-- [ ] G55 Asset library: import files or whole folders (also by dropping), folders from subfolders, search, paging, remove asset or folder; re-imports skip what is there
-- [ ] G56 Placed assets: move, resize, rotate (`R`), mirror (`F`), floor or object layer, forward/backward (`]` `[`), duplicate (Ctrl+D), delete; Shift places off the grid; Esc stops placing
-- [ ] G57 "Make walls" derives line-of-sight walls and doors from the tiles and turns FOV on
-- [ ] G58 "Use as encounter map" renders the image and sets the grid; leaving with unsaved changes asks
+- [x] G52 Paint tiles: floors (room, carpet, sand, snow, ice, rubble, swamp, water, fire, magma), walls, doors, windows, hidden doors; room and fill tools
+- [x] G53 Map size in squares with resize; start over; undo/redo (Ctrl+Z / Ctrl+Y)
+- [x] G54 View: wheel zoom, `+` `-` `0`, pan with middle-drag, Alt-drag or Space-drag
+- [x] G55 Asset library: import files or whole folders (also by dropping), folders from subfolders, search, paging, remove asset or folder; re-imports skip what is there
+- [x] G56 Placed assets: move, resize, rotate (`R`), mirror (`F`), floor or object layer, forward/backward (`]` `[`), duplicate (Ctrl+D), delete; Shift places off the grid; Esc stops placing
+- [x] G57 "Make walls" derives line-of-sight walls and doors from the tiles and turns FOV on
+- [x] G58 "Use as encounter map" renders the image and sets the grid; leaving with unsaved changes asks
 
 ### H. Party and advancement
 
@@ -316,8 +316,8 @@ Map maker
 
 - [x] J1 Upgrade slots by grade with a GM-set base; warnings for full hosts, a second installed weapon, a weapon above its host's grade
 - [x] J2 Installed weapons attach to their host; augmentations are implanted and cannot change hands; limit warning (apex free)
-- [ ] J3 Vehicles as a compendium kind and as tokens worth no XP
-- [ ] J4 Area Fire / Auto-Fire buttons on Strikes with those traits
+- [x] J3 Vehicles as a compendium kind and as tokens worth no XP
+- [x] J4 Area Fire / Auto-Fire buttons on Strikes with those traits
 - [ ] J5 Starship compendium kinds: starship, frame, battle station, station upgrade, expansion bay; the five starship conditions
 - [ ] J6 `scripts/techcore/build.sh` builds a private Tech Core pack from your PDF into `local/`
 - [ ] J7 Starship page: several ships, one active; create from a frame, delete with confirm; level follows the party or is pinned
@@ -790,7 +790,7 @@ The new app is built on a `rework` branch and published to a second path (for ex
 | **2 World** ✅ | Entry browser, editors for all ten types, markdown editor with links and widgets, backlinks, history, favourites and tray pins, maps with pins and regions, player map, graphs, timeline, lore exports. | C, D, E1–E4, O, P, M6–M7 | Do all campaign writing in the new app. |
 | **3 Compendium** ✅ | Browser, stat blocks with rolls, entry editor, creature builder, homebrew import and packs, Foundry sync, image folder import, field notes, dice panel. | L, E5–E7, M9–M11 | Look up and maintain rules content. |
 | **4 Party and loot** ✅ | Roster, ledger (XP, milestones, level-ups), inventory, wealth, treasure roll, earn income, companions. | H, I, J1–J2 | Track the party between sessions. |
-| **5 Encounters** | List, builder, VTT engine (prepare and run), tokens, conditions and automation, areas, resolve, player view, map maker, token library. | G, J3–J4 | Run a fight. |
+| **5 Encounters** ✅ | List, builder, VTT engine (prepare and run), tokens, conditions and automation, areas, resolve, player view, map maker, token library. | G, J3–J4 | Run a fight. |
 | **6 Sessions and the table** | Session board, capture, recap and finish, session log, table bar, Tonight, Desk with all widgets, sounds. | F, N, Q, B | Run a whole Pathfinder session in the new app. |
 | **7 Starfinder** | Starship page, crew, interior map, sensor map, starship combat, starship encounters. | J5–J15 | Run a Starfinder session. |
 | **8 Link, polish, cut-over** | Character link (Play Buddy), settings, shortcut cheat sheet, offline and install checks, performance pass with measurements, final parity audit, move the new app to the main path, tag the old one. Summary report. | K, R, A, T, the rest | Retire v0.41. |
@@ -901,6 +901,41 @@ Differences from v0.42, and what is left:
 - **Old rune fields.** v0.42 turned runes stored the old way (a "+1 striking" field on the item) into attached rune entries when the compendium had them. That conversion is not carried over; such an item shows its runes as a label and counts in the gear check, but lists no attached runes.
 - **The roster's "Build encounter" button** comes with Phase 5.
 - **Quest names in the log.** A level-up from a milestone quest says "Milestone quest", without the quest's name.
+
+**Phase 5, Encounters (done 2026-11-13, branch `rework`).**
+
+What exists: **Encounters** has three views. The **list** finds encounters by name and status and opens, copies, resolves, re-opens or deletes them. The **builder** searches creatures and hazards (level range, "near the party", rarity, traits, both games), keeps a selection with counts, weak or elite, XP per line, warnings and the threat meter against the party's level (or one you set), shows the treasure pace, and "Create encounter" puts the party's tokens and every enemy on a new prepared encounter; the selection is a draft kept with the campaign. The **token library** is shared by all campaigns: name, picture, what the token stands for (a stat block with weak or elite, an NPC, a party member), "picture follows the entry", "player character".
+
+An **encounter** opens on its map. Its mode is its status: Prepare, Run, Resolved. *Prepare*: map from a file, a web address, a dropped image or the map maker; grid size and offsets; "sight and walls"; music; the difficulty meter (party level override, allies and party left out, removed enemies still counted until forgotten, tokens without a stat block noted); loot (the party's inventory panel pointed at the encounter, with what the enemies carry as suggestions and the treasure roll); what the players' window shows; add creatures from the compendium or tokens from the library (click, or drag onto the map). *Map tools*: select (drag tokens, click doors, drag the map to pan, hold to ping), fog (hide, reveal, brush, cover all, clear all), ruler in feet, areas (burst, cone, line, emanation with the placement rules; an area can carry a save, DC, damage, conditions per degree, and linger), walls (seven kinds, snapping, Backspace, Ctrl+Z, right-click to open, change or delete), ping. Right-click gives a menu for a token, a wall, an area or the bare map. *Tokens* show portrait or initial, side, HP and temporary HP arcs, condition ring, hidden, elevation and timer badges, the acting ring and the dead mark. The token editor and the conditions dialog cover everything of G32 and G35 except what is listed below. *Run*: turn order with round, next and previous turn (previous undoes exactly what the turn change did), roll all initiative, a formula with presets, an HP field per row, ticking rows to show, hide or remove, quick add (`A`), recovery checks with dying, wounded and doomed, persistent damage with its flat check, frightened and stunned ticking down, action reminders, temporary HP rules, timers, hidden tokens that still act, and the log (one row per line in the database). Rolls from a stat block in the dock are rolled against the chosen target's AC, can be applied to it, and are logged under the selected token; "Place area" and the Area Fire and Auto-Fire buttons put the area on the map and ask for saves. *Resolve* shows the enemies and XP, who took part, accomplishment XP and the loot; it awards XP in XP campaigns, records it in milestone ones, moves the loot to the stash and offers the level-up at 1,000 XP. Re-open takes the XP back and the loot as far as it is still in the stash. The **players' window** follows live: map, fog, what their tokens see, tokens with health as a shade, areas, pings, the turn order with visible conditions; it reconnects when either window reloads. The **map maker** paints tiles (brush, rectangle, room, fill; right-click picks a tile), resizes, undoes and redoes, pans and zooms, keeps an asset library (files, folders, drops; folders, search, paging), places, moves, resizes, rotates, mirrors, layers, restacks and duplicates assets, and "Use as encounter map" renders the image, sets the grid and, with "Make walls", derives walls and doors and turns sight on.
+
+How it is built: `src/features/encounters/vtt/engine/` is the map engine (Pixi), which draws a plain scene and reports pointer input; it knows nothing of Vue or the database, and the GM's and the players' windows feed it different projections. `vtt/live.ts` (tokens, log), `turns.ts`, `areasLive.ts`, `playerSync.ts`, `rolls.ts` and `tools.ts` are the slices of the open encounter's state. What the players get is built by one pure function, `domain/rules/playerView.ts`, as a whitelist. Every write goes through `data/encounters.ts`, `data/resolution.ts` and `data/encounterBuild.ts`.
+
+Moved from `legacy/` into `src/domain/rules/`, with their tests: temporary HP, the turn effects, the condition catalogue, the battle map tiles and walls, the map asset rules; sight (the visibility polygon) became `walls.ts`.
+
+Checked against real data: the 23 imported encounters of The Codex list with their status, tokens and rounds; "The Fort" opens with its map, walls, sight and the turn order at round 3 with its log of 42 lines.
+
+Tests added: 44 unit tests moved over with the rules, 15 for the encounter repository, the builder, resolving and re-opening, difficulty, the players' projection (nothing of the GM's leaves) and sight; 5 browser tests (a fight by hand with damage, conditions, turns, undo, the log, the players' window and a reload; an area's saves; builder, stat block roll against a target, resolve and re-open; the map maker; the prepare tools, menus and dialogs without errors). Totals: 436 unit tests and 15 browser tests.
+
+Bugs found by the browser tests and fixed: two quick saves of the same encounter could overwrite each other (status lost when a fight started); the players' window was sent reactive objects, which cannot be sent; a changed label did not rename the token until reload.
+
+Differences from v0.42, and what is left:
+
+- **Enemy tokens of your imported encounters show as "Token"** until the Foundry compendium is synced in the new app: their names come from the stat block, and the preview's compendium holds only your homebrew so far.
+- **Everything starship** (G3, G8, sensor map, stations, shields) is Phase 7. Tokens on a sensor map are kept and take turns, but are not drawn.
+- **Everything Play Buddy** is Phase 8: damage requests to linked players, asking them to roll initiative, their shared numbers in place of a stat block.
+- **Music (G16):** the playlist link is stored; the offer to play it when the fight starts comes with Sounds in Phase 6.
+- **The mode is the status.** Prepare and Run are the encounter's status in the database, not a setting of the browser.
+- **Sight for players in "All" mode.** With sight on and the GM seeing everything, the players' window shows what the players' tokens see together. In v0.42 it showed no darkness at all in that mode.
+- **Pictures are not sent to the players' window**; it reads them from the same local storage. The scene itself is sent whole (it is small without pictures), at most once a frame, not as single changes.
+- **The stat block of a token opens in the dock**, not in a panel of its own; a bar under the turn order shows the selected token and the target of its attacks.
+- **Conditions:** colour per condition on the token; no icon picker, and the colour is not saved back to the compendium entry. The condition's name opens the compendium's rules text.
+- **Shape overlays** are areas without an effect (decision F6). Old shape overlays were never stored, so nothing is lost.
+- **Left-drag pans the map** in the select tool (as well as the middle button and Alt-drag).
+- **Creature builder from the encounter builder (G7):** a link to the compendium, where the creature builder is; not a dialog inside the builder.
+- **Dragging a compendium creature onto the map** from the compendium list is not wired (the map accepts it; the list does not offer the drag). Search and click, or right-click the map, adds one.
+- **Bulk "roll for one token"** and a per-token initiative roll are the initiative field and "roll all" (which only fills empty ones).
+- **Not exercised by a browser test:** dropping an image on the map, dragging from the library, importing assets into the map maker, weak and elite stat blocks in the dock, lingering areas, the recovery and persistent damage prompts (their rules are unit-tested).
+- **The Party page's "Build encounter" button** is still not there; the builder is one click away under Encounters.
 
 ---
 

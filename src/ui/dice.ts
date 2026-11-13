@@ -3,7 +3,7 @@
  * (`::dice[2d6]`), from stat blocks and from the command bar all land here,
  * with the buttons for what comes next (roll the damage, apply it).
  */
-import { inject, reactive, type InjectionKey } from 'vue'
+import { computed, inject, reactive, shallowRef, type InjectionKey } from 'vue'
 import type { GameId } from '@/domain/game'
 import { rollExpression } from '@/domain/rules/rolls'
 import { resolveStatRoll, type AreaSpec, type RollAction, type ShownRoll, type StatRoll } from '@/domain/rules/statRolls'
@@ -51,11 +51,15 @@ export interface RollContext {
 }
 export const ROLL_CONTEXT: InjectionKey<RollContext> = Symbol('roll-context')
 
+/** The open encounter takes the rolls of stat blocks wherever they are shown (the dock is outside its page). */
+export const activeRollContext = shallowRef<RollContext | null>(null)
+
 export function useStatRolls(game: () => GameId | undefined) {
-  const ctx = inject(ROLL_CONTEXT, null)
+  const injected = inject(ROLL_CONTEXT, null)
+  const ctx = () => injected ?? activeRollContext.value
   return {
-    roll: (r: StatRoll) => (ctx ? ctx.roll(r) : showRoll(resolveStatRoll(r, game() ?? 'pf2e'))),
-    canPlaceArea: !!ctx?.placeArea,
-    placeArea: (spec: AreaSpec) => ctx?.placeArea?.(spec),
+    roll: (r: StatRoll) => { const c = ctx(); if (c) c.roll(r); else showRoll(resolveStatRoll(r, game() ?? 'pf2e')) },
+    canPlaceArea: computed(() => !!ctx()?.placeArea),
+    placeArea: (spec: AreaSpec) => ctx()?.placeArea?.(spec),
   }
 }

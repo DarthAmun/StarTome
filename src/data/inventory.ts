@@ -327,3 +327,22 @@ export async function releaseOwner(campaignId: string, owner: OwnerKey): Promise
     await purseTable().delete(purse.id)
   })
 }
+
+/** An owner's stacks and coins as they are, before they are handed on (an encounter's loot when it is resolved). */
+export async function lootOf(campaignId: string, owner: OwnerKey): Promise<{ rows: Row[]; cp: number }> {
+  return { rows: await ownerRows(campaignId, owner).toArray(), cp: await purseOf(campaignId, owner) }
+}
+
+/** Takes loot back out of the stash as far as it is still there. Returns what could not be taken back. */
+export async function restoreLoot(campaignId: string, loot: { rows: Row[]; cp: number }, to: OwnerKey): Promise<{ names: string[]; cp: number }> {
+  const short = { names: [] as string[], cp: 0 }
+  for (const r of loot.rows.filter(x => !x.attachedTo && !x.containerId)) {
+    const same = await table().get(r.id)
+    const have = same?.ownerKey === STASH ? same : await findStack(campaignId, STASH, { ...toStack(r), containerId: null })
+    const qty = Math.min(have?.quantity ?? 0, r.quantity)
+    if (have && qty > 0) await move(have.id, to, qty)
+    if (qty < r.quantity) short.names.push(r.nameOverride ?? (r.itemId ? (await rulesGet(r.itemId))?.name : null) ?? 'an item')
+  }
+  short.cp = loot.cp - await transferCoins(campaignId, STASH, to, loot.cp)
+  return short
+}

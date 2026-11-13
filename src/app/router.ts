@@ -6,6 +6,12 @@ import ArtPage from '@/features/compendium/ArtPage.vue'
 import CompendiumPage from '@/features/compendium/CompendiumPage.vue'
 import HomebrewPage from '@/features/compendium/HomebrewPage.vue'
 import SyncPage from '@/features/compendium/SyncPage.vue'
+import BuilderPage from '@/features/encounters/BuilderPage.vue'
+import EncounterPage from '@/features/encounters/EncounterPage.vue'
+import MapMakerPage from '@/features/encounters/mapmaker/MapMakerPage.vue'
+import EncountersPage from '@/features/encounters/EncountersPage.vue'
+import PlayerEncounterPage from '@/features/encounters/PlayerEncounterPage.vue'
+import TokensPage from '@/features/encounters/TokensPage.vue'
 import PartyPage from '@/features/party/PartyPage.vue'
 import TonightPage from '@/features/tonight/TonightPage.vue'
 import EntryPage from '@/features/world/EntryPage.vue'
@@ -19,13 +25,13 @@ import WorldPage from '@/features/world/WorldPage.vue'
 import { PLACES, UTILITIES } from './places'
 import WelcomePage from './WelcomePage.vue'
 
-const built: Record<string, RouteRecordRaw['component']> = { tonight: TonightPage, world: WorldPage, compendium: CompendiumPage, party: PartyPage, data: DataPage, settings: SettingsPage }
+const built: Record<string, RouteRecordRaw['component']> = { tonight: TonightPage, world: WorldPage, compendium: CompendiumPage, party: PartyPage, encounters: EncountersPage, data: DataPage, settings: SettingsPage }
 
 const placeRoutes: RouteRecordRaw[] = [...PLACES, ...UTILITIES].map((p) => {
   const path = p.campaign ? `/c/:campaignId/${p.name}` : `/${p.name}`
   const component = built[p.name]
   return component
-    ? { path, name: p.name, component, props: p.name === 'party' }
+    ? { path, name: p.name, component, props: p.name === 'party' || p.name === 'encounters' }
     : { path, name: p.name, component: ComingPage, props: { title: p.label, phase: p.phase ?? 0, holds: p.holds } }
 })
 
@@ -39,11 +45,16 @@ export const router = createRouter({
     { path: '/c/:campaignId/map/:entryId', name: 'map', component: MapPage, props: true },
     { path: '/c/:campaignId/graphs/:graphId?', name: 'graphs', component: GraphsPage, props: true },
     { path: '/c/:campaignId/timeline', name: 'timeline', component: TimelinePage, props: true },
+    { path: '/c/:campaignId/encounters/builder', name: 'encounter-builder', component: BuilderPage, props: true },
+    { path: '/c/:campaignId/encounters/tokens', name: 'encounter-tokens', component: TokensPage, props: true },
+    { path: '/c/:campaignId/encounter/:encounterId', name: 'encounter', component: EncounterPage, props: true },
+    { path: '/c/:campaignId/encounter/:encounterId/map-maker', name: 'map-maker', component: MapMakerPage, props: true },
     { path: '/compendium/sync', name: 'compendium-sync', component: SyncPage },
     { path: '/compendium/homebrew', name: 'compendium-homebrew', component: HomebrewPage },
     { path: '/compendium/art', name: 'compendium-art', component: ArtPage },
     // Windows for the players: no shell, nothing of the GM's
     { path: '/player/map', name: 'player-map', component: PlayerMapPage, meta: { player: true } },
+    { path: '/player/encounter', name: 'player-encounter', component: PlayerEncounterPage, meta: { player: true } },
     { path: '/player/graph', name: 'player-graph', component: PlayerGraphPage, meta: { player: true } },
     { path: '/:rest(.*)*', redirect: '/' },
   ],

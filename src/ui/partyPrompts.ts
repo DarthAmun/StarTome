@@ -6,3 +6,6 @@ export interface XpPrompt { campaignId: string; refType: 'encounter' | 'quest' |
 
 export const levelUpPrompt = ref<LevelUpPrompt | null>(null)
 export const xpPrompt = ref<XpPrompt | null>(null)
+/** An encounter's planned loot: opened from the encounter, shown by the party's inventory. `gear`: what its enemies carry, as suggestions. */
+export interface LootPrompt { campaignId: string; encounterId: string; name: string; gear: { itemId?: string; name: string; quantity: number }[] }
+export const lootPrompt = ref<LootPrompt | null>(null)

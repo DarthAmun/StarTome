@@ -1,5 +1,5 @@
 /**
- * Areas on the grid (COMBAT_PLAN.md §5): which squares a burst, emanation,
+ * Areas on the grid : which squares a burst, emanation,
  * cone or line covers, and which tokens stand in it. Pure; the canvas draws
  * the squares and the save prompt uses the tokens.
  *
@@ -25,10 +25,10 @@ export interface AreaShape {
   /** Degrees, 0 = east, 90 = south (screen): a cone's or line's direction. */
   angle?: number
   /** An emanation's creature; it follows the token. */
-  attachedTokenId?: number | null
+  attachedTokenId?: string | number | null
 }
 
-export interface AreaToken { id: number; gridX: number; gridY: number; size: number }
+export interface AreaToken { id: string | number; gridX: number; gridY: number; size: number }
 
 const EPS = 1e-6
 
@@ -134,7 +134,7 @@ export type AreaTrigger = 'enter' | 'turn-start' | 'turn-end'
 /** A condition an area's save gives per degree, e.g. frightened 2 on a critical failure. */
 export interface AreaCondition { name: string; value: number | null }
 
-/** What an area does to the creatures in it (COMBAT_PLAN.md §5). */
+/** What an area does to the creatures in it . */
 export interface AreaEffect {
   save: AreaSave
   dc: number

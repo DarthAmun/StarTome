@@ -3,11 +3,14 @@
  * (a second window, usually on the table's screen). Typed messages over
  * BroadcastChannel; the only module that uses it.
  */
+import type { PlayerScene } from '@/domain/rules/playerView'
 
 export type PlayerMessage =
   | { type: 'map'; mapEntryId: string | null }
   | { type: 'graph'; graphId: string | null }
-  | { type: 'hello'; channel: 'map' | 'graph' }
+  | { type: 'encounter'; scene: PlayerScene | null }
+  | { type: 'ping'; col: number; row: number; focus: boolean }
+  | { type: 'hello'; channel: 'map' | 'graph' | 'encounter' }
 
 const CHANNEL = 'startome-next-player'
 let channel: BroadcastChannel | null = null

@@ -6,6 +6,7 @@
 import { computed, ref, shallowRef, watch } from 'vue'
 import { Copy, Hammer, Pencil, RotateCcw, Star, Trash2 } from 'lucide-vue-next'
 import type { GameId } from '@/domain/game'
+import { applyAdjustment } from '@/domain/rules/combat'
 import type { Creature, RulesEntity } from '@/domain/rules/types'
 import { rulesDelete, rulesDuplicate, rulesGet, rulesResetEdits, rulesUpdate } from '@/data/rules'
 import { confirmDialog, reportError } from '@/ui/dialogs'
@@ -15,7 +16,7 @@ import CreatureBuilder from './CreatureBuilder.vue'
 import RulesEditor from './RulesEditor.vue'
 import StatBlock from './StatBlock.vue'
 
-const props = defineProps<{ rulesId: string; startEditing?: boolean; inPage?: boolean }>()
+const props = defineProps<{ rulesId: string; startEditing?: boolean; inPage?: boolean; /** Shown as its weak or elite version (a token in an encounter). */ adjustment?: 'weak' | 'elite' | null }>()
 /** `open`: another entry was asked for (only beside the list; in the dock it opens as a tab). */
 const emit = defineEmits<{ open: [id: string, edit?: boolean]; gone: [] }>()
 
@@ -75,7 +76,7 @@ const remove = () => act('Deleting the entry', async () => {
       <button class="btn" :class="{ 'btn-primary': editing }" data-test="rules-edit" @click="toggleEdit"><Pencil :size="14" /> {{ editing ? 'Done' : 'Edit' }}</button>
     </div>
     <RulesEditor v-if="editing" ref="editor" :key="entity.id" :entity="entity" />
-    <StatBlock v-else :entity="entity" :game="game" @open="open($event)" />
+    <StatBlock v-else :entity="adjustment ? applyAdjustment(entity, adjustment) : entity" :game="game" @open="open($event)" />
     <CreatureBuilder v-if="built" :open="rebuilding" :game="built.game === 'sf2e' ? 'sf2e' : 'pf2e'" :base="built" @close="rebuilding = false" @saved="rebuilding = false" />
   </div>
   <p v-else-if="entity === null" class="empty">Not in the compendium.</p>

@@ -54,7 +54,7 @@ function openFull() {
     </div>
     <div class="body">
       <EntryView v-if="current.kind === 'entry'" :key="current.id" :entry-id="current.id" />
-      <RulesView v-else :key="current.id" :rules-id="current.id" @gone="closePeek(dock.active)" />
+      <RulesView v-else :key="current.id" :rules-id="current.id" :adjustment="current.adjustment" @gone="closePeek(dock.active)" />
     </div>
   </aside>
 </template>
