@@ -971,6 +971,41 @@ Differences from v0.42, and what is left:
 - **Local sound files** need Chrome's file access, as planned; other browsers can only use web addresses.
 - **Not exercised by a browser test:** dragging panels into frames, drawing connections, the drawer's copy from another campaign, random table and reward panels, playing an actual audio file and switching the output device, saved Desk layouts.
 
+### 11b. Open items (one list)
+
+Everything left out or left open so far, gathered from the phase entries above. Each later phase updates this list: items it closes are removed, new ones are added. Nothing here blocks the phases; it is what the final parity audit in Phase 8 walks through.
+
+**Waiting for a later phase**
+
+- *Phase 7 (Starfinder):* starship page, crew and stations, interior map, sensor map (tokens on it are kept and take turns, but are not drawn), shields and starship combat, "+ Starship" in the encounter list, starship encounters and the small-crew budget in the builder, the "Zone area" button on starship abilities.
+- *Phase 8 (Play Buddy):* pairing and linking; item, coin, level-up and hero point offers; the read-only mirror of a linked character's inventory; damage requests and "roll initiative" requests from an encounter; a linked player's shared numbers in place of a stat block and in area saves; the party panel on the session board; hero points in the recap.
+- *Phase 8 (polish and cut-over):* settings page in full and the shortcut cheat sheet (`?`); offline and install checks (S1, S2); "updated in another tab" notice; removing images nothing uses any more (decision F11); publishing the preview beside the old app; the performance pass; the final parity audit.
+
+**Small things not built** (say which you want; none is planned otherwise)
+
+- *World:* collapsible groups with previews and paged rendering in the list (lists of a few hundred render at once); filtering NPCs by faction or location; `{{` completion and links for recorded historical states; the old "edit attribute" command in the command bar; callouts other than GM-only (`> [!note]`) show as plain quotes.
+- *Compendium:* your edits to a synced entry are kept per field, not per sub-field (changing a creature's Fortitude keeps your whole saves line, so a later Foundry change to its Will is reported as a conflict); a sync or import in another window does not refresh an open list; the Foundry sync still unpacks with JSZip.
+- *Party:* runes stored the old way (a "+1 striking" field) show as a label and count in the gear check but are not turned into attached rune entries; a level-up from a milestone quest says "Milestone quest" without the quest's name; the roster has no "Build encounter" button.
+- *Encounters:* no icon picker for conditions, and a condition's colour is not saved back to the compendium entry; the creature builder is a link to the compendium, not a dialog inside the encounter builder; a creature cannot be dragged from the compendium list onto the map (search, click or right-click the map instead); no per-token "roll initiative" button (type it, or "roll all" fills the empty ones); the players' window gets the whole scene on each change instead of single changes.
+- *Sessions:* the capture bar has no `{{` or `@` completion; NPC portraits are not drawn beside mentions in panel text; connections run from a panel's lower dot to another's upper dot, not between the nearest sides; renaming an entry does not rewrite session panel text.
+- *Desk:* entry widgets are not edited in place (the name opens the dock); a location widget has no map with drill-down; the DC widget has no Recall Knowledge line for a pinned creature; a compendium entry is a card that opens the stat block, not the stat block itself; weather stayed a widget with its list instead of becoming random tables (decision F13).
+- *Backup folder:* each backup is a complete zip, so images are written every time (about 450 MB per backup for your data, three kept) instead of being shared between backups.
+
+**Changed on purpose** (different from v0.42, not missing)
+
+- An encounter's mode (Prepare, Run) is its status in the database, not a browser setting.
+- With sight on and the GM seeing everything, the players' window shows what the party's tokens see together (v0.42 showed no darkness there).
+- A token's stat block opens in the dock; left-drag pans the map in the select tool; shape overlays are areas without an effect.
+- The treasure roll counts as a treasure award when it fills the stash; it also fills an encounter's loot.
+- The cross-campaign home is gone (decision F20); the start page's campaign cards carry the counts.
+
+**Built but not exercised by a browser test** (their rules are unit-tested where there are rules)
+
+- *Encounters:* dropping an image on the map, dragging tokens from the library, importing assets into the map maker, weak and elite stat blocks in the dock, lingering areas, the recovery and persistent damage prompts.
+- *Sessions and Desk:* dragging panels into frames, drawing connections, copying a scene from another campaign, random table and reward panels, saved Desk layouts.
+- *Sounds:* playing a real audio file and switching the output device.
+- *Data:* enemy tokens of imported encounters are named after their stat block, so they show as "Token" until the Foundry compendium is synced in the new app.
+
 ---
 
 ## 12. Risks
