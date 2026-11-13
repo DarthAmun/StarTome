@@ -138,19 +138,27 @@ export function logChanges(token: Token, changes: ConditionChange[]): string[] {
 
 // ── Changing a token ───────────────────────────────────────────────────────
 
-export interface HpOptions { critical?: boolean; hitsAtZero?: number; absorbed?: number }
+export interface HpOptions { critical?: boolean; hitsAtZero?: number; absorbed?: number; /** Starships: the damage ignores Shield Points. */ bypassing?: boolean; nonlethal?: boolean; /** Starships: what got past the shields. */ hullDamage?: number }
+/** Starships take damage their own way (shields first; the party's ship becomes compromised, not dying): starshipLive.ts fills these in. */
+export const shipHooks = {
+  damage: null as null | ((t: Token, amount: number, opts: HpOptions) => void),
+  hpChange: null as null | ((t: Token, next: CombatantPatch, opts: HpOptions) => CombatantPatch),
+}
 
 /** Changes a token, logs what is worth logging, and adds dying, wounded and defeat to an HP change. */
 export function updateToken(id: string, updates: CombatantPatch, opts: HpOptions = {}): void {
   const token = getToken(id)
   if (!token) return
   const next: CombatantPatch = { ...updates }
-  if (next.hp && next.hp.current !== token.hp.current) {
-    const dying = next.usesDying !== undefined ? (next.usesDying ?? token.playerToken) : usesDying(token)
-    const fx = hpChangeEffects(next.conditions ?? token.conditions, { from: token.hp.current, to: next.hp.current, ...opts }, dying, live.automation)
-    if (fx.changes.length) { logChanges(token, fx.changes); token.conditions = fx.conditions; next.conditions = fx.conditions }
-    if (fx.dead && !token.dead) next.dead = true
-    if (fx.revived && token.dead) next.dead = false
+  if (next.hp && (next.hp.current !== token.hp.current || opts.hullDamage)) {
+    if (token.sensor?.role === 'player-ship' && shipHooks.hpChange) Object.assign(next, shipHooks.hpChange(token, next, opts))
+    else {
+      const dying = next.usesDying !== undefined ? (next.usesDying ?? token.playerToken) : usesDying(token)
+      const fx = hpChangeEffects(next.conditions ?? token.conditions, { from: token.hp.current, to: next.hp.current, ...opts }, dying, live.automation)
+      if (fx.changes.length) { logChanges(token, fx.changes); token.conditions = fx.conditions; next.conditions = fx.conditions }
+      if (fx.dead && !token.dead) next.dead = true
+      if (fx.revived && token.dead) next.dead = false
+    }
     const diff = next.hp.current !== null && token.hp.current !== null ? next.hp.current - token.hp.current : 0
     const absorbed = opts.absorbed ?? 0
     if (diff < 0 || absorbed > 0) logLine(token, 'damage', { value: Math.max(0, -diff) + absorbed, ...(absorbed ? { absorbed } : {}) })
@@ -174,6 +182,7 @@ export function applyDamage(id: string, amount: number, opts: HpOptions = {}): v
   const t = getToken(id)
   if (!t || t.hp.current === null || !amount) return
   if (amount < 0) { updateToken(id, { hp: { ...t.hp, current: Math.min(t.hp.max ?? Infinity, t.hp.current - amount) } }, opts); return }
+  if (t.sensor && shipHooks.damage) { shipHooks.damage(t, amount, opts); return }
   const r = damageWithTemp({ hp: t.hp.current, temp: t.hp.temp }, amount)
   updateToken(id, { hp: { ...t.hp, current: r.hp, temp: r.temp } }, { ...opts, hitsAtZero: t.hp.current <= 0 && amount > r.absorbed ? 1 : 0, absorbed: r.absorbed })
 }

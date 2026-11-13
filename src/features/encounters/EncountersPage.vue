@@ -6,6 +6,7 @@ import { Copy, Plus, Trash2 } from 'lucide-vue-next'
 import type { Encounter } from '@/domain/schema'
 import { cloneEncounter, createEncounter, deleteEncounter, encounters } from '@/data/encounters'
 import { reopenEncounter } from '@/data/resolution'
+import { starships, startStarshipBattle } from '@/data/starships'
 import { confirmDialog, notify, reportError } from '@/ui/dialogs'
 import { useLive } from '@/ui/useLive'
 import EncounterTabs from './EncounterTabs.vue'
@@ -27,6 +28,8 @@ const resolving = ref<string | null>(null)
 
 const open = (id: string) => router.push({ name: 'encounter', params: { campaignId: props.campaignId, encounterId: id } })
 const act = (what: string, work: () => Promise<unknown>) => work().catch(err => reportError(what, err))
+const ship = useLive(() => starships.active(props.campaignId), null, [() => props.campaignId])
+const starshipBattle = () => act('Starting the starship battle', async () => { if (ship.value) open(await startStarshipBattle(ship.value)) })
 const create = () => act('Creating the encounter', async () => open((await createEncounter(props.campaignId)).id))
 const clone = (e: Encounter) => act('Copying the encounter', async () => { await cloneEncounter(e.id) })
 const remove = (e: Encounter) => act('Deleting the encounter', async () => {
@@ -41,7 +44,7 @@ const reopen = (e: Encounter) => act('Re-opening the encounter', async () => {
 
 <template>
   <div class="page">
-    <div class="page-head"><h1>Encounters</h1><button class="btn btn-primary" data-test="new-encounter" @click="create"><Plus :size="15" /> New encounter</button></div>
+    <div class="page-head"><h1>Encounters</h1><button v-if="ship" class="btn" :title="`A battle aboard ${ship.name}: a copy of its interior with the crew at their stations`" data-test="new-starship-battle" @click="starshipBattle">+ Starship</button><button class="btn btn-primary" data-test="new-encounter" @click="create"><Plus :size="15" /> New encounter</button></div>
     <EncounterTabs :campaign-id="campaignId" />
     <div class="filters">
       <input v-model="search" class="input" placeholder="Search encounters…" aria-label="Search encounters" />
@@ -51,7 +54,7 @@ const reopen = (e: Encounter) => act('Re-opening the encounter', async () => {
       <li v-for="{ e, tokens } in shown" :key="e.id" class="panel" :data-encounter="e.name">
         <button class="main" @click="open(e.id)">
           <b>{{ e.name }}</b><span class="chip" :class="e.status">{{ STATUS[e.status] }}</span>
-          <span class="faint">{{ tokens }} token{{ tokens === 1 ? '' : 's' }}{{ e.map ? ' · map' : ' · no map' }}{{ e.fovEnabled ? ' · sight' : '' }}{{ e.status === 'active' ? ` · round ${e.turn.round}` : '' }}{{ e.status === 'resolved' && e.xpAwarded != null ? ` · ${e.xpAwarded} XP each` : '' }}</span>
+          <span class="faint">{{ tokens }} token{{ tokens === 1 ? '' : 's' }}{{ e.map ? ' · map' : ' · no map' }}{{ e.fovEnabled ? ' · sight' : '' }}{{ e.starship ? (e.starship.role === 'interior' ? ' · ship interior' : ' · starship battle') : '' }}{{ e.status === 'active' ? ` · round ${e.turn.round}` : '' }}{{ e.status === 'resolved' && e.xpAwarded != null ? ` · ${e.xpAwarded} XP each` : '' }}</span>
         </button>
         <button v-if="e.status !== 'resolved'" class="btn" :data-resolve="e.name" @click="resolving = e.id">Resolve…</button>
         <button v-else class="btn" @click="reopen(e)">Re-open</button>

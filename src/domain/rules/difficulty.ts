@@ -29,8 +29,9 @@ export interface Difficulty {
 }
 
 export function xpEntryOf(e: RulesEntity, adjustment: Adjustment | null): XpEntry | null {
-  if (e.kind !== 'creature' && e.kind !== 'hazard') return null
-  return { level: e.level, kind: e.kind, complex: e.kind === 'hazard' ? (e as Hazard).complex : undefined, adjustment }
+  // A starship counts like a creature of its level
+  if (e.kind !== 'creature' && e.kind !== 'hazard' && e.kind !== 'starship') return null
+  return { level: e.level, kind: e.kind === 'hazard' ? 'hazard' : 'creature', complex: e.kind === 'hazard' ? (e as Hazard).complex : undefined, adjustment }
 }
 
 export function rateTokens(game: GameId, tokens: DifficultyToken[], defeated: DefeatedEnemy[], entries: Map<string, RulesEntity>, partyLevel: number, lowestLevel: number | null): Difficulty {

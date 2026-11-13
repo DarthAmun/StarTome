@@ -99,6 +99,8 @@ const inv = ref<InstanceType<typeof InventoryPanel> | null>(null)
           <div class="meter"><div :style="{ width: `${Math.min(100, pace.fraction * 100)}%` }" /></div>
         </div>
       </div>
+      <RouterLink class="btn" :to="{ name: 'encounter-builder', params: { campaignId } }">Build encounter</RouterLink>
+      <RouterLink v-if="game === 'sf2e'" class="btn" data-test="open-starship" :to="{ name: 'starship', params: { campaignId } }">Starship</RouterLink>
       <button v-if="xpMode" class="btn" :disabled="!characters.length" title="Accomplishment XP: minor 10, moderate 30, major 80" data-test="award-xp" @click="xpPrompt = { campaignId, refType: null, refId: null, reason: '' }"><Sparkles :size="15" /> Award XP</button>
       <button class="btn btn-primary" :disabled="!characters.length" data-test="level-up" @click="levelUpPrompt = { campaignId, trigger: 'manual', refId: null, reason: 'Raise the selected characters by one level.' }"><TrendingUp :size="15" /> Level up party</button>
     </div>

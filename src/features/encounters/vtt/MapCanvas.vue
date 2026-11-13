@@ -12,6 +12,7 @@ import type { Cell } from './engine/types'
 import { areas, live, mapTokens, moveToken, saveMap } from './live'
 import { mapSquares, pingPlayers } from './playerSync'
 import { hexNumber, sightFor, toSceneTokens } from './scene'
+import { info, malfunctioning, markers } from './starshipLive'
 import { areaClick, areaDraft, tools } from './tools'
 
 const emit = defineEmits<{ context: [hit: { tokenId: string | null; wallId: string | null; areaId: string | null; cell: Cell }, x: number, y: number] }>()
@@ -87,6 +88,7 @@ onMounted(async () => {
   stops.push(watch(() => [live.tokens, live.activeId, live.encounter?.status], () => { void refreshTokens(); refreshSight() }, { immediate: true, deep: true }))
   stops.push(watch(() => [live.fovMode, live.encounter?.fovEnabled], refreshSight))
   stops.push(watch(() => tools.tool, () => e.toolChanged()))
+  stops.push(watch(() => [markers.value, info.value?.malfunctioning], () => e.setMarkers(markers.value.map(m => ({ slot: m.slot, x: m.x, y: m.y, off: malfunctioning(m.slot) }))), { immediate: true, deep: true }))
 })
 
 onBeforeUnmount(() => { stops.forEach(stop => stop()); observer?.disconnect(); engine?.destroy(); engine = null })

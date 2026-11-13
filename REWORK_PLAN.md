@@ -1,6 +1,6 @@
 # StarTome rework plan
 
-Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phases 1 to 6 are done on the `rework` branch (see section 11a). Phase 7 is next.
+Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phases 1 to 7 are done on the `rework` branch (see section 11a). Phase 8 is next.
 
 How this was produced: the schema, types, format docs, backup/import code, the Play Buddy port and the app shell were read line by line. The large UI files (encounter page, GM screen, map maker, editors, session board) were read by extracting their templates, handlers, shortcuts and storage keys rather than every line. The app was started (`pnpm dev`), the main screens were opened, `pnpm test` (557 passed, 2 skipped) and `pnpm typecheck` ran clean. A real backup (`~/Downloads/startome-all-2026-11-03.json`, 578 MB) was inspected for its actual shape. Anything in the inventory I could not confirm by running it is still listed; Phase 3 verifies each line.
 
@@ -212,12 +212,12 @@ History (flag F4)
 List and builder
 - [x] G1 Encounter list per campaign: search, status, details (map, tokens, round, FOV), open, clone, delete with confirm
 - [x] G2 Resolve and re-open from the list
-- [ ] G3 "+ Starship" creates a starship battle on the active ship (SF2e)
+- [x] G3 "+ Starship" creates a starship battle on the active ship (SF2e)
 - [x] G4 Encounter builder: party level (override, reset, mixed-level hint), treasure pace for the level
 - [x] G5 Builder search: creatures, hazards, starships; level range, rarity, traits; both games' creatures usable
 - [x] G6 Builder selection: counts, weak/elite, XP per slot, "too strong / too weak" warnings, threat meter with budgets
 - [ ] G7 Build creature (GM Core tables) from the builder
-- [ ] G8 Starship encounter switch with small-crew budgets and the concierge variant
+- [x] G8 Starship encounter switch with small-crew budgets and the concierge variant
 - [x] G9 "Create encounter" places party tokens and enemies on free squares of a new prepared encounter; the selection is kept per campaign until cleared
 
 Prepare
@@ -318,17 +318,17 @@ Map maker
 - [x] J2 Installed weapons attach to their host; augmentations are implanted and cannot change hands; limit warning (apex free)
 - [x] J3 Vehicles as a compendium kind and as tokens worth no XP
 - [x] J4 Area Fire / Auto-Fire buttons on Strikes with those traits
-- [ ] J5 Starship compendium kinds: starship, frame, battle station, station upgrade, expansion bay; the five starship conditions
+- [x] J5 Starship compendium kinds: starship, frame, battle station, station upgrade, expansion bay; the five starship conditions
 - [ ] J6 `scripts/techcore/build.sh` builds a private Tech Core pack from your PDF into `local/`
-- [ ] J7 Starship page: several ships, one active; create from a frame, delete with confirm; level follows the party or is pinned
-- [ ] J8 Ship sheet: HP/SP, AC, saves, speed, sensor range, conditions, "new at this level", notes, image
-- [ ] J9 Battle stations: grade, helmed bonus, upgrades with limits, station actions; expansion bays
-- [ ] J10 Crew: drag members onto stations, exploration activity, suggested initiative skill, hand-entered skills, named presets
-- [ ] J11 Interior map with station markers; "Start starship battle" copies it into a new encounter with the crew at their stations; "Save positions as crew"
-- [ ] J12 Sensor map: zones, ships and hazards with heading, drag between zones, turn, HP and Shield Points, hide from players, sensor range and off-guard zones, zone areas with the save prompt; shown in the player view
-- [ ] J13 Starship combat: shields before hull, bypassing, nonlethal, Generate Shields, Fortify, Repair Self; compromised and wrecked, malfunctioning stations, hull integrity check; state written back to the ship
-- [ ] J14 Stations panel in the encounter: who helms what, defenses with helmed bonuses, the helming member's station actions on their turn
-- [ ] J15 Emergency Repairs on the Starship page; start-of-encounter effects from exploration activities; downtime notes of expansion bays
+- [x] J7 Starship page: several ships, one active; create from a frame, delete with confirm; level follows the party or is pinned
+- [x] J8 Ship sheet: HP/SP, AC, saves, speed, sensor range, conditions, "new at this level", notes, image
+- [x] J9 Battle stations: grade, helmed bonus, upgrades with limits, station actions; expansion bays
+- [x] J10 Crew: drag members onto stations, exploration activity, suggested initiative skill, hand-entered skills, named presets
+- [x] J11 Interior map with station markers; "Start starship battle" copies it into a new encounter with the crew at their stations; "Save positions as crew"
+- [x] J12 Sensor map: zones, ships and hazards with heading, drag between zones, turn, HP and Shield Points, hide from players, sensor range and off-guard zones, zone areas with the save prompt; shown in the player view
+- [x] J13 Starship combat: shields before hull, bypassing, nonlethal, Generate Shields, Fortify, Repair Self; compromised and wrecked, malfunctioning stations, hull integrity check; state written back to the ship
+- [x] J14 Stations panel in the encounter: who helms what, defenses with helmed bonuses, the helming member's station actions on their turn
+- [x] J15 Emergency Repairs on the Starship page; start-of-encounter effects from exploration activities; downtime notes of expansion bays
 
 ### K. Play Buddy
 
@@ -792,7 +792,7 @@ The new app is built on a `rework` branch and published to a second path (for ex
 | **4 Party and loot** ✅ | Roster, ledger (XP, milestones, level-ups), inventory, wealth, treasure roll, earn income, companions. | H, I, J1–J2 | Track the party between sessions. |
 | **5 Encounters** ✅ | List, builder, VTT engine (prepare and run), tokens, conditions and automation, areas, resolve, player view, map maker, token library. | G, J3–J4 | Run a fight. |
 | **6 Sessions and the table** ✅ | Session board, capture, recap and finish, session log, table bar, Tonight, Desk with all widgets, sounds. | F, N, Q, B | Run a whole Pathfinder session in the new app. |
-| **7 Starfinder** | Starship page, crew, interior map, sensor map, starship combat, starship encounters. | J5–J15 | Run a Starfinder session. |
+| **7 Starfinder** ✅ | Starship page, crew, interior map, sensor map, starship combat, starship encounters. | J5–J15 | Run a Starfinder session. |
 | **8 Link, polish, cut-over** | Character link (Play Buddy), settings, shortcut cheat sheet, offline and install checks, performance pass with measurements, final parity audit, move the new app to the main path, tag the old one. Summary report. | K, R, A, T, the rest | Retire v0.41. |
 
 Order reasoning: data safety first; then the parts every later phase leans on (entries, compendium); party before encounters because resolution writes to the ledger and the stash; sessions after encounters because the table bar and board run encounters; Starfinder after its dependencies; the character link last because it touches party, inventory and encounters and has a mock server to test against.
@@ -971,24 +971,44 @@ Differences from v0.42, and what is left:
 - **Local sound files** need Chrome's file access, as planned; other browsers can only use web addresses.
 - **Not exercised by a browser test:** dragging panels into frames, drawing connections, the drawer's copy from another campaign, random table and reward panels, playing an actual audio file and switching the output device, saved Desk layouts.
 
+**Phase 7, Starfinder (done 2026-11-13, branch `rework`).**
+
+What exists: the **Starship** page (from the Party page, in Starfinder campaigns). Several ships, one of them the party's; a ship is made from a frame, which brings its stations. The sheet follows the ship's level (the party's, or one you pin): Hull and Shield Points (current and maximum), AC, saves, speed, sensor range, the four lasting conditions, what the last level brought, notes and a picture. **Battle stations**: the frame's own and the ones you choose, each with its grade, helmed bonus, upgrades against its limit (with warnings for an upgrade in the wrong station, above the ship's level, or too many), and its actions. **Expansion bays** with their options against the frame's slots. **Crew**: each party member at a station, as free crew or not aboard; their exploration activity; the skill rolled for initiative there, entered by hand; seatings saved by name. **Emergency Repairs** rolls Crafting against the DC of the rank attempted and applies the result. The ship's **interior** is an encounter map: its Stations panel places each station on a square. **Start a starship battle** (also "+ Starship" in the encounter list) copies the interior with its walls and whatever stands on it, puts the ship on the sensor map and seats the crew at their stations.
+
+In a starship encounter the side panel has two more parts. **Stations**: who stands on (helms) which station, the ship's AC and saves right now (helmed bonuses, the pilot's Piloting DC if higher, inoperable, off-kilter), the acting crew member's station actions, malfunctioning stations, the hull integrity check of a compromised ship, what the exploration activities give when initiative is rolled, and "Save positions as crew". **Sensor map**: a row of zones (3 to 30) with ships and hazards facing left or right; select one to move or turn it, hide it, open its stat block, see its sensor range and from where it is caught off-guard; damage goes to Shield Points first unless bypassing, then the hull; Generate Shields, Fortify, Repair Self; a zone area (cone, line, emanation, burst with its range) shows whom it hits and asks for saves in the same save prompt as areas on the map. The party's ship at 0 Hull Points becomes compromised (plus its wrecked value; 2 on a critical hit; inoperable on nonlethal), every station malfunctions and it joins the turn order; the hull integrity check moves compromised up or down; at 10 it is destroyed; repaired above 0 it is wrecked one step more. Hull, shields and the lasting conditions are written back to the ship. The players' window shows the row of zones: their ship in numbers, the others as a word. The **builder** has a "Starship encounter" switch (starships in the search, the small-crew budgets, the concierge variant) and creates the battle with ships on the sensor map facing the party and boarders on the interior.
+
+Moved from `legacy/` into `src/domain/rules/`, with their tests: starship stats and grades, the party's starship (sheet, slots, crew, markers), the sensor map, starship combat and Emergency Repairs.
+
+Tests added: 33 unit tests moved over with the rules, 6 for the starship repository, battles, the builder and the players' sensor view, 1 browser test (build a ship from a frame, choose a station, seat the crew, place a station on the interior, start a battle, damage through shields to compromised, the players' window, the state back on the sheet). Totals: 491 unit tests and 21 browser tests.
+
+Not checked against your data: the preview's compendium has no starship frames (they come from your Tech Core pack), and neither imported campaign has a starship in this database, so the page was exercised with test entries of the same shape.
+
+Differences from v0.42, and what is left:
+
+- **Crew are seated with a select per member**, not by dragging onto stations.
+- **"Zone area" is opened from the sensor map**, with shape, size, DC and damage typed in; a starship's stat block has no button that fills them in.
+- **Play Buddy's skill numbers** for the crew (Piloting and the like) come with Phase 8; until then the modifier is the one entered on the Starship page.
+- **`scripts/techcore/build.sh` (J6)** was not touched or run here; it writes homebrew files, which import as before.
+- **Not exercised by a browser test:** upgrades and bays, crew presets, Emergency Repairs, zone areas and their saves, the hull integrity check's outcomes (unit-tested), a starship encounter made by the builder (unit-tested).
+
 ### 11b. Open items (one list)
 
 Everything left out or left open so far, gathered from the phase entries above. Each later phase updates this list: items it closes are removed, new ones are added. Nothing here blocks the phases; it is what the final parity audit in Phase 8 walks through.
 
 **Waiting for a later phase**
 
-- *Phase 7 (Starfinder):* starship page, crew and stations, interior map, sensor map (tokens on it are kept and take turns, but are not drawn), shields and starship combat, "+ Starship" in the encounter list, starship encounters and the small-crew budget in the builder, the "Zone area" button on starship abilities.
-- *Phase 8 (Play Buddy):* pairing and linking; item, coin, level-up and hero point offers; the read-only mirror of a linked character's inventory; damage requests and "roll initiative" requests from an encounter; a linked player's shared numbers in place of a stat block and in area saves; the party panel on the session board; hero points in the recap.
+- *Phase 8 (Play Buddy):* pairing and linking; the crew's skill modifiers on the Starship page; item, coin, level-up and hero point offers; the read-only mirror of a linked character's inventory; damage requests and "roll initiative" requests from an encounter; a linked player's shared numbers in place of a stat block and in area saves; the party panel on the session board; hero points in the recap.
 - *Phase 8 (polish and cut-over):* settings page in full and the shortcut cheat sheet (`?`); offline and install checks (S1, S2); "updated in another tab" notice; removing images nothing uses any more (decision F11); publishing the preview beside the old app; the performance pass; the final parity audit.
 
 **Small things not built** (say which you want; none is planned otherwise)
 
 - *World:* collapsible groups with previews and paged rendering in the list (lists of a few hundred render at once); filtering NPCs by faction or location; `{{` completion and links for recorded historical states; the old "edit attribute" command in the command bar; callouts other than GM-only (`> [!note]`) show as plain quotes.
 - *Compendium:* your edits to a synced entry are kept per field, not per sub-field (changing a creature's Fortitude keeps your whole saves line, so a later Foundry change to its Will is reported as a conflict); a sync or import in another window does not refresh an open list; the Foundry sync still unpacks with JSZip.
-- *Party:* runes stored the old way (a "+1 striking" field) show as a label and count in the gear check but are not turned into attached rune entries; a level-up from a milestone quest says "Milestone quest" without the quest's name; the roster has no "Build encounter" button.
+- *Party:* runes stored the old way (a "+1 striking" field) show as a label and count in the gear check but are not turned into attached rune entries; a level-up from a milestone quest says "Milestone quest" without the quest's name.
 - *Encounters:* no icon picker for conditions, and a condition's colour is not saved back to the compendium entry; the creature builder is a link to the compendium, not a dialog inside the encounter builder; a creature cannot be dragged from the compendium list onto the map (search, click or right-click the map instead); no per-token "roll initiative" button (type it, or "roll all" fills the empty ones); the players' window gets the whole scene on each change instead of single changes.
 - *Sessions:* the capture bar has no `{{` or `@` completion; NPC portraits are not drawn beside mentions in panel text; connections run from a panel's lower dot to another's upper dot, not between the nearest sides; renaming an entry does not rewrite session panel text.
 - *Desk:* entry widgets are not edited in place (the name opens the dock); a location widget has no map with drill-down; the DC widget has no Recall Knowledge line for a pinned creature; a compendium entry is a card that opens the stat block, not the stat block itself; weather stayed a widget with its list instead of becoming random tables (decision F13).
+- *Starfinder:* crew are seated with a select, not by dragging; a starship's stat block has no "Zone area" button that fills in the sensor map's zone area; `scripts/techcore/build.sh` was not re-run against the new app.
 - *Backup folder:* each backup is a complete zip, so images are written every time (about 450 MB per backup for your data, three kept) instead of being shared between backups.
 
 **Changed on purpose** (different from v0.42, not missing)
@@ -1004,6 +1024,7 @@ Everything left out or left open so far, gathered from the phase entries above. 
 - *Encounters:* dropping an image on the map, dragging tokens from the library, importing assets into the map maker, weak and elite stat blocks in the dock, lingering areas, the recovery and persistent damage prompts.
 - *Sessions and Desk:* dragging panels into frames, drawing connections, copying a scene from another campaign, random table and reward panels, saved Desk layouts.
 - *Sounds:* playing a real audio file and switching the output device.
+- *Starfinder:* upgrades and bays, crew presets, Emergency Repairs, zone areas, a builder-made starship encounter; and nothing of it against real Tech Core entries, which the preview's compendium does not hold yet.
 - *Data:* enemy tokens of imported encounters are named after their stat block, so they show as "Token" until the Foundry compendium is synced in the new app.
 
 ---

@@ -31,6 +31,9 @@ import PreparePanel from './vtt/PreparePanel.vue'
 import QuickAdd from './vtt/QuickAdd.vue'
 import { encounterRolls, targetId } from './vtt/rolls'
 import TokenDialog from './vtt/TokenDialog.vue'
+import SensorPanel from './vtt/SensorPanel.vue'
+import { followShip, info as shipInfoNow, loadShip, placeMarker } from './vtt/starshipLive'
+import StationsPanel from './vtt/StationsPanel.vue'
 import { tools } from './vtt/tools'
 import ToolBar from './vtt/ToolBar.vue'
 import TurnOrder from './vtt/TurnOrder.vue'
@@ -50,6 +53,9 @@ const quick = ref<{ cell: Cell; start: 'creature' | 'token' } | null>(null)
 const resolving = ref(false)
 const side = ref<'order' | 'log'>('order')
 let stopSync: (() => void) | null = null
+let stopShip: (() => void) | null = null
+/** The station whose marker the next click on the map places. */
+const placing = ref<number | null>(null)
 
 const enc = computed(() => live.encounter)
 const mode = computed(() => (enc.value?.status === 'active' ? 'run' : enc.value?.status === 'resolved' ? 'resolved' : 'prepare'))
@@ -63,6 +69,9 @@ async function load(id: string) {
   restoreTurn()
   tools.tool = 'select'
   stopSync = startPlayerSync(props.campaignId)
+  await loadShip()
+  stopShip?.()
+  stopShip = followShip()
 }
 onMounted(() => { activeRollContext.value = encounterRolls; window.addEventListener('keydown', onKey); void load(props.encounterId) })
 watch(() => props.encounterId, (id) => { stopSync?.(); void load(id) })
@@ -70,6 +79,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey)
   activeRollContext.value = null
   stopSync?.()
+  stopShip?.()
   void flushSaves()
 })
 
@@ -97,6 +107,13 @@ function openStat() {
   const t = selected.value, link = t ? statLinkOf(t) : null
   if (link) peek({ kind: 'rules', id: link.rulesId, adjustment: link.adjustment })
   else if (t?.ref.kind === 'entry') peek({ kind: 'entry', id: t.ref.entryId })
+}
+
+function stageClick(e: MouseEvent) {
+  if (placing.value === null) return
+  const at = canvas.value?.cellAt(e.clientX, e.clientY)
+  if (at) void placeMarker(placing.value, { x: at.col, y: at.row })
+  placing.value = null
 }
 
 async function onDrop(e: DragEvent) {
@@ -143,13 +160,15 @@ function onKey(e: KeyboardEvent) {
       <button v-else class="btn" data-test="reopen" @click="reopen">Re-open</button>
     </header>
 
-    <div class="stage" @dragover.prevent @drop.prevent="onDrop">
+    <div class="stage" :class="{ placing: placing !== null }" @dragover.prevent @drop.prevent="onDrop" @click="stageClick">
       <MapCanvas ref="canvas" @context="(hit, x, y) => (menu = { hit, x, y })" />
       <ToolBar />
       <TurnPrompts v-if="mode === 'run'" />
     </div>
 
     <aside class="side">
+      <StationsPanel v-if="shipInfoNow" v-model:placing="placing" />
+      <SensorPanel v-if="shipInfoNow?.role === 'battle'" />
       <PreparePanel v-if="mode === 'prepare'" @unlinked="editId = $event" />
       <div v-if="mode !== 'prepare'" class="tabs"><button :class="{ on: side === 'order' }" @click="side = 'order'">Turn order</button><button :class="{ on: side === 'log' }" data-test="tab-log" @click="side = 'log'">Log ({{ live.log.length }})</button></div>
       <LogPanel v-if="mode !== 'prepare' && side === 'log'" class="fill" />
@@ -186,8 +205,8 @@ function onKey(e: KeyboardEvent) {
 .seg, .tabs { display: flex; border: var(--frame); border-radius: var(--radius); overflow: hidden; }
 .seg button, .tabs button { background: none; border: 0; padding: .3rem .8rem; color: var(--text-dim); }
 .seg button.on, .tabs button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
-.stage { position: relative; min-width: 0; min-height: 0; }
-.side { display: flex; flex-direction: column; min-height: 0; border-left: var(--frame); background: var(--bg-raised); overflow: hidden; }
+.stage { position: relative; min-width: 0; min-height: 0; } .stage.placing { outline: 2px dashed #4ab8e8; outline-offset: -3px; }
+.side { display: flex; flex-direction: column; min-height: 0; border-left: var(--frame); background: var(--bg-raised); overflow: auto; }
 .side .tabs { border-width: 0 0 1px; border-radius: 0; } .side .tabs button { flex: 1; }
 .fill { flex: 1; min-height: 8rem; } .prepare .side { overflow: auto; } .prepare .fill { flex: none; }
 .sel { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; padding: .5rem .6rem; border-top: var(--frame); background: var(--bg-sunken); }

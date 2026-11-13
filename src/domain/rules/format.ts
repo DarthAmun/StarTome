@@ -73,6 +73,7 @@ export const ACTION_GLYPH = { 1: '◆', 2: '◆◆', 3: '◆◆◆', free: '◇'
 export function formatActionCost(cost: ActionCost | undefined): string {
   if (cost === null || cost === undefined || cost === 'passive') return ''
   if (typeof cost === 'number' || cost === 'free' || cost === 'reaction') return ACTION_GLYPH[cost]
+  if (typeof cost !== 'object') return String(cost)
   if ('text' in cost) return cost.text
   return `${ACTION_GLYPH[cost.min]} to ${ACTION_GLYPH[cost.max]}`
 }

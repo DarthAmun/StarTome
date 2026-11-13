@@ -45,7 +45,7 @@ export interface PlayerSource {
   conditions: TokenCondition[]
   timers: TokenTimer[]
   /** On the sensor map of a starship battle, not on this map. */
-  sensor: unknown
+  sensor: { zone: number; heading: number | null; role: string | null; shields: number | null; shieldsMax: number | null } | null
 }
 
 export interface PlayerToken {
@@ -66,6 +66,30 @@ export interface PlayerToken {
   elevation: number | null
 }
 
+/** A ship or hazard on the sensor map as players see it: their own ship in numbers, the others as a word. */
+export interface PlayerShip {
+  id: string
+  name: string
+  zone: number
+  heading: number
+  side: 'party' | 'ally' | 'enemy' | 'hazard'
+  hp: { current: number | null; max: number | null } | null
+  shields: { current: number | null; max: number | null } | null
+  health: HealthState | 'destroyed' | null
+  conditions: string[]
+}
+
+export function toPlayerShip(t: PlayerSource): PlayerShip {
+  const own = t.sensor?.role === 'player-ship'
+  return {
+    id: t.id, name: t.name, zone: t.sensor?.zone ?? 0, heading: t.sensor?.heading ?? 1,
+    side: own ? 'party' : t.sensor?.role === 'hazard' ? 'hazard' : t.ally ? 'ally' : 'enemy',
+    hp: own ? { current: t.hp.current, max: t.hp.max } : null, shields: own ? { current: t.sensor?.shields ?? null, max: t.sensor?.shieldsMax ?? null } : null,
+    health: own ? null : t.dead ? 'destroyed' : healthState(t),
+    conditions: t.conditions.filter(c => !c.hidden).map(c => (c.value != null ? `${c.name} ${c.value}` : c.name)),
+  }
+}
+
 export interface PlayerTurn { id: string; name: string; image: ImageRef | null; dead: boolean; party: boolean; mystery: boolean }
 
 export interface PlayerScene {
@@ -81,6 +105,8 @@ export interface PlayerScene {
   round: number
   activeId: string | null
   turns: PlayerTurn[]
+  /** The sensor map of a starship battle: its zones and who is in them. */
+  sensor: { zones: number; ships: PlayerShip[] } | null
   prefs: PlayerViewPrefs
 }
 
@@ -118,6 +144,8 @@ export interface PlayerSceneInput {
   running: boolean
   round: number
   activeId: string | null
+  /** Zones of the sensor map; null when the encounter has none. */
+  zones?: number | null
   prefs: PlayerViewPrefs
 }
 
@@ -132,5 +160,6 @@ export function toPlayerScene(i: PlayerSceneInput): PlayerScene {
     // A hidden token's turn is nobody's turn, unless it shows as "?"
     activeId: turns.some(t => t.id === i.activeId) ? i.activeId : null,
     turns, prefs: { ...i.prefs },
+    sensor: i.zones ? { zones: i.zones, ships: i.tokens.filter(t => t.visible && t.sensor).map(toPlayerShip) } : null,
   }
 }

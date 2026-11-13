@@ -66,6 +66,15 @@ onBeforeUnmount(() => { offs.forEach(off => off()); observer?.disconnect(); engi
         </span>
       </li>
     </ol>
+    <div v-if="scene?.sensor" class="sensor" data-test="player-sensor" :style="{ gridTemplateColumns: `repeat(${scene.sensor.zones}, minmax(0, 1fr))` }">
+      <div v-for="z in scene.sensor.zones" :key="z" class="zone">
+        <span v-for="s in scene.sensor.ships.filter(x => x.zone === z - 1)" :key="s.id" class="ship" :class="s.side" :title="s.conditions.join(', ')">
+          {{ s.heading > 0 ? '▶' : '◀' }} {{ s.name }}
+          <small v-if="s.hp">{{ s.hp.current }}/{{ s.hp.max }} HP<template v-if="s.shields?.max"> · {{ s.shields.current }}/{{ s.shields.max }} SP</template></small>
+          <small v-else-if="s.health && s.health !== 'healthy'">{{ s.health === 'dead' ? 'destroyed' : s.health }}</small>
+        </span>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -80,5 +89,8 @@ onBeforeUnmount(() => { offs.forEach(off => off()); observer?.disconnect(); engi
 .rail li.active { border-color: #ffd700; background: rgb(255 215 0 / .12); } .rail li.dead { opacity: .45; }
 .who { display: flex; flex-direction: column; min-width: 0; } .party b { color: #3bbfa8; } .size-large b { font-size: 1.15rem; } .size-small b { font-size: .82rem; }
 .conds { display: flex; gap: 3px; flex-wrap: wrap; } .conds i { font-style: normal; font-size: .68rem; font-weight: 600; padding: 0 .3rem; border-radius: 3px; color: #10101a; }
+.sensor { position: absolute; left: .6rem; right: .6rem; bottom: .6rem; display: grid; gap: 3px; background: rgb(10 10 22 / .78); border-radius: 8px; padding: .4rem; }
+.zone { min-height: 3.2rem; border: 1px solid #33334d; border-radius: 4px; display: flex; flex-direction: column; gap: 2px; padding: 2px; font-size: .78rem; }
+.ship { display: flex; flex-direction: column; line-height: 1.15; } .ship small { opacity: .75; } .ship.party { color: #3bbfa8; } .ship.ally { color: #7fb2e6; } .ship.enemy { color: #e86a6a; } .ship.hazard { color: #d9c34a; }
 .mystery { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; background: #23233a; font-size: 1.3rem; color: #8a88a0; }
 </style>

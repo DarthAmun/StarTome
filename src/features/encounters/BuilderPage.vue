@@ -18,6 +18,7 @@ import { campaignSettings, partyOf } from '@/data/party'
 import { workspace } from '@/data/repo'
 import { rulesCount } from '@/data/repo'
 import { rulesGetMany, rulesQuery } from '@/data/rules'
+import { starships } from '@/data/starships'
 import { loadWealth } from '@/data/wealth'
 import { confirmDialog, notify, reportError } from '@/ui/dialogs'
 import { useLive } from '@/ui/useLive'
@@ -43,15 +44,17 @@ const wealth = useLive(async () => loadWealth(props.campaignId, { level: level.v
 const compendium = useLive(() => rulesCount(), 1)
 
 // ── Search ──
-const text = ref(''), levelMin = ref<number | ''>(''), levelMax = ref<number | ''>(''), kind = ref<'both' | 'creature' | 'hazard'>('both'), rarity = ref<Rarity | ''>(''), traitText = ref(''), bothGames = ref(false)
+const ship = useLive(() => starships.active(props.campaignId), null, [() => props.campaignId])
+const text = ref(''), levelMin = ref<number | ''>(''), levelMax = ref<number | ''>(''), kind = ref<'both' | 'creature' | 'hazard' | 'starship'>('both'), rarity = ref<Rarity | ''>(''), traitText = ref(''), bothGames = ref(false)
 const results = shallowRef<RulesEntity[]>([])
 const total = ref(0)
 let run = 0
-watch([text, levelMin, levelMax, kind, rarity, traitText, bothGames, game], async () => {
+watch([text, levelMin, levelMax, kind, rarity, traitText, bothGames, game, () => build.value.starship], async () => {
+  if (!build.value.starship && kind.value === 'starship') kind.value = 'both'
   const mine = ++run
   const num = (v: number | '') => (v === '' || !Number.isFinite(v) ? null : v)
   const page = await rulesQuery({
-    kinds: kind.value === 'both' ? ['creature', 'hazard'] : [kind.value], text: text.value.trim(), games: bothGames.value ? [] : [game.value], limit: 60, sort: 'level',
+    kinds: kind.value === 'both' ? (build.value.starship ? ['starship', 'creature', 'hazard'] : ['creature', 'hazard']) : [kind.value], text: text.value.trim(), games: bothGames.value ? [] : [game.value], limit: 60, sort: 'level',
     levelMin: num(levelMin.value), levelMax: num(levelMax.value), rarities: rarity.value ? [rarity.value] : undefined,
     traits: traitText.value.split(',').map(t => t.trim().toLowerCase().replace(/\s+/g, '-')).filter(Boolean),
   })
@@ -77,9 +80,9 @@ function add(e: RulesEntity) {
 const xpEntry = (s: BuildSlot): XpEntry | null => { const e = entries.value[s.rulesId]; return e ? xpEntryOf(e, s.adjustment) : null }
 const slotXp = (s: BuildSlot) => { const x = xpEntry(s); return x ? entryXp(game.value, x, level.value) : 0 }
 const warn = (s: BuildSlot) => { const x = xpEntry(s); return !x ? '' : tooStrong(x, build.value.partyLevel === null ? party.value.min : level.value) ? 'far above the party' : slotXp(s) === 0 ? 'too weak to count' : '' }
-const kindLabel = (e: RulesEntity) => (e.kind !== 'hazard' ? 'Creature' : (e as Hazard).complex ? 'Complex hazard' : 'Hazard')
+const kindLabel = (e: RulesEntity) => (e.kind === 'starship' ? 'Starship' : e.kind !== 'hazard' ? 'Creature' : (e as Hazard).complex ? 'Complex hazard' : 'Hazard')
 const totalXp = computed(() => build.value.slots.reduce((n, s) => n + slotXp(s) * s.count, 0))
-const rated = computed(() => ({ party: party.value, level: level.value, difficulty: { rows: [], xp: totalXp.value, unlinked: 0 }, rating: rateEncounter(game.value, totalXp.value, party.value.size), award: 0 }))
+const rated = computed(() => ({ party: party.value, level: level.value, difficulty: { rows: [], xp: totalXp.value, unlinked: 0 }, rating: rateEncounter(game.value, totalXp.value, party.value.size, build.value.starship ? { concierge: build.value.concierge } : null), award: 0 }))
 function step(i: number, by: number) { const s = build.value.slots[i]; if (!s) return; s.count += by; if (s.count <= 0) build.value.slots.splice(i, 1) }
 function setLevel(v: number | null) { build.value.partyLevel = v === null || clampLevel(v) === party.value.level ? null : clampLevel(v) }
 
@@ -106,7 +109,7 @@ async function create() {
       <section class="find">
         <div class="row">
           <input v-model="text" class="input grow" placeholder="Search creatures and hazards…" data-test="builder-search" />
-          <select v-model="kind" class="input auto" aria-label="Kind"><option value="both">Creatures and hazards</option><option value="creature">Creatures</option><option value="hazard">Hazards</option></select>
+          <select v-model="kind" class="input auto" aria-label="Kind"><option value="both">Creatures and hazards</option><option value="creature">Creatures</option><option value="hazard">Hazards</option><option v-if="build.starship" value="starship">Starships</option></select>
         </div>
         <div class="row">
           <label class="faint">Level <input v-model.number="levelMin" type="number" class="input num" aria-label="Lowest level" /> to <input v-model.number="levelMax" type="number" class="input num" aria-label="Highest level" /></label>
@@ -133,6 +136,11 @@ async function create() {
 
       <section class="pick panel">
         <input v-model="build.name" class="input" placeholder="Encounter name" aria-label="Encounter name" />
+        <template v-if="game === 'sf2e'">
+          <label class="dim" :title="ship ? `Aboard ${ship.name}: its interior, the crew at their stations, ships on the sensor map` : 'Make a starship on the Starship page first'"><input v-model="build.starship" type="checkbox" :disabled="!ship" data-test="builder-starship" /> Starship encounter{{ ship ? ` aboard ${ship.name}` : ' (no starship yet)' }}</label>
+          <label v-if="build.starship" class="dim" title="Variant rule: a VI helps a small crew, so the budget is not lowered for three or fewer"><input v-model="build.concierge" type="checkbox" /> Concierge upgrade</label>
+          <p v-if="build.starship && party.size > 0 && party.size <= 3 && !build.concierge" class="faint">A crew of {{ party.size }} cannot helm every station: the budgets are lowered.</p>
+        </template>
         <DifficultyMeter :rated="rated" :override="build.partyLevel" @level="setLevel" />
         <p v-if="wealth?.pace" class="faint">Treasure this level: {{ formatMoney({ cp: wealth.pace.awarded }, game) }} of {{ formatMoney({ cp: wealth.pace.expected }, game) }} awarded.</p>
         <ul data-test="builder-selection">

@@ -11,6 +11,7 @@ import { onPlayerMessage, openPlayerWindow, sendToPlayers, type PlayerMessage } 
 import { areaCells } from './areasLive'
 import { areas, live, mapTokens } from './live'
 import { sightFor } from './scene'
+import { zones } from './starshipLive'
 import { order, round } from './turns'
 
 export const playerPrefs = ref<PlayerViewPrefs>({ ...DEFAULT_PLAYER_PREFS })
@@ -29,7 +30,8 @@ function send(): void {
   sendToPlayers(JSON.parse(JSON.stringify({
     type: 'encounter',
     scene: toPlayerScene({
-      encounterId: enc.id, map: enc.map, grid: enc.grid, fog: map.fog, tokens, order: order.value,
+      encounterId: enc.id, map: enc.map, grid: enc.grid, fog: map.fog, tokens: live.tokens, order: order.value,
+      zones: live.tokens.some(t => t.sensor) ? zones.value : null,
       areas: areas().map(a => ({ id: a.id, color: a.color, hidden: a.hidden, cells: [...areaCells(a)] })),
       // With sight on and the GM seeing everything, players see what their tokens see together
       lit: sightFor(enc.fovEnabled, live.fovMode === 'gm' ? 'group' : live.fovMode, tokens, live.activeId, wallsOf(map), mapSquares.value, false).lit,

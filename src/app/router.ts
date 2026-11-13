@@ -17,6 +17,7 @@ import BoardPage from '@/features/sessions/BoardPage.vue'
 import SessionsPage from '@/features/sessions/SessionsPage.vue'
 import DeskPage from '@/features/desk/DeskPage.vue'
 import SoundsPage from '@/features/sounds/SoundsPage.vue'
+import StarshipPage from '@/features/starship/StarshipPage.vue'
 import TonightPage from '@/features/tonight/TonightPage.vue'
 import EntryPage from '@/features/world/EntryPage.vue'
 import GraphsPage from '@/features/world/GraphsPage.vue'
@@ -50,6 +51,7 @@ export const router = createRouter({
     { path: '/c/:campaignId/graphs/:graphId?', name: 'graphs', component: GraphsPage, props: true },
     { path: '/c/:campaignId/timeline', name: 'timeline', component: TimelinePage, props: true },
     { path: '/c/:campaignId/session/:sessionId', name: 'session', component: BoardPage, props: true },
+    { path: '/c/:campaignId/starship', name: 'starship', component: StarshipPage, props: true },
     { path: '/c/:campaignId/encounters/builder', name: 'encounter-builder', component: BuilderPage, props: true },
     { path: '/c/:campaignId/encounters/tokens', name: 'encounter-tokens', component: TokensPage, props: true },
     { path: '/c/:campaignId/encounter/:encounterId', name: 'encounter', component: EncounterPage, props: true },

@@ -15,6 +15,7 @@ import { rulesGet } from '@/data/rules'
 import AppDialog from '@/ui/components/AppDialog.vue'
 import { areaCells, asAreaToken, closeAreaPrompt } from './areasLive'
 import { addConditions, applyDamage, areas, live, logLine, mapTokens } from './live'
+import { defenses } from './starshipLive'
 
 interface Row { token: Token; modifier: number | null; d20: number | null; damageOverride: number | null }
 
@@ -26,6 +27,8 @@ const damage = ref<number | null>(null)
 const breakdown = ref('')
 
 async function saveModifier(t: Token, save: AreaSave): Promise<number | null> {
+  // The party's starship: its sheet with the helmed bonuses; any crew member rolls it
+  if (t.sensor?.role === 'player-ship') return defenses.value?.saves[save] ?? null
   const link = statLinkOf(t), entry = link ? await rulesGet(link.rulesId) : undefined
   if (!entry || !link) return null
   const e = applyAdjustment(entry, link.adjustment)
@@ -33,6 +36,7 @@ async function saveModifier(t: Token, save: AreaSave): Promise<number | null> {
   if (e.kind === 'hazard') return e.saves?.[save] ?? null
   // Vehicles only have Fortitude; Reflex against a collision goes to the pilot
   if (e.kind === 'vehicle') return save === 'fort' ? e.fort : null
+  if (e.kind === 'starship') return e.saves[save]
   return null
 }
 
@@ -41,7 +45,8 @@ watch(() => prompt.value?.id, async () => {
   breakdown.value = ''
   const p = prompt.value, a = area.value, e = effect.value
   if (!p || !a || !e) { rows.value = []; return }
-  const alive = mapTokens().filter(t => !t.dead)
+  // Named tokens may stand on the sensor map; "everyone inside" is about the battle map
+  const alive = (p.tokenIds ? live.tokens : mapTokens()).filter(t => !t.dead)
   const inside = new Set(tokensInArea(areaCells(a), alive.map(asAreaToken)).map(t => t.id))
   const tokens = p.tokenIds ? alive.filter(t => p.tokenIds?.includes(t.id)) : alive.filter(t => inside.has(t.id))
   rows.value = await Promise.all(tokens.map(async t => ({ token: t, modifier: await saveModifier(t, e.save), d20: null, damageOverride: null })))
