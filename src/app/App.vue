@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ChevronsUpDown, Search } from 'lucide-vue-next'
 import { campaigns as campaignRepo, settings as settingsRepo } from '@/data/repo'
 import { backupIfDue } from '@/services/backup/folder'
+import PartyPrompts from '@/features/party/PartyPrompts.vue'
 import DialogHost from '@/ui/components/DialogHost.vue'
 import { useLive } from '@/ui/useLive'
 import { campaign, campaignId, campaigns, closeDock, commandBarOpen, dock, patchSettings, settings } from '@/ui/workbench'
@@ -85,6 +86,7 @@ function switchCampaign(e: Event) {
     <PeekDock />
     <PinTray />
     <DicePanel />
+    <PartyPrompts />
     <CommandBar />
     <DialogHost />
   </div>

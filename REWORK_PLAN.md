@@ -1,6 +1,6 @@
 # StarTome rework plan
 
-Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phases 1 to 3 are done on the `rework` branch (see section 11a). Phase 4 is next.
+Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phases 1 to 4 are done on the `rework` branch (see section 11a). Phase 5 is next.
 
 How this was produced: the schema, types, format docs, backup/import code, the Play Buddy port and the app shell were read line by line. The large UI files (encounter page, GM screen, map maker, editors, session board) were read by extracting their templates, handlers, shortcuts and storage keys rather than every line. The app was started (`pnpm dev`), the main screens were opened, `pnpm test` (557 passed, 2 skipped) and `pnpm typecheck` ran clean. A real backup (`~/Downloads/startome-all-2026-11-03.json`, 578 MB) was inspected for its actual shape. Anything in the inventory I could not confirm by running it is still listed; Phase 3 verifies each line.
 
@@ -285,37 +285,37 @@ Map maker
 
 ### H. Party and advancement
 
-- [ ] H1 Roster: add from an NPC or a typed name; player character or companion; remove with confirm (items to the stash)
-- [ ] H2 NPCs flagged as Player Character join the party automatically; the flag and the roster stay in step
-- [ ] H3 Level +/−, XP, Strength modifier per member; companions can count as PCs
-- [ ] H4 Party level (average, rounded down) with mixed-level hint; pacing since the last level-up
-- [ ] H5 Level up party: pick who levels, undo, log; opened by hand or by a milestone quest
-- [ ] H6 Award XP: accomplishment sizes (10/30/80), who, reason; reaching 1,000 XP prompts a level-up; log with undo
-- [ ] H7 Companion builder (animal, robot, drone): writes a homebrew creature that follows the companion's level and links its token
-- [ ] H8 Earn Income per member: task level, proficiency, days, roll; pay goes into the purse as a correction
+- [x] H1 Roster: add from an NPC or a typed name; player character or companion; remove with confirm (items to the stash)
+- [x] H2 NPCs flagged as Player Character join the party automatically; the flag and the roster stay in step
+- [x] H3 Level +/−, XP, Strength modifier per member; companions can count as PCs
+- [x] H4 Party level (average, rounded down) with mixed-level hint; pacing since the last level-up
+- [x] H5 Level up party: pick who levels, undo, log; opened by hand or by a milestone quest
+- [x] H6 Award XP: accomplishment sizes (10/30/80), who, reason; reaching 1,000 XP prompts a level-up; log with undo
+- [x] H7 Companion builder (animal, robot, drone): writes a homebrew creature that follows the companion's level and links its token
+- [x] H8 Earn Income per member: task level, proficiency, days, roll; pay goes into the purse as a correction
 - [ ] H9 Level-up offers to linked Play Buddy players ("level N offered")
 
 ### I. Inventory and wealth
 
-- [ ] I1 One inventory for the stash, every character and every encounter's loot
-- [ ] I2 GM view and player view (unidentified items show their player name and count as nothing)
-- [ ] I3 Add from the compendium or as free text; "as treasure" switch; quantity; delete with attachments
-- [ ] I4 Move or give a quantity to another owner; coins per purse with money parsing (gp/sp/cp or credits); split coins evenly
-- [ ] I5 Bulk totals and encumbrance against the Strength modifier
-- [ ] I6 Containers with capacity and bulk reduction
-- [ ] I7 Attachments: runes, talismans, upgrades, relic gifts on a host item; value sums up
-- [ ] I8 Relics with aspects; gifts dormant or awakened
-- [ ] I9 Identify / unidentified with player name and description
-- [ ] I10 Overrides: name, price, bulk, grade; GM notes; missing-entry marker
-- [ ] I11 Wealth readout: awarded versus expected treasure by level, consumables counted or not, ABP switch, "matches level N"
-- [ ] I12 Treasure baseline (set with confirm); treasure awards outside encounters with undo
-- [ ] I13 Gear check: expected runes or grades by level per member
-- [ ] I14 Treasure roll: fill a share of a level's treasure with random items (rarity, kinds, skip owned, re-roll a slot, currency)
+- [x] I1 One inventory for the stash, every character and every encounter's loot
+- [x] I2 GM view and player view (unidentified items show their player name and count as nothing)
+- [x] I3 Add from the compendium or as free text; "as treasure" switch; quantity; delete with attachments
+- [x] I4 Move or give a quantity to another owner; coins per purse with money parsing (gp/sp/cp or credits); split coins evenly
+- [x] I5 Bulk totals and encumbrance against the Strength modifier
+- [x] I6 Containers with capacity and bulk reduction
+- [x] I7 Attachments: runes, talismans, upgrades, relic gifts on a host item; value sums up
+- [x] I8 Relics with aspects; gifts dormant or awakened
+- [x] I9 Identify / unidentified with player name and description
+- [x] I10 Overrides: name, price, bulk, grade; GM notes; missing-entry marker
+- [x] I11 Wealth readout: awarded versus expected treasure by level, consumables counted or not, ABP switch, "matches level N"
+- [x] I12 Treasure baseline (set with confirm); treasure awards outside encounters with undo
+- [x] I13 Gear check: expected runes or grades by level per member
+- [x] I14 Treasure roll: fill a share of a level's treasure with random items (rarity, kinds, skip owned, re-roll a slot, currency)
 
 ### J. Starfinder 2e
 
-- [ ] J1 Upgrade slots by grade with a GM-set base; warnings for full hosts, a second installed weapon, a weapon above its host's grade
-- [ ] J2 Installed weapons attach to their host; augmentations are implanted and cannot change hands; limit warning (apex free)
+- [x] J1 Upgrade slots by grade with a GM-set base; warnings for full hosts, a second installed weapon, a weapon above its host's grade
+- [x] J2 Installed weapons attach to their host; augmentations are implanted and cannot change hands; limit warning (apex free)
 - [ ] J3 Vehicles as a compendium kind and as tokens worth no XP
 - [ ] J4 Area Fire / Auto-Fire buttons on Strikes with those traits
 - [ ] J5 Starship compendium kinds: starship, frame, battle station, station upgrade, expansion bay; the five starship conditions
@@ -789,7 +789,7 @@ The new app is built on a `rework` branch and published to a second path (for ex
 | **1 Foundation** ✅ | Vite + Vue + strict TypeScript project, lint rules, design tokens and both skins, shell (rail, command bar, dock, tray), domain schemas, database, repositories, backup v3, legacy import with tests, backup folder. Pure rules and their tests moved over. | S, parts of A, M3–M5 | Import everything, switch campaigns, search, open any entry read-only in the dock, export and restore a backup. |
 | **2 World** ✅ | Entry browser, editors for all ten types, markdown editor with links and widgets, backlinks, history, favourites and tray pins, maps with pins and regions, player map, graphs, timeline, lore exports. | C, D, E1–E4, O, P, M6–M7 | Do all campaign writing in the new app. |
 | **3 Compendium** ✅ | Browser, stat blocks with rolls, entry editor, creature builder, homebrew import and packs, Foundry sync, image folder import, field notes, dice panel. | L, E5–E7, M9–M11 | Look up and maintain rules content. |
-| **4 Party and loot** | Roster, ledger (XP, milestones, level-ups), inventory, wealth, treasure roll, earn income, companions. | H, I, J1–J2 | Track the party between sessions. |
+| **4 Party and loot** ✅ | Roster, ledger (XP, milestones, level-ups), inventory, wealth, treasure roll, earn income, companions. | H, I, J1–J2 | Track the party between sessions. |
 | **5 Encounters** | List, builder, VTT engine (prepare and run), tokens, conditions and automation, areas, resolve, player view, map maker, token library. | G, J3–J4 | Run a fight. |
 | **6 Sessions and the table** | Session board, capture, recap and finish, session log, table bar, Tonight, Desk with all widgets, sounds. | F, N, Q, B | Run a whole Pathfinder session in the new app. |
 | **7 Starfinder** | Starship page, crew, interior map, sensor map, starship combat, starship encounters. | J5–J15 | Run a Starfinder session. |
@@ -882,6 +882,25 @@ Differences from v0.42, and what is left:
 - **Wealth helpers** that read the compendium (median consumable prices) and the attachment rules move with Phase 4.
 - **Code rules relaxed in two places**, both on purpose: the Foundry and pf2ools converters may use untyped values (they read other people's JSON), and the unit tests moved from v0.42 (`tests/rules/`) are run but not type-checked under the stricter settings.
 - **The sync still uses JSZip**; the plan's switch to fflate applies to backups, which have it.
+
+**Phase 4, Party and loot (done 2026-11-13, branch `rework`).**
+
+What exists: **Party** is one page. The **roster** adds members from an NPC entry or a typed name, as player character or companion; level (stepper), XP and Strength are edited in the row; a member's level is also what its NPC entry states; removing a member sends their items and coins to the stash. "Is this NPC a player character" is one fact now (a party member of role PC points at the entry), so the switch on the NPC and the roster cannot disagree. The header shows the party level with the mixed-level hint and, in milestone campaigns, the pacing since the last level-up. **Level up party** and **Award XP** are two prompts that also open by themselves: a completed milestone quest asks to level up, a completed quest in an XP campaign offers quest XP, and anyone reaching 1,000 XP is offered a level-up that costs it. Level-ups, XP awards and treasure awards are entries of one ledger, each with its undo. **Companions** get a stat block built from type and stage, written as a homebrew creature that follows the companion's level. **Earn Income** pays into a member's purse. The **inventory** is one list for the stash and every character (and, by a switch already built in, an encounter's loot): add from the compendium or as free text, quantity, "as treasure", unidentified; a click on a stack opens everything about it (name, price, Bulk, grade and upgrade slots in Starfinder, GM notes, identify with player name and description, container, relic and aspects, implant, move a quantity, attach runes, talismans, upgrades or gifts, delete). Coins per purse with money parsing, give to another owner, split evenly. GM view and player view. Bulk and encumbrance against Strength, containers with capacity. Starfinder upgrade slots and their warnings, installed weapons, augmentations with the limit warning. **Wealth** shows awarded against expected treasure, "matches level N", the pace within this level, the baseline, the consumables and ABP switches, the gear check per member, recorded awards with undo, and the treasure roll. An NPC entry with a class has a **Progression** section: class features and feat slots by level, each slot listing the feats that fit.
+
+Moved from `legacy/` into `src/domain/rules/`, with their tests: party, inventory, attachments, wealth, advancement, income, treasure roll, companions, progression, and (ahead of Phase 5, because advancement needs them) encounter and combat.
+
+Checked against real data: the Codex campaign imported from v0.42 shows its five members with portraits, six purses, the stash and the wealth readout (71% of expected, baseline of 5 November).
+
+Tests added: 99 unit tests moved over with the rules, 9 for the party and inventory writes (members and their entry's level, level-ups and XP with undo, companions, stacks merging and splitting, attaching and replacing runes, containers, coins, the wealth readout), 2 browser tests (members, XP, level-up and undo; coins, an unidentified item, the player view, a move, awards and the readout). Totals: 377 unit tests and 10 browser tests.
+
+Differences from v0.42, and what is left:
+
+- **Everything Play Buddy** waits for Phase 8: level-up and item offers to linked players (H9), the read-only mirror of a linked character's inventory. Linked characters and their mirrored stacks are imported and shown (marked "in their app"), but nothing is sent.
+- **The treasure roll** puts its result in the stash and counts it as a treasure award. In v0.42 it only filled an encounter's loot; that use comes back with the encounter's loot dialog in Phase 5 (the same component, pointed at the encounter).
+- **Tokens** are Phase 5: a companion's stat block is written, but not yet linked to its map token.
+- **Old rune fields.** v0.42 turned runes stored the old way (a "+1 striking" field on the item) into attached rune entries when the compendium had them. That conversion is not carried over; such an item shows its runes as a label and counts in the gear check, but lists no attached runes.
+- **The roster's "Build encounter" button** comes with Phase 5.
+- **Quest names in the log.** A level-up from a milestone quest says "Milestone quest", without the quest's name.
 
 ---
 

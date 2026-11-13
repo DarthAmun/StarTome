@@ -7,7 +7,8 @@ import { taskProgress } from '@/domain/markdownBlocks'
 import type { Entry } from '@/domain/schema'
 import { addCharacterFor, characterOfEntry, removeCharacter } from '@/data/party'
 import { relationsOf, type Relations } from '@/data/relations'
-import { peek } from '@/ui/workbench'
+import { campaign, peek } from '@/ui/workbench'
+import NpcProgression from './NpcProgression.vue'
 import { sessionPanelsOf } from '@/data/repo'
 import { confirmDialog } from '@/ui/dialogs'
 import { renderMarkdown } from '@/ui/markdown'
@@ -56,6 +57,10 @@ const panels = useLive(async () => (props.entry.type === 'session' ? sessionPane
 </script>
 
 <template>
+  <details v-if="entry.type === 'npc' && (entry.data.class || entry.data.class2)" class="extra">
+    <summary class="eyebrow">Progression</summary>
+    <NpcProgression :ancestry="entry.data.ancestry" :classes="[entry.data.class, entry.data.class2]" :level="entry.data.level" :game="campaign?.game ?? 'pf2e'" />
+  </details>
   <div v-if="entry.type === 'npc'" class="extra line">
     <label class="check"><input type="checkbox" :checked="!!character" @change.prevent="togglePc" /> Player character</label>
     <span v-if="character" class="faint">In the party at level {{ character.level }}</span>

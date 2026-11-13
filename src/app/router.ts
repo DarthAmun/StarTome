@@ -6,6 +6,7 @@ import ArtPage from '@/features/compendium/ArtPage.vue'
 import CompendiumPage from '@/features/compendium/CompendiumPage.vue'
 import HomebrewPage from '@/features/compendium/HomebrewPage.vue'
 import SyncPage from '@/features/compendium/SyncPage.vue'
+import PartyPage from '@/features/party/PartyPage.vue'
 import TonightPage from '@/features/tonight/TonightPage.vue'
 import EntryPage from '@/features/world/EntryPage.vue'
 import GraphsPage from '@/features/world/GraphsPage.vue'
@@ -18,13 +19,13 @@ import WorldPage from '@/features/world/WorldPage.vue'
 import { PLACES, UTILITIES } from './places'
 import WelcomePage from './WelcomePage.vue'
 
-const built: Record<string, RouteRecordRaw['component']> = { tonight: TonightPage, world: WorldPage, compendium: CompendiumPage, data: DataPage, settings: SettingsPage }
+const built: Record<string, RouteRecordRaw['component']> = { tonight: TonightPage, world: WorldPage, compendium: CompendiumPage, party: PartyPage, data: DataPage, settings: SettingsPage }
 
 const placeRoutes: RouteRecordRaw[] = [...PLACES, ...UTILITIES].map((p) => {
   const path = p.campaign ? `/c/:campaignId/${p.name}` : `/${p.name}`
   const component = built[p.name]
   return component
-    ? { path, name: p.name, component }
+    ? { path, name: p.name, component, props: p.name === 'party' }
     : { path, name: p.name, component: ComingPage, props: { title: p.label, phase: p.phase ?? 0, holds: p.holds } }
 })
 
