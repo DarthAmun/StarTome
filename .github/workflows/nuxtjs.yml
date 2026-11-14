@@ -91,6 +91,22 @@ jobs:
         env:
           NUXT_APP_BASE_URL: /StarTome/
 
+      # The rework preview (REWORK_PLAN.md, phase 8b): the rework branch, built into /StarTome/next/
+      - name: Checkout the rework branch
+        uses: actions/checkout@v7
+        with:
+          ref: rework
+          path: rework-src
+
+      - name: Build the rework preview
+        working-directory: rework-src
+        run: |
+          pnpm install
+          pnpm build
+          cp -r dist ../.output/public/next
+        env:
+          APP_BASE_URL: /StarTome/next/
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:

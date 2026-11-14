@@ -52,7 +52,8 @@ export default defineNuxtConfig({
     workbox: {
       maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10 MB — covers the lazily loaded game-icons chunk
       navigateFallback: baseURL,
-      navigateFallbackDenylist: [/^\/api\//],
+      // /StarTome/next/ is the rework preview, a separate app with its own offline cache
+      navigateFallbackDenylist: [/^\/api\//, /\/next\//],
       globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'],
     },
     devOptions: { enabled: false },
