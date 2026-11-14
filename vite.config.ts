@@ -5,8 +5,6 @@ import { VitePWA } from 'vite-plugin-pwa'
 import pkg from './package.json' with { type: 'json' }
 
 const base = process.env.APP_BASE_URL ?? '/'
-// The preview at /StarTome/next/ is installed next to v0.42, so its window needs another name
-const appName = base.endsWith('/next/') ? 'StarTome next' : 'StarTome'
 
 export default defineConfig({
   base,
@@ -24,9 +22,10 @@ export default defineConfig({
       registerType: 'prompt',
       injectRegister: false,
       manifest: {
-        id: 'startome-next',
-        name: appName,
-        short_name: appName,
+        // v0.42's id: an installed v0.42 becomes this app instead of a second one
+        id: 'startome',
+        name: 'StarTome',
+        short_name: 'StarTome',
         description: 'StarTome — your companion for Pathfinder 2e and Starfinder 2e campaigns',
         theme_color: '#14110f',
         background_color: '#14110f',
@@ -40,7 +39,8 @@ export default defineConfig({
           { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
-      workbox: { maximumFileSizeToCacheInBytes: 3_000_000, navigateFallback: `${base}index.html`, globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'] },
+      // sw-takeover.js: replaces an installed v0.42 without waiting for its windows to close
+      workbox: { importScripts: ['sw-takeover.js'], maximumFileSizeToCacheInBytes: 3_000_000, navigateFallback: `${base}index.html`, globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'] },
       devOptions: { enabled: false },
     }),
   ],

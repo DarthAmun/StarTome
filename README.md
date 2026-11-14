@@ -1,8 +1,8 @@
-# StarTome (rework branch)
+# StarTome
 
 An offline-first app for Pathfinder 2e and Starfinder 2e Game Masters: campaign notes, sessions, encounters on a battle map, party and loot, a rules compendium. Everything stays on your device.
 
-This branch is the rework described in [REWORK_PLAN.md](REWORK_PLAN.md). The released app (v0.42) is on `main`; its code is kept here under [`legacy/`](legacy/README.md) until each part is rebuilt.
+Published at https://darthamun.github.io/StarTome/. It was rebuilt as described in [REWORK_PLAN.md](REWORK_PLAN.md); the old app (v0.42) is on the branch `legacy` (tag `v0.42.0`) and is no longer deployed.
 
 ```bash
 pnpm install
@@ -13,8 +13,7 @@ pnpm dev            # http://localhost:3001
 |---|---|
 | `pnpm lint` | ESLint, including the layer boundaries (`domain` → `data` → `services` → `ui` → `features` → `app`) |
 | `pnpm typecheck` | strict TypeScript over `src/` and `tests/` |
-| `pnpm test` | unit tests of the new app |
-| `pnpm test:legacy` | unit tests of the v0.42 code not ported yet |
+| `pnpm test` | unit tests |
 | `pnpm test:e2e` | browser tests (Playwright) |
 | `pnpm build` | production build into `dist/` |
 

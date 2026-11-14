@@ -1,8 +1,8 @@
 // Builds src/ui/gameIcons.gen.ts: the Game Icons (gi-*) the app can show, by name.
 //
 // The full set is 6.7 MB. Data stores icons by name (a note's icon, a condition's
-// icon), so the names must keep working; this bundles the ones v0.42 offered or
-// used plus scripts/icons-extra.txt, about 130 icons.
+// icon), so the names must keep working; this bundles the ones the app uses plus
+// scripts/icons-extra.txt (every icon v0.42 offered or used), about 130 icons.
 //
 //   node scripts/build-icons.mjs
 import { readFileSync, readdirSync, statSync, writeFileSync, existsSync } from 'node:fs'
@@ -17,7 +17,6 @@ const scan = (dir) => {
     else if (/\.(vue|ts)$/.test(f)) for (const m of readFileSync(p, 'utf8').matchAll(/['"`](gi-[a-z0-9-]+)['"`]/g)) names.add(m[1])
   }
 }
-if (existsSync('legacy')) scan('legacy')
 if (existsSync('scripts/icons-extra.txt')) for (const n of readFileSync('scripts/icons-extra.txt', 'utf8').split(/\s+/)) if (n.startsWith('gi-')) names.add(n)
 
 const byName = new Map(Object.values(gi).map(i => [i.name, i]))

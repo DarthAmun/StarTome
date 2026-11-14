@@ -86,7 +86,7 @@ async function check() {
     </div>
     <h2 class="sec">Keyboard shortcuts <span class="faint hint">press <span class="kbd">?</span> anywhere</span></h2>
     <div class="panel block keys"><ShortcutList /></div>
-    <p class="faint about">StarTome {{ version }} · rework preview. Pathfinder campaigns wear the Tome skin, Starfinder campaigns the Star skin.<br>
+    <p class="faint about">StarTome {{ version }}. Pathfinder campaigns wear the Tome skin, Starfinder campaigns the Star skin.<br>
       StarTome is unofficial and not affiliated with Paizo Inc.</p>
   </div>
 </template>

@@ -13,7 +13,7 @@ function forbiddenFor(layer) {
 }
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'legacy/**', 'node_modules/**', 'dev-dist/**'] },
+  { ignores: ['dist/**', 'node_modules/**', 'dev-dist/**'] },
   ...tseslint.configs.recommended,
   ...vue.configs['flat/essential'],
   {

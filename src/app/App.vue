@@ -106,7 +106,6 @@ function switchCampaign(e: Event) {
         <ChevronsUpDown :size="13" />
       </label>
       <button class="find" @click="commandBarOpen = true"><Search :size="14" /> <span>Go to, find, look up…</span> <span class="kbd">Ctrl K</span></button>
-      <span class="preview chip">rework preview · your live data is in v0.42</span>
     </header>
     <TableBar />
     <main class="main"><RouterView :key="String(route.params.campaignId ?? '')" /></main>
@@ -131,7 +130,6 @@ function switchCampaign(e: Event) {
 .find { flex: 1; max-width: 460px; margin: 0 auto; display: flex; align-items: center; gap: .6rem; padding: .32rem .7rem; background: var(--bg); border: var(--frame); border-radius: var(--radius); color: var(--text-faint); }
 .find span:first-of-type { flex: 1; text-align: left; }
 .find:hover { border-color: var(--line-strong); color: var(--text-dim); }
-.preview { font-size: .72rem; color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); }
 .top { grid-row: 1; }
 .main { grid-column: 2; grid-row: 3; min-height: 0; min-width: 0; }
 .shell :deep(.tray) { grid-row: 4; }

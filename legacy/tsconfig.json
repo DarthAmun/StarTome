@@ -1,1 +1,0 @@
-{ "compilerOptions": { "paths": { "~/*": ["./*"] }, "module": "ESNext", "moduleResolution": "Bundler", "target": "ES2022", "skipLibCheck": true, "strict": true, "noEmit": true } }

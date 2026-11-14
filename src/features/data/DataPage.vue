@@ -135,7 +135,7 @@ async function backupNow() {
 }
 
 async function wipe() {
-  if (!await confirmDialog({ title: 'Wipe this app’s data?', body: 'Every campaign, entry, image and compendium entry in the rework app is deleted. v0.42 and its data are not touched. This cannot be undone.', confirmLabel: 'Wipe everything', danger: true })) return
+  if (!await confirmDialog({ title: 'Wipe this app’s data?', body: 'Every campaign, entry, image and compendium entry in this app is deleted. The old v0.42 database is not touched. This cannot be undone.', confirmLabel: 'Wipe everything', danger: true })) return
   await run('Wiping', wipeDatabase)
   legacy.value = null
 }
@@ -170,7 +170,7 @@ const GUIDES: [string, string, string][] = [['HOMEBREW_FORMAT.md', 'Homebrew for
 
     <section class="panel block">
       <h2>Bring your data over from v0.42</h2>
-      <p class="dim">Reads everything from the old app and replaces what is here. The old app and its data stay exactly as they are, so you can repeat this whenever you want to try the rework with current data.</p>
+      <p class="dim">Reads everything from the old app and replaces what is here. The old database stays in this browser untouched, so you can repeat this as long as it is there.</p>
       <div class="actions">
         <button class="btn btn-primary" :disabled="!oldDbHere || !!busy" @click="legacyFromBrowser"><HardDriveUpload :size="15" /> Import from v0.42 in this browser</button>
         <button class="btn" :disabled="!!busy" @click="pick(onFile, '.json,application/json')">From a v0.42 backup file…</button>
