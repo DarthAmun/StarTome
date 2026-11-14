@@ -6,6 +6,12 @@
 export interface DomainEvents {
   questCompleted: { campaignId: string; entryId: string; name: string; milestone: boolean }
   entryDeleted: { campaignId: string; entryId: string }
+  /** A linked player's shared numbers changed (HP, conditions, AC …). */
+  characterMirrored: { campaignId: string; characterId: string }
+  /** A linked player rolled; `line` is the roll in words, for the combat log. */
+  linkRoll: { campaignId: string; characterId: string | null; line: string }
+  /** A linked player's initiative roll was written to that encounter's turn order. */
+  linkInitiative: { campaignId: string; encounterId: string; characterId: string; total: number }
 }
 
 type Handler<K extends keyof DomainEvents> = (payload: DomainEvents[K]) => void

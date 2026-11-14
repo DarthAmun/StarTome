@@ -6,6 +6,7 @@
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import type { Character } from '@/domain/schema'
 import { partyOf } from '@/data/party'
 import { addLog, sessions } from '@/data/sessions'
 import { live } from '@/features/encounters/vtt/live'
@@ -18,6 +19,9 @@ import { campaignId } from '@/ui/workbench'
 const route = useRoute()
 const session = useLive(() => (campaignId.value ? sessions.running(campaignId.value) : Promise.resolve(null)), null, [campaignId])
 const party = useLive(() => (campaignId.value ? partyOf(campaignId.value) : Promise.resolve([])), [], [campaignId])
+/** What a linked player shares (Play Buddy): HP, hero points and conditions ride along in the bar. */
+const shared = (c: Character) => c.link?.mirror?.basic ?? null
+const sharedTitle = (c: Character) => { const b = shared(c); return b ? `Level ${c.level} · ${b.hp.value}/${b.hp.max} HP${b.hp.temp ? ` +${b.hp.temp}` : ''}${b.heroPoints !== null ? ` · ${b.heroPoints} hero ${b.heroPoints === 1 ? 'point' : 'points'}` : ''}${b.conditions.length ? ` · ${b.conditions.map(k => `${k.name}${k.value ? ` ${k.value}` : ''}`).join(', ')}` : ''}` : '' }
 const text = ref('')
 const input = ref<HTMLInputElement | null>(null)
 /** On the session's own board the capture bar there does the logging. */
@@ -46,12 +50,12 @@ onUnmounted(() => window.removeEventListener('keydown', key))
     <input v-if="!onBoard" ref="input" v-model="text" class="input" placeholder="What happened? Enter logs it (Alt+L)" aria-label="Log to the running session" @keydown.enter="log" />
     <span v-else class="grow" />
     <RouterLink v-if="fight" class="fight" :to="{ name: 'encounter', params: { campaignId: session.campaignId, encounterId: fight.id } }">{{ fight.name }} · round <b class="num">{{ fight.round }}</b><template v-if="fight.acting"> · {{ fight.acting }}</template></RouterLink>
-    <span class="party"><span v-for="c in party" :key="c.id" class="chip" :title="`${c.role === 'pc' ? 'Level' : 'Companion, level'} ${c.level}`">{{ c.name }} <b class="num">{{ c.level }}</b></span></span>
+    <span class="party"><span v-for="c in party" :key="c.id" class="chip" :title="shared(c) ? sharedTitle(c) : `${c.role === 'pc' ? 'Level' : 'Companion, level'} ${c.level}`">{{ c.name }} <b class="num">{{ c.level }}</b><template v-if="shared(c)"> <span class="num hp" :class="{ low: shared(c)!.hp.value * 2 <= shared(c)!.hp.max }">{{ shared(c)!.hp.value }}/{{ shared(c)!.hp.max }}</span><span v-if="shared(c)!.heroPoints !== null" class="hero" title="Hero points"> {{ '●'.repeat(shared(c)!.heroPoints ?? 0) }}</span><span v-if="shared(c)!.conditions.length" class="cond"> {{ shared(c)!.conditions.length }}!</span></template></span></span>
   </div>
 </template>
 
 <style scoped>
 .table-bar { grid-column: 2 / -1; grid-row: 2; display: flex; align-items: center; gap: .7rem; padding: .25rem 1rem; border-bottom: var(--frame); background: color-mix(in srgb, var(--accent) 7%, var(--bg-sunken)); min-width: 0; }
 .now { color: var(--accent); white-space: nowrap; font-family: var(--font-title); font-size: .9rem; } .input { flex: 1; max-width: 40rem; padding: .25em .6em; } .grow { flex: 1; }
-.fight { white-space: nowrap; color: var(--text); } .party { display: flex; gap: .3rem; overflow: hidden; margin-left: auto; } .party .chip { white-space: nowrap; }
+.fight { white-space: nowrap; color: var(--text); } .party { display: flex; gap: .3rem; overflow: hidden; margin-left: auto; } .party .chip { white-space: nowrap; } .hp { color: var(--text-dim); } .hp.low, .cond { color: var(--warn); } .hero { color: var(--accent); letter-spacing: -.1em; }
 </style>

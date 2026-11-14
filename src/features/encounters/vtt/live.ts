@@ -183,9 +183,14 @@ export function applyDamage(id: string, amount: number, opts: HpOptions = {}): v
   if (!t || t.hp.current === null || !amount) return
   if (amount < 0) { updateToken(id, { hp: { ...t.hp, current: Math.min(t.hp.max ?? Infinity, t.hp.current - amount) } }, opts); return }
   if (t.sensor && shipHooks.damage) { shipHooks.damage(t, amount, opts); return }
+  for (const fn of damageHooks) fn(t, amount)
   const r = damageWithTemp({ hp: t.hp.current, temp: t.hp.temp }, amount)
   updateToken(id, { hp: { ...t.hp, current: r.hp, temp: r.temp } }, { ...opts, hitsAtZero: t.hp.current <= 0 && amount > r.absorbed ? 1 : 0, absorbed: r.absorbed })
 }
+
+/** Told about damage dealt to a token (a linked player's app is sent it), and asked for a token's initiative modifier when it has no stat block. */
+export const damageHooks: ((t: Token, amount: number) => void)[] = []
+export const initiativeModifier = { of: (_t: Token): number => 0 }
 
 /** Temporary HP do not stack: the higher value stays. */
 export function grantTempHp(id: string, amount: number): void {
@@ -331,7 +336,7 @@ export async function rollAllInitiative(): Promise<void> {
   const entries = new Map((await rulesGetMany([...new Set(todo.map(t => statLinkOf(t)?.rulesId).filter((id): id is string => !!id))])).map(e => [e.id, e]))
   for (const t of todo) {
     const link = statLinkOf(t)
-    t.initiative = initiativeFor(t, link ? entries.get(link.rulesId) : undefined, link?.adjustment ?? null)
+    t.initiative = initiativeFor(t, link ? entries.get(link.rulesId) : undefined, link?.adjustment ?? null, initiativeModifier.of(t))
     saveToken(t.id, { initiative: t.initiative })
   }
 }

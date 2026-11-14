@@ -10,12 +10,13 @@ import { formatMoney } from '@/domain/rules/format'
 import { containerOf, dormantGift, effective, toPlayerView, type EffectiveEntry, type InventoryEntry as Stack, type OwnerKey, type PlayerEntry } from '@/domain/rules/inventory'
 import type { Item, RelicGift } from '@/domain/rules/types'
 import { stripGmOnly } from '@/domain/gmContent'
+import type { Character } from '@/domain/schema'
 import { inventory, toStack } from '@/data/inventory'
 import { rulesGetMany } from '@/data/rules'
 import { rulesRevision } from '@/ui/rulesLive'
 import { useLive } from '@/ui/useLive'
 
-export interface OwnerInfo { key: OwnerKey; name: string; characterId: string | null; strMod: number | null }
+export interface OwnerInfo { key: OwnerKey; name: string; characterId: string | null; strMod: number | null; /** The party member behind a character's inventory; linked ones are given things as offers. */ character?: Character | null }
 
 export interface InventoryContext {
   campaignId: string

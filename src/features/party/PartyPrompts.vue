@@ -8,7 +8,8 @@ import { onDomainEvent } from '@/domain/events'
 import { ACCOMPLISHMENT_XP, XP_PER_LEVEL } from '@/domain/rules/advancement'
 import { isPartyMember, MAX_LEVEL } from '@/domain/rules/party'
 import type { Character } from '@/domain/schema'
-import { awardXp, campaignSettings, levelUp, partyOf } from '@/data/party'
+import { awardXp, campaignSettings, partyOf } from '@/data/party'
+import { levelUpParty } from '@/services/characterLink/link'
 import AppDialog from '@/ui/components/AppDialog.vue'
 import { notify, reportError } from '@/ui/dialogs'
 import { levelUpPrompt, lootPrompt, xpPrompt } from '@/ui/partyPrompts'
@@ -50,7 +51,12 @@ async function confirmLevelUp() {
   const p = levelUpPrompt.value
   if (!p) return
   busy.value = true
-  try { await levelUp(p.campaignId, [...selected.value], p.trigger, p.refId); levelUpPrompt.value = null }
+  try {
+    const entry = await levelUpParty(p.campaignId, [...selected.value], p.trigger, p.refId)
+    const waiting = entry?.changes.filter(ch => ch.offer?.state === 'pending').length ?? 0
+    if (waiting) notify(`${waiting} linked ${waiting === 1 ? 'player levels' : 'players level'} up in Play Buddy: the level moves when they accept.`)
+    levelUpPrompt.value = null
+  }
   catch (err) { reportError('Levelling up', err) } finally { busy.value = false }
 }
 async function confirmXp() {

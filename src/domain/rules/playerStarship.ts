@@ -294,8 +294,12 @@ export function markersFromStations(slots: StationSlot[], nameOf: (stationId: st
   return slots.flatMap(s => (s.marker && s.stationId ? [{ slot: s.slot, x: s.marker.x, y: s.marker.y, name: nameOf(s.stationId) }] : []))
 }
 
-/** A crew member's skill modifier as entered by hand on the Starship page (lower-case skill → modifier), or null. */
-export function crewSkill(c: { skills?: Record<string, number> | null } | null | undefined, skill: string): number | null {
-  const own = c?.skills?.[skill.toLowerCase()]
+type SharedSkills = { skills?: { skills: Record<string, number> }; defenses?: { perception: number } }
+/** A crew member's skill modifier: what their player shares (Play Buddy), else what was entered by hand on the Starship page; or null. */
+export function crewSkill(c: { skills?: Record<string, number> | null; link?: { mirror?: SharedSkills | null } | null } | null | undefined, skill: string): number | null {
+  const key = skill.toLowerCase(), shared = c?.link?.mirror
+  const theirs = key === 'perception' ? shared?.defenses?.perception : shared?.skills?.skills[key]
+  if (typeof theirs === 'number') return theirs
+  const own = c?.skills?.[key]
   return typeof own === 'number' ? own : null
 }

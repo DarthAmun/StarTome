@@ -14,6 +14,7 @@ import { isAugmentation, upgradeSlots, upgradeWarnings } from '@/domain/rules/sf
 import type { Item, RelicGift } from '@/domain/rules/types'
 import { attach, detach, move, removeEntry, setImplanted, setRelic, store, updateEntry, type EntryPatch } from '@/data/inventory'
 import { rulesQuery } from '@/data/rules'
+import { identify, offerItems } from '@/services/characterLink/link'
 import { confirmDialog, reportError } from '@/ui/dialogs'
 import { peek } from '@/ui/workbench'
 import { INVENTORY, type InventoryContext } from './inventoryContext'
@@ -95,7 +96,16 @@ const targets = computed(() => ctx.owners.value.filter(o => o.key !== e.value.ow
 const moveTo = ref('')
 const moveQty = ref(1)
 watch(open, (o) => { if (o) { moveQty.value = e.value.quantity; moveTo.value = targets.value[0]?.key ?? '' } })
-const doMove = () => run('Moving the item', move(e.value.id, moveTo.value, Math.min(e.value.quantity, Math.max(1, moveQty.value || 1))))
+/** A linked player is given things as an offer: the stack stays here, marked, until they accept. */
+const offerTarget = computed(() => { const c = targets.value.find(o => o.key === moveTo.value)?.character; return c?.link ? c : null })
+function doMove() {
+  const quantity = Math.min(e.value.quantity, Math.max(1, moveQty.value || 1))
+  if (!offerTarget.value) return run('Moving the item', move(e.value.id, moveTo.value, quantity))
+  run('Offering the item', offerItems(offerTarget.value, [{ entry: e.value, item: item.value, quantity, attached: attached.value.map(a => ({ entry: a, item: ctx.item(a) ?? ctx.gift(a) })) }]))
+  open.value = false
+}
+const holder = computed(() => ctx.owners.value.find(o => o.key === e.value.owner)?.character ?? null)
+function reveal() { if (holder.value && e.value.pbEntryId) run('Identifying', identify(holder.value, e.value.pbEntryId, ctx.nameOf(e.value))) }
 
 // ── Attach ─────────────────────────────────────────────────────────────────
 const canHost = computed(() => !mirrored.value && !isAttached.value && (!!e.value.relic || !!hostKindOf(item.value) || !e.value.itemId))
@@ -157,7 +167,14 @@ const doAttach = (source: { entryId: string } | { itemId: string }) => run('Atta
     </button>
     <button v-if="isAttached && gm && !locked" class="btn btn-ghost btn-icon" :title="stack.attachKind === 'gift' ? 'Remove this gift' : 'Take it off; it becomes a loose item again'" @click="run('Detaching', detach(stack.id))"><Link2Off :size="13" /></button>
 
-    <div v-if="open && gm" class="detail">
+    <div v-if="open && gm && mirrored" class="detail">
+      <p v-if="stack.pbOfferId" class="dim">Offered to a player: it stays here until they accept. Withdraw it under Play Buddy › Sent.</p>
+      <template v-else>
+        <p class="dim">This is in {{ holder?.name ?? 'the player' }}'s Play Buddy. It is shown and counted here, and changed there.</p>
+        <div v-if="!stack.identified && holder?.link" class="line"><button class="btn" data-test="identify" @click="reveal">Identify it for {{ holder.name }}</button></div>
+      </template>
+    </div>
+    <div v-else-if="open && gm" class="detail">
       <p v-for="w in warnings" :key="w" class="warn">{{ w }}</p>
       <div class="grid">
         <label><span class="label">Quantity</span><input class="input" type="number" min="0" :value="stack.quantity" @change="patch({ quantity: Number(val($event)) })" /></label>
@@ -186,7 +203,7 @@ const doAttach = (source: { entryId: string } | { itemId: string }) => run('Atta
         <input v-model.number="moveQty" class="input qty-in" type="number" min="1" :max="stack.quantity" aria-label="Quantity to move" />
         <span class="faint">to</span>
         <select v-model="moveTo" class="input" aria-label="Move to"><option v-for="o in targets" :key="o.key" :value="o.key">{{ o.name }}</option></select>
-        <button class="btn" :disabled="!moveTo" @click="doMove">Move</button>
+        <button class="btn" :disabled="!moveTo" data-test="move-item" @click="doMove">{{ offerTarget ? 'Offer' : 'Move' }}</button>
       </div>
       <div v-if="canHost" class="attach">
         <input v-model="attachQuery" class="input" :placeholder="attachHint" />

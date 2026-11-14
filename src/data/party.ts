@@ -57,7 +57,7 @@ export async function updateCampaignRules(campaignId: string, patch: Partial<Cam
 // ── Members ────────────────────────────────────────────────────────────────
 
 /** A member's level is also what its NPC entry states. */
-async function writeEntryLevel(entryId: string | null, level: number): Promise<void> {
+export async function writeEntryLevel(entryId: string | null, level: number): Promise<void> {
   const e = entryId ? await getDb().rows('entries').get(entryId) : undefined
   if (e?.type === 'npc' && e.data.level !== String(level)) await getDb().rows('entries').put(zEntry.parse({ ...e, data: { ...e.data, level: String(level) } }))
 }
@@ -103,6 +103,14 @@ export async function updateCharacter(id: string, patch: CharacterPatch): Promis
 export async function removeCharacter(characterId: string): Promise<void> {
   const c = await table().get(characterId)
   if (!c) return
+  // A linked player keeps what is in their app: only what was theirs here goes to the stash
+  if (c.link) {
+    const owner = characterOwner(characterId)
+    const mine = await getDb().rows('inventory').where('[campaignId+ownerKey]').equals([c.campaignId, owner]).toArray()
+    await getDb().rows('inventory').bulkDelete(mine.filter(r => r.link?.remoteEntryId).map(r => r.id))
+    const purse = await getDb().rows('purses').where('[campaignId+ownerKey]').equals([c.campaignId, owner]).first()
+    if (purse) await getDb().rows('purses').delete(purse.id)
+  }
   await releaseOwner(c.campaignId, characterOwner(characterId))
   await table().delete(characterId)
 }
@@ -138,42 +146,81 @@ export async function syncCompanionEntry(c: Character, force = false): Promise<v
 
 // ── Level-ups ──────────────────────────────────────────────────────────────
 
-/** Raises each selected character by one level and records it. In XP campaigns a level costs 1,000 XP. */
+/**
+ * Raises each selected character by one level and records it. In XP campaigns a level costs 1,000 XP.
+ * A character linked to the player's app levels up there: its change waits as an offer (the character
+ * link sends it) and the level moves when the player accepts.
+ */
 export async function levelUp(campaignId: string, selected: string[], trigger: LevelUpEntry['trigger'] = 'manual', refId: string | null = null): Promise<LevelUpEntry | null> {
   const rows = await table().where('campaignId').equals(campaignId).toArray()
   const xpMode = (await campaignSettings(campaignId)).rules.advancement === 'xp'
-  const changes = planLevelUp(rows, selected, xpMode ? XP_PER_LEVEL : undefined)
+  const linked = new Set(rows.filter(r => r.link).map(r => r.id))
+  // A character whose last level-up still waits for its player is left out
+  const waiting = new Set((await ledgerOf(campaignId)).flatMap(l => (l.kind === 'levelUp' && !l.undoneAt ? l.changes.filter(ch => ch.offer?.state === 'pending').map(ch => ch.characterId) : [])))
+  const changes = planLevelUp(rows, selected.filter(id => !waiting.has(id)), xpMode ? XP_PER_LEVEL : undefined).map(ch => (linked.has(ch.characterId) ? { ...ch, offer: { outboxId: null, state: 'pending' as const } } : ch))
   if (!changes.length) return null
   const ts = nowIso()
   const entry = zLedgerEntry.parse({ id: newId(), campaignId, kind: 'levelUp', at: ts, trigger, refId, changes }) as LevelUpEntry
   await getDb().transaction('rw', table(), ledger(), async () => {
-    for (const ch of changes) await table().update(ch.characterId, { level: ch.to, ...(ch.xpTo !== undefined ? { xp: ch.xpTo } : {}), updatedAt: ts })
+    for (const ch of changes) await table().update(ch.characterId, { ...(ch.offer ? {} : { level: ch.to }), ...(ch.xpTo !== undefined ? { xp: ch.xpTo } : {}), updatedAt: ts })
     await ledger().put(entry)
   })
   for (const ch of changes) {
     const c = rows.find(r => r.id === ch.characterId)
-    if (!c) continue
+    if (!c || ch.offer) continue
     await writeEntryLevel(c.entryId, ch.to)
     await syncCompanionEntry({ ...c, level: ch.to })
   }
   return entry
 }
 
-/** Reverts a level-up for every character still at the level it raised them to. XP earned since stays. */
+type OfferState = NonNullable<LevelUpEntry['changes'][number]['offer']>['state']
+
+/** Notes which outbox row carries a pending level-up. */
+export async function setLevelUpOffer(ledgerId: string, characterId: string, outboxId: string): Promise<void> {
+  const entry = await ledger().get(ledgerId)
+  if (entry?.kind !== 'levelUp') return
+  await ledger().put({ ...entry, changes: entry.changes.map(ch => (ch.characterId === characterId && ch.offer ? { ...ch, offer: { ...ch.offer, outboxId } } : ch)) })
+}
+
+/** A pending level-up was answered: accepted moves the level; anything else gives the XP it cost back. */
+export async function settleLevelUp(ledgerId: string, characterId: string, state: Exclude<OfferState, 'pending'>): Promise<void> {
+  const entry = await ledger().get(ledgerId)
+  const ch = entry?.kind === 'levelUp' ? entry.changes.find(x => x.characterId === characterId) : undefined
+  if (entry?.kind !== 'levelUp' || ch?.offer?.state !== 'pending') return
+  await ledger().put({ ...entry, changes: entry.changes.map(x => (x === ch ? { ...x, offer: { ...ch.offer!, state } } : x)) })
+  const c = await table().get(characterId)
+  if (!c) return
+  if (state === 'accepted') {
+    const level = Math.max(c.level, ch.to)
+    await table().put({ ...c, level, updatedAt: nowIso() })
+    await writeEntryLevel(c.entryId, level)
+  } else if (ch.xpFrom !== undefined && ch.xpTo !== undefined) {
+    await table().put({ ...c, xp: c.xp + ch.xpFrom - ch.xpTo, updatedAt: nowIso() })
+  }
+}
+
+/**
+ * Reverts a level-up for every character still at the level it raised them to. XP earned since stays.
+ * Level-ups a player has not answered are taken back; ones they accepted stay (their app owns the level).
+ */
 export async function undoLevelUp(id: string): Promise<void> {
   const entry = await ledger().get(id)
   if (entry?.kind !== 'levelUp' || entry.undoneAt) return
+  for (const ch of entry.changes) if (ch.offer?.state === 'pending') await settleLevelUp(id, ch.characterId, 'withdrawn')
   const ts = nowIso()
   const reverted: Character[] = []
   await getDb().transaction('rw', table(), ledger(), async () => {
-    for (const ch of entry.changes) {
+    const current = await ledger().get(id)
+    if (current?.kind !== 'levelUp') return
+    for (const ch of current.changes) {
       const c = await table().get(ch.characterId)
-      if (!c || c.level !== ch.to) continue
+      if (!c || ch.offer || c.level !== ch.to) continue
       const next = { ...c, level: ch.from, xp: ch.xpFrom !== undefined && ch.xpTo !== undefined ? c.xp + ch.xpFrom - ch.xpTo : c.xp, updatedAt: ts }
       await table().put(next)
       reverted.push(next)
     }
-    await ledger().put({ ...entry, undoneAt: ts })
+    await ledger().put({ ...current, undoneAt: ts })
   })
   for (const c of reverted) { await writeEntryLevel(c.entryId, c.level); await syncCompanionEntry(c) }
 }

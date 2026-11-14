@@ -5,12 +5,13 @@
  * one) on Enter. Ticking rows shows, hides or removes several at once.
  */
 import { computed, ref } from 'vue'
-import { ChevronLeft, ChevronRight, Dices, Eye, EyeOff, Trash2 } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight, Dices, Eye, EyeOff, Smartphone, Trash2 } from 'lucide-vue-next'
 import { validateFormula } from '@/domain/formula'
 import { conditionInfo } from '@/domain/rules/conditions'
 import type { Token } from '@/data/encounters'
 import { confirmDialog } from '@/ui/dialogs'
 import { applyDamage, live, removeTokens, rollAllInitiative, saveEncounter, updateToken } from './live'
+import { askInitiative, linkedHere } from './linkLive'
 import { conditionColor } from './scene'
 import { nextTurn, order, prevTurn, round, turnIndex } from './turns'
 
@@ -56,6 +57,7 @@ const abbr = (name: string) => conditionInfo(name)?.abbr ?? name.slice(0, 3).toU
       </template>
       <span v-else class="eyebrow">Turn order</span>
       <span class="grow" />
+      <button v-if="linkedHere().length" class="btn btn-icon" title="Ask the linked players to roll initiative in Play Buddy" data-test="ask-initiative" @click="askInitiative()"><Smartphone :size="15" /></button>
       <button class="btn btn-icon" title="Roll initiative for everyone who has none" data-test="roll-initiative" @click="rollAllInitiative()"><Dices :size="15" /></button>
     </header>
     <div class="formula">

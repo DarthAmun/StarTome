@@ -64,9 +64,9 @@ export interface LevelChange {
   xpTo?: number
   /**
    * Characters linked to Play Buddy level up in the player's app: the change is
-   * an offer (a linkOffers row) and the level moves only once it's accepted.
+   * an offer (a linkOutbox row) and the level moves only once it's accepted.
    */
-  offer?: { id: string | null; state: 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'expired' | 'failed' }
+  offer?: { outboxId: string | null; state: 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'expired' | 'failed' }
 }
 
 /**

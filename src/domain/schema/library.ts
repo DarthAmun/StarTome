@@ -100,7 +100,4 @@ export const DEFAULT_SETTINGS: Settings = zSettings.parse({ id: 'app' })
 
 export const zMeta = z.object({ key: z.string().min(1), value: z.unknown() })
 
-/** Offers and requests to the character app, from outbox to answer (Phase 8 types the payload). */
-export const zLinkOutboxItem = z.looseObject({ id: zId, campaignId: zId })
-
 export { zOpaque }

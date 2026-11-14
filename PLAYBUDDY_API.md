@@ -1,431 +1,374 @@
-# Play Buddy GM API — v1 (draft)
+# Play Buddy GM API — v1 (draft 2)
 
-Status: **draft for review** by Carl (Play Buddy) and Amon (StarTome), 2026-10-31.
-This document is the contract. Play Buddy implements the server; StarTome is the first client.
-Everything here can change until both sides sign off; after that, v1 only grows by **additive** changes.
+Status: **draft 2, 2026-11-14**, written by StarTome for Carl (Play Buddy). Nothing of draft 1 was built on Play Buddy's side, so draft 2 replaces it under the same base path `/v1`. What changed and why is in §13.
+
+This document is the contract. Play Buddy implements the server; StarTome is the first client. `scripts/playbuddy-mock.mjs` in the StarTome repo implements every endpoint in memory and StarTome's tests run against it, so its answers double as example payloads (§12).
 
 ## 1. Purpose and principles
 
-StarTome is a browser-based GM tool (campaigns, encounters/VTT, loot, XP). Play Buddy is the players' character app. Phase 2 of Play Buddy lets players join a game run by a GM. This API lets the GM's tool see what players share and send them things, without ever owning their characters.
+StarTome is the GM's tool (campaigns, encounters, loot, XP), running in the GM's browser. Play Buddy is the players' character app. This API lets the GM's tool see what players share and send them things, without ever owning their characters.
 
-1. **Players own their characters.** Nothing in this API writes a character directly. The GM sends **offers** (items, coins, level-ups) and **requests** (roll this, take this damage); the player's app applies them, by the player's accept or by an auto-accept the player switched on.
-2. **Sharing is the player's choice.** Status comes in **share levels** (§5). A level the player didn't share answers `notShared`, never an error page.
-3. **Rules stay in Play Buddy.** The API returns computed values (AC, skill modifiers, max HP), never formulas. StarTome doesn't recompute a character.
-4. **Everything is optional for StarTome.** It works fully without Play Buddy, so every field the GM tool can live without is optional.
-5. **Offline-friendly.** All writes are idempotent (`Idempotency-Key`), all reads are snapshots with a timestamp, events have a sequence number so a client can catch up.
+1. **Players own their characters.** Nothing here writes a character. The GM sends **messages** (gifts, level-ups, "roll this", "take this damage"); the player's app applies them, by the player's tap or by an auto-accept the player switched on.
+2. **Sharing is the player's choice,** in four share levels (§5). What a player does not share is simply absent.
+3. **Rules stay in Play Buddy.** The API returns computed values (AC, skill modifiers, maximum HP), never formulas.
+4. **Three moving parts.** One snapshot (`GET /game`), one stream of changes (`GET /events`), one way to send something to a player (`POST /messages`). There is nothing else to keep in step.
+5. **Whole numbers.** Money is always copper pieces. Bulk is always tenths (L = 1, 1 Bulk = 10).
+6. **Safe to repeat.** Every message carries an idempotency key; events carry a sequence number, so a client that was closed catches up.
 
 ## 2. Topology
 
 ```
- player phones/laptops ──(Play Buddy game, iroh P2P — Carl's design)──▶ GM's Play Buddy (desktop, "GM mode")
-                                                                              │
-                                                    HTTP on 127.0.0.1:<port>  │  this API
-                                                                              ▼
-                                                               StarTome in the GM's browser
+ player phones/laptops ──(Play Buddy game, Carl's design)──▶ GM's Play Buddy (desktop, "GM mode")
+                                                                    │
+                                          HTTP on 127.0.0.1:<port>  │  this API
+                                                                    ▼
+                                                     StarTome in the GM's browser
 ```
 
-- The **GM runs Play Buddy in GM mode on the same computer** as StarTome. That instance is the hub for the game and serves this API on the loopback interface only.
-- How players reach the hub (iroh, local network, later remote) is Play Buddy's business and not part of this contract.
-- The API is available only while a game is open in GM mode and the GM has switched the API on.
+The GM runs Play Buddy in GM mode on the same computer as StarTome. That instance serves this API on the loopback interface only, while a game is open and the GM has switched the API on. How players reach it is Play Buddy's business.
 
-## 3. Transport, security, browser access
+## 3. Transport and security
 
 | Topic | Rule |
 |---|---|
-| Address | `http://127.0.0.1:<port>`; default port **47110**, configurable in Play Buddy. Bind to loopback only. |
-| Base path | `/v1`. Breaking changes go to `/v2`. |
-| Format | JSON, UTF-8, `camelCase` keys. Timestamps ISO 8601 UTC (`2026-10-31T19:04:05Z`). Ids are opaque strings. |
-| Auth | `Authorization: Bearer <token>` on every endpoint except `GET /v1/health` and `POST /v1/pair`. |
-| Pairing | Play Buddy shows a 6-digit **pair code** in GM mode. StarTome posts it to `/v1/pair` and gets a token. Tokens last until the GM revokes them in Play Buddy (a list of paired clients with "revoke"). Wrong codes: rate-limited (5 per minute). |
-| CORS | Allow the configured origins (defaults: `https://darthamun.github.io`, `http://localhost:3001`). Methods `GET, POST, DELETE, OPTIONS`; headers `Authorization, Content-Type, Idempotency-Key`. Answer preflights with `Access-Control-Allow-Private-Network: true` (Chrome's Private/Local Network Access). |
-| Live updates | **Long-polling** on `GET /v1/events` (§8). No SSE/WebSocket needed: `fetch` can send the `Authorization` header, `EventSource` can't. |
-| Limits | Request bodies ≤ 256 KB. |
+| Address | `http://127.0.0.1:<port>`, default port **47110**, configurable in Play Buddy. Loopback only. |
+| Base path | `/v1`. After sign-off v1 only grows by additions; breaking changes go to `/v2`. |
+| Format | JSON, UTF-8, `camelCase`. Timestamps ISO 8601 UTC. Ids are opaque strings. Unknown fields are ignored by both sides. |
+| Auth | `Authorization: Bearer <token>` on everything except `GET /v1/health` and `POST /v1/pair`. |
+| Pairing | Play Buddy shows a 6-digit pair code in GM mode. The client posts it and gets a token that lasts until the GM revokes it in Play Buddy. Wrong codes are rate-limited (5 per minute). |
+| CORS | Allow the configured origins (defaults `https://darthamun.github.io`, `http://localhost:3001`; editable in Play Buddy's settings). Methods `GET, POST, DELETE, OPTIONS`; headers `Authorization, Content-Type, Idempotency-Key`. Answer preflights with `Access-Control-Allow-Private-Network: true`. |
+| Live updates | Long polling on `GET /v1/events`. |
+| Limits | Request bodies up to 256 KB. |
 
-Browsers allow an `https` page to call `http://127.0.0.1` (it counts as a secure context); Chrome may show a one-time "access devices on your local network" prompt.
+Errors are `{ "error": { "code": ErrorCode, "message": string } }`:
 
-## 4. Conventions shared by all payloads
+| Status | Code | When |
+|---|---|---|
+| 400 | `invalidPayload` | The body does not match this document. |
+| 400 | `pairCodeInvalid` | Wrong pair code. |
+| 401 | `unauthorized` | Missing or revoked token. |
+| 404 | `playerNotFound`, `messageNotFound` | |
+| 409 | `noGame` | No game is open in GM mode. |
+| 409 | `conflict` | The idempotency key was used with a different body. |
+| 429 | `rateLimited` | |
+| 503 | `apiDisabled` | The GM switched the API off. |
+
+## 4. Shared types
 
 ```ts
-type Iso = string                      // ISO 8601 UTC
-type Coins = { pp: number; gp: number; sp: number; cp: number }   // as Play Buddy stores them
-type Cp = number                       // money in copper: 1 gp = 100 cp
+type Iso = string                  // "2026-11-14T19:04:05Z"
+type Cp = number                   // money in copper: 1 gp = 100 cp, 1 credit = 10 cp
+type Bulk = number                 // tenths of Bulk: L = 1, 1 Bulk = 10, negligible = 0
+type System = 'pf2e' | 'sf2e'
+type ShareLevel = 'basic' | 'defenses' | 'skills' | 'inventory'
 
-/** How an item is identified across both apps. Both come from foundryvtt/pf2e. */
+/** A catalog item both apps know from Foundry's data. */
 interface ItemRef {
-  slug: string                         // Play Buddy catalog id, e.g. "longsword" (Foundry's system.slug / slugified name)
-  foundryId?: string                   // Foundry document _id, e.g. "00gDg8WcPv3TKC9N" — SHOULD be included when known
-  pack?: string                        // Foundry pack, e.g. "equipment-srd"
+  slug: string                     // Foundry's slug of the name: "healing-potion-minor"
+  foundryId?: string               // Foundry document _id: SHOULD be sent when known
+  pack?: string                    // Foundry pack, "equipment-srd"
+  system?: System                  // absent = pf2e
 }
 
-interface ApiError { error: { code: ErrorCode; message: string; details?: unknown } }
-type ErrorCode =
-  | 'unauthorized' | 'pairCodeInvalid' | 'rateLimited'
-  | 'noGame' | 'apiDisabled'
-  | 'playerNotFound' | 'offerNotFound' | 'notShared'
-  | 'invalidPayload' | 'unknownItem' | 'conflict' | 'internal'
+/** Everything needed to show and count an item without a catalog. */
+interface ItemFacts {
+  name: string
+  type: string                     // weapon, armor, shield, gear, consumable, ammo, treasure, container, kit, relic-gift
+  level: number
+  price: Cp                        // for `priceFor` units
+  priceFor: number
+  bulk: Bulk
+  rarity: string
+  traits: string[]
+  summary?: string
+}
 ```
 
-- **Matching items:** StarTome stores Foundry ids (`fvtt:pf2e:<pack>:<_id>`). With `foundryId` in `ItemRef`, matching is exact. Without it, StarTome falls back to the slug (both apps derive it from the same Foundry data). **Request to Carl:** keep Foundry's `_id` (and pack) in the importer output for equipment, magic items, spells and runes.
-- **Bulk** is a number in Bulk: `0.1` = L, `0` = negligible (Play Buddy's native form).
-- **HTTP status:** `200` ok, `201` created, `204` no body, `400 invalidPayload`, `401 unauthorized`, `403 notShared`, `404 *NotFound`, `409 conflict`/`noGame`, `429 rateLimited`, `503 apiDisabled`.
+**Matching items.** StarTome's compendium ids are `fvtt:<system>:<pack>:<foundryId>`, so a ref with `foundryId` and `pack` matches exactly; without them StarTome matches by name. Request to Carl: keep Foundry's `_id` and pack in the importer for equipment, runes, upgrades and augmentations.
 
 ## 5. Share levels
 
-The player chooses per game which levels the GM may read. Defaults suggested to Play Buddy: `basic` and `defenses` on, others off.
+The player chooses per game what the GM may read. Suggested defaults: `basic` and `defenses` on.
 
 | Level | Contents | StarTome uses it for |
 |---|---|---|
-| `basic` | name, level, ancestry/heritage/class, HP (current/max/temp), conditions, hero points | party page, encounter tokens, HP bars, conditions on tokens, hero point tracking |
-| `defenses` | AC, saves, Perception, speed(s), resistances/weaknesses/immunities | encounter tokens, hidden Perception/save rolls, encounter math |
-| `skills` | all skill modifiers + lores, class DC, spell DCs/attacks, attribute modifiers | secret skill rolls, Recall Knowledge, DCs |
-| `inventory` | items, coins, invested count, bulk | party wealth and gear check, loot hand-out, identification |
+| `basic` | name, level, ancestry, class, HP, conditions, hero points | party page, table bar, tokens, the recap |
+| `defenses` | AC, saves, Perception, speeds, resistances | tokens, area saves, initiative |
+| `skills` | attribute modifiers, skills and lores, class DC, spell DCs, attack bonuses | secret checks, starship crew |
+| `inventory` | items, coins, Bulk carried, invested count | the party's inventory and wealth readout, identifying |
 
-(`spells` is left out of v1 on purpose: StarTome has no use for it yet.)
+## 6. The snapshot: `GET /v1/game`
 
-## 6. Endpoints
-
-### 6.1 Health and pairing
-
-**`GET /v1/health`** (no auth)
-```json
-{ "app": "playbuddy", "appVersion": "0.9.0", "apiVersion": "1.0", "rulesVersion": "pf2e@4cf4c97", "game": { "open": true, "apiEnabled": true } }
-```
-`rulesVersion` identifies the catalog (e.g. the Foundry commit the data was imported from).
-
-**`POST /v1/pair`** (no auth) `{ "code": "482913", "client": "StarTome", "clientVersion": "0.9.1" }`
-→ `201 { "token": "…", "clientId": "c_7Hx…" }` · `400 pairCodeInvalid` · `429 rateLimited`
-
-**`DELETE /v1/pair`** — the client forgets itself (revokes its own token) → `204`.
-
-### 6.2 Game and players
-
-**`GET /v1/game`**
-```json
-{
-  "gameId": "g_01J…",
-  "name": "The Codex",
-  "startedAt": "2026-10-31T18:00:00Z",
-  "players": [
-    {
-      "playerId": "p_01J…",
-      "displayName": "Carl",
-      "online": true,
-      "lastSeenAt": "2026-10-31T19:04:05Z",
-      "character": { "characterId": "c_01J…", "name": "Groknar", "level": 7, "ancestry": "Orc", "class": "Magus", "class2": "Psychic" },
-      "shares": ["basic", "defenses"],
-      "autoAccept": { "items": false, "coins": true, "levelUp": false, "heroPoints": true, "requests": false }
-    }
-  ],
-  "eventSeq": 1284
-}
-```
-- `playerId` is stable for this player across sessions of the same game. `characterId` is the Play Buddy character id; if the player switches characters, a `characterChanged` event follows.
-- `autoAccept` tells the GM what will apply without a tap (purely informative).
-
-### 6.3 Status
-
-**`GET /v1/players/{playerId}/status?levels=basic,defenses,skills,inventory`**
-
-Returns the requested levels the player shares, and lists the rest in `notShared`. Asking only for unshared levels → `403 notShared` (body as below with no level blocks).
+Everything the client needs to start, in one call.
 
 ```ts
-interface StatusResponse {
-  playerId: string
+interface Game {
+  gameId: string
+  name: string
+  system: System
+  eventSeq: number                 // where /events continues
+  players: Player[]
+}
+
+interface Player {
+  playerId: string                 // stable for this player across sessions of the game
+  displayName: string
+  online: boolean
+  shares: ShareLevel[]
+  autoAccept: { items: boolean; coins: boolean; levelUp: boolean; heroPoints: boolean; rolls: boolean; damage: boolean }
+  sheet: Sheet | null              // null: no character chosen yet
+}
+
+/** What the player shares of their character. A block is present exactly when its level is shared. */
+interface Sheet {
   characterId: string
-  at: Iso                               // when Play Buddy last received this character from the player
-  notShared: ShareLevel[]
+  at: Iso                          // when Play Buddy last heard from the player's device
   basic?: {
     name: string; level: number
-    ancestry: string; heritage?: string; background?: string; class: string; class2?: string
+    ancestry: string; heritage?: string; class: string; class2?: string
     hp: { current: number; max: number; temp: number }
-    conditions: { id: string; name: string; value?: number }[]   // ids are Foundry condition slugs: "frightened", "dying", "wounded", "off-guard"
-    heroPoints: number                                           // 0–3
-    size?: 'tiny' | 'sm' | 'med' | 'lg' | 'huge' | 'grg'
+    conditions: { id: string; name: string; value?: number }[]   // ids are Foundry condition slugs
+    heroPoints: number             // 0–3
   }
   defenses?: {
     ac: number
     saves: { fortitude: number; reflex: number; will: number }
     perception: number
-    speeds: { land: number; [kind: string]: number }           // feet
+    speeds: { land: number; [kind: string]: number }             // feet
     resistances?: { type: string; value: number }[]
     weaknesses?: { type: string; value: number }[]
     immunities?: string[]
   }
   skills?: {
     attributes: { str: number; dex: number; con: number; int: number; wis: number; cha: number }   // modifiers
-    skills: Record<string, number>                             // "athletics": 12, lores as "warfare-lore": 9
+    skills: Record<string, number>                               // "athletics": 12, "piloting": 9, "warfare-lore": 9
     classDc?: number
-    spellcasting?: { source: string; tradition: string; dc: number; attack: number }[]
+    spellDc?: number                                             // the highest, if a caster
+    attacks?: { melee?: number; ranged?: number }                // best weapon attack bonuses
   }
   inventory?: {
-    coins: Coins
-    bulk: { carried: number; encumberedAt: number; limit: number }
-    invested: { count: number; limit: number }
-    items: InventoryItem[]
+    coins: Cp
+    bulk: Bulk                     // carried
+    invested: number
+    items: HeldItem[]
   }
 }
 
-interface InventoryItem {
-  entryId: string                       // Play Buddy inventory entry id ("i12"), stable for that character
-  ref: ItemRef                          // catalog identity; for custom items the item it was duplicated from, if any
-  custom: boolean                       // true = player/GM-made definition (Play Buddy INV-5)
-  name: string
+interface HeldItem {
+  entryId: string                  // Play Buddy's inventory entry, stable for that character
+  ref?: ItemRef                    // absent for items the player or GM made up
+  facts: ItemFacts                 // always present; while unidentified, `facts.name` is the unidentified name
   quantity: number
-  level: number
-  rarity: 'common' | 'uncommon' | 'rare' | 'unique'
-  type: string                          // weapon, armor, shield, gear, consumable, ammo, treasure, container, kit
-  price: Cp                             // per `priceFor` units, as in the catalog
-  priceFor: number
-  bulk: number
-  location: 'held' | 'worn' | 'stowed'
-  container?: string                    // entryId of the container
+  identified: boolean
   invested?: boolean
-  attachments?: Attachment[]            // runes, talismans, upgrades, accessories, relic gifts on this item
-  relic?: { aspects: string[] }         // a relic (GMG p. 94); its gifts are attachments of kind 'gift'
-  identified: boolean                   // false: only `name` (the unidentified name) is shown to the player
-}
-
-/** Something etched onto, affixed to or installed in an item, or a relic's gift. */
-interface Attachment {
-  entryId?: string                      // in a status: Play Buddy's id for it, what an `identify` offer reveals
-  kind: 'rune' | 'talisman' | 'upgrade' | 'accessory' | 'gift'
-  ref?: ItemRef                         // catalog item (runes, talismans, upgrades)
-  definition?: CustomItemDefinition     // otherwise: relic gifts (type "relic-gift") and homebrew
-  name: string
-  level?: number
-  price?: Cp
-  identified?: boolean                  // false: an unidentified rune, or a relic gift that hasn't awakened
-  tier?: 'minor' | 'major' | 'grand'    // relic gifts
-}
-```
-
-- **Attachments replace the earlier `runes` list.** They cover property runes beyond potency/striking, shield runes, talismans, SF2e upgrades and relic gifts, and each carries its own price, so both apps count an item's value the same way.
-- A talisman that was spent, or a rune the player moved to another item, simply shows up differently in the next status: StarTome mirrors what it reads, so no event is needed.
-- **Unidentified items:** everything attached to them is sent with `identified: false` and stays hidden with the item. An `identify` offer for the item reveals it with its attachments; an `identify` offer naming an attachment's `entryId` reveals that one only (a relic gift awakening).
-
-**`GET /v1/status?levels=…`** — the same for every player in one call: `{ "players": StatusResponse[] }` (players who share none of the levels appear with only `notShared`).
-
-### 6.4 Offers (GM → player, the player's app applies them)
-
-**`POST /v1/offers`** with header `Idempotency-Key: <uuid>` (required). Re-posting the same key returns the original offer (`200`) instead of creating a second one.
-
-```ts
-interface OfferRequest {
-  to: string[]                          // playerIds
-  note?: string                         // shown to the player, e.g. "From the dragon's hoard"
-  expiresAt?: Iso
-  payload: OfferPayload
-}
-
-type OfferPayload =
-  | { kind: 'item'; items: OfferItem[] }
-  | { kind: 'coins'; coins: Coins }
-  | { kind: 'levelUp'; toLevel: number }                      // the player levels up in their own app
-  | { kind: 'heroPoint'; amount: number; reason?: string }    // award hero points; the player's app caps the total at 3
-  | { kind: 'identify'; entryId: string; playerId: string }   // reveal an unidentified item the player holds
-
-interface OfferItem {
-  ref?: ItemRef                         // catalog item (preferred)
-  definition?: CustomItemDefinition     // a homebrew item; Play Buddy's custom-item shape (ItemEntry)
-  quantity: number
-  attachments?: Attachment[]            // §6.3; StarTome sends them with the item they're on
+  container?: string               // entryId of the container it is in
+  attachments?: HeldAttachment[]   // runes, talismans, upgrades, installed weapons, relic gifts
   relic?: { aspects: string[] }
-  identified?: boolean                  // default true
-  unidentifiedName?: string             // shown while unidentified, e.g. "Glowing Longsword"
+  grade?: string                   // SF2e: commercial … paragon
+  implanted?: boolean              // SF2e: an augmentation in the character's body
+}
+
+interface HeldAttachment {
+  entryId: string                  // what an `identify` message can name
+  kind: 'rune' | 'talisman' | 'upgrade' | 'installed' | 'accessory' | 'gift'
+  ref?: ItemRef
+  facts: ItemFacts
+  identified: boolean              // false: an unidentified rune, or a relic gift that has not awakened
+  tier?: 'minor' | 'major' | 'grand'   // relic gifts
+}
+```
+
+Everything attached to an unidentified item is sent with `identified: false` and stays hidden with it.
+
+## 7. Messages: `POST /v1/messages`
+
+One message goes to one player. Header `Idempotency-Key: <uuid>` is required: posting the same key again returns the message as it stands now (`200`) instead of making a second one.
+
+```ts
+interface MessageRequest {
+  to: string                       // playerId
+  note?: string                    // shown to the player: "From the dragon's hoard"
+  body: MessageBody
+}
+
+type MessageBody =
+  | { kind: 'items'; items: GivenItem[] }
+  | { kind: 'coins'; cp: Cp }
+  | { kind: 'levelUp'; toLevel: number }                    // the player levels up in their own app
+  | { kind: 'heroPoints'; amount: number; reason?: string } // the player's app keeps the total at 3 or less
+  | { kind: 'identify'; entryId: string }                   // reveal an item or attachment the player holds
+  | { kind: 'roll'; check: string; dc?: number; secret?: boolean; initiative?: boolean; label?: string }
+  | { kind: 'damage'; damage?: { amount: number; type: string; persistent?: boolean }[]; conditions?: { id: string; value?: number }[]; label?: string }
+
+interface GivenItem {
+  ref?: ItemRef                    // sent whenever StarTome's item came from Foundry
+  facts: ItemFacts                 // always sent: Play Buddy uses its catalog entry when it knows `ref`, else these facts
+  quantity: number
+  identified?: boolean             // default true
+  unidentifiedName?: string        // shown while unidentified: "Glowing longsword"
   unidentifiedDescription?: string
+  attachments?: { kind: HeldAttachment['kind']; ref?: ItemRef; facts: ItemFacts; identified?: boolean; tier?: 'minor' | 'major' | 'grand' }[]
+  relic?: { aspects: string[] }
+  grade?: string
 }
 ```
-Exactly one of `ref` / `definition` per item. If `ref` is unknown to Play Buddy's catalog and no `definition` is given → `400 unknownItem` (StarTome then retries with a `definition`).
 
-`CustomItemDefinition` is Play Buddy's existing custom-item shape (`ItemEntry`: id, name, type, level, price, priceFor, bulk, rarity, traits, usage, summary, category, weapon/armor/shield/container data). The GM may set `source: "StarTome homebrew"`.
+- `roll.check`: `perception`, `fortitude`, `reflex`, `will`, `skill:<slug>` (`skill:stealth`, `skill:warfare-lore`), or `flat` (then `dc` is required). `secret`: the player sees that they rolled, not the result. `initiative`: Play Buddy shows it as an initiative roll.
+- `damage`: the player's app applies its own resistances and weaknesses, then the conditions.
 
-→ `201 Offer`
+Answer: `201 Message`.
 
 ```ts
-interface Offer {
-  offerId: string
-  idempotencyKey: string
+interface Message {
+  messageId: string
+  to: string
   createdAt: Iso
-  to: string[]
-  payload: OfferPayload
   note?: string
-  /** One state per recipient. */
-  deliveries: { playerId: string; state: OfferState; at: Iso; reason?: string }[]
+  body: MessageBody
+  state: MessageState
+  at: Iso                          // when it reached this state
+  reason?: string                  // why it failed, or the player's words on declining
+  roll?: Roll                      // `roll` messages once answered
 }
-type OfferState = 'queued' | 'delivered' | 'accepted' | 'declined' | 'withdrawn' | 'expired' | 'failed'
-```
-- `queued`: player offline, will be delivered on reconnect. `delivered`: on the player's device, waiting for them. `failed`: the player's app couldn't apply it (`reason` says why).
-- An item offer to several players means **each** gets the items (use one offer per player to split loot).
-
-**`GET /v1/offers?open=true`** → `{ "offers": Offer[] }` (open = any delivery still `queued`/`delivered`).
-**`GET /v1/offers/{offerId}`** → `Offer`.
-**`DELETE /v1/offers/{offerId}`** → withdraws all not-yet-answered deliveries → `200 Offer`.
-
-### 6.5 Requests (GM asks, the player acts)
-
-Requests don't change anything by themselves; the result comes back as events.
-
-**`POST /v1/requests`** (`Idempotency-Key` required)
-```ts
-interface RollRequest {
-  to: string[]
-  kind: 'roll'
-  check: string                         // "perception" | "fortitude" | "reflex" | "will" | "skill:stealth" | "skill:warfare-lore" | "flat"
-  dc?: number                           // flat checks: required
-  secret?: boolean                      // the player sees that they rolled, not the result (Play Buddy decides how)
-  purpose?: 'initiative' | 'check'      // initiative rolls are ordered by StarTome
-  label?: string                        // "Initiative — Goblin ambush"
-}
-
-interface DamageRequest {               // apply damage/conditions in the player's app
-  to: string[]
-  kind: 'damage'
-  damage?: { amount: number; type: string; persistent?: boolean }[]   // the player's app applies its own resistances
-  conditions?: { id: string; value?: number }[]
-  label?: string
-}
-```
-→ `201 { "requestId": "r_…", "deliveries": [ … same shape as offers … ] }`. Roll results arrive as `roll` events carrying `requestId`; a damage request ends `accepted` (applied) or `declined`, and the new HP arrive as `statusChanged`.
-
-A request may also be withdrawn: **`DELETE /v1/requests/{requestId}`** → `200`.
-
-### 6.6 Catalog
-
-**`GET /v1/catalog/items?q=long&limit=20`** and **`GET /v1/catalog/items?slugs=longsword,healing-potion-minor`**
-→ `{ "items": { ref: ItemRef, name, level, price, priceFor, rarity, type }[] }`
-
-Used once per unmatched item; the GM confirms a match, StarTome remembers it.
-
-## 7. Rolls
-
-Every roll a player makes during the game is reported (GM-2), whether asked for or not.
-
-```ts
-interface Roll {
-  rollId: string
-  playerId: string
-  characterId: string
-  at: Iso
-  requestId?: string                    // set when it answers a request
-  kind: 'check' | 'save' | 'perception' | 'initiative' | 'skill' | 'attack' | 'damage' | 'flat' | 'spell' | 'custom'
-  label: string                         // "Athletics", "Longsword +1 (MAP −5)", "Fireball damage"
-  formula: string                       // "1d20+12", "2d8+4"
-  dice: { die: number; result: number }[]
-  modifier: number
-  total: number
-  dc?: number
-  degree?: 'criticalSuccess' | 'success' | 'failure' | 'criticalFailure'
-  damageTypes?: { type: string; amount: number }[]   // damage rolls
-  secret: boolean                       // rolled secretly: the player didn't see the result
-}
+type MessageState = 'queued' | 'delivered' | 'accepted' | 'declined' | 'withdrawn' | 'expired' | 'failed'
 ```
 
-## 8. Events
+| State | Meaning |
+|---|---|
+| `queued` | The player is offline; it is delivered when they reconnect. |
+| `delivered` | On the player's device, waiting for them. |
+| `accepted` | Applied: items and coins added, level-up started, hero points added, item revealed, roll made (see `roll`), damage taken. |
+| `declined` | The player said no. |
+| `withdrawn` | The GM took it back before it was answered. |
+| `expired` | Play Buddy gave up on it (the game was closed, the player left). |
+| `failed` | The player's app could not apply it; `reason` says why. |
 
-**`GET /v1/events?after=<seq>&wait=25`** — long poll. Returns at once if events newer than `after` exist, else holds up to `wait` seconds (max 30) and returns `{ events: [] }`.
+The last five are final. Changes arrive as `message` events (§8); the sheet changes they cause arrive as `sheet` events.
+
+**`GET /v1/messages?ids=m_1,m_2`** → `{ "messages": Message[], "unknown": string[] }`. For catching up on answers given while the client was closed. Ids Play Buddy no longer knows come back in `unknown`.
+
+**`DELETE /v1/messages/{messageId}`** → `200 Message`, now `withdrawn` if it was not final yet (a final message is returned unchanged).
+
+## 8. Events: `GET /v1/events?after=<seq>&wait=25`
+
+Long poll. Answers at once when events newer than `after` exist, otherwise holds for up to `wait` seconds (at most 30) and answers with an empty list.
 
 ```ts
 interface EventsResponse { events: GameEvent[]; lastSeq: number; resetRequired?: boolean }
+
 type GameEvent = { seq: number; at: Iso } & (
+  | { type: 'sheet'; playerId: string; characterId: string; sheetAt: Iso; blocks: Partial<Pick<Sheet, ShareLevel>>; unshared?: ShareLevel[] }
+  | { type: 'player'; player: Omit<Player, 'sheet'> }      // joined, came online, went offline, changed shares or auto-accept
+  | { type: 'playerLeft'; playerId: string }
+  | { type: 'message'; message: Message }
   | { type: 'roll'; roll: Roll }
-  | { type: 'statusChanged'; playerId: string; levels: ShareLevel[] }      // fetch status again for those levels
-  | { type: 'sharesChanged'; playerId: string; shares: ShareLevel[] }
-  | { type: 'offerChanged'; offerId: string; playerId: string; state: OfferState; reason?: string }
-  | { type: 'requestChanged'; requestId: string; playerId: string; state: OfferState; reason?: string }
-  | { type: 'itemReturned'; playerId: string; item: InventoryItem; note?: string }   // "give to party stash" in Play Buddy
-  | { type: 'playerJoined' | 'playerLeft' | 'playerOnline' | 'playerOffline'; playerId: string }
-  | { type: 'characterChanged'; playerId: string; characterId: string }
+  | { type: 'itemReturned'; playerId: string; item: HeldItem; note?: string }
   | { type: 'gameClosed' }
 )
+
+interface Roll {
+  rollId: string
+  playerId: string
+  at: Iso
+  messageId?: string               // set when it answers a `roll` message
+  kind: 'check' | 'save' | 'perception' | 'initiative' | 'skill' | 'attack' | 'damage' | 'flat' | 'spell' | 'custom'
+  label: string                    // "Athletics", "Longsword +1 (MAP −5)"
+  formula: string                  // "1d20+12"
+  total: number
+  dc?: number
+  degree?: 'criticalSuccess' | 'success' | 'failure' | 'criticalFailure'
+  secret: boolean
+}
 ```
-- `seq` increases by 1 per event within a game. Play Buddy keeps at least the last 1,000 events; if `after` is older than that, the response has `resetRequired: true` and the client re-reads `/game` and `/status`.
-- `statusChanged` carries no data on purpose: the client re-reads only what it needs, and sharing rules are checked in one place (`/status`).
-- **`itemReturned`** needs a small Play Buddy feature: a "Give to party" action on an inventory entry that removes it and emits this event. StarTome puts the item in the party stash.
 
-## 9. Manual fallback: the share file
+- **`sheet`** carries the blocks that changed, whole. The client replaces those blocks and keeps the others. `unshared` lists levels the player stopped sharing: the client forgets them. A player switching to another character sends all shared blocks with the new `characterId`.
+- **`roll`**: every roll a player makes during the game is reported, asked for or not. A roll that answers a message is also on that message.
+- **`itemReturned`**: a "Give to party" action on an inventory entry in Play Buddy removes it there and emits this; StarTome puts the item in the party stash.
+- `seq` rises by 1 per event within a game. Play Buddy keeps at least the last 1,000 events. If `after` is older than that, or belongs to another game, the answer has `resetRequired: true`: the client reads `/game` again and asks `/messages?ids=` for what it still waits on.
 
-For play without the live API (or before Phase 2 exists), Play Buddy can **export a share file** that StarTome imports by drop or paste on its Import & Export page:
+## 9. Health and pairing
+
+**`GET /v1/health`** (no auth)
+
+```json
+{ "app": "playbuddy", "appVersion": "0.9.0", "apiVersion": "1.0", "rulesVersion": "pf2e@4cf4c97", "game": { "open": true, "apiEnabled": true } }
+```
+
+**`POST /v1/pair`** (no auth) `{ "code": "482913", "client": "StarTome", "clientVersion": "1.0.0" }` → `201 { "token": "…", "clientId": "c_7Hx…" }`
+
+**`DELETE /v1/pair`** → `204`. The client gives its own token back.
+
+## 10. The share file (manual fallback)
+
+For play without the live API, Play Buddy exports a file that StarTome imports by drop or from the Party page:
 
 ```json
 {
   "format": "playbuddy-share",
-  "formatVersion": 1,
-  "exportedAt": "2026-10-31T19:00:00Z",
-  "rulesVersion": "pf2e@4cf4c97",
-  "status": { /* StatusResponse with the levels the player chose to include; playerId may be "" */ }
+  "formatVersion": 2,
+  "exportedAt": "2026-11-14T19:00:00Z",
+  "system": "pf2e",
+  "displayName": "Carl",
+  "sheet": { "characterId": "c_01J…", "at": "…", "basic": { }, "inventory": { } }
 }
 ```
-Same types as the live API, so StarTome uses one converter for both.
 
-## 10. What StarTome does with it (for context)
+`sheet` is the `Sheet` of §6 with the levels the player chose to include, so both apps use one converter for file and API.
 
-| StarTome feature | Uses |
+## 11. What StarTome does with it
+
+| StarTome | Uses |
 |---|---|
-| Link a campaign to a game, link party characters to players | `/game` (once), stored as `gameId` + `playerId` on the character |
-| Party page: HP, conditions, level | `basic`, refreshed on `statusChanged` (XP stays in StarTome) |
-| Encounter tokens for PCs (AC, saves, Perception, HP) | `basic` + `defenses` |
-| Initiative | `roll` request with `purpose: 'initiative'`; results fill the turn order |
-| Secret checks (Perception, Stealth, Recall Knowledge) | rolled locally from `skills`, or `roll` request with `secret` |
-| Roll log | `roll` events into the encounter combat log |
-| Loot hand-out, coins | offers; pending until accepted; declined items go back to the stash |
-| Level-ups (milestones, quests, 1,000 XP) | `levelUp` offers from the party's level-up: StarTome records them as pending, the level moves when the player accepts, a decline refunds the XP, undo withdraws the offer |
-| Hero points (start of session, good play) | `heroPoint` offers; the count shows on the party page from `basic` |
-| Identification | unidentified item offers, later an `identify` offer |
-| Wealth and gear check | `inventory` |
+| Pair, link a campaign to the open game, link party members to players | `/pair`, `/game` |
+| Party page and table bar: HP, conditions, hero points, level | `sheet.basic` (XP stays in StarTome) |
+| Tokens of linked characters follow HP, conditions and AC; their saves fill the area save prompt; Perception rolls their initiative | `basic`, `defenses` |
+| Starship crew: Piloting, Computers, Crafting, Perception; Area Fire DCs; gunnery | `skills` (`classDc`, `attacks.ranged`) |
+| The character's inventory, read-only, in the party's wealth and gear check | `inventory` |
+| Loot hand-out | `items` and `coins` messages; the stack stays in the stash marked "offered" until accepted; declined coins come back |
+| Level-ups (milestone, quest, 1,000 XP) | `levelUp` messages; the level moves when the player accepts; a decline refunds the XP; undo withdraws |
+| Hero points (start of session, a great moment) | `heroPoints` messages |
+| Identifying | items given with `identified: false`, later an `identify` message |
+| Initiative | `roll` messages with `initiative: true`; results fill the turn order |
+| Secret checks | `roll` messages with `secret` |
+| Damage and conditions from the encounter | `damage` messages |
+| Combat log | `roll` events |
 | Items given back | `itemReturned` → party stash |
 
-## 11. Out of scope for v1
+## 12. Reference mock
 
-Spells and spell slots, feats, the full sheet, editing characters, the GM's own NPCs in Play Buddy, chat, maps, remote (non-loopback) access. (Starfinder 2e is no longer out of scope: see §11a.)
+```
+node scripts/playbuddy-mock.mjs [--port 47110] [--manual] [--system sf2e]
+```
 
-## 11a. Starfinder 2e (asked for 2026-11-07)
+Two players (Carl with Groknar, Mira with Sel), pair code `123456`. Without `--manual` the mock players answer by themselves: accept gifts, roll what they are asked, take the damage. `/mock/*` plays the player side by hand: `POST /mock/messages/{id}/answer` (`{ "state": "accepted" | "declined" | "failed", "reason"? }`), `POST /mock/roll`, `POST /mock/return`, `POST /mock/hp`, `POST /mock/shares`, `POST /mock/online`, `POST /mock/reset`, `GET /mock/state`.
 
-StarTome runs Starfinder 2e campaigns with tactical starship combat (STARFINDER_PLAN.md). Its side is built and tested against the mock (`--system sf2e`); everything here is **additive**, so a PF2e Play Buddy keeps working unchanged. What a Starfinder-capable Play Buddy should send:
+## 13. Changes from draft 1
 
-| Where | Field | Meaning |
+Draft 1 was written on 2026-10-31 around what Play Buddy stored at the time. Draft 2 is written around what the GM's tool needs, after StarTome's own rework. Nothing in it needs data Play Buddy did not already have to provide for draft 1.
+
+| Draft 1 | Draft 2 | Why |
 |---|---|---|
-| `GET /v1/game` | `system: 'sf2e'` | The game's system. Absent means `pf2e`. StarTome warns when it differs from the campaign's game. |
-| `ItemRef` (everywhere) | `system: 'sf2e'` | The Foundry system of `pack`/`foundryId`; StarTome resolves `fvtt:sf2e:<pack>:<_id>`. Absent means `pf2e`. StarTome sends it on SF2e items too. |
-| status `skills.skills` | SF2e slugs | `computers`, `piloting`, `crafting`, `athletics` … as in the SF2e Player Core. The starship crew cards use Piloting, Computers, Crafting and Perception (`defenses.perception`). |
-| status `skills.classDc` | number | Area Fire / Auto-Fire DCs (class DC + tracking). |
-| status `skills.attacks` | `{ ranged?, melee? }` | Weapon attack bonuses; gunnery Strikes use the ranged one. |
-| status `inventory.items[]` | `grade?` | `commercial` … `paragon`; StarTome's upgrade-slot check reads it. |
-| status `inventory.items[]` | `implanted?: true` | An augmentation implanted in the character (counts toward the four-implant limit). |
-| status `inventory.items[].attachments[]` | `kind: 'upgrade'` | Armor and weapon upgrades, and installed weapons. |
-| coins / `Cp` | — | Unchanged: SF2e prices and coins travel in copper too (1 credit = 10 cp, as Foundry stores them in silver). |
-| status `basic.heroPoints` | — | As in PF2e; a crew member can spend one to reroll the starship's save. |
+| `GET /game` + `GET /status` + `GET /players/{id}/status?levels=` + `statusChanged` events that said "read again" | `GET /game` carries every player's shared sheet; `sheet` events carry the changed blocks | One read to start, no read per change, and no `notShared` errors to handle: an unshared block is absent. |
+| Offers (`/offers`) and requests (`/requests`), each with create, read, withdraw and its own event | Messages (`/messages`): one resource, one event | They had the same lifecycle; StarTome kept them in one outbox anyway. |
+| `to: string[]` with a list of deliveries | `to` is one player, the message has one state | StarTome always tracked them per player; a gift "to several" was ambiguous. |
+| Roll results only as `roll` events | The answered `roll` message carries its roll as well | A result given while StarTome was closed could not be recovered. |
+| `ref` *or* `definition`; `400 unknownItem` and a retry with a definition | Always `facts`, plus `ref` when there is one | No error path, no second request, and no catalog search endpoint. |
+| `GET /catalog/items` | Removed | Only existed for the retry above. |
+| `Coins { pp, gp, sp, cp }` | `Cp` everywhere | One number; each app shows it its own way. |
+| Bulk as a fraction (`0.1` = L) | Tenths (`1` = L) | Whole numbers. |
+| `playerJoined`, `playerLeft`, `playerOnline`, `playerOffline`, `sharesChanged`, `characterChanged` | `player` (the player's line as it is now), `playerLeft`; a character switch is a `sheet` event | The client replaces a row instead of interpreting six events. |
+| `identify` named `playerId` and `entryId` | `entryId`; the player is `to` | Said twice. |
+| Attachment kind `upgrade` also for installed weapons | Kind `installed` | StarTome's upgrade-slot check tells them apart. |
+| `autoAccept.requests` | `autoAccept.rolls`, `autoAccept.damage` | A player may let rolls through but want to see damage. |
+| Starfinder additions in a separate section | Part of the types (`system`, `skills.attacks`, `grade`, `implanted`) | |
+| Share file `formatVersion: 1` with `status` | `formatVersion: 2` with `sheet` | Same type as the API. |
 
-Optional, later: show the player the battle station they helm and its station actions (StarTome could push them as an offer-like notice).
+Still asked of Play Buddy, as in draft 1: unidentified items (name and description shown until an `identify` message), "Give to party", applying damage with the character's own resistances, hero points (0–3) on the character, and prompting the player to roll.
 
-## 12. Open questions
+## 14. Open questions for Carl
 
-Checked against Play Buddy at `7606e23`: it has no XP, no hero points and no unidentified items; condition ids are already Foundry slugs; the importer drops Foundry's `_id`.
-
-1. **Foundry ids in the catalog** (§4): can the importer keep `_id` and pack for equipment, magic items and runes? Until then StarTome matches by slug (fine for most items, ambiguous for same-named variants).
-2. **XP** stays in StarTome (the GM awards it; Play Buddy only has levels). The GM sends a `levelUp` offer when a character reaches the next level. OK?
-3. **Port and origins:** is 47110 fine, and should the origin list be editable in Play Buddy's settings?
-4. **Sharing defaults:** `basic` + `defenses` on by default, or everything off?
-5. **Event retention** (1,000 events) and long-poll `wait` (≤ 30 s) OK for the hub?
-
-### New Play Buddy features this spec asks for (agreed on StarTome's side for v1)
-- **Unidentified items:** `identified` + unidentified name/description on inventory entries; the player sees only those until an `identify` offer arrives (§6.4).
-- **Give to party:** an inventory action that removes the item and emits `itemReturned` (§8).
-- **Damage requests:** apply damage (with the character's own resistances/weaknesses) and conditions from the GM, after the player's accept or auto-accept (§6.5).
-- **Hero points:** track 0–3 hero points on the character (spend to reroll, or all of them to avoid death), share the count in `basic`, and apply `heroPoint` offers (auto-accept by default; the total never goes above 3).
-- **Roll requests:** prompt the player to roll a check, save, Perception, initiative or flat check; the result comes back as a `roll` with the `requestId` (§6.5).
-
-## 13. Reference mock
-
-`scripts/playbuddy-mock.mjs` in the StarTome repo implements this spec in memory (two players, pair code `123456`):
-
-```
-node scripts/playbuddy-mock.mjs [--port 47110] [--manual]
-```
-
-Without `--manual` the mock players answer by themselves (accept offers, roll requested checks, apply damage). `/mock/*` endpoints play the player side by hand (`/mock/offers/{id}/answer`, `/mock/requests/{id}/answer`, `/mock/roll`, `/mock/return`, `/mock/hp`, `/mock/shares`, `/mock/reset`, `GET /mock/state`). StarTome's tests run against it, so its responses double as example payloads for every endpoint.
-
-## 14. Change log
-
-- 2026-11-07: Starfinder 2e additions (§11a): `game.system`, `ItemRef.system`, `skills.attacks`, item `grade` / `implanted`. The mock has `--system sf2e`.
-- 2026-10-31: hero points (`basic.heroPoints`, `heroPoint` offers) added.
-- 2026-10-31: first draft (Amon/StarTome), based on Play Buddy's data model at `7606e23` and StarTome's FORK_PLAN §9 / FEATURES_PLAN §6.
+1. Can the importer keep Foundry's `_id` and pack (§4)?
+2. Is 47110 fine as the default port?
+3. Sharing defaults: `basic` and `defenses` on, or everything off?
+4. Is keeping 1,000 events and holding a poll for up to 30 seconds fine for the hub?
+5. Later, if wanted: showing a player the battle station they helm and its actions (a new message kind, additive).

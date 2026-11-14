@@ -17,6 +17,7 @@ import type { Character } from '@/domain/schema'
 import { addEntry, adjustPurse, splitPurse, transferCoins } from '@/data/inventory'
 import { awardTreasure, updateCampaignRules } from '@/data/party'
 import { rulesQuery } from '@/data/rules'
+import { offerCoins } from '@/services/characterLink/link'
 import { confirmDialog, notify, reportError } from '@/ui/dialogs'
 import { createInventoryContext, INVENTORY, type OwnerInfo } from './inventoryContext'
 import InventoryRow from './InventoryRow.vue'
@@ -33,7 +34,7 @@ const selected = ref<OwnerKey>(props.lockOwner ?? STASH)
 const owners = computed<OwnerInfo[]>(() => [
   ...(props.lockOwner ? [{ key: props.lockOwner, name: props.lockName ?? 'Loot', characterId: null, strMod: null }] : []),
   { key: STASH, name: 'Party stash', characterId: null, strMod: null },
-  ...props.characters.map(c => ({ key: characterOwner(c.id), name: c.name, characterId: c.id, strMod: c.strMod })),
+  ...props.characters.map(c => ({ key: characterOwner(c.id), name: c.name, characterId: c.id, strMod: c.strMod, character: c })),
 ])
 const ctx = createInventoryContext(props.campaignId, toRef(props, 'game'), view, owners)
 provide(INVENTORY, ctx)
@@ -44,6 +45,8 @@ const purseList = computed(() => Object.entries(ctx.purses.value).map(([owner, c
 const totals = computed(() => partyTotals(ctx.stacks.value, ctx.items.value, purseList.value, view.value, props.game !== 'sf2e'))
 const loadOf = (o: OwnerInfo): Encumbrance | null => (o.characterId ? encumbrance(totals.value.byOwner[o.key]?.bulk ?? 0, o.strMod) : null)
 const current = computed(() => owners.value.find(o => o.key === selected.value))
+/** A linked character's inventory is their app's: shown here, changed there. */
+const theirs = computed(() => !!current.value?.character?.link)
 const currentTotal = computed(() => totals.value.byOwner[selected.value])
 const unknown = computed(() => Object.values(totals.value.byOwner).reduce((a, t) => a + t.unknownPrices, 0))
 const run = (what: string, work: Promise<unknown>) => work.catch(err => reportError(what, err))
@@ -104,7 +107,10 @@ async function changeCoins(sign: 1 | -1) {
 }
 async function giveCoins(to: string) {
   if (!to || coinCp.value === null) return
-  await run('Moving the coins', transferCoins(props.campaignId, selected.value, to, coinCp.value))
+  const target = owners.value.find(o => o.key === to)?.character
+  // A linked player gets coins as an offer: they leave this purse now and come back if declined
+  if (target?.link) { await run('Offering the coins', offerCoins(target, Math.min(coinCp.value, ctx.purses.value[selected.value] ?? 0), ctx.money(coinCp.value), selected.value)); notify(`Offered ${ctx.money(coinCp.value)} to ${target.name}.`, 'ok') }
+  else await run('Moving the coins', transferCoins(props.campaignId, selected.value, to, coinCp.value))
   coinInput.value = ''
 }
 async function split() {
@@ -136,7 +142,7 @@ async function setBaseline() {
     </div>
     <div class="owners" role="tablist">
       <button v-for="o in owners" :key="o.key" class="owner" :class="{ on: o.key === selected }" role="tab" @click="selected = o.key">
-        <span>{{ o.name }}</span>
+        <span>{{ o.name }}</span><span v-if="o.character?.link" class="load app" title="Read from their Play Buddy">app</span>
         <span class="num faint">{{ ctx.money(totals.byOwner[o.key]?.total ?? 0) }}</span>
         <span v-if="loadOf(o) && loadOf(o) !== 'ok'" class="load" :title="loadOf(o) === 'overloaded' ? 'Over the Bulk limit' : 'Encumbered'">{{ loadOf(o) === 'overloaded' ? 'over' : 'enc.' }}</span>
       </button>
@@ -144,7 +150,8 @@ async function setBaseline() {
 
     <div class="bar">
       <span class="num purse">{{ ctx.money(ctx.purses.value[selected] ?? 0) }}</span>
-      <template v-if="view === 'gm'">
+      <span v-if="theirs" class="faint">As their Play Buddy reports it. Give them things from the stash: they arrive as offers.</span>
+      <template v-else-if="view === 'gm'">
         <input v-model="coinInput" class="input coin" :placeholder="game === 'sf2e' ? '250 cr' : '12 gp 5 sp'" aria-label="Coins" @keydown.enter="changeCoins(1)" />
         <button class="btn" :disabled="coinCp === null" title="Add coins" @click="changeCoins(1)">+</button>
         <button class="btn" :disabled="coinCp === null" title="Take coins away" @click="changeCoins(-1)">−</button>
@@ -165,7 +172,7 @@ async function setBaseline() {
       <p v-if="!rows.length" class="empty">{{ current?.name ?? 'This owner' }} holds no items.</p>
     </div>
 
-    <div v-if="view === 'gm'" class="add">
+    <div v-if="view === 'gm' && !theirs" class="add">
       <input v-model.number="addQty" class="input qty" type="number" min="1" aria-label="Quantity" />
       <div class="search">
         <input v-model="addQuery" class="input" placeholder="Add an item: search the compendium or type any name…" data-test="inv-add" @keydown.enter="addTyped" />
@@ -187,7 +194,7 @@ async function setBaseline() {
 .owners { display: flex; gap: 2px; flex-wrap: wrap; border-bottom: var(--frame); }
 .owner { display: flex; align-items: baseline; gap: .5rem; padding: .4rem .8rem; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--text-dim); }
 .owner.on { color: var(--text); border-bottom-color: var(--accent); background: var(--bg-raised); }
-.load { font-size: .68rem; text-transform: uppercase; color: var(--warn); }
+.load { font-size: .68rem; text-transform: uppercase; color: var(--warn); } .load.app { color: var(--accent); }
 .purse { font-size: 1.15rem; min-width: 6rem; }
 .coin { width: 9rem; } .give { width: 9rem; } .qty { width: 4.2rem; }
 .warn { color: var(--warn); margin: 0; }

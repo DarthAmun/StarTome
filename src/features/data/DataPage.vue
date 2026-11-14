@@ -13,7 +13,7 @@ import { backupFolderState, backupFolderSupported, backupToFolder, chooseBackupF
 import { importLegacyFile, importLegacyFromBrowser, legacyDbExists, type LegacyImportResult } from '@/services/v042/import'
 import { confirmDialog, notify, reportError } from '@/ui/dialogs'
 import { handOver } from '@/ui/pendingImport'
-import { campaign } from '@/ui/workbench'
+import { campaign, campaignId } from '@/ui/workbench'
 import LoreExport from './LoreExport.vue'
 import campaignGuide from '../../../CAMPAIGN_FORMAT.md?raw'
 import homebrewGuide from '../../../HOMEBREW_FORMAT.md?raw'
@@ -59,15 +59,18 @@ async function legacyFromBrowser() {
 
 /** Files that are not backups go to the screen that reads them: a Foundry release, a homebrew file. */
 async function elsewhere(file: File, isZip: boolean): Promise<boolean> {
-  let name: 'compendium-sync' | 'compendium-homebrew' | null = null
+  let name: 'compendium-sync' | 'compendium-homebrew' | 'party' | null = null
   if (isZip) name = /json-assets/i.test(file.name) ? 'compendium-sync' : null
   else {
     const head = await file.slice(0, 4096).text()
-    if (/"type"\s*:\s*"homebrew"/.test(head) || /^\s*(\[\s*)?\{[^{}]*"kind"\s*:/.test(head)) name = 'compendium-homebrew'
+    if (/"format"\s*:\s*"playbuddy-share"/.test(head)) name = 'party'
+    else if (/"type"\s*:\s*"homebrew"/.test(head) || /^\s*(\[\s*)?\{[^{}]*"kind"\s*:/.test(head)) name = 'compendium-homebrew'
   }
   if (!name) return false
+  // A Play Buddy share file belongs to a party member: the Party page asks which
+  if (name === 'party' && !campaignId.value) { notify('Open a campaign first: a Play Buddy share file is imported for one of its party members.'); return true }
   handOver(file)
-  await router.push({ name })
+  await router.push(name === 'party' ? { name, params: { campaignId: campaignId.value } } : { name })
   return true
 }
 

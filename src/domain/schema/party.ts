@@ -1,6 +1,7 @@
 /** The party: characters, the advancement ledger, inventory and purses, starships. */
 import { z } from 'zod'
 import { zId, zImageRef, zIso, zOpaque } from './common'
+import { zMirror } from './link'
 
 export const zCharacter = z.object({
   id: zId,
@@ -21,8 +22,8 @@ export const zCharacter = z.object({
     provider: z.literal('playbuddy'),
     playerId: z.string(),
     characterId: z.string().nullable().default(null),
-    /** Last shared status, in our vocabulary. */
-    mirror: zOpaque.nullable().default(null),
+    /** What the player last shared. */
+    mirror: zMirror.nullable().default(null),
   }).nullable().default(null),
   companion: zOpaque.nullable().default(null),
   companionRulesId: z.string().nullable().default(null),
@@ -42,7 +43,10 @@ export const zLedgerEntry = z.discriminatedUnion('kind', [
     trigger: z.enum(['manual', 'quest', 'encounter']).default('manual'),
     /** The quest entry or encounter that caused it. */
     refId: zId.nullable().default(null),
-    changes: z.array(z.object({ characterId: zId, from: z.number(), to: z.number(), xpFrom: z.number().optional(), xpTo: z.number().optional() })).default([]),
+    changes: z.array(z.object({ characterId: zId, from: z.number(), to: z.number(), xpFrom: z.number().optional(), xpTo: z.number().optional(),
+      /** A linked character levels up in the player's app: the level moves once this is accepted. */
+      offer: z.object({ outboxId: zId.nullable().default(null), state: z.enum(['pending', 'accepted', 'declined', 'withdrawn', 'expired', 'failed']) }).optional(),
+    })).default([]),
   }),
   z.object({
     ...ledgerBase, kind: z.literal('xpAward'),

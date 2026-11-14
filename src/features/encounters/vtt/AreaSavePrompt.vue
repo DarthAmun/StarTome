@@ -15,6 +15,7 @@ import { rulesGet } from '@/data/rules'
 import AppDialog from '@/ui/components/AppDialog.vue'
 import { areaCells, asAreaToken, closeAreaPrompt } from './areasLive'
 import { addConditions, applyDamage, areas, live, logLine, mapTokens } from './live'
+import { sharedOf } from './linkLive'
 import { defenses } from './starshipLive'
 
 interface Row { token: Token; modifier: number | null; d20: number | null; damageOverride: number | null }
@@ -29,6 +30,9 @@ const breakdown = ref('')
 async function saveModifier(t: Token, save: AreaSave): Promise<number | null> {
   // The party's starship: its sheet with the helmed bonuses; any crew member rolls it
   if (t.sensor?.role === 'player-ship') return defenses.value?.saves[save] ?? null
+  // A linked player's save is the one their app reports
+  const shared = sharedOf(t)?.defenses
+  if (shared) return shared[save]
   const link = statLinkOf(t), entry = link ? await rulesGet(link.rulesId) : undefined
   if (!entry || !link) return null
   const e = applyAdjustment(entry, link.adjustment)

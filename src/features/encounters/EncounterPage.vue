@@ -36,6 +36,8 @@ import { followShip, info as shipInfoNow, loadShip, placeMarker } from './vtt/st
 import StationsPanel from './vtt/StationsPanel.vue'
 import { tools } from './vtt/tools'
 import ToolBar from './vtt/ToolBar.vue'
+import LinkedSheet from './vtt/LinkedSheet.vue'
+import { startLinkLive } from './vtt/linkLive'
 import TurnOrder from './vtt/TurnOrder.vue'
 import TurnPrompts from './vtt/TurnPrompts.vue'
 import { keepTurn, restoreTurn, startEncounter } from './vtt/turns'
@@ -54,6 +56,7 @@ const resolving = ref(false)
 const side = ref<'order' | 'log'>('order')
 let stopSync: (() => void) | null = null
 let stopShip: (() => void) | null = null
+let stopLink: (() => void) | null = null
 /** The station whose marker the next click on the map places. */
 const placing = ref<number | null>(null)
 
@@ -72,10 +75,13 @@ async function load(id: string) {
   await loadShip()
   stopShip?.()
   stopShip = followShip()
+  stopLink?.()
+  stopLink = await startLinkLive()
 }
 onMounted(() => { activeRollContext.value = encounterRolls; window.addEventListener('keydown', onKey); void load(props.encounterId) })
 watch(() => props.encounterId, (id) => { stopSync?.(); void load(id) })
 onBeforeUnmount(() => {
+  stopLink?.()
   window.removeEventListener('keydown', onKey)
   activeRollContext.value = null
   stopSync?.()
@@ -182,6 +188,7 @@ function onKey(e: KeyboardEvent) {
         <label class="target">Attacks target
           <select v-model="targetId" class="input" aria-label="Target"><option :value="null">nobody</option><option v-for="t in live.tokens.filter(x => x.id !== selected!.id)" :key="t.id" :value="t.id">{{ t.name }}{{ t.ac !== null ? ` (AC ${t.ac})` : '' }}</option></select>
         </label>
+        <LinkedSheet :token="selected" />
       </div>
     </aside>
 

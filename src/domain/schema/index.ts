@@ -7,7 +7,8 @@ import type { z } from 'zod'
 import { zCampaign } from './campaign'
 import { zCombatLogEntry, zCombatant, zEncounter, zEncounterMap, zActor } from './encounter'
 import { zEntry, zEntryVersion, zGraph, zGraphEdge, zLink, zMapPin, zSessionEdge, zSessionPanel } from './entry'
-import { zImageMeta, zLinkOutboxItem, zMapAsset, zMeta, zRulesOverlay, zRulesRow, zSettings, zSoundPlaylist, zSoundTrack, zSyncState, zWorkspaceItem } from './library'
+import { zLinkOutboxItem } from './link'
+import { zImageMeta, zMapAsset, zMeta, zRulesOverlay, zRulesRow, zSettings, zSoundPlaylist, zSoundTrack, zSyncState, zWorkspaceItem } from './library'
 import { zCharacter, zInventoryEntry, zLedgerEntry, zPurse, zStarship } from './party'
 
 export * from './common'
@@ -16,6 +17,7 @@ export * from './entry'
 export * from './encounter'
 export * from './party'
 export * from './library'
+export * from './link'
 
 /** The row shapes inside a backup's data/ folder; raised by every migration. */
 export const SCHEMA_VERSION = 1

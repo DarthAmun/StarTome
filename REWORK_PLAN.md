@@ -1,6 +1,6 @@
 # StarTome rework plan
 
-Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phases 1 to 7 are done on the `rework` branch (see section 11a). Phase 8 is next.
+Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phases 1 to 7 and the Play Buddy half of Phase 8 are done on the `rework` branch (see section 11a). The other half of Phase 8 (settings, cheat sheet, offline checks, performance, parity audit, cut-over) is next.
 
 How this was produced: the schema, types, format docs, backup/import code, the Play Buddy port and the app shell were read line by line. The large UI files (encounter page, GM screen, map maker, editors, session board) were read by extracting their templates, handlers, shortcuts and storage keys rather than every line. The app was started (`pnpm dev`), the main screens were opened, `pnpm test` (557 passed, 2 skipped) and `pnpm typecheck` ran clean. A real backup (`~/Downloads/startome-all-2026-11-03.json`, 578 MB) was inspected for its actual shape. Anything in the inventory I could not confirm by running it is still listed; Phase 3 verifies each line.
 
@@ -332,16 +332,16 @@ Map maker
 
 ### K. Play Buddy
 
-- [ ] K1 Pair with Play Buddy on this computer (port, six-digit code); unpair; health and version check
-- [ ] K2 Link a campaign to the open game; game-system mismatch warning
-- [ ] K3 Link players to party characters, or add a character from a player; unlink keeps the last known items
-- [ ] K4 Status mirror by share level: HP, conditions, hero points, defenses, skills, inventory (read-only here)
-- [ ] K5 Offers from the stash: items (with attachments, unidentified names, custom items), coins (refunded if declined), level-up, hero point (one or everyone), identify
-- [ ] K6 Requests: roll (secret, with DC), initiative into the turn order, damage with conditions
-- [ ] K7 Outbox with idempotency keys; withdraw; clear answered; offer and roll lists
-- [ ] K8 Live events while the campaign is open (long poll); tokens of linked characters follow their HP and conditions
-- [ ] K9 Share-file import as a fallback, from the Import page or the party page
-- [ ] K10 SF2e games: system, skills, attack bonuses, grades, implants
+- [x] K1 Pair with Play Buddy on this computer (port, six-digit code); unpair; health and version check
+- [x] K2 Link a campaign to the open game; game-system mismatch warning
+- [x] K3 Link players to party characters, or add a character from a player; unlink keeps the last known items
+- [x] K4 Status mirror by share level: HP, conditions, hero points, defenses, skills, inventory (read-only here)
+- [x] K5 Offers from the stash: items (with attachments, unidentified names, custom items), coins (refunded if declined), level-up, hero point (one or everyone), identify
+- [x] K6 Requests: roll (secret, with DC), initiative into the turn order, damage with conditions
+- [x] K7 Outbox with idempotency keys; withdraw; clear answered; offer and roll lists
+- [x] K8 Live events while the campaign is open (long poll); tokens of linked characters follow their HP and conditions
+- [x] K9 Share-file import as a fallback, from the Import page or the party page
+- [x] K10 SF2e games: system, skills, attack bonuses, grades, implants
 
 ### L. Compendium
 
@@ -793,7 +793,8 @@ The new app is built on a `rework` branch and published to a second path (for ex
 | **5 Encounters** ✅ | List, builder, VTT engine (prepare and run), tokens, conditions and automation, areas, resolve, player view, map maker, token library. | G, J3–J4 | Run a fight. |
 | **6 Sessions and the table** ✅ | Session board, capture, recap and finish, session log, table bar, Tonight, Desk with all widgets, sounds. | F, N, Q, B | Run a whole Pathfinder session in the new app. |
 | **7 Starfinder** ✅ | Starship page, crew, interior map, sensor map, starship combat, starship encounters. | J5–J15 | Run a Starfinder session. |
-| **8 Link, polish, cut-over** | Character link (Play Buddy), settings, shortcut cheat sheet, offline and install checks, performance pass with measurements, final parity audit, move the new app to the main path, tag the old one. Summary report. | K, R, A, T, the rest | Retire v0.41. |
+| **8a Link** ✅ | Character link (Play Buddy) against a rewritten API (`PLAYBUDDY_API.md`, draft 2). | K | Run a session with linked players, once Play Buddy implements the API. |
+| **8b Polish, cut-over** | Settings, shortcut cheat sheet, offline and install checks, performance pass with measurements, final parity audit, move the new app to the main path, tag the old one. Summary report. | R, A, T, the rest | Retire v0.41. |
 
 Order reasoning: data safety first; then the parts every later phase leans on (entries, compendium); party before encounters because resolution writes to the ledger and the stash; sessions after encounters because the table bar and board run encounters; Starfinder after its dependencies; the character link last because it touches party, inventory and encounters and has a mock server to test against.
 
@@ -991,14 +992,41 @@ Differences from v0.42, and what is left:
 - **`scripts/techcore/build.sh` (J6)** was not touched or run here; it writes homebrew files, which import as before.
 - **Not exercised by a browser test:** upgrades and bays, crew presets, Emergency Repairs, zone areas and their saves, the hull integrity check's outcomes (unit-tested), a starship encounter made by the builder (unit-tested).
 
+**Phase 8a, the character link (done 2026-11-14, branch `rework`).**
+
+The API was rewritten first, since Play Buddy has built none of it yet (decision Q10). `PLAYBUDDY_API.md` is now draft 2, with a table of every change and its reason for Carl (its section 13). In short: one snapshot (`GET /game` carries every player's shared sheet), one stream of changes (`GET /events`, where a `sheet` event carries the changed blocks instead of saying "read again"), and one way to send something to a player (`POST /messages`, which replaces offers and requests; one message goes to one player and has one state; an answered roll message carries its roll). Items always travel with their facts (name, level, price, Bulk), so there is no "unknown item" error, no retry and no catalog search. Money is always copper, Bulk always tenths. Eleven endpoints became seven. `scripts/playbuddy-mock.mjs` implements draft 2; the draft 1 mock stays in `legacy/scripts/` for the v0.42 reference app's tests.
+
+What exists: the **Party page** has a Play Buddy section. Pair with the port and the six-digit code (the pairing is kept on this device and is never in a backup); unpair; a line says whether Play Buddy is reachable, speaks the same API version, has a game open, and whether the campaign is following it. Link the campaign to the open game (with a warning when its game system differs, or when Play Buddy has another game open than the one linked). Each player shows online or not, their character and what they share, and is linked to a party member or added as a new one; unlink keeps the items last seen as ordinary stacks. A linked member's row shows HP, temporary HP, hero points and conditions; level and Strength follow their app, so the level stepper is off. Their **inventory** tab is what their app reports: read-only, counted in wealth and the gear check, with runes, upgrades, grades and implants. Giving is done from the stash: "Move … to" a linked member becomes **Offer** (the stack stays, marked "offered", until accepted; attachments, relic aspects, unidentified names and homebrew items go along); "give to" a linked member offers coins (they leave the purse at once and come back on a decline). An unidentified item in their app has "Identify it for …". **Level up party** levels unlinked members at once and sends linked ones an offer: XP is paid now, the level moves when the player accepts, a decline refunds, undo withdraws; a member with a level-up waiting is left out of the next one. Hero points: one member (star button), or everyone (also in the session's **recap**, which shows each player's count). "Ask … to roll" sends a check to one player or all, with DC and secret. **Sent** lists everything with its state and result, with Withdraw and "Clear answered"; **Players' rolls** lists what they rolled. A message written while Play Buddy is away waits in the outbox and goes out on reconnect; answers given while StarTome was closed are fetched on the next start.
+
+While the campaign is open the app follows the game (long poll, started by the shell). In an **encounter**, a linked member's tokens take HP, temporary HP, conditions and AC from their app (and log the difference while the fight runs); a button in the turn order asks the linked players for initiative and the results fill it in (also when the encounter is not open); "roll all" uses their Perception; damage typed for their token is sent to their app, which applies its own resistances; the area save prompt fills in their save; the selected token shows their saves, Perception, skills and DCs where a stat block would be, each a button that asks their player for that roll; their rolls land in the combat log. The **table bar** shows each linked member's HP, hero points and a mark for conditions. On the **Starship** page a linked crew member's Piloting, Computers, Crafting or Perception is the one their app reports. A **share file** dropped on Import & Backup, or picked on the Party page, is imported for the member you choose (read-only if they are linked, ordinary stacks if not).
+
+How it is built: `domain/schema/link.ts` types the mirror and the outbox (both were untyped until now); `data/link.ts` and `data/linkInventory.ts` are the only code that writes them; `services/characterLink/` holds the wire types, the pure converters, the HTTP client, the state, the outbox and the live loop. The link tells the rest of the app what happened through three domain events (`characterMirrored`, `linkRoll`, `linkInitiative`); the encounter listens and never calls the link's tables.
+
+Tests added: 20 unit tests (converters; against the mock server: pairing and a wrong code, the mirror, HP and shares changing, hero points, gifts accepted and withdrawn, declined coins, returned items, the outbox while Play Buddy is away and catching up afterwards, the three level-up cases, a character removed mid-read, initiative, a secret roll, damage, unidentified and identify, share file, unlinking, a Starfinder game) and 2 browser tests against the mock (pair, link, sheet, gift, hero points, roll, a change in their app; and in an encounter: token follows the app, initiative, shared numbers, damage sent). Totals: 511 unit tests and 23 browser tests.
+
+Bugs found by the tests and fixed: two callers starting the live loop at once started two loops (every roll was listed twice); removing a linked member sent the items of their own app to the party stash.
+
+Checked against real data: the 2026-11-12 backup still imports with the mirror now typed.
+
+Differences from v0.42, and what is left:
+
+- **Nothing real to test against.** Everything runs against the mock. The first session with a real Play Buddy will find things.
+- **The party panel on the session board** was not rebuilt as a panel; the table bar carries HP, hero points and conditions on every screen while a session runs.
+- **Conditions cannot be sent from the encounter.** The API and the link can send conditions with damage; the encounter only sends the damage typed for a token (as v0.42 did). Area saves apply their conditions to the token here, and the next report from the player's app replaces them.
+- **Healing typed for a linked token** is not sent (the API has no healing message); the token shows it until their app reports again.
+- **Damage is sent as "untyped"**, so the player's app cannot apply a resistance to a type. v0.42 did the same.
+- **Matching items** is by Foundry id, then by exact name; there is no dialog to pick a match by hand (v0.42 had none either; draft 1's catalog search is gone).
+- **Open messages of v0.42 are not carried over** (decided in Phase 1): the outbox starts empty. Linked characters and their last mirror are.
+- **Not exercised by a browser test:** coins, level-up offers, identify, the share file, the recap's hero points, the crew's shared skills, the outbox while offline (all unit-tested against the mock except the two screens' buttons).
+- **One existing browser test is flaky** (`world.spec.ts`, "commands, field filters, table view and an embedded card"): it fails now and then in a full run, with and without this phase's changes.
+
 ### 11b. Open items (one list)
 
 Everything left out or left open so far, gathered from the phase entries above. Each later phase updates this list: items it closes are removed, new ones are added. Nothing here blocks the phases; it is what the final parity audit in Phase 8 walks through.
 
 **Waiting for a later phase**
 
-- *Phase 8 (Play Buddy):* pairing and linking; the crew's skill modifiers on the Starship page; item, coin, level-up and hero point offers; the read-only mirror of a linked character's inventory; damage requests and "roll initiative" requests from an encounter; a linked player's shared numbers in place of a stat block and in area saves; the party panel on the session board; hero points in the recap.
-- *Phase 8 (polish and cut-over):* settings page in full and the shortcut cheat sheet (`?`); offline and install checks (S1, S2); "updated in another tab" notice; removing images nothing uses any more (decision F11); publishing the preview beside the old app; the performance pass; the final parity audit.
+- *Phase 8b (polish and cut-over):* **the production build fails today** (`pnpm build`: the main script is 2.38 MB, above the limit the offline cache accepts, so no service worker is written; it failed the same way before Phase 8a; the fix is splitting the bundle by page, which is the performance pass); settings page in full and the shortcut cheat sheet (`?`); offline and install checks (S1, S2); "updated in another tab" notice; removing images nothing uses any more (decision F11); publishing the preview beside the old app; the performance pass; the final parity audit.
 
 **Small things not built** (say which you want; none is planned otherwise)
 
@@ -1009,6 +1037,7 @@ Everything left out or left open so far, gathered from the phase entries above. 
 - *Sessions:* the capture bar has no `{{` or `@` completion; NPC portraits are not drawn beside mentions in panel text; connections run from a panel's lower dot to another's upper dot, not between the nearest sides; renaming an entry does not rewrite session panel text.
 - *Desk:* entry widgets are not edited in place (the name opens the dock); a location widget has no map with drill-down; the DC widget has no Recall Knowledge line for a pinned creature; a compendium entry is a card that opens the stat block, not the stat block itself; weather stayed a widget with its list instead of becoming random tables (decision F13).
 - *Starfinder:* crew are seated with a select, not by dragging; a starship's stat block has no "Zone area" button that fills in the sensor map's zone area; `scripts/techcore/build.sh` was not re-run against the new app.
+- *Play Buddy:* everything is tested against the mock only, until Play Buddy implements draft 2 of the API; no party panel on the session board (the table bar shows HP, hero points and conditions); conditions and healing are not sent from the encounter, and damage is sent untyped; no dialog to match an item by hand.
 - *Backup folder:* each backup is a complete zip, so images are written every time (about 450 MB per backup for your data, three kept) instead of being shared between backups.
 
 **Changed on purpose** (different from v0.42, not missing)
@@ -1025,6 +1054,8 @@ Everything left out or left open so far, gathered from the phase entries above. 
 - *Sessions and Desk:* dragging panels into frames, drawing connections, copying a scene from another campaign, random table and reward panels, saved Desk layouts.
 - *Sounds:* playing a real audio file and switching the output device.
 - *Starfinder:* upgrades and bays, crew presets, Emergency Repairs, zone areas, a builder-made starship encounter; and nothing of it against real Tech Core entries, which the preview's compendium does not hold yet.
+- *Play Buddy:* offering coins, level-up offers, identify, the share file, hero points from the recap, the crew's shared skills (unit-tested against the mock).
+- *Flaky:* the World browser test "commands, field filters, table view and an embedded card" fails now and then in a full run.
 - *Data:* enemy tokens of imported encounters are named after their stat block, so they show as "Token" until the Foundry compendium is synced in the new app.
 
 ---

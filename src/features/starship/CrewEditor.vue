@@ -13,6 +13,8 @@ const stationOf = (c: Character) => stations.value.find(r => r.slot.slot === cre
 const skillOf = (c: Character) => { const s = stationOf(c); return s ? STATION_INITIATIVE_SKILL[stationKey(s.name)] ?? 'Perception' : 'Perception' }
 /** The one word a hand-entered modifier is stored under ("Piloting"; the magic conduit's is whichever the character uses). */
 const skillKey = (c: Character) => (/^[A-Za-z]+$/.test(skillOf(c)) ? skillOf(c).toLowerCase() : 'tradition')
+/** A linked player's own number (Play Buddy) is used as it is. */
+const shares = (c: Character) => { const m = c.link?.mirror, k = skillKey(c); return k === 'perception' ? !!m?.defenses : typeof m?.skills?.skills[k] === 'number' }
 const presetName = ref('')
 
 function place(c: Character, e: Event) {
@@ -41,7 +43,7 @@ function setSkill(c: Character, e: Event) {
           <option value="">No exploration activity</option><option v-for="a in activitiesFor(stationOf(c)?.name)" :key="a.key" :value="a.key">{{ a.name }}</option>
         </select>
         <label class="faint skill" :title="`Rolled for initiative at this station: ${skillOf(c)}`">{{ skillKey(c) === 'tradition' ? 'Tradition skill' : skillOf(c) }}
-          <input class="input num" :value="crewSkill(c, skillKey(c)) ?? ''" placeholder="+0" :aria-label="`${skillOf(c)} of ${c.name}`" @change="setSkill(c, $event)" /></label>
+           <input class="input num" :value="crewSkill(c, skillKey(c)) ?? ''" placeholder="+0" :disabled="shares(c)" :title="shares(c) ? 'From their Play Buddy' : undefined" :aria-label="`${skillOf(c)} of ${c.name}`" @change="setSkill(c, $event)" /></label>
       </template>
     </div>
     <p v-if="!characters.length" class="faint">No party members yet. Add them on the Party page.</p>

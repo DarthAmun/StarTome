@@ -5,9 +5,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { ChevronsUpDown, Search } from 'lucide-vue-next'
 import { campaigns as campaignRepo, settings as settingsRepo } from '@/data/repo'
 import { backupIfDue } from '@/services/backup/folder'
+import { onLinkNotice, ready as linkReady, startLive, stopLive } from '@/services/characterLink/link'
 import PartyPrompts from '@/features/party/PartyPrompts.vue'
 import SoundBar from '@/features/sounds/SoundBar.vue'
 import DialogHost from '@/ui/components/DialogHost.vue'
+import { notify } from '@/ui/dialogs'
 import { useLive } from '@/ui/useLive'
 import { campaign, campaignId, campaigns, closeDock, commandBarOpen, dock, patchSettings, settings } from '@/ui/workbench'
 import AppRail from './AppRail.vue'
@@ -35,6 +37,14 @@ watch(() => route.params.campaignId, (id) => {
 watch([liveSettings, liveCampaigns], ([s, list]) => {
   if (!campaignId.value && s.lastCampaignId && list.some(c => c.id === s.lastCampaignId)) campaignId.value = s.lastCampaignId
 })
+
+// A campaign linked to Play Buddy follows its game while it is open (not in the players' windows)
+onLinkNotice(notify)
+watch(() => [campaign.value?.id, campaign.value?.characterLink?.gameId, route.meta.player] as const, ([id, gameId, player]) => {
+  if (player) return
+  if (id && gameId) void linkReady().then(() => startLive(id))
+  else stopLive()
+}, { immediate: true })
 
 // The skin is the campaign's game; mode, accent and size are yours
 const skin = computed(() => (campaign.value?.game === 'sf2e' ? 'star' : 'tome'))

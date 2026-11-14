@@ -4,14 +4,15 @@
  * wealth readout, and the log of level-ups and XP awards with undo.
  */
 import { computed, ref, shallowRef, watch } from 'vue'
-import { Bot, Coins, Sparkles, TrendingUp, UserMinus, Users, X } from 'lucide-vue-next'
+import { Bot, Coins, Sparkles, Star, TrendingUp, UserMinus, Users, X } from 'lucide-vue-next'
 import { campaignRules } from '@/domain/game'
 import { XP_PER_LEVEL, type Pacing } from '@/domain/rules/advancement'
 import { isPartyMember, MAX_LEVEL, MIN_LEVEL, partyLevel } from '@/domain/rules/party'
 import type { Character, Entry } from '@/domain/schema'
-import { addCharacter, ledgerOf, partyOf, removeCharacter, undoLevelUp, undoXpAward, updateCharacter, type LevelUpEntry, type XpAwardEntry } from '@/data/party'
+import { addCharacter, ledgerOf, partyOf, removeCharacter, undoXpAward, updateCharacter, type LevelUpEntry, type XpAwardEntry } from '@/data/party'
 import { entries as entryRepo } from '@/data/repo'
 import { loadPacing } from '@/data/wealth'
+import { offerHeroPoints, undoPartyLevelUp } from '@/services/characterLink/link'
 import { confirmDialog, reportError } from '@/ui/dialogs'
 import { imageUrlOf } from '@/ui/imageUrl'
 import { levelUpPrompt, xpPrompt } from '@/ui/partyPrompts'
@@ -20,6 +21,7 @@ import { campaign, peek } from '@/ui/workbench'
 import CompanionDialog from './CompanionDialog.vue'
 import EarnIncomeDialog from './EarnIncomeDialog.vue'
 import InventoryPanel from './InventoryPanel.vue'
+import LinkPanel from './LinkPanel.vue'
 import WealthPanel from './WealthPanel.vue'
 
 const props = defineProps<{ campaignId: string }>()
@@ -55,7 +57,7 @@ function setLevel(c: Character, level: number) { if (Number.isFinite(level) && l
 function setXp(c: Character, raw: string) { const v = Math.round(Number(raw)); if (raw.trim() !== '' && Number.isFinite(v) && v !== c.xp) run('Changing the XP', updateCharacter(c.id, { xp: v })) }
 function setStr(c: Character, raw: string) { const v = raw.trim() === '' ? null : Math.round(Number(raw)); if (v === null || Number.isFinite(v)) run('Changing Strength', updateCharacter(c.id, { strMod: v })) }
 async function remove(c: Character) {
-  if (await confirmDialog({ title: `Remove ${c.name} from the party?`, body: 'The NPC entry stays. Their items and coins go to the party stash.', confirmLabel: 'Remove' })) run('Removing the member', removeCharacter(c.id))
+  if (await confirmDialog({ title: `Remove ${c.name} from the party?`, body: c.link ? 'The NPC entry stays. What is in their Play Buddy stays theirs.' : 'The NPC entry stays. Their items and coins go to the party stash.', confirmLabel: 'Remove' })) run('Removing the member', removeCharacter(c.id))
 }
 
 const addSearch = ref('')
@@ -113,9 +115,13 @@ const inv = ref<InstanceType<typeof InventoryPanel> | null>(null)
         <span class="who">
           <a v-if="c.entryId" @click="peek({ kind: 'entry', id: c.entryId })">{{ c.name }}</a><span v-else>{{ c.name }}</span>
           <span class="chip" :class="c.role">{{ c.role === 'pc' ? 'PC' : 'Companion' }}</span>
+          <template v-if="c.link">
+            <span class="chip pc" title="Linked to a player's Play Buddy: their app owns the sheet, so level and Strength follow it">linked</span>
+            <span v-if="c.link.mirror?.basic" class="num shared" data-test="member-hp" :title="c.link.mirror.basic.conditions.map(k => `${k.name}${k.value ? ` ${k.value}` : ''}`).join(', ') || 'No conditions'">{{ c.link.mirror.basic.hp.value }}/{{ c.link.mirror.basic.hp.max }} HP<template v-if="c.link.mirror.basic.hp.temp"> +{{ c.link.mirror.basic.hp.temp }}</template><template v-if="c.link.mirror.basic.heroPoints !== null"> · <span title="Hero points">{{ '●'.repeat(c.link.mirror.basic.heroPoints) }}{{ '○'.repeat(Math.max(0, 3 - c.link.mirror.basic.heroPoints)) }}</span></template><span v-if="c.link.mirror.basic.conditions.length" class="warn"> · {{ c.link.mirror.basic.conditions.map(k => `${k.name}${k.value ? ` ${k.value}` : ''}`).join(', ') }}</span></span>
+          </template>
         </span>
         <label class="field"><span class="label">Level</span>
-          <span class="stepper"><button aria-label="Lower level" :disabled="c.level <= MIN_LEVEL" @click="setLevel(c, c.level - 1)">−</button><input type="number" :min="MIN_LEVEL" :max="MAX_LEVEL" :value="c.level" aria-label="Level" @change="setLevel(c, Number(num($event)))" /><button aria-label="Raise level" :disabled="c.level >= MAX_LEVEL" @click="setLevel(c, c.level + 1)">+</button></span>
+          <span class="stepper"><button aria-label="Lower level" :disabled="c.level <= MIN_LEVEL || !!c.link" @click="setLevel(c, c.level - 1)">−</button><input type="number" :min="MIN_LEVEL" :max="MAX_LEVEL" :value="c.level" aria-label="Level" :disabled="!!c.link" @change="setLevel(c, Number(num($event)))" /><button aria-label="Raise level" :disabled="c.level >= MAX_LEVEL || !!c.link" @click="setLevel(c, c.level + 1)">+</button></span>
         </label>
         <label v-if="c.role === 'companion'" class="dim counts" title="Counts for party size and party level, for example a capable NPC who joins the fight"><input type="checkbox" :checked="c.treatAsPc" @change="run('Saving', updateCharacter(c.id, { treatAsPc: !c.treatAsPc }))" /> counts as a PC</label>
         <span v-else class="faint counts">counts for the party</span>
@@ -123,6 +129,7 @@ const inv = ref<InstanceType<typeof InventoryPanel> | null>(null)
         <label class="field" title="Strength modifier, for the encumbrance warning"><span class="label">Str</span><input class="input tiny" type="number" min="-5" max="10" placeholder="—" :value="c.strMod ?? ''" aria-label="Strength modifier" @change="setStr(c, num($event))" /></label>
         <span class="actions">
           <button v-if="c.role === 'companion'" class="btn btn-ghost btn-icon" :class="{ on: !!c.companion }" :title="c.companion ? 'Companion stat block (kept at this level)' : 'Build a companion stat block: animal, robot or drone'" @click="companionFor = c"><Bot :size="15" /></button>
+          <button v-if="c.link" class="btn btn-ghost btn-icon" title="Give a hero point" data-test="hero-point" @click="run('Giving a hero point', offerHeroPoints(c))"><Star :size="15" /></button>
           <button class="btn btn-ghost btn-icon" title="Earn income (downtime)" @click="incomeFor = c"><Coins :size="15" /></button>
           <button class="btn btn-ghost btn-icon" :title="c.role === 'pc' ? 'Make companion' : 'Make player character'" @click="run('Saving', updateCharacter(c.id, { role: c.role === 'pc' ? 'companion' : 'pc' }))"><component :is="c.role === 'pc' ? UserMinus : Users" :size="15" /></button>
           <button class="btn btn-ghost btn-icon" title="Remove from the party (the NPC entry stays)" @click="remove(c)"><X :size="15" /></button>
@@ -136,6 +143,8 @@ const inv = ref<InstanceType<typeof InventoryPanel> | null>(null)
         </div>
       </div>
     </section>
+
+    <LinkPanel :campaign-id="campaignId" :game="game" :characters="characters" />
 
     <InventoryPanel ref="inv" :campaign-id="campaignId" :game="game" :characters="characters" :party-level="party.level" :rules="rules" />
 
@@ -155,9 +164,9 @@ const inv = ref<InstanceType<typeof InventoryPanel> | null>(null)
     <section v-if="levelUps.length">
       <h2>Level-ups</h2>
       <div v-for="l in levelUps.slice(0, 15)" :key="l.id" class="log" :class="{ undone: l.undoneAt }">
-        <span class="faint">{{ when(l.at) }}</span><span>{{ triggerLabel(l) }}</span><span class="what">{{ l.changes.map(ch => `${nameOf(ch.characterId)} ${ch.from}→${ch.to}`).join(', ') }}</span>
+        <span class="faint">{{ when(l.at) }}</span><span>{{ triggerLabel(l) }}</span><span class="what">{{ l.changes.map(ch => `${nameOf(ch.characterId)} ${ch.from}→${ch.to}${ch.offer && ch.offer.state !== 'accepted' ? ` (${ch.offer.state === 'pending' ? 'waiting for the player' : ch.offer.state})` : ''}`).join(', ') }}</span>
         <span v-if="l.undoneAt" class="faint">undone</span>
-        <button v-else-if="l.id === firstActive" class="btn" data-test="undo-level-up" @click="run('Undoing the level-up', undoLevelUp(l.id))">Undo</button><span v-else />
+        <button v-else-if="l.id === firstActive" class="btn" data-test="undo-level-up" @click="run('Undoing the level-up', undoPartyLevelUp(l.id))">Undo</button><span v-else />
       </div>
     </section>
 
@@ -178,7 +187,7 @@ section { display: flex; flex-direction: column; gap: .4rem; }
 .member.out { opacity: .7; }
 .avatar { width: 34px; height: 34px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: var(--bg-sunken); border: var(--frame); font-family: var(--font-title); color: var(--text-dim); }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
-.who { display: flex; align-items: center; gap: .5rem; } .who a { cursor: pointer; }
+.who { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; } .shared { font-size: .85rem; color: var(--text-dim); } .who a { cursor: pointer; }
 .chip.pc { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
 .field { display: flex; align-items: center; gap: .4rem; } .field .label { margin: 0; }
 .stepper { display: inline-flex; border: var(--frame); border-radius: var(--radius); overflow: hidden; }
