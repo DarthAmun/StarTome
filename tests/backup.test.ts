@@ -2,8 +2,8 @@ import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { sequentialIds } from '@/domain/ids'
 import type { ImageRow } from '@/domain/schema'
-import { StarTomeDb, useDbForTests } from '@/data/db'
-import { readSnapshot, validateSnapshot, writeSnapshot } from '@/data/snapshot'
+import { StarTomeDb, getDb, useDbForTests } from '@/data/db'
+import { putImagesInBatches, readSnapshot, validateSnapshot, writeSnapshot } from '@/data/snapshot'
 import { exportBackupBlob, importBackup } from '@/services/backup'
 import { checkManifest } from '@/services/backup/format'
 import { blobChunks, readBackup } from '@/services/backup/zip'
@@ -152,5 +152,23 @@ describe('unused images', () => {
     expect(await removeUnusedImagesIfDue(now + 3_600_000)).toBeNull()
     // A day later the new orphan is old enough
     expect((await removeUnusedImagesIfDue(now + 25 * 3_600_000))?.ids).toEqual(['orphan-new'])
+  })
+})
+
+describe('images copied from v0.42 in this browser', () => {
+  it('are written a few at a time, and one that cannot be read is skipped and counted, not fatal', async () => {
+    await freshDb()
+    const db = getDb()
+    const good = (id: string): ImageRow => ({ id, blob: new Blob([`img ${id}`], { type: 'image/png' }), mime: 'image/png', createdAt: '2026-11-14T00:00:00.000Z' })
+    // A blob whose file is gone, as Chrome hands it out from another database
+    const gone = new Blob(['x'])
+    Object.defineProperty(gone, 'arrayBuffer', { value: () => Promise.reject(new DOMException('gone', 'NotReadableError')) })
+    const rows = [good('a'), good('b'), { ...good('c'), blob: gone }, good('d'), good('e')]
+    const steps: string[] = []
+    const r = await putImagesInBatches(rows, (done, total) => steps.push(`${done}/${total}`), 2)
+    expect(r).toEqual({ written: 4, unreadable: 1 })
+    expect(steps).toEqual(['2/5', '4/5', '5/5'])
+    expect((await db.images.toArray()).map(i => i.id).sort()).toEqual(['a', 'b', 'd', 'e'])
+    expect(await (await db.images.get('d'))!.blob.text()).toBe('img d')
   })
 })

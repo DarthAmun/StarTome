@@ -7,7 +7,7 @@ import { newId, nowIso } from '@/domain/ids'
 import type { ImageRow } from '@/domain/schema'
 import { legacyDbExists, readLegacyDb } from '@/data/legacyDb'
 import { meta } from '@/data/repo'
-import { SnapshotInvalidError, validateSnapshot, writeSnapshot } from '@/data/snapshot'
+import { putImagesInBatches, SnapshotInvalidError, validateSnapshot, writeSnapshot } from '@/data/snapshot'
 import { dataUrlToBlob, mimeOfDataUrl } from '@/services/files/dataUrl'
 import { readJsonFile } from '@/services/files/jsonStream'
 import type { LegacyPayload, LegacyReport } from './context'
@@ -51,10 +51,13 @@ async function importPayload(payload: LegacyPayload, stored: StoredImages, sourc
   if (missingImages) result.report.notes.push(`${missingImages} image${missingImages === 1 ? '' : 's'} that entries point at ${missingImages === 1 ? 'was' : 'were'} not in the source; those show as missing`)
 
   progress('Writing')
-  const { written } = await writeSnapshot(snapshot, images, { mode: 'replace' })
+  const { written } = await writeSnapshot(snapshot, [], { mode: 'replace' })
+  const pics = await putImagesInBatches(images, (done, total) => progress(`Copying images ${done} of ${total}`))
+  written.images = pics.written
+  if (pics.unreadable) result.report.notes.push(`${pics.unreadable} image${pics.unreadable === 1 ? '' : 's'} could not be read from the source and ${pics.unreadable === 1 ? 'was' : 'were'} left out; those show as missing`)
   const dangling = checkReferences(snapshot)
   await meta.set('legacyImport', { at: now, source, tables: result.report.tables, notes: result.report.notes.length, dangling: dangling.length })
-  return { report: result.report, written, missingImages, dangling }
+  return { report: result.report, written, missingImages: missingImages + pics.unreadable, dangling }
 }
 
 /** A `version: 2` backup or campaign file of v0.42 (any size: big files are read as a stream). */

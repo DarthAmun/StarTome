@@ -72,6 +72,29 @@ export async function writeSnapshot(snapshot: Snapshot, images: ImageRow[], opts
   return { written, skipped }
 }
 
+/**
+ * Images written apart from the rows, a few at a time, each read into memory first. A blob that
+ * comes straight from another database (v0.42's) is only a reference into that database's files;
+ * Chrome aborts the whole write ("Failed to write blobs") when one of them can't be read or the
+ * transaction grows too large. An image that can't be read is skipped and counted.
+ */
+export async function putImagesInBatches(images: ImageRow[], onProgress?: (done: number, total: number) => void, batch = 25): Promise<{ written: number; unreadable: number }> {
+  const db = getDb()
+  let written = 0, unreadable = 0
+  for (let i = 0; i < images.length; i += batch) {
+    const rows: ImageRow[] = []
+    for (const img of images.slice(i, i + batch)) {
+      try { rows.push({ ...img, blob: new Blob([await img.blob.arrayBuffer()], { type: img.mime || img.blob.type }) }) } catch { unreadable++ }
+    }
+    try { await db.images.bulkPut(rows); written += rows.length } catch {
+      // One bad row fails the batch: write them one by one and skip what still fails
+      for (const row of rows) { try { await db.images.put(row); written++ } catch { unreadable++ } }
+    }
+    onProgress?.(Math.min(i + batch, images.length), images.length)
+  }
+  return { written, unreadable }
+}
+
 export async function readSnapshot(): Promise<Snapshot> {
   const db = getDb()
   const snapshot = emptySnapshot()

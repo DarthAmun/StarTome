@@ -1104,7 +1104,7 @@ Not exercised by a browser test: the update notice (needs two builds), dragging 
 - NPCs have a **Factions** field: pick factions of the campaign; they count like links (the NPC card, the faction's members, the World filters) and go when the faction is deleted. Links in the text still count.
 - A session's page links to its board instead of the old "arrives with the Sessions phase" line.
 - Importing a v0.42 *file* now says that backups never held the synced Foundry compendium (yours: 2,281 own and edited entries) and points to Foundry sync. Importing from v0.42 in this browser brings the full compendium.
-- Checked: v0.42 with your backup restored and both Foundry releases synced (28,965 entries), then "Import from v0.42 in this browser": everything arrives, no error. The error you saw is not reproduced yet; its message is needed.
+- "Import from v0.42 in this browser" failed for you with `DataError: Failed to write blobs (IOError)`: every image went into the new database in the same transaction as the rows, still as a reference into v0.42's files, so one unreadable image (or the size of it all) aborted everything. Images are now read into memory and written 25 at a time after the rows (`putImagesInBatches`); an image that can't be read is skipped and named in the report. Checked against v0.42 with your backup and both Foundry releases (28,965 entries, 2,851 images): 13 seconds, nothing left out. Not checked on your own browser's database.
 
 ### 11b. Open items (one list)
 
