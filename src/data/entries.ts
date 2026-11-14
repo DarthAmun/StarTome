@@ -5,7 +5,7 @@
  */
 import { extractRefs, isEntryTypeName, renameRefs, uniqueName } from '@/domain/links'
 import { newId, nowIso } from '@/domain/ids'
-import { ENTRY_DATA, zEntry, type Entry, type EntryType, type EntryVersion, type Link } from '@/domain/schema'
+import { ENTRY_DATA, npcFactions, zEntry, type Entry, type EntryType, type EntryVersion, type Link } from '@/domain/schema'
 import { getDb } from './db'
 
 const LABEL: Record<EntryType, string> = {
@@ -132,6 +132,7 @@ export async function deleteEntry(id: string): Promise<void> {
     await db.rows('entries').where('campaignId').equals(e.campaignId).modify((x) => {
       if (x.type === 'quest' && x.data.giver.entryId === id) x.data.giver.entryId = null
       if (x.type === 'region' && x.data.mapEntryId === id) x.data.mapEntryId = null
+      if (x.type === 'npc' && npcFactions(x).includes(id)) x.data.factions = npcFactions(x).filter(f => f !== id)
     })
     if (e.type === 'session') {
       await db.rows('sessionPanels').where('sessionId').equals(id).delete()

@@ -27,6 +27,8 @@ const busy = ref<string | null>(null)
 const counts = ref<Record<string, number>>({})
 const oldDbHere = ref(false)
 const legacy = ref<LegacyImportResult | null>(null)
+/** Where the last v0.42 import came from: a backup file never holds the synced Foundry compendium. */
+const legacyFrom = ref<'browser' | 'file' | null>(null)
 const folder = ref<FolderState>({ name: null, permission: null, lastBackupAt: null })
 
 const unused = ref<UnusedImages | null>(null)
@@ -58,7 +60,8 @@ const replaceWarning = 'Everything in this app is replaced by what is imported. 
 
 async function legacyFromBrowser() {
   if (hasData() && !await confirmDialog({ title: 'Import from v0.42 in this browser?', body: replaceWarning, confirmLabel: 'Replace and import', danger: true })) return
-  legacy.value = await run('Importing from v0.42', () => importLegacyFromBrowser(step => { busy.value = step })) ?? legacy.value
+  const got = await run('Importing from v0.42', () => importLegacyFromBrowser(step => { busy.value = step }))
+  if (got) { legacy.value = got; legacyFrom.value = 'browser' }
 }
 
 /** Files that are not backups go to the screen that reads them: a Foundry release, a homebrew file. */
@@ -83,7 +86,8 @@ async function onFile(file: File) {
   if (await elsewhere(file, isZip)) return
   if (!isZip) {
     if (hasData() && !await confirmDialog({ title: `Import ${file.name}?`, body: replaceWarning, confirmLabel: 'Replace and import', danger: true })) return
-    legacy.value = await run('Importing the v0.42 file', () => importLegacyFile(file, step => { busy.value = step })) ?? legacy.value
+    const got = await run('Importing the v0.42 file', () => importLegacyFile(file, step => { busy.value = step }))
+    if (got) { legacy.value = got; legacyFrom.value = 'file' }
     return
   }
   const restore = await confirmDialog({ title: `Restore ${file.name}?`, body: 'Restore replaces everything here with the backup (your synced compendium stays). Cancel, then use “Add campaigns” to put its campaigns beside what is here instead.', confirmLabel: 'Restore', danger: true })
@@ -182,6 +186,7 @@ const GUIDES: [string, string, string][] = [['HOMEBREW_FORMAT.md', 'Homebrew for
           <tr v-for="(t, name) in legacy.report.tables" :key="name"><td>{{ name }}</td><td class="num">{{ t.converted }}</td><td class="num" :class="{ warn: t.dropped }">{{ t.dropped ? `${t.dropped} left out` : '' }}</td></tr>
           <tr><td>images</td><td class="num">{{ legacy.written.images }}</td><td class="num" :class="{ warn: legacy.missingImages }">{{ legacy.missingImages ? `${legacy.missingImages} missing` : '' }}</td></tr>
         </table>
+        <p v-if="legacyFrom === 'file'" class="note" data-test="legacy-foundry-note">A v0.42 backup holds only your own and edited compendium entries ({{ legacy.report.tables.rules?.converted ?? 0 }}), never the synced Foundry ones. For the full compendium, go to <RouterLink :to="{ name: 'compendium-sync' }">Compendium › Foundry sync</RouterLink> and drop the Pathfinder and Starfinder <code>json-assets.zip</code>; your edits are kept.</p>
         <p v-if="legacy.dangling.length" class="warn">{{ legacy.dangling.length }} references point at nothing. Please report this: {{ legacy.dangling.slice(0, 3).join('; ') }}</p>
         <details v-if="legacy.report.notes.length"><summary>{{ legacy.report.notes.length }} notes</summary><ul><li v-for="(n, i) in legacy.report.notes" :key="i">{{ n }}</li></ul></details>
         <p v-else class="faint">Nothing had to be repaired or left out.</p>
@@ -243,6 +248,7 @@ const GUIDES: [string, string, string][] = [['HOMEBREW_FORMAT.md', 'Homebrew for
 .report { margin-top: 1rem; padding: .8rem 1rem; background: var(--bg-sunken); border: var(--frame); border-radius: var(--radius); }
 .report table { border-collapse: collapse; margin: .4rem 0 .6rem; }
 .report td { padding: .1rem 1.2rem .1rem 0; }
+.report .note { margin: .2rem 0 .6rem; color: var(--text-dim); }
 .warn { color: var(--warn); }
 .stats { display: flex; flex-wrap: wrap; gap: .4rem 1.6rem; color: var(--text-dim); }
 .stats .num { color: var(--text); font-size: 1.1rem; margin-right: .2rem; }

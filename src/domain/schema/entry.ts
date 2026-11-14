@@ -21,8 +21,15 @@ export const zNpcData = z.object({
   class2: z.string().default(''),
   status: z.string().default(''),
   alive: z.boolean().default(true),
+  /** Factions the NPC belongs to, picked by hand; links in text count as well (data/relations.ts) */
+  factions: z.array(zId).default([]),
   ...extra,
 })
+
+/** An NPC's picked factions; NPCs stored before the field existed have none. */
+export function npcFactions(e: { type: string; data: unknown }): string[] {
+  return e.type === 'npc' ? ((e.data as { factions?: string[] }).factions ?? []) : []
+}
 
 export const zLocationData = z.object({
   map: zImageRef.nullable().default(null),

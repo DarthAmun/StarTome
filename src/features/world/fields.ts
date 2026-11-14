@@ -8,6 +8,7 @@ export type Field =
   | { key: string; label: string; kind: 'image' }
   | { key: string; label: string; kind: 'statuses'; options: [value: string, label: string][] }
   | { key: string; label: string; kind: 'giver' }
+  | { key: string; label: string; kind: 'factions' }
   | { key: string; label: string; kind: 'color' }
   | { key: string; label: string; kind: 'icon' }
 
@@ -23,6 +24,7 @@ export const FIELDS: Record<EntryType, Field[]> = {
     { key: 'class2', label: 'Second class', kind: 'text', placeholder: 'Dual-class only', suggest: 'class' },
     { key: 'status', label: 'Status', kind: 'text', placeholder: 'Friendly, at court, imprisoned…', wide: true },
     { key: 'alive', label: 'Vital status', kind: 'check', on: 'Alive' },
+    { key: 'factions', label: 'Factions', kind: 'factions' },
   ],
   location: [
     { key: 'banner', label: 'Banner', kind: 'image' },

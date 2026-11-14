@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /** What only some entry types have: a table's rows and its roll, the player-character switch, a quest's objectives, a region's shape. */
 import { computed, ref } from 'vue'
-import { Dices, Map as MapIcon, Plus, X } from 'lucide-vue-next'
+import { Dices, LayoutPanelLeft, Map as MapIcon, Plus, X } from 'lucide-vue-next'
 import { evaluateFormula } from '@/domain/formula'
 import { taskProgress } from '@/domain/markdownBlocks'
 import type { Entry } from '@/domain/schema'
@@ -111,8 +111,10 @@ const panels = useLive(async () => (props.entry.type === 'session' ? sessionPane
   </div>
 
   <div v-else-if="entry.type === 'session'" class="extra">
-    <p class="faint">The session board (scenes, capture, recap) arrives with the Sessions phase. Its panels, as imported:</p>
-    <div v-for="p in panels" :key="p.id" class="panel-line"><span class="eyebrow">{{ p.kind }}{{ p.status ? ` · ${p.status}` : '' }}</span> {{ p.title || p.body.slice(0, 80) }}</div>
+    <div class="line">
+      <RouterLink class="btn" :to="{ name: 'session', params: { campaignId: entry.campaignId, sessionId: entry.id } }" data-test="open-board"><LayoutPanelLeft :size="14" /> Open the session board</RouterLink>
+      <span class="faint">{{ panels.length === 1 ? 'One panel' : `${panels.length || 'No'} panels` }} on the board</span>
+    </div>
   </div>
 </template>
 
@@ -131,5 +133,4 @@ const panels = useLive(async () => (props.entry.type === 'session' ? sessionPane
 .result { display: inline-flex; gap: .6rem; align-items: baseline; }
 .result .num { color: var(--accent); font-size: 1.2rem; }
 .result :deep(p) { margin: 0; }
-.panel-line { padding: .2rem 0; border-bottom: var(--frame); }
 </style>

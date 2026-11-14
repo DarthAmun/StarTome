@@ -1096,6 +1096,16 @@ Not exercised by a browser test: the update notice (needs two builds), dragging 
 - An installed v0.42 would never let the new offline worker take over (v0.42's page doesn't send the message the Reload button sends), so the app would have stayed v0.42 until every window closed. `public/sw-takeover.js` makes the first install over v0.42 take over at once; it recognises v0.42 by `/_nuxt/` files in the offline cache. Checked in Chrome with v0.42's real build installed and the new build deployed over it: the first visit opens the new app and no v0.42 files stay cached; later updates wait for Reload as before.
 - Your data: v0.42's database stays in the browser untouched. Import & Backup › "Import from v0.42 in this browser" brings it into the new app (database `startome-next`) and can be repeated.
 
+**After the cut-over: first fixes (2026-11-14).** From your first look at 1.0.0:
+
+- The rail is wider (`--rail-w: 4.9rem`) so "Compendium" and "Encounters" fit at every interface size; a longer label is cut, never spills.
+- Dropdowns: every `<select>` opens the app's own list (padded, in the skin's colours) where Chrome supports it (`appearance: base-select`, Chrome 135+). The World and Compendium "New" menus close on a click outside or Escape.
+- Links in text show the entry's picture again, as in v0.42: an NPC's portrait, a location's or faction's picture, a note's icon, in front of the name. Everywhere text is shown (editor, dock, panels, Desk widgets); `| entry` cards now fill in read-only views too.
+- NPCs have a **Factions** field: pick factions of the campaign; they count like links (the NPC card, the faction's members, the World filters) and go when the faction is deleted. Links in the text still count.
+- A session's page links to its board instead of the old "arrives with the Sessions phase" line.
+- Importing a v0.42 *file* now says that backups never held the synced Foundry compendium (yours: 2,281 own and edited entries) and points to Foundry sync. Importing from v0.42 in this browser brings the full compendium.
+- Checked: v0.42 with your backup restored and both Foundry releases synced (28,965 entries), then "Import from v0.42 in this browser": everything arrives, no error. The error you saw is not reproduced yet; its message is needed.
+
 ### 11b. Open items (one list)
 
 Everything left out or left open so far, gathered from the phase entries above. Each later phase updates this list: items it closes are removed, new ones are added. Nothing here blocks the phases; it is what the final parity audit in Phase 8 walks through.

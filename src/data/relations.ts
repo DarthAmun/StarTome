@@ -1,5 +1,5 @@
-/** What links say about an entry: an NPC's factions, places and last session; a faction's members. Derived, never stored. */
-import type { Entry, EntryOf } from '@/domain/schema'
+/** What links (and factions picked on an NPC) say about an entry: an NPC's factions, places and last session; a faction's members. Derived, never stored. */
+import { npcFactions, type Entry, type EntryOf } from '@/domain/schema'
 import { getDb } from './db'
 
 export interface Relations { factions: Entry[]; locations: Entry[]; members: Entry[]; lastSession: EntryOf<'session'> | null }
@@ -18,6 +18,9 @@ export async function relationsOf(entry: Entry): Promise<Relations> {
   const pinnedOn = entry.type === 'npc'
     ? (await db.rows('entries').bulkGet((await db.rows('mapPins').where('entryId').equals(entry.id).toArray()).map(p => p.mapEntryId))).filter((e): e is Entry => !!e)
     : []
+  // Factions picked on the NPC count like links, both ways
+  if (npcFactions(entry).length) around.push(...(await db.rows('entries').bulkGet(npcFactions(entry))).filter((e): e is Entry => !!e))
+  if (entry.type === 'faction') around.push(...await db.rows('entries').where('campaignId').equals(entry.campaignId).filter(e => npcFactions(e).includes(entry.id)).toArray())
   const sessions = around.filter((e): e is EntryOf<'session'> => e.type === 'session').sort((a, b) => (Number(b.data.number) || 0) - (Number(a.data.number) || 0) || b.updatedAt.localeCompare(a.updatedAt))
   const unique = (list: Entry[]) => [...new Map(list.map(e => [e.id, e])).values()].sort((a, b) => a.name.localeCompare(b.name))
   return {
@@ -50,6 +53,7 @@ export async function npcPlaces(campaignId: string): Promise<Record<string, { Fa
     if (a?.type === 'npc') note(a.id, b)
     if (b?.type === 'npc') note(b.id, a)
   }
+  for (const e of entries) for (const id of npcFactions(e)) note(e.id, byId.get(id))
   for (const p of await db.rows('mapPins').where('campaignId').equals(campaignId).toArray()) {
     if (p.entryId && byId.get(p.entryId)?.type === 'npc') note(p.entryId, byId.get(p.mapEntryId))
   }

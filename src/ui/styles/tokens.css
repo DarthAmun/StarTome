@@ -9,7 +9,7 @@
   --font-ui: 'DM Sans', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --size: 14px;
-  --rail-w: 58px;
+  --rail-w: 4.9rem;
   --bar-h: 46px;
   --tray-h: 38px;
   --dock-w: min(460px, 38vw);

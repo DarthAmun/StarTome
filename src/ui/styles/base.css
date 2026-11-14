@@ -35,6 +35,18 @@ button { cursor: pointer; }
   width: 100%; padding: .45em .65em; background: var(--bg-sunken); border: var(--frame); border-radius: var(--radius); color: var(--text);
 }
 .input:focus { border-color: var(--accent); outline: none; }
+/* Dropdown lists drawn by the app, not by the system: padded, in the skin's colours (Chrome 135+; elsewhere the system list) */
+@supports (appearance: base-select) {
+  select, ::picker(select) { appearance: base-select; }
+  select { display: inline-flex; align-items: center; gap: .4em; }
+  select::picker-icon { color: var(--text-faint); font-size: .8em; }
+  ::picker(select) { background: var(--bg-raised); color: var(--text); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: var(--shadow); padding: .3rem; margin-top: 2px; max-height: 60vh; }
+  select option { padding: .35rem .65rem; border-radius: var(--radius); gap: .5rem; }
+  select option:hover, select option:focus-visible { background: var(--bg-hover); outline: none; }
+  select option:checked { color: var(--accent); }
+  select option::checkmark { order: 1; margin-left: auto; color: var(--accent); }
+  select optgroup { padding: .2rem 0; } select optgroup legend { padding: .3rem .65rem .1rem; font-size: .75rem; color: var(--text-faint); text-transform: uppercase; letter-spacing: .08em; }
+}
 .label { display: block; font-size: .78rem; color: var(--text-faint); letter-spacing: .08em; text-transform: uppercase; margin-bottom: .3em; }
 .eyebrow { font-family: var(--font-title); font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--text-faint); }
 .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
@@ -67,6 +79,8 @@ button { cursor: pointer; }
 .prose img { max-width: 100%; }
 .prose .ref { display: inline-flex; align-items: baseline; gap: .3em; padding: 0 .4em; border-radius: var(--radius); background: color-mix(in srgb, var(--ref-color, var(--accent)) 14%, transparent); color: var(--ref-color, var(--accent)); cursor: pointer; text-decoration: none; }
 .prose .ref:hover { background: color-mix(in srgb, var(--ref-color, var(--accent)) 26%, transparent); }
+.prose .ref .ref-face { width: 1.3em; height: 1.3em; flex: none; align-self: center; border-radius: 50%; object-fit: cover; margin-left: -.25em; }
+.prose .ref .ref-icon svg { width: 100%; height: 100%; display: block; }
 .prose .ref.unresolved { opacity: .65; border-bottom: 1px dotted currentColor; background: none; }
 .prose .widget { display: inline-flex; align-items: center; gap: .4em; padding: 0 .55em; margin: 0 .1em; border: 1px solid color-mix(in srgb, var(--accent-2) 55%, var(--line)); border-radius: var(--radius); background: color-mix(in srgb, var(--accent-2) 10%, transparent); color: var(--text); font-family: var(--font-mono); font-size: .88em; }
 .prose .widget:hover { border-color: var(--accent-2); }

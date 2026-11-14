@@ -5,6 +5,7 @@
  * shows beside the list with its stat block and rolls.
  */
 import { computed, reactive, ref, shallowRef, watch } from 'vue'
+import { useDismiss } from '@/ui/dismiss'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowDownAZ, ArrowUpAZ, Hammer, Plus, Search, Star } from 'lucide-vue-next'
 import { GAME_CONFIG, GAME_IDS, type GameId } from '@/domain/game'
@@ -106,6 +107,8 @@ function onKey(e: KeyboardEvent) {
 // ── New entries ────────────────────────────────────────────────────────────
 const newGame = computed<GameId>(() => (prefs.game === 'all' ? campaign.value?.game ?? 'pf2e' : prefs.game))
 const adding = ref(false)
+const newBox = ref<HTMLElement | null>(null)
+useDismiss(adding, newBox)
 async function create(k: RulesKind) {
   adding.value = false
   try { const e = await rulesCreate(k, { name: `New ${RULES_KIND_CONFIG[k].label}`, game: newGame.value }); await router.replace({ query: { kind: k, id: e.id, edit: '1' } }) }
@@ -134,7 +137,7 @@ function drag(ev: DragEvent, e: { id: string; name: string }) { ev.dataTransfer?
     <div class="compendium">
       <aside class="filters">
         <div class="head"><h1>Compendium</h1>
-          <div class="new">
+          <div ref="newBox" class="new">
             <button class="btn btn-primary" data-test="rules-new" @click="kind ? create(kind) : (adding = !adding)"><Plus :size="14" /> New</button>
             <div v-if="adding" class="menu panel"><button v-for="k in RULES_KINDS" :key="k" class="kind" @click="create(k)">{{ RULES_KIND_CONFIG[k].label }}</button></div>
           </div>

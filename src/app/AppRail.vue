@@ -32,7 +32,9 @@ function to(p: Place) {
 <style scoped>
 .rail { grid-row: 1 / -1; display: flex; flex-direction: column; align-items: stretch; background: var(--bg-sunken); border-right: var(--frame); padding: .5rem 0; gap: 2px; }
 .mark { display: grid; place-items: center; height: 40px; margin-bottom: .5rem; }
-.place { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: .5rem 0 .4rem; color: var(--text-faint); border-left: 2px solid transparent; font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; }
+.place { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: .5rem .15rem .4rem; min-width: 0; color: var(--text-faint); border-left: 2px solid transparent; font-size: .62rem; letter-spacing: .02em; text-transform: uppercase; }
+/* The longest label (Compendium) fits at every interface size; a longer one is cut, never spills */
+.place span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .place:hover { color: var(--text); text-decoration: none; background: var(--bg-hover); }
 .place.on { color: var(--accent); border-left-color: var(--accent); background: var(--accent-soft); }
 .place.later { opacity: .5; }

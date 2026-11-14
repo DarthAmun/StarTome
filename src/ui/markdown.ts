@@ -1,7 +1,6 @@
 /**
  * Markdown → safe HTML, with StarTome's additions: `{{type: Name}}` references
  * become clickable chips and `> [!hidden]` callouts are marked GM-only.
- * (The editor and the inline widgets arrive with the World phase.)
  */
 import DOMPurify from 'dompurify'
 import MarkdownIt from 'markdown-it'

@@ -49,7 +49,7 @@ function roll() { const e = entry.value; if (e?.type === 'random-table') { const
         <div class="head"><button class="name" @click="peek({ kind: 'entry', id: entry.id })">{{ entry.name }}</button><button class="btn btn-ghost btn-icon" title="Edit here" :aria-label="`Edit ${entry.name} here`" data-test="desk-entry-pencil" @click="editing = true"><Pencil :size="13" /></button></div>
         <p v-if="entryFacts(entry).length" class="facts faint"><span v-for="[k, v] in entryFacts(entry)" :key="k"><i>{{ k }}</i> {{ v }}</span></p>
         <div v-if="entry.type === 'random-table'" class="roll"><button class="btn" @click="roll">Roll {{ entry.data.die }}</button><ProseText v-if="result" :text="result" :campaign-id="entry.campaignId" /></div>
-        <ProseText :text="entry.body" :campaign-id="entry.campaignId" faces />
+        <ProseText :text="entry.body" :campaign-id="entry.campaignId" />
       </div>
     </div>
     <div v-if="shownMap" class="map" data-test="desk-map" @wheel.stop @pointerdown.stop>

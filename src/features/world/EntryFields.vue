@@ -2,7 +2,7 @@
 /** The typed fields of an entry. Every change saves just that field. */
 import { reactive, ref } from 'vue'
 import { ImagePlus, X } from 'lucide-vue-next'
-import type { Entry, ImageRef } from '@/domain/schema'
+import { npcFactions, type Entry, type ImageRef } from '@/domain/schema'
 import { entriesNamed } from '@/data/entries'
 import { rulesNameList } from '@/data/rules'
 import { campaign } from '@/ui/workbench'
@@ -51,6 +51,17 @@ function setGiver(name: string) {
   set('giver', hit ? { entryId: hit.id, kind: hit.type, name: hit.name } : { entryId: null, kind: null, name: name.trim() })
 }
 const giverName = () => (props.entry.type === 'quest' ? props.entry.data.giver.name : '')
+// An NPC's factions: picked from the campaign's factions by name
+const factions = ref<{ id: string; name: string }[]>([])
+async function loadFactions() { factions.value = await entriesNamed(props.entry.campaignId, ['faction']) }
+void loadFactions()
+const memberOf = () => npcFactions(props.entry)
+const factionName = (id: string) => factions.value.find(f => f.id === id)?.name ?? '…'
+function addFaction(input: HTMLInputElement) {
+  const hit = factions.value.find(f => f.name.toLowerCase() === input.value.trim().toLowerCase())
+  if (hit && !memberOf().includes(hit.id)) set('factions', [...memberOf(), hit.id])
+  if (hit) input.value = ''
+}
 // Ancestry and class: names from the compendium, for the campaign's game
 const names = ref<Record<string, string[]>>({})
 async function loadNames(kind: 'ancestry' | 'class') {
@@ -58,7 +69,7 @@ async function loadNames(kind: 'ancestry' | 'class') {
   const game = campaign.value?.game
   names.value = { ...names.value, [kind]: [...new Set((await rulesNameList(kind, game ? [game] : undefined)).map(r => r.name))] }
 }
-const isWide = (f: Field) => f.kind === 'image' || f.kind === 'statuses' || f.kind === 'icon' || (f.kind === 'text' && f.wide)
+const isWide = (f: Field) => f.kind === 'image' || f.kind === 'factions' || f.kind === 'statuses' || f.kind === 'icon' || (f.kind === 'text' && f.wide)
 </script>
 
 <template>
@@ -85,6 +96,11 @@ const isWide = (f: Field) => f.kind === 'image' || f.kind === 'statuses' || f.ki
         <input :id="`f-${f.key}`" class="input" list="givers" :value="giverName()" placeholder="An NPC, a faction, or any name" @focus="loadGivers" @change="setGiver(value($event))" />
         <datalist id="givers"><option v-for="g in givers" :key="g.id" :value="g.name">{{ g.type }}</option></datalist>
       </template>
+      <div v-else-if="f.kind === 'factions'" class="pills" data-test="npc-factions">
+        <span v-for="id in memberOf()" :key="id" class="chip pill on">{{ factionName(id) }}<button class="unpick" :title="`Not in ${factionName(id)}`" @click="set('factions', memberOf().filter(x => x !== id))"><X :size="12" /></button></span>
+        <input :id="`f-${f.key}`" class="input faction-pick" list="factions" :placeholder="factions.length ? 'Add a faction…' : 'No factions in this campaign yet'" :disabled="!factions.length" @focus="loadFactions" @change="addFaction($event.target as HTMLInputElement)" />
+        <datalist id="factions"><option v-for="x in factions.filter(x => !memberOf().includes(x.id))" :key="x.id" :value="x.name" /></datalist>
+      </div>
       <div v-else-if="f.kind === 'image'" class="image">
         <img v-if="urls[f.key]?.value" :src="urls[f.key]?.value ?? ''" alt="" />
         <button class="btn" @click="upload(f.key, false)"><ImagePlus :size="14" /> {{ data()[f.key] ? 'Replace' : 'Upload' }}</button>
@@ -104,6 +120,8 @@ const isWide = (f: Field) => f.kind === 'image' || f.kind === 'statuses' || f.ki
 .pill { background: none; cursor: pointer; }
 .pill.icon { padding: .3em .45em; }
 .pill.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.unpick { display: inline-grid; place-items: center; margin-left: .3rem; padding: 0; background: none; border: 0; color: inherit; cursor: pointer; opacity: .7; } .unpick:hover { opacity: 1; }
+.faction-pick { flex: 1; min-width: 180px; max-width: 280px; }
 .image { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 .image img { width: 44px; height: 44px; object-fit: cover; border-radius: var(--radius); border: var(--frame); }
 .url { flex: 1; min-width: 160px; }

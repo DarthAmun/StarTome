@@ -79,7 +79,7 @@ const SIDE_HANDLES: [string, 'source' | 'target', Position][] = [
       <button class="edit" aria-label="Edit panel" @click.stop="data.onEdit()"><Pencil :size="12" /></button>
     </header>
     <h4 v-if="title" :class="{ link: entryId }" @click="entryId && peek({ kind: 'entry', id: entryId })">{{ title }}</h4>
-    <ProseText v-if="p.body" class="body" :text="p.body" :campaign-id="p.campaignId" faces />
+    <ProseText v-if="p.body" class="body" :text="p.body" :campaign-id="p.campaignId" />
     <div v-if="p.kind === 'encounter'" class="acts">
       <template v-if="encounter">
         <span class="chip">{{ encounter.status }}</span>

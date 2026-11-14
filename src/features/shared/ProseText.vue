@@ -3,32 +3,24 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { isEntryTypeName } from '@/domain/links'
 import { findEntryByName, rulesByName } from '@/data/repo'
-import { entryImage } from '@/features/shared/facts'
 import { rollDice } from '@/ui/dice'
-import { imageUrlOf } from '@/ui/imageUrl'
 import { renderMarkdown } from '@/ui/markdown'
 import { peek } from '@/ui/workbench'
+import { fillEmbeds, fillFaces } from './embeds'
 
-const props = defineProps<{ text: string; campaignId: string; /** Draws an NPC's portrait beside each mention of it. */ faces?: boolean }>()
+const props = defineProps<{ text: string; campaignId: string }>()
 const html = computed(() => renderMarkdown(props.text))
 const el = ref<HTMLElement | null>(null)
 
-/** After each render: the NPCs named in the text get their portrait in front of the name. */
-async function drawFaces() {
+/** After each render: linked entries get their picture in front of the name, `| entry` links their card. */
+async function decorate() {
   await nextTick()
-  if (!props.faces || !el.value) return
-  for (const a of el.value.querySelectorAll<HTMLElement>('a.ref[data-ref-type="npc"]:not([data-face])')) {
-    a.dataset.face = '1'
-    const entry = await findEntryByName(props.campaignId, 'npc', a.dataset.refName ?? '')
-    const url = entry ? await imageUrlOf(entryImage(entry)) : null
-    if (!url || !a.isConnected) continue
-    const img = document.createElement('img')
-    img.src = url; img.alt = ''; img.className = 'ref-face'
-    a.prepend(img)
-  }
+  if (!el.value) return
+  void fillEmbeds(el.value, props.campaignId)
+  void fillFaces(el.value, props.campaignId)
 }
-onMounted(drawFaces)
-watch([html, () => props.faces], drawFaces)
+onMounted(decorate)
+watch(html, decorate)
 
 async function click(e: MouseEvent) {
   const el = (e.target as HTMLElement).closest<HTMLElement>('[data-ref-type], [data-widget]')
@@ -50,5 +42,4 @@ async function click(e: MouseEvent) {
 .text { font-size: .9rem; line-height: 1.45; }
 .text :deep(h1), .text :deep(h2), .text :deep(h3) { font-size: .95rem; margin: .5em 0 .2em; }
 .text :deep(p) { margin: 0 0 .4em; }
-.text :deep(.ref-face) { width: 1.25em; height: 1.25em; border-radius: 50%; object-fit: cover; align-self: center; }
 </style>

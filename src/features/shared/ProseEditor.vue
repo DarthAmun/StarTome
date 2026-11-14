@@ -22,7 +22,7 @@ import { notify } from '@/ui/dialogs'
 import { ENTRY_TYPE_INFO } from '@/ui/entryTypes'
 import { renderMarkdown } from '@/ui/markdown'
 import { peek } from '@/ui/workbench'
-import { fillEmbeds } from './embeds'
+import { fillEmbeds, fillFaces } from './embeds'
 import { linkCompletion } from './linkCompletion'
 
 type Mode = 'live' | 'source' | 'read'
@@ -59,7 +59,7 @@ const whole = computed(() => render(props.modelValue))
 const root = ref<HTMLElement | null>(null)
 watch([rendered, whole, shownMode, editing], async () => {
   await nextTick()
-  if (root.value) void fillEmbeds(root.value, props.campaignId)
+  if (root.value) { void fillEmbeds(root.value, props.campaignId); void fillFaces(root.value, props.campaignId) }
 }, { immediate: true, flush: 'post' })
 
 function commit(next: string[]) {

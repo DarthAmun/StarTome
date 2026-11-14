@@ -140,4 +140,20 @@ describe('relations derived from links', () => {
     expect(r.lastSession?.name).toBe('Two')
     expect((await relationsOf((await db.rows('entries').get(ledger.id))!)).members.map(e => e.name)).toEqual(['Kib'])
   })
+
+  it('factions picked on an NPC count like links, show in the filters, and go when the faction is deleted', async () => {
+    const { relationsOf, npcPlaces } = await import('@/data/relations')
+    const db = getDb()
+    const kib = await createEntry(C, 'npc', 'Kib'), ledger = await createEntry(C, 'faction', 'Ledger'), guild = await createEntry(C, 'faction', 'Guild')
+    await saveEntry(kib.id, { body: 'Works for {{faction: Ledger}}.', data: { factions: [ledger.id, guild.id] } })
+
+    const r = await relationsOf((await db.rows('entries').get(kib.id))!)
+    expect(r.factions.map(e => e.name)).toEqual(['Guild', 'Ledger'])
+    expect((await relationsOf((await db.rows('entries').get(guild.id))!)).members.map(e => e.name)).toEqual(['Kib'])
+    expect((await npcPlaces(C))[kib.id]?.Faction.sort()).toEqual(['Guild', 'Ledger'])
+
+    await deleteEntry(guild.id)
+    const after = await db.rows('entries').get(kib.id)
+    expect(after?.type === 'npc' && after.data.factions).toEqual([ledger.id])
+  })
 })

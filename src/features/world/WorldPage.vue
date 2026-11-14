@@ -6,6 +6,7 @@ import { isEntryTypeName } from '@/domain/links'
  * opens the entry in the dock; Shift+Enter or a double-click opens its page.
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useDismiss } from '@/ui/dismiss'
 import { useRouter } from 'vue-router'
 import { LayoutGrid, List, Plus, Search, Table2 } from 'lucide-vue-next'
 import type { Entry, EntryType } from '@/domain/schema'
@@ -29,6 +30,8 @@ const { state, facetsOf, oneType, counts, tags, facetOptions, shown, groups, gro
 const searchEl = ref<HTMLInputElement | null>(null)
 const focusId = ref<string | null>(null)
 const adding = ref(false)
+const newBox = ref<HTMLElement | null>(null)
+useDismiss(adding, newBox)
 const DENSITIES: [Density, typeof List, string][] = [['list', List, 'Rows'], ['gallery', LayoutGrid, 'Gallery'], ['table', Table2, 'Table']]
 /** Letters that start an entry on screen, for the jump rail. */
 const letters = computed(() => (state.sort === 'name' && state.group === 'none' && flat.value.length > 24 ? [...new Set(flat.value.map(e => e.name.charAt(0).toUpperCase()))].sort() : []))
@@ -76,7 +79,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
     <div class="world">
       <aside class="filters">
         <div class="head"><h1>World</h1>
-          <div class="new">
+          <div ref="newBox" class="new">
             <button class="btn btn-primary" @click="adding = !adding"><Plus :size="14" /> New</button>
             <div v-if="adding" class="menu panel">
               <button v-for="t in ENTRY_TYPE_ORDER.filter(x => x !== 'session')" :key="t" class="type" :style="{ '--type': ENTRY_TYPE_INFO[t].color }" @click="add(t)"><component :is="ENTRY_TYPE_INFO[t].icon" :size="14" /> <span>{{ ENTRY_TYPE_INFO[t].label }}</span><span /></button>
