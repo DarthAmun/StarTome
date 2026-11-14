@@ -1,6 +1,6 @@
 # StarTome rework plan
 
-Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phases 1 to 7 and the Play Buddy half of Phase 8 are done on the `rework` branch (see section 11a). Of the other half of Phase 8, the build, settings, the cheat sheet, the offline checks and the image clean-up are done, and so are most of the small open items (section 11a, last entry); what is left is the parity audit, publishing the preview and the cut-over (section 11b).
+Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phases 1 to 7 and the Play Buddy half of Phase 8 are done on the `rework` branch (see section 11a). Of the other half of Phase 8, the build, settings, the cheat sheet, the offline checks and the image clean-up are done, and so are most of the small open items (section 11a, last entry); the preview is published at `/StarTome/next/`; what is left is the parity audit and the cut-over (section 11b).
 
 How this was produced: the schema, types, format docs, backup/import code, the Play Buddy port and the app shell were read line by line. The large UI files (encounter page, GM screen, map maker, editors, session board) were read by extracting their templates, handlers, shortcuts and storage keys rather than every line. The app was started (`pnpm dev`), the main screens were opened, `pnpm test` (557 passed, 2 skipped) and `pnpm typecheck` ran clean. A real backup (`~/Downloads/startome-all-2026-11-03.json`, 578 MB) was inspected for its actual shape. Anything in the inventory I could not confirm by running it is still listed; Phase 3 verifies each line.
 
@@ -1088,6 +1088,8 @@ Tests added: 6 unit tests (unused images, the set command, old runes, renamed en
 
 Not exercised by a browser test: the update notice (needs two builds), dragging a creature onto the map, dragging crew, the zone area button, the location map on the Desk, remembered condition colours, portraits in panel text, converting runes and what is sent to Play Buddy from an encounter (the last two are unit-tested).
 
+**The preview is published (2026-11-14).** The deploy on `main` now also checks out the `rework` branch and builds it into `/StarTome/next/` (`APP_BASE_URL=/StarTome/next/`); every push to `rework` that passes its checks asks `main` to deploy again (last step of `rework.yml`). v0.42's offline worker skips `/next/` (its `navigateFallbackDenylist`), otherwise it would answer that address with the old app. Checked with both builds side by side in Chrome: with v0.42's worker running, `/next/` opens the new app, each has its own worker, and both open offline. The preview installs as "StarTome next" next to v0.42. The two share the browser's storage for the address, so "Import from v0.42 in this browser" finds the old database; the new app writes only to its own (`startome-next`). At the cut-over, the `/next/` steps in `nuxtjs.yml` and the denylist go.
+
 ### 11b. Open items (one list)
 
 Everything left out or left open so far, gathered from the phase entries above. Each later phase updates this list: items it closes are removed, new ones are added. Nothing here blocks the phases; it is what the final parity audit in Phase 8 walks through.
@@ -1095,7 +1097,6 @@ Everything left out or left open so far, gathered from the phase entries above. 
 **Left of Phase 8b**
 
 - The final parity audit (walking section 2 line by line and ticking what is verified).
-- Publishing the preview beside the old app: it needs a change to the deploy workflow on `main`, which is yours to approve.
 - The cut-over: moving the new app to the main path, tagging v0.42, removing `legacy/`.
 - "Waiting for other tabs to close" during a database upgrade (the second half of A12): there is only one database version so far, so there is nothing to wait for yet.
 

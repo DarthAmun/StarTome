@@ -5,6 +5,8 @@ import { VitePWA } from 'vite-plugin-pwa'
 import pkg from './package.json' with { type: 'json' }
 
 const base = process.env.APP_BASE_URL ?? '/'
+// The preview at /StarTome/next/ is installed next to v0.42, so its window needs another name
+const appName = base.endsWith('/next/') ? 'StarTome next' : 'StarTome'
 
 export default defineConfig({
   base,
@@ -23,8 +25,8 @@ export default defineConfig({
       injectRegister: false,
       manifest: {
         id: 'startome-next',
-        name: 'StarTome',
-        short_name: 'StarTome',
+        name: appName,
+        short_name: appName,
         description: 'StarTome — your companion for Pathfinder 2e and Starfinder 2e campaigns',
         theme_color: '#14110f',
         background_color: '#14110f',

@@ -1,6 +1,7 @@
 name: Rework checks
 
-# The rework branch (REWORK_PLAN.md): nothing is deployed from here; main keeps deploying v0.42.
+# The rework branch (REWORK_PLAN.md). main keeps deploying v0.42 at /StarTome/ and builds this
+# branch into /StarTome/next/; once the checks pass, the last step asks main to deploy again.
 on:
   push:
     branches: ["rework"]
@@ -8,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 jobs:
   check:
@@ -42,3 +44,8 @@ jobs:
           name: playwright-test-results
           path: test-results/
           retention-days: 7
+      - name: Publish the preview at /StarTome/next/
+        if: github.ref == 'refs/heads/rework'
+        run: gh workflow run nuxtjs.yml --ref main --repo "${{ github.repository }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
