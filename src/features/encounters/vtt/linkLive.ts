@@ -1,8 +1,9 @@
 /**
  * Linked players in the open encounter (Play Buddy): their tokens follow the
  * HP, conditions and AC their app reports, their initiative rolls land in the
- * turn order, their rolls in the log, and damage dealt to them here is sent
- * to their app, which applies its own resistances.
+ * turn order, their rolls in the log, and damage (with its type), healing and
+ * conditions given to them here are sent to their app, which applies its own
+ * resistances.
  */
 import { shallowRef } from 'vue'
 import { onDomainEvent } from '@/domain/events'
@@ -13,7 +14,7 @@ import { isTokenOf } from '@/data/link'
 import { partyOf } from '@/data/party'
 import { requestDamage, requestInitiative } from '@/services/characterLink/link'
 import { notify, reportError } from '@/ui/dialogs'
-import { damageHooks, initiativeModifier, live, logLine } from './live'
+import { conditionHooks, damageHooks, initiativeModifier, live, logLine, type HpOptions } from './live'
 
 /** The campaign's linked party members. */
 export const linkedParty = shallowRef<Character[]>([])
@@ -72,10 +73,23 @@ export async function startLinkLive(): Promise<() => void> {
   await reload()
   for (const c of linkedParty.value) follow(c)
   initiativeModifier.of = t => sharedOf(t)?.defenses?.perception ?? 0
-  const sendDamage = (t: Token, amount: number) => {
+  const fail = (err: unknown) => reportError('Sending to Play Buddy', err)
+  // Damage goes with its type when one was given; healing as healing
+  const sendDamage = (t: Token, amount: number, opts: HpOptions) => {
     const c = characterOfToken(t)
-    if (c && live.encounter?.status === 'active') requestDamage(c, { damage: [{ amount, type: 'untyped' }], conditions: [], label: live.encounter.name }).catch(err => reportError('Sending the damage', err))
+    if (!c || live.encounter?.status !== 'active') return
+    const label = live.encounter.name
+    if (amount < 0) requestDamage(c, { damage: [], conditions: [], healing: -amount, label }).catch(fail)
+    else requestDamage(c, { damage: [{ amount, type: opts.type?.trim().toLowerCase() || 'untyped' }], conditions: [], label }).catch(fail)
   }
+  // Conditions the game knows (not ones of your own, not persistent damage) are sent by their Foundry slug
+  const sendConditions = (t: Token, added: { name: string; value: number | null }[]) => {
+    const c = characterOfToken(t)
+    if (!c || live.encounter?.status !== 'active') return
+    const conditions = added.filter(k => conditionInfo(k.name) && !/^persistent/i.test(k.name)).map(k => ({ id: k.name.trim().toLowerCase().replace(/\s+/g, '-'), ...(k.value ? { value: k.value } : {}) }))
+    if (conditions.length) requestDamage(c, { damage: [], conditions, label: live.encounter.name }).catch(fail)
+  }
+  conditionHooks.push(sendConditions)
   damageHooks.push(sendDamage)
   const stops = [
     onDomainEvent('characterMirrored', async ({ campaignId, characterId }) => {
@@ -98,6 +112,7 @@ export async function startLinkLive(): Promise<() => void> {
   return () => {
     for (const stop of stops) stop()
     damageHooks.splice(damageHooks.indexOf(sendDamage), 1)
+    conditionHooks.splice(conditionHooks.indexOf(sendConditions), 1)
     initiativeModifier.of = () => 0
   }
 }

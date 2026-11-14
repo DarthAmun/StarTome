@@ -149,3 +149,28 @@ export function carryOverLayout(existing: Pick<SessionPanel, 'x' | 'y' | 'h' | '
   const spots = Array.from({ length: count }, (_, i) => ({ x: 30 + (i % 4) * 290, y: 60 + Math.floor(i / 4) * 230 }))
   return { frame: { x: left, y: bottom, w: 30 + Math.min(Math.max(count, 1), 4) * 290, h: 60 + Math.max(1, Math.ceil(count / 4)) * 230 }, spots }
 }
+
+export type Side = 'top' | 'bottom' | 'left' | 'right'
+interface Box { x: number; y: number; w: number; h: number }
+
+/**
+ * The sides of two panels that face each other, for drawing a connection from `a` to `b`:
+ * side by side → right to left (or left to right); otherwise the lower edge of the upper one
+ * to the upper edge of the lower one.
+ */
+export function nearestSides(a: Box, b: Box): [from: Side, to: Side] {
+  const dx = (b.x + b.w / 2) - (a.x + a.w / 2), dy = (b.y + b.h / 2) - (a.y + a.h / 2)
+  // Gaps between the boxes on each axis: the axis with the wider gap is the one they are apart on
+  const gapX = Math.abs(dx) - (a.w + b.w) / 2, gapY = Math.abs(dy) - (a.h + b.h) / 2
+  if (gapX > gapY) return dx >= 0 ? ['right', 'left'] : ['left', 'right']
+  return dy >= 0 ? ['bottom', 'top'] : ['top', 'bottom']
+}
+
+const TABLE_DICE = [4, 6, 8, 10, 12, 20, 100]
+
+/** A plain list as the rows of a random table: the smallest die that has a face for each, its faces shared out evenly. */
+export function tableRows(results: string[]): { die: string; rows: { min: number; max: number; result: string }[] } {
+  const list = results.slice(0, 100)
+  const die = TABLE_DICE.find(d => d >= list.length) ?? 100
+  return { die: `d${die}`, rows: list.map((result, i) => ({ min: Math.floor(i * die / list.length) + 1, max: Math.floor((i + 1) * die / list.length), result })) }
+}

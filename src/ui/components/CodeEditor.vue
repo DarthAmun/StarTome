@@ -41,9 +41,13 @@ const props = withDefaults(defineProps<{
   autofocus?: boolean
   fill?: boolean
   singleLine?: boolean
+  /** With singleLine: Enter emits `enter` and the cursor stays (a field that submits), instead of leaving the field. */
+  submit?: boolean
+  /** What the field is, for screen readers (the editable text itself carries it). */
+  label?: string
   complete?: CompleteFn
-}>(), { placeholder: '', readonly: false, autofocus: false, fill: false, singleLine: false })
-const emit = defineEmits<{ 'update:modelValue': [text: string]; blur: []; escape: [] }>()
+}>(), { placeholder: '', readonly: false, autofocus: false, fill: false, singleLine: false, submit: false })
+const emit = defineEmits<{ 'update:modelValue': [text: string]; blur: []; escape: []; enter: [] }>()
 
 const host = shallowRef<HTMLDivElement | null>(null)
 const view = shallowRef<EditorView | null>(null)
@@ -159,7 +163,7 @@ function singleLineExtensions(): Extension[] {
     }),
     Prec.highest(keymap.of([{
       key: 'Enter',
-      run: v => { if (completionStatus(v.state) === 'active') return false; v.contentDOM.blur(); return true },
+      run: v => { if (completionStatus(v.state) === 'active') return false; if (props.submit) emit('enter'); else v.contentDOM.blur(); return true },
     }])),
   ]
 }
@@ -199,6 +203,7 @@ function extensions(): Extension[] {
         return true
       },
     })),
+    ...(props.label ? [EditorView.contentAttributes.of({ 'aria-label': props.label })] : []),
     EditorView.updateListener.of(u => {
       if (u.docChanged) emit('update:modelValue', u.state.doc.toString())
       if (u.focusChanged && !u.view.hasFocus) emit('blur')

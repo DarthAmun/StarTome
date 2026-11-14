@@ -147,7 +147,7 @@ export function createMockServer({ port = 47110, manual = false, delayMs = 1200,
     } else if (b.kind === 'roll') m.roll = roll(p, { label: b.label, check: b.check, messageId: m.messageId, dc: b.dc, secret: !!b.secret, kind: b.initiative ? 'initiative' : undefined, total })
     else if (b.kind === 'damage') {
       const sum = (b.damage ?? []).filter(d => !d.persistent).reduce((n, d) => n + d.amount, 0)
-      c.hp.current = Math.max(0, c.hp.current - sum)
+      c.hp.current = Math.min(c.hp.max, Math.max(0, c.hp.current - sum) + (b.healing ?? 0))
       for (const k of b.conditions ?? []) if (!c.conditions.some(x => x.id === k.id)) c.conditions.push({ id: k.id, name: k.id.charAt(0).toUpperCase() + k.id.slice(1), ...(k.value ? { value: k.value } : {}) })
       changed(p, ['basic'])
     }

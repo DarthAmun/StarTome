@@ -23,6 +23,7 @@ import { loadWealth } from '@/data/wealth'
 import { confirmDialog, notify, reportError } from '@/ui/dialogs'
 import { useLive } from '@/ui/useLive'
 import { peek } from '@/ui/workbench'
+import CreatureBuilder from '@/features/compendium/CreatureBuilder.vue'
 import DifficultyMeter from './DifficultyMeter.vue'
 import EncounterTabs from './EncounterTabs.vue'
 
@@ -70,6 +71,10 @@ watch(() => build.value.slots.map(s => s.rulesId).join('|'), async () => {
   const ids = [...new Set(build.value.slots.map(s => s.rulesId))].filter(id => !entries.value[id])
   if (ids.length) entries.value = { ...entries.value, ...Object.fromEntries((await rulesGetMany(ids)).map(e => [e.id, e])) }
 }, { immediate: true })
+
+// A creature that does not exist yet is built here and goes straight into the selection
+const building = ref(false)
+function built(creature: RulesEntity) { building.value = false; add(creature); notify(`${creature.name} is in the compendium as homebrew and in this encounter.`, 'ok') }
 
 function add(e: RulesEntity) {
   entries.value = { ...entries.value, [e.id]: e }
@@ -131,7 +136,8 @@ async function create() {
           </tbody>
         </table>
         <p v-if="compendium && total > results.length" class="faint">{{ results.length }} of {{ total }}: narrow the search for the rest.</p>
-        <p class="faint">Need one that does not exist? <RouterLink :to="{ name: 'compendium', query: { kind: 'creature' } }">Build a creature</RouterLink> in the compendium, then find it here.</p>
+        <p class="faint">Need one that does not exist? <button class="btn" data-test="build-creature" @click="building = true">Build a creature</button></p>
+        <CreatureBuilder :open="building" :game="game" :start-level="level" @close="building = false" @saved="built" />
       </section>
 
       <section class="pick panel">

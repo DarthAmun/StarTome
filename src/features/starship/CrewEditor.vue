@@ -17,6 +17,20 @@ const skillKey = (c: Character) => (/^[A-Za-z]+$/.test(skillOf(c)) ? skillOf(c).
 const shares = (c: Character) => { const m = c.link?.mirror, k = skillKey(c); return k === 'perception' ? !!m?.defenses : typeof m?.skills?.skills[k] === 'number' }
 const presetName = ref('')
 
+// Seating by dragging: a name onto a station, onto "Free crew", or off the ship
+const dragging = ref<string | null>(null)
+const over = ref<string | null>(null)
+const seated = (slot: number | null) => props.characters.filter(c => crew.value.has(c.id) && (crew.value.get(c.id)?.slot ?? null) === slot && (slot !== null || !stationOf(c)))
+const ashore = computed(() => props.characters.filter(c => !crew.value.has(c.id)))
+function dragStart(e: DragEvent, c: Character) { dragging.value = c.id; e.dataTransfer?.setData('text/plain', c.name); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move' }
+function dropOn(target: number | null | 'off') {
+  const id = dragging.value
+  dragging.value = null; over.value = null
+  if (!id) return
+  if (target === 'off') void unassign(props.ship.id, id)
+  else void assign(props.ship.id, id, target)
+}
+
 function place(c: Character, e: Event) {
   const v = (e.target as HTMLSelectElement).value
   if (v === 'off') void unassign(props.ship.id, c.id)
@@ -33,6 +47,22 @@ function setSkill(c: Character, e: Event) {
 <template>
   <section class="panel block" data-test="ship-crew">
     <span class="eyebrow">Crew</span>
+    <div v-if="characters.length" class="seats" data-test="crew-seats" @dragend="dragging = null; over = null">
+      <div v-for="r in stations" :key="r.slot.slot" class="seat" :class="{ over: over === `s${r.slot.slot}` }" :data-seat="r.station?.name" @dragover.prevent="over = `s${r.slot.slot}`" @dragleave="over = null" @drop.prevent="dropOn(r.slot.slot)">
+        <span class="seat-name">{{ r.slot.slot }} · {{ r.station?.name }}</span>
+        <span v-for="c in seated(r.slot.slot)" :key="c.id" class="chip who-chip" draggable="true" :data-crew-chip="c.name" @dragstart="dragStart($event, c)">{{ c.name }}</span>
+        <span v-if="!seated(r.slot.slot).length" class="faint none">empty</span>
+      </div>
+      <div class="seat free" :class="{ over: over === 'free' }" data-seat="Free crew" @dragover.prevent="over = 'free'" @dragleave="over = null" @drop.prevent="dropOn(null)">
+        <span class="seat-name">Free crew</span>
+        <span v-for="c in seated(null)" :key="c.id" class="chip who-chip" draggable="true" :data-crew-chip="c.name" @dragstart="dragStart($event, c)">{{ c.name }}</span>
+      </div>
+      <div class="seat off" :class="{ over: over === 'off' }" data-seat="Not aboard" @dragover.prevent="over = 'off'" @dragleave="over = null" @drop.prevent="dropOn('off')">
+        <span class="seat-name">Not aboard</span>
+        <span v-for="c in ashore" :key="c.id" class="chip who-chip" draggable="true" :data-crew-chip="c.name" @dragstart="dragStart($event, c)">{{ c.name }}</span>
+      </div>
+    </div>
+    <p v-if="characters.length" class="faint">Drag a name onto a station, or choose below.</p>
     <div v-for="c in characters" :key="c.id" class="row" :data-crew="c.name">
       <b class="who">{{ c.name }}</b>
       <select class="input" :value="crew.has(c.id) ? (crew.get(c.id)?.slot ?? '') : 'off'" :aria-label="`Station of ${c.name}`" @change="place(c, $event)">
@@ -56,6 +86,9 @@ function setSkill(c: Character, e: Event) {
 
 <style scoped>
 .block { padding: .9rem 1.1rem; display: flex; flex-direction: column; gap: .45rem; } .eyebrow { color: var(--accent); }
+.seats { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .4rem; }
+.seat { display: flex; flex-wrap: wrap; align-content: start; gap: .25rem; min-height: 3.6rem; padding: .35rem .5rem; border: 1px dashed var(--line-strong); border-radius: var(--radius); } .seat.over { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+.seat-name { width: 100%; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-faint); } .seat.free, .seat.off { background: var(--bg-sunken); } .who-chip { cursor: grab; background: var(--bg-raised); color: var(--text); } .none { font-size: .8rem; }
 .row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; } .who { width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .row .input { width: auto; padding: .2em .4em; }
 .skill { display: flex; align-items: center; gap: .3rem; } .num { width: 3.6rem !important; } .presets { margin-top: .4rem; border-top: var(--frame); padding-top: .5rem; } .presets .chip { background: none; cursor: pointer; } .name { width: 13rem !important; } p { margin: 0; }
 </style>

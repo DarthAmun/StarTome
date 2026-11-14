@@ -17,6 +17,7 @@ import { entries as entryRepo } from '@/data/repo'
 import { rulesSearch } from '@/data/rules'
 import { DC_STEPS } from '@/domain/rules/dcs'
 import { RULES_KIND_CONFIG, type RulesEntity } from '@/domain/rules/types'
+import { fieldChange } from '@/features/world/fields'
 import { ENTRY_TYPE_INFO } from '@/ui/entryTypes'
 import { campaign, campaignId, campaigns, closePeek, commandBarOpen, dock, patchSettings, peek } from '@/ui/workbench'
 import { PLACES, UTILITIES } from './places'
@@ -32,17 +33,23 @@ const rules = shallowRef<RulesEntity[]>([])
 let index: MiniSearch<Entry> | null = null
 const byId = shallowRef(new Map<string, Entry>())
 
-watch(commandBarOpen, async (open) => {
+/** Resolves when the entries of the open campaign are read: Enter waits for it, so a command typed at once still finds the entry it is about. */
+let ready: Promise<void> = Promise.resolve()
+let loaded = false
+
+watch(commandBarOpen, (open) => {
   if (!open) { dialog.value?.close(); return }
   query.value = ''; cursor.value = 0; rules.value = []
   dialog.value?.showModal()
-  await nextTick()
-  input.value?.focus()
+  void nextTick(() => input.value?.focus())
   // Built when the bar opens: a few hundred entries index in milliseconds, and it is never stale
-  const list = campaignId.value ? await entryRepo.ofCampaign(campaignId.value) : []
-  byId.value = new Map(list.map(e => [e.id, e]))
-  index = new MiniSearch<Entry>({ fields: ['name', 'tags', 'body'], extractField: (doc, field) => (field === 'tags' ? doc.tags.join(' ') : String(doc[field as 'name' | 'body'] ?? '')) })
-  index.addAll(list)
+  loaded = false
+  ready = (async () => {
+    const list = campaignId.value ? await entryRepo.ofCampaign(campaignId.value) : []
+    byId.value = new Map(list.map(e => [e.id, e]))
+    index = new MiniSearch<Entry>({ fields: ['name', 'tags', 'body'], extractField: (doc, field) => (field === 'tags' ? doc.tags.join(' ') : String(doc[field as 'name' | 'body'] ?? '')) })
+    index.addAll(list)
+  })().catch(err => reportError('Reading the entries', err)).finally(() => { loaded = true })
 })
 
 watch(query, async (q) => {
@@ -71,6 +78,10 @@ function commandHit(): Hit | null {
     }
     case 'mode': return hit(`${cmd.mode === 'light' ? 'Light' : 'Dark'} mode`, 'settings', () => patchSettings({ mode: cmd.mode }))
     case 'rename': return e ? hit(`Rename “${e.name}” to “${cmd.name}”`, 'texts that name it are rewritten', () => saveEntry(e.id, { name: cmd.name })) : null
+    case 'set': {
+      const change = e ? fieldChange(e.type, cmd.text) : null
+      return e && change ? hit(`Set ${change.label} of “${e.name}” to ${change.shown}`, 'changes the entry open beside', () => saveEntry(e.id, { data: { [change.key]: change.value } })) : null
+    }
     case 'append': return e ? hit(`Add to “${e.name}”`, cmd.text, () => saveEntry(e.id, { body: `${e.body.trimEnd()}${e.body.trim() ? '\n\n' : ''}${cmd.text}` })) : null
     case 'favorite': return e ? hit(`${e.favorite ? 'Remove' : 'Add'} “${e.name}” ${e.favorite ? 'from' : 'to'} favourites`, '', () => saveEntry(e.id, { favorite: !e.favorite })) : null
     case 'delete': return e ? hit(`Delete “${e.name}”…`, 'asks first', async () => {
@@ -126,7 +137,12 @@ function choose(hit: Hit | undefined, full: boolean) {
 function onKey(e: KeyboardEvent) {
   if (e.key === 'ArrowDown') { e.preventDefault(); cursor.value = Math.min(hits.value.length - 1, cursor.value + 1) }
   else if (e.key === 'ArrowUp') { e.preventDefault(); cursor.value = Math.max(0, cursor.value - 1) }
-  else if (e.key === 'Enter') { e.preventDefault(); choose(hits.value[cursor.value], e.shiftKey) }
+  else if (e.key === 'Enter') {
+    e.preventDefault()
+    const full = e.shiftKey
+    if (loaded) choose(hits.value[cursor.value], full)
+    else void ready.then(() => choose(hits.value[cursor.value], full))
+  }
   else return
   document.querySelector(`[data-hit="${cursor.value}"]`)?.scrollIntoView({ block: 'nearest' })
 }
@@ -136,7 +152,7 @@ function onKey(e: KeyboardEvent) {
   <dialog ref="dialog" class="bar" @close="commandBarOpen = false" @click.self="commandBarOpen = false">
     <label class="field">
       <Search :size="17" />
-      <input ref="input" v-model="query" placeholder="Go to a place, find an entry, look up a rule…" title="Also: new npc Name · roll 2d6+3 · dc 5 hard · dc expert · rename … · append … · favourite · delete · light · dark" autocomplete="off" spellcheck="false" @keydown="onKey" />
+      <input ref="input" v-model="query" placeholder="Go to a place, find an entry, look up a rule…" title="Also: new npc Name · roll 2d6+3 · dc 5 hard · dc expert · rename … · set status … · append … · favourite · delete · light · dark" autocomplete="off" spellcheck="false" @keydown="onKey" />
       <span class="kbd">Esc</span>
     </label>
     <div class="hits">

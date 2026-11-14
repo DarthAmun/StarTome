@@ -61,3 +61,42 @@ export const FIELDS: Record<EntryType, Field[]> = {
   ],
   region: [{ key: 'color', label: 'Colour', kind: 'color' }],
 }
+
+export interface FieldChange { key: string; label: string; value: string | boolean | string[]; shown: string }
+
+const YES = ['yes', 'y', 'true', 'on', '1'], NO = ['no', 'n', 'false', 'off', '0']
+
+/**
+ * What `set <field> <value>` in the command bar means for an entry of this type: the field
+ * whose key or label starts the text, and the rest as its value. Null when no field fits or
+ * the value is not one the field takes. Pictures, colours, icons and quest givers are not set this way.
+ */
+export function fieldChange(type: EntryType, text: string): FieldChange | null {
+  const lower = text.trim().toLowerCase()
+  // "dead" and "alive" are worth a short form
+  if (type === 'npc' && (lower === 'dead' || lower === 'alive')) return { key: 'alive', label: 'Vital status', value: lower === 'alive', shown: lower === 'alive' ? 'Alive' : 'Dead' }
+  const named = FIELDS[type]
+    .flatMap(f => [f.key, f.label].map(n => ({ f, name: n.toLowerCase() })))
+    .filter(x => lower === x.name || lower.startsWith(`${x.name} `))
+    .sort((a, b) => b.name.length - a.name.length)[0]
+  if (!named) return null
+  const f = named.f
+  const raw = text.trim().slice(named.name.length).trim()
+  const value = raw.toLowerCase()
+  if (f.kind === 'text') return { key: f.key, label: f.label, value: raw, shown: raw || 'nothing' }
+  if (f.kind === 'select') {
+    const hit = f.options.find(([v, l]) => v === value || l.toLowerCase() === value) ?? (value ? f.options.find(([v]) => v.startsWith(value)) : undefined)
+    return hit ? { key: f.key, label: f.label, value: hit[0], shown: hit[1] } : null
+  }
+  if (f.kind === 'check') {
+    const on = YES.includes(value) || value === f.on.toLowerCase() ? true : NO.includes(value) ? false : null
+    return on === null ? null : { key: f.key, label: f.label, value: on, shown: on ? f.on : `not “${f.on}”` }
+  }
+  if (f.kind === 'statuses') {
+    const picked = value.split(/[,\s]+/).filter(Boolean).map(v => f.options.find(([o]) => o === v || o.startsWith(v))?.[0])
+    if (!picked.length || picked.some(v => !v)) return null
+    const list = [...new Set(picked as string[])]
+    return { key: f.key, label: f.label, value: list, shown: list.join(', ') }
+  }
+  return null
+}

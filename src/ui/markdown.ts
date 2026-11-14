@@ -14,6 +14,14 @@ const ALIASES: Record<string, string> = { table: 'random-table' }
 /** Inline widgets: ::dice[2d6+3], ::button[Label | 2d6], ::table[Name], ::choose[a | b], ::clock[Name | 2/6] */
 const WIDGET = /::(dice|button|table|choose|clock)\[([^\]\n]*)\]/g
 
+/** Callout kinds as people write them → the four tones drawn. */
+const CALLOUT_TONES: Record<string, string> = {
+  note: 'note', info: 'note', abstract: 'note', summary: 'note', quote: 'note', example: 'note', todo: 'note',
+  tip: 'tip', hint: 'tip', success: 'tip', check: 'tip', done: 'tip', question: 'tip', help: 'tip',
+  warning: 'warn', caution: 'warn', attention: 'warn', important: 'warn',
+  danger: 'danger', error: 'danger', bug: 'danger', failure: 'danger', fail: 'danger',
+}
+
 function widgetHtml(kind: string, args: string, clockIndex: number): string {
   const parts = args.split('|').map(p => p.trim())
   const first = parts[0] ?? ''
@@ -58,6 +66,11 @@ export function renderMarkdown(source: string, opts: RenderOptions = {}): string
   let task = 0
   html = html.replace(/<li>(\s*(?:<p>)?)\[([ xX])\]\s/g, (_m, open: string, mark: string) => `<li class="task">${open}<input type="checkbox" data-task="${task++}"${mark === ' ' ? '' : ' checked'}> `)
   html = html.replace(/<blockquote>\s*<p>\[!hidden\]\s*([^<\n]*)(?:<br>)?/gi, (_m, title: string) => `<blockquote class="gm-only"><p>${title ? `<strong>${title}</strong><br>` : ''}`)
+  // Other callouts (`> [!note] Title`, tip, warning, danger, info, quote…) get a labelled box
+  html = html.replace(/<blockquote>\s*<p>\[!([a-z]+)\]\s*([^<\n]*)(?:<br>)?/gi, (_m, kind: string, title: string) => {
+    const k = kind.toLowerCase()
+    return `<blockquote class="callout callout-${CALLOUT_TONES[k] ?? 'note'}"><p><strong class="callout-title">${title || k.charAt(0).toUpperCase() + k.slice(1)}</strong><br>`
+  })
   return DOMPurify.sanitize(html, { ADD_ATTR: ['data-ref-type', 'data-ref-name', 'style', 'data-widget', 'data-expr', 'data-label', 'data-table', 'data-options', 'data-index', 'data-task'] })
 }
 
@@ -66,6 +79,7 @@ export function excerpt(source: string, max = 160): string {
   const plain = source
     .replace(/^\s*>\s*\[!hidden\][\s\S]*?(?=\n[^>]|\n\n|$)/gim, '')
     .replace(REF, (_a, _t, name: string) => name.trim())
+    .replace(/\[![a-z]+\]/gi, ' ')
     .replace(/[#*_`>~-]+/g, ' ').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\s+/g, ' ').trim()
   return plain.length > max ? `${plain.slice(0, max).trimEnd()}…` : plain
 }

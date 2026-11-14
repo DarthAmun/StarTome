@@ -102,6 +102,11 @@ async function renamed(old: Entry, next: Entry): Promise<void> {
         : source.data
     await db.rows('entries').put(zEntry.parse({ ...source, body: fix(source.body), data }))
   }
+  // Session panels and the drawer hold text of their own (a session's body is only their sum)
+  await db.rows('sessionPanels').where('campaignId').equals(next.campaignId).modify((panel) => {
+    const title = renameRefs(panel.title, next.type, old.name, next.name), body = renameRefs(panel.body, next.type, old.name, next.name)
+    if (title !== panel.title || body !== panel.body) { panel.title = title; panel.body = body }
+  })
   for (const l of incoming) await db.rows('links').update(l.id, { targetName: next.name })
   // A quest keeps its giver's name beside the id
   await db.rows('entries').where('[campaignId+type]').equals([next.campaignId, 'quest']).modify((q) => {

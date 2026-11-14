@@ -16,7 +16,8 @@ export function answerConfirm(ok: boolean): void {
   dialogs.confirm = null
 }
 
-export interface Notice { id: number; kind: 'info' | 'ok' | 'error'; text: string }
+export interface NoticeAction { label: string; run: () => void }
+export interface Notice { id: number; kind: 'info' | 'ok' | 'error'; text: string; action?: NoticeAction }
 
 export const notices = reactive({ list: [] as Notice[] })
 let nextNotice = 1
@@ -29,6 +30,12 @@ export function notify(text: string, kind: Notice['kind'] = 'info', ms = 6000): 
 
 export function dismissNotice(id: number): void {
   notices.list = notices.list.filter(n => n.id !== id)
+}
+
+/** A notice that stays until it is dismissed or its button is used. Asking again with the same text does not stack. */
+export function notifySticky(text: string, action: NoticeAction): void {
+  if (notices.list.some(n => n.text === text)) return
+  notices.list.push({ id: nextNotice++, kind: 'info', text, action })
 }
 
 /** Shows a failure where the user sees it instead of only in the console. */

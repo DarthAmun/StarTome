@@ -152,3 +152,29 @@ describe('wealth', () => {
     expect((await loadWealth(C, { level: null, size: 0, xps: [] })).readout).toBeNull()
   })
 })
+
+describe('runes kept the old way', () => {
+  it('become attached runes when the compendium has every one of them, and stay a label otherwise', async () => {
+    const { convertOldRunes, oldRuneCount } = await import('@/data/oldRunes')
+    const rune = (id: string, name: string) => ({ ...item(name, { traits: ['rune'], usage: 'etched onto a weapon' } as Partial<Item>), id })
+    await rulesTable().bulkPut([
+      { ...item('Longsword', { category: 'weapon' } as Partial<Item>), id: 'longsword' },
+      rune('pot1', 'Weapon Potency (+1)'), rune('strk', 'Striking'), rune('flam', 'Flaming'),
+    ])
+    const sword = await addEntry({ campaignId: C, owner: STASH, itemId: 'longsword' })
+    const axe = await addEntry({ campaignId: C, owner: STASH, name: 'Old axe' })
+    await getDb().rows('inventory').update(sword, { runes: { potency: 1, striking: 1, property: ['flaming'] } })
+    await getDb().rows('inventory').update(axe, { runes: { potency: 2, property: [] } })
+    expect(await oldRuneCount(C)).toBe(2)
+
+    const result = await convertOldRunes(C)
+    expect(result.converted).toBe(1)
+    expect(result.left).toEqual([{ item: 'Old axe', missing: ['Weapon Potency (+2)'] }])
+    const all = await inventory.ofCampaign(C)
+    expect(all.filter(r => r.attachedTo === sword).map(r => r.itemId).sort()).toEqual(['flam', 'pot1', 'strk'])
+    // The summary the gear check reads is rebuilt from what is attached
+    expect(all.find(r => r.id === sword)?.runes).toMatchObject({ potency: 1, striking: 1, property: ['flaming'] })
+    expect(await oldRuneCount(C)).toBe(1)
+  })
+})
+

@@ -7,6 +7,7 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Download, FolderOpen, HardDriveUpload, Trash2 } from 'lucide-vue-next'
+import { findUnusedImages, removeUnusedImages, type UnusedImages } from '@/data/imageCleanup'
 import { countRows, wipeDatabase } from '@/data/snapshot'
 import { BackupError, backupFileName, exportBackupBlob, importBackup } from '@/services/backup'
 import { backupFolderState, backupFolderSupported, backupToFolder, chooseBackupFolder, forgetBackupFolder, type FolderState } from '@/services/backup/folder'
@@ -28,8 +29,11 @@ const oldDbHere = ref(false)
 const legacy = ref<LegacyImportResult | null>(null)
 const folder = ref<FolderState>({ name: null, permission: null, lastBackupAt: null })
 
+const unused = ref<UnusedImages | null>(null)
+
 async function refresh() {
   counts.value = await countRows()
+  unused.value = await findUnusedImages()
   folder.value = await backupFolderState()
   oldDbHere.value = await legacyDbExists()
 }
@@ -136,6 +140,11 @@ async function wipe() {
   legacy.value = null
 }
 
+async function cleanImages() {
+  const gone = await run('Removing unused images', () => removeUnusedImages())
+  if (gone) notify(gone.ids.length ? `Removed ${gone.ids.length} unused image(s), ${size(gone.bytes)}.` : 'No unused images.', 'ok')
+}
+
 function onDrop(e: DragEvent) {
   const f = e.dataTransfer?.files[0]
   if (f) void onFile(f)
@@ -218,6 +227,9 @@ const GUIDES: [string, string, string][] = [['HOMEBREW_FORMAT.md', 'Homebrew for
       <div class="stats"><div v-for="k in SHOWN" :key="k"><span class="num">{{ (counts[k] ?? 0).toLocaleString() }}</span> {{ k }}</div></div>
       <p class="faint"><template v-for="([k, n], i) in others()" :key="k">{{ i ? ' · ' : 'Also: ' }}{{ n.toLocaleString() }} {{ k }}</template></p>
       <p v-if="storage" class="dim">Storage used: <span class="num">{{ size(storage.usage) }}</span> of {{ size(storage.quota) }} the browser allows · {{ storage.persisted ? 'protected from automatic clean-up' : 'not yet protected from automatic clean-up' }}</p>
+      <p class="dim" data-test="unused-images">Images nothing uses any more (a replaced portrait, the art of a deleted entry) are removed by themselves once a day, a day after they went out of use.
+        <template v-if="unused?.ids.length"> Waiting now: <span class="num">{{ unused.ids.length }}</span> ({{ size(unused.bytes) }}). <button class="btn" :disabled="!!busy" @click="cleanImages">Remove now</button></template>
+        <template v-else> None are waiting.</template></p>
       <div class="actions"><button class="btn btn-danger" :disabled="!!busy" @click="wipe"><Trash2 :size="15" /> Wipe this app's data</button></div>
     </section>
   </div>

@@ -26,6 +26,7 @@ watch(() => dialogs.confirm, async (req) => {
   <div class="notices" role="status">
     <div v-for="n in notices.list" :key="n.id" class="notice" :class="n.kind">
       <span>{{ n.text }}</span>
+      <button v-if="n.action" class="btn btn-primary" @click="n.action.run(); dismissNotice(n.id)">{{ n.action.label }}</button>
       <button class="btn btn-ghost btn-icon" aria-label="Dismiss" @click="dismissNotice(n.id)"><X :size="14" /></button>
     </div>
   </div>

@@ -198,7 +198,7 @@ type MessageBody =
   | { kind: 'heroPoints'; amount: number; reason?: string } // the player's app keeps the total at 3 or less
   | { kind: 'identify'; entryId: string }                   // reveal an item or attachment the player holds
   | { kind: 'roll'; check: string; dc?: number; secret?: boolean; initiative?: boolean; label?: string }
-  | { kind: 'damage'; damage?: { amount: number; type: string; persistent?: boolean }[]; conditions?: { id: string; value?: number }[]; label?: string }
+  | { kind: 'damage'; damage?: { amount: number; type: string; persistent?: boolean }[]; healing?: number; conditions?: { id: string; value?: number }[]; label?: string }
 
 interface GivenItem {
   ref?: ItemRef                    // sent whenever StarTome's item came from Foundry
@@ -214,7 +214,7 @@ interface GivenItem {
 ```
 
 - `roll.check`: `perception`, `fortitude`, `reflex`, `will`, `skill:<slug>` (`skill:stealth`, `skill:warfare-lore`), or `flat` (then `dc` is required). `secret`: the player sees that they rolled, not the result. `initiative`: Play Buddy shows it as an initiative roll.
-- `damage`: the player's app applies its own resistances and weaknesses, then the conditions.
+- `damage`: the player's app applies its own resistances and weaknesses, then the conditions. `type` is a Foundry damage type slug (`fire`, `slashing`) or `untyped` when the GM gave none. `healing` (added 2026-11-14) is Hit Points given back, up to the character's maximum; a message may carry only `healing`, only `conditions`, or any mix. Conditions are only ever added this way: the GM cannot take a condition off a player's character.
 
 Answer: `201 Message`.
 
@@ -360,6 +360,7 @@ Draft 1 was written on 2026-10-31 around what Play Buddy stored at the time. Dra
 | `identify` named `playerId` and `entryId` | `entryId`; the player is `to` | Said twice. |
 | Attachment kind `upgrade` also for installed weapons | Kind `installed` | StarTome's upgrade-slot check tells them apart. |
 | `autoAccept.requests` | `autoAccept.rolls`, `autoAccept.damage` | A player may let rolls through but want to see damage. |
+| Damage messages carried damage and conditions | Also `healing` (2026-11-14) | Healing typed for a linked character's token in an encounter had no way to reach their app. |
 | Starfinder additions in a separate section | Part of the types (`system`, `skills.attacks`, `grade`, `implanted`) | |
 | Share file `formatVersion: 1` with `status` | `formatVersion: 2` with `sheet` | Same type as the API. |
 

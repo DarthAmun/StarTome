@@ -13,13 +13,15 @@ import { rulesFindByName } from '@/data/rules'
 import AppDialog from '@/ui/components/AppDialog.vue'
 import { notify } from '@/ui/dialogs'
 import { peek } from '@/ui/workbench'
-import { live, updateToken } from './live'
+import { chosenConditionColor, loadConditionColors, rememberConditionColor } from './conditionColors'
+import { conditionHooks, live, updateToken } from './live'
 import { conditionColor } from './scene'
 
 const props = defineProps<{ token: Token }>()
 const emit = defineEmits<{ close: [] }>()
 
 const search = ref('')
+void loadConditionColors()
 const all = computed(() => builtinConditions(live.game).filter(c => c.name !== 'Persistent Damage'))
 const has = (name: string) => props.token.conditions.some(c => c.name.toLowerCase() === name.toLowerCase())
 const offered = computed(() => { const q = search.value.trim().toLowerCase(); return all.value.filter(c => !has(c.name) && (!q || c.name.toLowerCase().includes(q))) })
@@ -36,11 +38,13 @@ const typed = computed(() => {
 const write = (conditions: TokenCondition[]) => updateToken(props.token.id, { conditions })
 function add(name: string, value: number | null = null, formula?: string) {
   const info = conditionInfo(name)
-  write([...props.token.conditions, { name, value: value ?? (info?.valued ? 1 : null), color: info?.color ?? getConditionColor(name), ...(info ? { icon: info.icon } : {}), ...(formula ? { formula } : {}) }])
+  write([...props.token.conditions, { name, value: value ?? (info?.valued ? 1 : null), color: chosenConditionColor(name) ?? info?.color ?? getConditionColor(name), ...(info ? { icon: info.icon } : {}), ...(formula ? { formula } : {}) }])
+  for (const fn of conditionHooks) fn(props.token, [{ name, value: value ?? (info?.valued ? 1 : null) }])
   search.value = ''
 }
 function addTyped() { const t = typed.value; if (t) add(t.name, 'value' in t ? t.value ?? null : null, 'formula' in t ? t.formula : undefined) }
 const change = (name: string, patch: Partial<TokenCondition>) => write(props.token.conditions.map(c => (c.name === name ? { ...c, ...patch } : c)))
+function recolor(name: string, color: string) { change(name, { color }); void rememberConditionColor(name, color) }
 const remove = (name: string) => write(props.token.conditions.filter(c => c.name !== name))
 function step(c: TokenCondition, by: number) {
   const next = (c.value ?? 0) + by
@@ -58,7 +62,7 @@ async function rules(name: string) {
   <AppDialog :title="`Conditions · ${token.name}`" @close="emit('close')">
     <ul class="have" data-test="token-conditions">
       <li v-for="c in token.conditions" :key="c.name" :data-condition="c.name">
-        <input type="color" :value="conditionColor(c)" :aria-label="`Colour of ${c.name}`" @change="change(c.name, { color: ($event.target as HTMLInputElement).value })" />
+        <input type="color" :value="conditionColor(c)" :aria-label="`Colour of ${c.name}`" title="This colour is remembered for the condition" @change="recolor(c.name, ($event.target as HTMLInputElement).value)" />
         <span class="what"><button class="name" title="Rules text" @click="rules(c.name)">{{ c.name }}</button><small class="faint">{{ conditionInfo(c.name)?.desc }}</small></span>
         <input v-if="/^persistent/i.test(c.name)" class="input formula" :value="c.formula ?? ''" placeholder="2d6" :aria-label="`Damage of ${c.name}`" @change="change(c.name, { formula: ($event.target as HTMLInputElement).value.trim() })" />
         <template v-if="c.value != null">
@@ -73,7 +77,7 @@ async function rules(name: string) {
     <input v-model="search" class="input" placeholder="Add a condition… (or “Persistent fire 2d6”, or one of your own)" data-test="condition-search" @keydown.enter="offered[0] && !typed ? add(offered[0].name) : addTyped()" />
     <button v-if="typed" class="btn" @click="addTyped">Add “{{ typed.label }}”</button>
     <div class="offer">
-      <button v-for="c in offered" :key="c.name" class="chip" :style="{ borderColor: c.color }" :title="c.desc" @click="add(c.name)">{{ c.name }}</button>
+      <button v-for="c in offered" :key="c.name" class="chip" :style="{ borderColor: chosenConditionColor(c.name) ?? c.color }" :title="c.desc" @click="add(c.name)">{{ c.name }}</button>
     </div>
     <template #footer><button class="btn btn-primary" @click="emit('close')">Done</button></template>
   </AppDialog>

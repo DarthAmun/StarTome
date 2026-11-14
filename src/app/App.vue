@@ -1,18 +1,22 @@
 <script setup lang="ts">
 /** The shell: rail, top bar, the page, the peek dock and the tray. */
-import { computed, onMounted, onUnmounted, watch, watchEffect } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ChevronsUpDown, Search } from 'lucide-vue-next'
 import { campaigns as campaignRepo, settings as settingsRepo } from '@/data/repo'
+import { removeUnusedImagesIfDue } from '@/data/imageCleanup'
+import { onDatabaseChange } from '@/data/repo'
 import { backupIfDue } from '@/services/backup/folder'
 import { onLinkNotice, ready as linkReady, startLive, stopLive } from '@/services/characterLink/link'
 import PartyPrompts from '@/features/party/PartyPrompts.vue'
 import SoundBar from '@/features/sounds/SoundBar.vue'
 import DialogHost from '@/ui/components/DialogHost.vue'
-import { notify } from '@/ui/dialogs'
+import { notify, notifySticky } from '@/ui/dialogs'
+import { startPwa } from '@/ui/pwa'
 import { useLive } from '@/ui/useLive'
 import { campaign, campaignId, campaigns, closeDock, commandBarOpen, dock, patchSettings, settings } from '@/ui/workbench'
 import AppRail from './AppRail.vue'
+import CheatSheet from './CheatSheet.vue'
 import CommandBar from './CommandBar.vue'
 import DicePanel from './DicePanel.vue'
 import PeekDock from './PeekDock.vue'
@@ -58,17 +62,27 @@ watchEffect(() => {
   else root.style.removeProperty('--user-accent')
 })
 
+const cheatSheet = ref(false)
+
 function onKey(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); commandBarOpen.value = !commandBarOpen.value; return }
   // Escape closes the dock, but not while it is leaving a field or an editor
   const t = e.target as HTMLElement | null
   const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)
+  if (e.key === '?' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && !document.querySelector('dialog[open]')) { e.preventDefault(); cheatSheet.value = true; return }
   if (e.key === 'Escape' && dock.open && !typing && !commandBarOpen.value && !document.querySelector('dialog[open]')) closeDock()
 }
 onMounted(() => {
   window.addEventListener('keydown', onKey)
   void navigator.storage?.persist?.()
   void backupIfDue(__APP_VERSION__).catch(err => console.warn('automatic backup skipped', err))
+  // The address, not the route: the first navigation has not finished when the shell mounts
+  if (location.hash.startsWith('#/player/')) return
+  startPwa()
+  // Images nothing uses any more go once a day, after the page has settled
+  setTimeout(() => void removeUnusedImagesIfDue().catch(err => console.warn('image clean-up skipped', err)), 20_000)
+  // Another tab opened a newer version of the app and changed the database under this one
+  onDatabaseChange(() => notifySticky('StarTome was updated in another tab. Reload this one to keep working.', { label: 'Reload', run: () => location.reload() }))
 })
 onUnmounted(() => window.removeEventListener('keydown', onKey))
 
@@ -102,6 +116,7 @@ function switchCampaign(e: Event) {
     <SoundBar />
     <PartyPrompts />
     <CommandBar />
+    <CheatSheet v-if="cheatSheet" @close="cheatSheet = false" />
     <DialogHost />
   </div>
 </template>

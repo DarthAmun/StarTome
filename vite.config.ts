@@ -11,12 +11,16 @@ export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   worker: { format: 'es' },
+  // The text editor (CodeMirror) is one chunk of about 550 kB, loaded with the first editor
+  build: { chunkSizeWarningLimit: 600 },
   // Only the sync worker uses jszip; found late, the dev server would reload the page under a sync in progress
   optimizeDeps: { include: ['jszip'] },
   plugins: [
     vue(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': a new version waits for a Reload click instead of replacing the app under a running session
+      registerType: 'prompt',
+      injectRegister: false,
       manifest: {
         id: 'startome-next',
         name: 'StarTome',
@@ -34,7 +38,7 @@ export default defineConfig({
           { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
-      workbox: { navigateFallback: `${base}index.html`, globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'] },
+      workbox: { maximumFileSizeToCacheInBytes: 3_000_000, navigateFallback: `${base}index.html`, globPatterns: ['**/*.{js,css,html,png,svg,ico,woff2}'] },
       devOptions: { enabled: false },
     }),
   ],

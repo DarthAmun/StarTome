@@ -5,7 +5,7 @@
  * damage it (shields first), see its sensor range and where it is off-guard
  * from, and lay a zone area over the row to ask for saves.
  */
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ArrowLeftRight, ChevronLeft, ChevronRight, Eye, EyeOff, Trash2 } from 'lucide-vue-next'
 import { newId } from '@/domain/ids'
 import type { AreaOverlay, AreaSave } from '@/domain/rules/areas'
@@ -15,10 +15,13 @@ import { generateShieldsDice, repairSelfHp } from '@/domain/rules/starshipCombat
 import type { RulesEntity } from '@/domain/rules/types'
 import { statLinkOf, type Token } from '@/data/encounters'
 import { rulesGetMany, rulesQuery } from '@/data/rules'
+import { activeRollContext, type RollContext } from '@/ui/dice'
+import { notify } from '@/ui/dialogs'
 import { useLive } from '@/ui/useLive'
 import { peek } from '@/ui/workbench'
 import { addArea, openAreaPrompt } from './areasLive'
 import { applyDamage, live, removeTokens, updateToken } from './live'
+import { encounterRolls } from './rolls'
 import { addSensorToken, info, moveSensor, sensorTokens, setShields, setZones, sheet, ship, shipToken, zones } from './starshipLive'
 
 const entries = useLive(async () => new Map<string, RulesEntity>((await rulesGetMany(sensorTokens.value.map(t => statLinkOf(t)?.rulesId).filter((id): id is string => !!id))).map(e => [e.id, e])), new Map<string, RulesEntity>(), [() => sensorTokens.value.map(t => statLinkOf(t)?.rulesId).join('|')])
@@ -101,10 +104,14 @@ function askSaves() {
 }
 /** From a starship's stat block: its ability's zone area, ready to aim. */
 function openZoneArea(spec: ZoneAreaSpec) {
+  if (!selected.value?.sensor) { notify('Select the ship that uses it on the sensor map, then press “Zone area” again.'); return }
   Object.assign(area, { kind: spec.kind, size: spec.size, ...(spec.dc ? { dc: spec.dc } : {}), ...(spec.save ? { save: spec.save } : {}), ...(spec.basic !== undefined ? { basic: spec.basic } : {}), ...(spec.damage ? { damage: spec.damage } : {}) })
   areaOpen.value = true
 }
-defineExpose({ openZoneArea })
+// While the sensor map is on screen, a starship's stat block (in the dock) offers "Zone area" on its abilities
+const withZones: RollContext = { ...encounterRolls, zoneArea: openZoneArea }
+onMounted(() => { activeRollContext.value = withZones })
+onUnmounted(() => { if (activeRollContext.value === withZones) activeRollContext.value = encounterRolls })
 const stat = (t: Token) => { const l = statLinkOf(t); if (l) peek({ kind: 'rules', id: l.rulesId, adjustment: l.adjustment }) }
 </script>
 

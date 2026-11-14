@@ -8,6 +8,8 @@ export type Command =
   | { kind: 'roll'; expr: string }
   | { kind: 'rename'; name: string }
   | { kind: 'append'; text: string }
+  /** `set status imprisoned`: a field of the open entry; which field the words name depends on its type. */
+  | { kind: 'set'; text: string }
   | { kind: 'delete' }
   | { kind: 'favorite' }
   | { kind: 'mode'; mode: 'light' | 'dark' }
@@ -31,6 +33,7 @@ export function parseCommand(input: string, game: GameId = 'pf2e'): Command | nu
   if (/^\d*d\d+/i.test(text) && !/[a-ce-z]{2}/i.test(text)) return { kind: 'roll', expr: text }
   if (verb === 'dc') { const dc = parseDcQuery(tail, game); return dc ? { kind: 'dc', dc } : null }
   if (verb === 'rename') return tail ? { kind: 'rename', name: tail } : null
+  if (verb === 'set') return tail ? { kind: 'set', text: tail } : null
   if (verb === 'append') return tail ? { kind: 'append', text: tail } : null
   if (verb === 'delete' && !tail) return { kind: 'delete' }
   if ((verb === 'favourite' || verb === 'favorite' || verb === 'star') && !tail) return { kind: 'favorite' }

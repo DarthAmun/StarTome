@@ -138,7 +138,7 @@ export function logChanges(token: Token, changes: ConditionChange[]): string[] {
 
 // ── Changing a token ───────────────────────────────────────────────────────
 
-export interface HpOptions { critical?: boolean; hitsAtZero?: number; absorbed?: number; /** Starships: the damage ignores Shield Points. */ bypassing?: boolean; nonlethal?: boolean; /** Starships: what got past the shields. */ hullDamage?: number }
+export interface HpOptions { /** The damage type as typed ("fire"); a linked player's app applies its resistances to it. */ type?: string; critical?: boolean; hitsAtZero?: number; absorbed?: number; /** Starships: the damage ignores Shield Points. */ bypassing?: boolean; nonlethal?: boolean; /** Starships: what got past the shields. */ hullDamage?: number }
 /** Starships take damage their own way (shields first; the party's ship becomes compromised, not dying): starshipLive.ts fills these in. */
 export const shipHooks = {
   damage: null as null | ((t: Token, amount: number, opts: HpOptions) => void),
@@ -181,15 +181,20 @@ export function updateToken(id: string, updates: CombatantPatch, opts: HpOptions
 export function applyDamage(id: string, amount: number, opts: HpOptions = {}): void {
   const t = getToken(id)
   if (!t || t.hp.current === null || !amount) return
-  if (amount < 0) { updateToken(id, { hp: { ...t.hp, current: Math.min(t.hp.max ?? Infinity, t.hp.current - amount) } }, opts); return }
+  if (amount < 0) {
+    if (!t.sensor) for (const fn of damageHooks) fn(t, amount, opts)
+    updateToken(id, { hp: { ...t.hp, current: Math.min(t.hp.max ?? Infinity, t.hp.current - amount) } }, opts)
+    return
+  }
   if (t.sensor && shipHooks.damage) { shipHooks.damage(t, amount, opts); return }
-  for (const fn of damageHooks) fn(t, amount)
+  for (const fn of damageHooks) fn(t, amount, opts)
   const r = damageWithTemp({ hp: t.hp.current, temp: t.hp.temp }, amount)
   updateToken(id, { hp: { ...t.hp, current: r.hp, temp: r.temp } }, { ...opts, hitsAtZero: t.hp.current <= 0 && amount > r.absorbed ? 1 : 0, absorbed: r.absorbed })
 }
 
-/** Told about damage dealt to a token (a linked player's app is sent it), and asked for a token's initiative modifier when it has no stat block. */
-export const damageHooks: ((t: Token, amount: number) => void)[] = []
+/** Told about damage dealt to a token, or healing (a negative amount), and about conditions put on it: a linked player's app is sent them. */
+export const damageHooks: ((t: Token, amount: number, opts: HpOptions) => void)[] = []
+export const conditionHooks: ((t: Token, added: { name: string; value: number | null }[]) => void)[] = []
 export const initiativeModifier = { of: (_t: Token): number => 0 }
 
 /** Temporary HP do not stack: the higher value stays. */
@@ -202,6 +207,7 @@ export function grantTempHp(id: string, amount: number): void {
 export function addConditions(id: string, conds: { name: string; value: number | null }[], look: (name: string) => Partial<TokenCondition> = () => ({})): void {
   const t = getToken(id)
   if (!t || !conds.length) return
+  for (const fn of conditionHooks) fn(t, conds)
   const next = t.conditions.map(c => ({ ...c }))
   for (const add of conds) {
     const have = next.find(c => c.name.toLowerCase() === add.name.toLowerCase())
@@ -330,9 +336,17 @@ export async function setStatBlock(id: string, rulesId: string | null, adjustmen
   await refreshTokens()
 }
 
+/** Rolls initiative for one token, replacing what it had. */
+export function rollInitiativeFor(id: string): Promise<void> {
+  return rollInitiativeOf(live.tokens.filter(t => t.id === id))
+}
+
 /** Rolls initiative for every token that has none. */
-export async function rollAllInitiative(): Promise<void> {
-  const todo = live.tokens.filter(t => t.initiative === null)
+export function rollAllInitiative(): Promise<void> {
+  return rollInitiativeOf(live.tokens.filter(t => t.initiative === null))
+}
+
+async function rollInitiativeOf(todo: Token[]): Promise<void> {
   const entries = new Map((await rulesGetMany([...new Set(todo.map(t => statLinkOf(t)?.rulesId).filter((id): id is string => !!id))])).map(e => [e.id, e]))
   for (const t of todo) {
     const link = statLinkOf(t)

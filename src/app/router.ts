@@ -1,34 +1,36 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
-import DataPage from '@/features/data/DataPage.vue'
-import SettingsPage from '@/features/settings/SettingsPage.vue'
 import ComingPage from '@/features/shared/ComingPage.vue'
-import ArtPage from '@/features/compendium/ArtPage.vue'
-import CompendiumPage from '@/features/compendium/CompendiumPage.vue'
-import HomebrewPage from '@/features/compendium/HomebrewPage.vue'
-import SyncPage from '@/features/compendium/SyncPage.vue'
-import BuilderPage from '@/features/encounters/BuilderPage.vue'
-import EncounterPage from '@/features/encounters/EncounterPage.vue'
-import MapMakerPage from '@/features/encounters/mapmaker/MapMakerPage.vue'
-import EncountersPage from '@/features/encounters/EncountersPage.vue'
-import PlayerEncounterPage from '@/features/encounters/PlayerEncounterPage.vue'
-import TokensPage from '@/features/encounters/TokensPage.vue'
-import PartyPage from '@/features/party/PartyPage.vue'
-import BoardPage from '@/features/sessions/BoardPage.vue'
-import SessionsPage from '@/features/sessions/SessionsPage.vue'
-import DeskPage from '@/features/desk/DeskPage.vue'
-import SoundsPage from '@/features/sounds/SoundsPage.vue'
-import StarshipPage from '@/features/starship/StarshipPage.vue'
 import TonightPage from '@/features/tonight/TonightPage.vue'
-import EntryPage from '@/features/world/EntryPage.vue'
-import GraphsPage from '@/features/world/GraphsPage.vue'
-import MapPage from '@/features/world/MapPage.vue'
-import MapsPage from '@/features/world/MapsPage.vue'
-import PlayerGraphPage from '@/features/world/PlayerGraphPage.vue'
-import PlayerMapPage from '@/features/world/PlayerMapPage.vue'
-import TimelinePage from '@/features/world/TimelinePage.vue'
-import WorldPage from '@/features/world/WorldPage.vue'
 import { PLACES, UTILITIES } from './places'
 import WelcomePage from './WelcomePage.vue'
+
+// Every page but the first ones loads when it is opened; the offline cache holds them all
+const DataPage = () => import('@/features/data/DataPage.vue')
+const SettingsPage = () => import('@/features/settings/SettingsPage.vue')
+const ArtPage = () => import('@/features/compendium/ArtPage.vue')
+const CompendiumPage = () => import('@/features/compendium/CompendiumPage.vue')
+const HomebrewPage = () => import('@/features/compendium/HomebrewPage.vue')
+const SyncPage = () => import('@/features/compendium/SyncPage.vue')
+const BuilderPage = () => import('@/features/encounters/BuilderPage.vue')
+const EncounterPage = () => import('@/features/encounters/EncounterPage.vue')
+const MapMakerPage = () => import('@/features/encounters/mapmaker/MapMakerPage.vue')
+const EncountersPage = () => import('@/features/encounters/EncountersPage.vue')
+const PlayerEncounterPage = () => import('@/features/encounters/PlayerEncounterPage.vue')
+const TokensPage = () => import('@/features/encounters/TokensPage.vue')
+const PartyPage = () => import('@/features/party/PartyPage.vue')
+const BoardPage = () => import('@/features/sessions/BoardPage.vue')
+const SessionsPage = () => import('@/features/sessions/SessionsPage.vue')
+const DeskPage = () => import('@/features/desk/DeskPage.vue')
+const SoundsPage = () => import('@/features/sounds/SoundsPage.vue')
+const StarshipPage = () => import('@/features/starship/StarshipPage.vue')
+const EntryPage = () => import('@/features/world/EntryPage.vue')
+const GraphsPage = () => import('@/features/world/GraphsPage.vue')
+const MapPage = () => import('@/features/world/MapPage.vue')
+const MapsPage = () => import('@/features/world/MapsPage.vue')
+const PlayerGraphPage = () => import('@/features/world/PlayerGraphPage.vue')
+const PlayerMapPage = () => import('@/features/world/PlayerMapPage.vue')
+const TimelinePage = () => import('@/features/world/TimelinePage.vue')
+const WorldPage = () => import('@/features/world/WorldPage.vue')
 
 const built: Record<string, RouteRecordRaw['component']> = { tonight: TonightPage, world: WorldPage, compendium: CompendiumPage, party: PartyPage, encounters: EncountersPage, sessions: SessionsPage, sounds: SoundsPage, desk: DeskPage, data: DataPage, settings: SettingsPage }
 

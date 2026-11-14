@@ -59,7 +59,7 @@ export type MessageBody =
   | { kind: 'heroPoints'; amount: number; reason?: string }
   | { kind: 'identify'; entryId: string }
   | { kind: 'roll'; check: string; dc?: number; secret?: boolean; initiative?: boolean; label?: string }
-  | { kind: 'damage'; damage?: { amount: number; type: string; persistent?: boolean }[]; conditions?: { id: string; value?: number }[]; label?: string }
+  | { kind: 'damage'; damage?: { amount: number; type: string; persistent?: boolean }[]; healing?: number; conditions?: { id: string; value?: number }[]; label?: string }
 
 export interface MessageRequest { to: string; note?: string; body: MessageBody }
 

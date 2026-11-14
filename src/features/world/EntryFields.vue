@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** The typed fields of an entry. Every change saves just that field. */
-import { ref } from 'vue'
+import { reactive, ref } from 'vue'
 import { ImagePlus, X } from 'lucide-vue-next'
 import type { Entry, ImageRef } from '@/domain/schema'
 import { entriesNamed } from '@/data/entries'
@@ -20,6 +20,12 @@ const data = () => props.entry.data as Record<string, unknown>
 const text = (key: string) => String(data()[key] ?? '')
 const set = (key: string, value: unknown) => emit('change', { [key]: value })
 const value = (e: Event) => (e.target as HTMLInputElement).value
+/**
+ * What is being typed into a text field, until it is saved. Without it a redraw while typing (the
+ * suggestions of Ancestry and Class arrive a moment after the field is entered) put the stored value back.
+ */
+const typing = reactive<Record<string, string>>({})
+function commitText(key: string, v: string) { set(key, v); delete typing[key] }
 
 // Images: one small component-local helper per image field
 function imageUrl(key: string) { return useImageUrl(() => data()[key] as ImageRef | null) }
@@ -60,7 +66,7 @@ const isWide = (f: Field) => f.kind === 'image' || f.kind === 'statuses' || f.ki
     <div v-for="f in FIELDS[entry.type]" :key="f.key" class="field" :class="{ wide: isWide(f) }">
       <label class="label" :for="`f-${f.key}`">{{ f.label }}</label>
       <template v-if="f.kind === 'text'">
-        <input :id="`f-${f.key}`" class="input" :list="f.suggest ? `rules-${f.suggest}` : undefined" :value="text(f.key)" :placeholder="f.placeholder" @focus="f.suggest && loadNames(f.suggest)" @change="set(f.key, value($event))" />
+        <input :id="`f-${f.key}`" class="input" :list="f.suggest ? `rules-${f.suggest}` : undefined" :value="typing[f.key] ?? text(f.key)" :placeholder="f.placeholder" @focus="f.suggest && loadNames(f.suggest)" @input="typing[f.key] = value($event)" @change="commitText(f.key, value($event))" />
         <datalist v-if="f.suggest" :id="`rules-${f.suggest}`"><option v-for="n in names[f.suggest] ?? []" :key="n" :value="n" /></datalist>
       </template>
       <select v-else-if="f.kind === 'select'" :id="`f-${f.key}`" class="input" :value="text(f.key)" @change="set(f.key, value($event) || null)">

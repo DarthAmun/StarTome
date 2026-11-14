@@ -10,7 +10,7 @@ import { campaigns, createCampaign, entries, workspace } from '@/data/repo'
 import { addEdge, addLog, addPanel, copyToDrawer, createSession, deletePanel, moveToDrawer, nextSession, patchPanel, placeFromDrawer, sendToSession, sessions } from '@/data/sessions'
 import { sounds } from '@/data/sounds'
 import { characterOwner } from '@/domain/rules/inventory'
-import { boardText, carryOverLayout, encounterOutcome, finishReviewRows, logsInOrder, rollOnTable } from '@/domain/rules/sessionBoard'
+import { boardText, carryOverLayout, encounterOutcome, finishReviewRows, logsInOrder, nearestSides, rollOnTable, tableRows } from '@/domain/rules/sessionBoard'
 import type { SessionPanel } from '@/domain/schema'
 import { defaultLayout, freeSpot, newWidget, readPresets, readWidgets, tidy } from '@/features/desk/desk'
 
@@ -46,6 +46,21 @@ describe('session boards', () => {
     expect(await entries.linksTo(npc.id)).toEqual([])
     await deletePanel(scene.id)
     expect(await body(s.id)).toBe('')
+  })
+
+  it('a renamed entry is renamed in panel text, on boards and in the drawer', async () => {
+    const npc = await createEntry(C, 'npc', 'Mara')
+    const s = await createSession(C)
+    const scene = await addPanel({ campaignId: C, sessionId: s.id, kind: 'scene', x: 0, y: 0, title: 'The inn', body: 'Meet {{npc: Mara}}.' })
+    const kept = await addPanel({ campaignId: C, sessionId: null, kind: 'note', x: 0, y: 0, body: '{{npc: Mara}} owes them.' })
+    await saveEntry(npc.id, { name: 'Mara Voss' })
+    expect((await getDb().rows('sessionPanels').get(scene.id))?.body).toBe('Meet {{npc: Mara Voss}}.')
+    expect((await getDb().rows('sessionPanels').get(kept.id))?.body).toBe('{{npc: Mara Voss}} owes them.')
+    expect(await body(s.id)).toBe('### The inn\nMeet {{npc: Mara Voss}}.')
+    expect((await entries.linksTo(npc.id)).map(l => l.targetName)).toEqual(['Mara Voss'])
+    // An edit of the panel afterwards keeps the link whole
+    await patchPanel(scene.id, { title: 'The Gilded Inn' })
+    expect((await entries.linksTo(npc.id)).map(l => l.sourceId)).toEqual([s.id])
   })
 
   it('moves panels to the drawer and back, dropping their connections', async () => {
@@ -126,6 +141,24 @@ describe('session board rules', () => {
     const { frame, spots } = carryOverLayout([p({ x: 100, y: 0 }), p({ kind: 'frame', x: 50, y: 300, h: 400 })], 5)
     expect(frame).toMatchObject({ x: 50, y: 780, w: 30 + 4 * 290, h: 60 + 2 * 230 })
     expect(spots[4]).toEqual({ x: 30, y: 290 })
+  })
+
+  it('turns a plain list into table rows that use every face of the die', () => {
+    expect(tableRows(['Clear', 'Rain', 'Storm'])).toEqual({ die: 'd4', rows: [{ min: 1, max: 1, result: 'Clear' }, { min: 2, max: 2, result: 'Rain' }, { min: 3, max: 4, result: 'Storm' }] })
+    const seven = tableRows(['a', 'b', 'c', 'd', 'e', 'f', 'g'])
+    expect(seven.die).toBe('d8')
+    expect(seven.rows.at(-1)?.max).toBe(8)
+    expect(seven.rows.every((r, i) => r.min <= r.max && (i === 0 ? r.min === 1 : r.min === (seven.rows[i - 1]?.max ?? 0) + 1))).toBe(true)
+  })
+
+  it('connects panels at the sides that face each other', () => {
+    const box = (x: number, y: number) => ({ x, y, w: 260, h: 110 })
+    expect(nearestSides(box(0, 0), box(0, 300))).toEqual(['bottom', 'top'])
+    expect(nearestSides(box(0, 300), box(0, 0))).toEqual(['top', 'bottom'])
+    expect(nearestSides(box(0, 0), box(400, 20))).toEqual(['right', 'left'])
+    expect(nearestSides(box(400, 0), box(0, 40))).toEqual(['left', 'right'])
+    // Diagonal: the axis with the wider gap between the boxes decides
+    expect(nearestSides(box(0, 0), box(300, 400))).toEqual(['bottom', 'top'])
   })
 
   it('rolls on a table and words an encounter\'s outcome', () => {

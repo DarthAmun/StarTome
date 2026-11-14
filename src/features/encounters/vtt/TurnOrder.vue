@@ -10,7 +10,7 @@ import { validateFormula } from '@/domain/formula'
 import { conditionInfo } from '@/domain/rules/conditions'
 import type { Token } from '@/data/encounters'
 import { confirmDialog } from '@/ui/dialogs'
-import { applyDamage, live, removeTokens, rollAllInitiative, saveEncounter, updateToken } from './live'
+import { applyDamage, live, removeTokens, rollAllInitiative, rollInitiativeFor, saveEncounter, updateToken } from './live'
 import { askInitiative, linkedHere } from './linkLive'
 import { conditionColor } from './scene'
 import { nextTurn, order, prevTurn, round, turnIndex } from './turns'
@@ -29,8 +29,10 @@ const others = computed(() => live.tokens.filter(t => !order.value.some(o => o.i
 function saveFormula() { if (formulaOk.value) saveEncounter({ initiativeFormula: formula.value.trim() || null }) }
 function toggle(id: string) { const s = new Set(picked.value); if (s.has(id)) s.delete(id); else s.add(id); picked.value = s }
 function hpEnter(t: Token) {
-  const n = Number(hpDraft.value[t.id])
-  if (Number.isFinite(n) && n) applyDamage(t.id, n)
+  // "12", "-8" (healing) or "12 fire": the type matters to a linked player's app, which knows its resistances
+  const m = /^\s*(-?\d+)\s*([a-z][a-z -]*)?$/i.exec(hpDraft.value[t.id] ?? '')
+  const n = m ? Number(m[1]) : 0
+  if (n) applyDamage(t.id, n, m?.[2] ? { type: m[2].trim() } : {})
   hpDraft.value = { ...hpDraft.value, [t.id]: '' }
 }
 function setInitiative(t: Token, e: Event) {
@@ -74,13 +76,14 @@ const abbr = (name: string) => conditionInfo(name)?.abbr ?? name.slice(0, 3).toU
       <li v-for="(t, i) in [...order, ...others]" :key="t.id" class="row" :class="{ active: running && i === turnIndex && i < order.length, out: i >= order.length, sel: live.selectedId === t.id, hidden: !t.visible }" :data-turn="t.name" @click="live.selectedId = t.id" @dblclick="emit('edit', t.id)">
         <input type="checkbox" :checked="picked.has(t.id)" :aria-label="`Tick ${t.name}`" @click.stop @change="toggle(t.id)" />
         <input class="init num" :value="t.initiative ?? ''" :aria-label="`Initiative of ${t.name}`" placeholder="–" @click.stop @change="setInitiative(t, $event)" />
+        <button class="roll-one" :class="{ again: t.initiative !== null }" :title="t.initiative === null ? `Roll initiative for ${t.name}` : `Roll ${t.name}'s initiative again`" :aria-label="`Roll initiative for ${t.name}`" :data-roll-init="t.name" @click.stop="rollInitiativeFor(t.id)"><Dices :size="12" /></button>
         <span class="name" :class="{ party: t.playerToken, ally: t.ally, dead: t.dead }">{{ t.name }}<EyeOff v-if="!t.visible" :size="11" /></span>
         <span class="conds" @click.stop="emit('conditions', t.id)">
           <i v-for="c in t.conditions" :key="c.name" :style="{ background: conditionColor(c) }" :class="{ gm: c.hidden }" :title="c.value != null ? `${c.name} ${c.value}` : c.name">{{ abbr(c.name) }}{{ c.value ?? '' }}</i>
           <i v-if="!t.conditions.length" class="add" title="Conditions">+</i>
         </span>
         <span v-if="t.hp.max !== null" class="hp num" :title="t.hp.temp ? `${t.hp.temp} temporary HP` : ''"><b :data-hp="t.name">{{ t.hp.current }}</b>/{{ t.hp.max }}<em v-if="t.hp.temp">+{{ t.hp.temp }}</em></span>
-        <input v-if="t.hp.max !== null" v-model="hpDraft[t.id]" class="dmg num" :aria-label="`Damage to ${t.name}`" placeholder="±" title="Damage, or a negative number to heal; Enter applies" @click.stop @keydown.enter="hpEnter(t)" />
+        <input v-if="t.hp.max !== null" v-model="hpDraft[t.id]" class="dmg num" :aria-label="`Damage to ${t.name}`" placeholder="±" title="Damage (“12”, or “12 fire” for a linked player), or a negative number to heal; Enter applies" @click.stop @keydown.enter="hpEnter(t)" />
       </li>
     </ol>
     <p v-if="!live.tokens.length" class="faint empty-note">No tokens yet. Add creatures or drag tokens onto the map.</p>
@@ -99,12 +102,15 @@ ol { list-style: none; margin: .4rem 0 0; padding: 0; overflow: auto; flex: 1; }
 .row.active { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .row.out { opacity: .55; } .row.hidden .name { font-style: italic; }
 .init { width: 2.4rem; text-align: center; background: var(--bg-sunken); border: var(--frame); border-radius: var(--radius); padding: .1rem; }
+.roll-one { display: grid; place-items: center; width: 1.2rem; height: 1.3rem; margin-left: -.25rem; padding: 0; background: none; border: 0; color: var(--text-faint); }
+.roll-one:hover { color: var(--accent); } .roll-one.again { visibility: hidden; } .row:hover .roll-one.again { visibility: visible; }
 .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: .3rem; }
 .name.party { color: #3bbfa8; } .name.ally { color: #7fb2e6; } .name.dead { text-decoration: line-through; color: var(--text-faint); }
 .conds { display: flex; gap: 2px; flex-wrap: wrap; justify-content: flex-end; max-width: 7rem; cursor: pointer; }
 .conds i { font-style: normal; font-size: .62rem; font-weight: 700; padding: 0 .25rem; border-radius: 3px; color: #10101a; }
 .conds i.gm { outline: 1px dashed var(--text); } .conds i.add { background: none; color: var(--text-faint); border: 1px dashed var(--line-strong); }
 .hp { font-size: .82rem; color: var(--text-dim); white-space: nowrap; } .hp b { color: var(--text); } .hp em { color: #4a90d9; font-style: normal; }
-.dmg { width: 2.6rem; text-align: center; background: var(--bg-sunken); border: var(--frame); border-radius: var(--radius); padding: .1rem; }
+.dmg:focus { width: 5.2rem; }
+.dmg { width: 2.6rem; transition: width .12s; text-align: center; background: var(--bg-sunken); border: var(--frame); border-radius: var(--radius); padding: .1rem; }
 .empty-note { padding: 1rem .8rem; }
 </style>

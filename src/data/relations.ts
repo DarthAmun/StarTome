@@ -27,3 +27,31 @@ export async function relationsOf(entry: Entry): Promise<Relations> {
     lastSession: sessions[0] ?? null,
   }
 }
+
+/**
+ * For the World list's filters: every NPC of the campaign with the names of the factions it is
+ * linked with and the locations it is found at (linked either way, or pinned on the location's map).
+ */
+export async function npcPlaces(campaignId: string): Promise<Record<string, { Faction: string[]; Location: string[] }>> {
+  const db = getDb()
+  const entries = await db.rows('entries').where('campaignId').equals(campaignId).toArray()
+  const byId = new Map(entries.map(e => [e.id, e]))
+  const out: Record<string, { Faction: string[]; Location: string[] }> = {}
+  const note = (npcId: string, other: Entry | undefined) => {
+    if (!other || (other.type !== 'faction' && other.type !== 'location')) return
+    const row = out[npcId] ??= { Faction: [], Location: [] }
+    const list = other.type === 'faction' ? row.Faction : row.Location
+    if (!list.includes(other.name)) list.push(other.name)
+  }
+  const links = await db.rows('links').where('sourceId').anyOf([...byId.keys()]).toArray()
+  for (const l of links) {
+    if (!l.targetEntryId) continue
+    const a = byId.get(l.sourceId), b = byId.get(l.targetEntryId)
+    if (a?.type === 'npc') note(a.id, b)
+    if (b?.type === 'npc') note(b.id, a)
+  }
+  for (const p of await db.rows('mapPins').where('campaignId').equals(campaignId).toArray()) {
+    if (p.entryId && byId.get(p.entryId)?.type === 'npc') note(p.entryId, byId.get(p.mapEntryId))
+  }
+  return out
+}

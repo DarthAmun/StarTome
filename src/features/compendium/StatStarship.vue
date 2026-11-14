@@ -10,7 +10,7 @@ import StrikeLine from './StrikeLine.vue'
 import { formatIwr, humanize, md, zonesText } from './statText'
 
 const props = defineProps<{ entity: RulesEntity; game?: GameId }>()
-const { roll } = useStatRolls(() => props.game ?? 'sf2e')
+const { roll, canZoneArea, zoneArea } = useStatRolls(() => props.game ?? 'sf2e')
 
 const ABILITY_KEYS: AbilityKey[] = ['str', 'dex', 'con', 'int', 'wis', 'cha']
 const SAVES = [['fort', 'Fort', 'Fortitude'], ['ref', 'Ref', 'Reflex'], ['will', 'Will', 'Will']] as const
@@ -70,7 +70,7 @@ function check(label: string, modifier: number) {
     <hr />
     <p class="line"><b>Speed</b> {{ zonesText(starship.speed) }}</p>
     <StrikeLine v-for="(s, i) in starship.strikes" :key="'ss' + i" :strike="s" :owner="entity.name" @roll="roll" />
-    <ActionLine v-for="a in starship.actions" :key="a.name" :action="a" :owner="entity.name" />
+    <ActionLine v-for="a in starship.actions" :key="a.name" :action="a" :owner="entity.name" :can-zone-area="canZoneArea" @zone="zoneArea" />
   </template>
 
   <template v-if="frame">

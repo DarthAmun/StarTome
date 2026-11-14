@@ -59,11 +59,18 @@ function award() {
   xpPrompt.value = { campaignId: p.value.campaignId, refType: null, refId: null, reason: p.value.title || 'Reward', amount: xp }
   props.data.board.setStatus(p.value, 'awarded')
 }
+
+const SIDE_HANDLES: [string, 'source' | 'target', Position][] = [
+  ['s-top', 'source', Position.Top], ['s-left', 'source', Position.Left], ['s-right', 'source', Position.Right],
+  ['t-bottom', 'target', Position.Bottom], ['t-left', 'target', Position.Left], ['t-right', 'target', Position.Right],
+]
 </script>
 
 <template>
   <div class="panel-node" :class="[p.kind, { sel: data.selected, faded: p.status === 'skipped' }]" :style="{ '--k': color, width: `${cfg.width}px` }" :data-panel="title || cfg.label" @click="data.board.select(p.id)" @dblclick.stop="data.onEdit()">
-    <Handle type="target" :position="Position.Top" />
+    <Handle id="t-top" type="target" :position="Position.Top" />
+    <!-- Where a connection may also arrive or leave: it takes the sides nearest to each other. Only the two dots above are for drawing one. -->
+    <Handle v-for="[id, type, pos] in SIDE_HANDLES" :id="id" :key="id" :type="type" :position="pos" :connectable="false" class="side" />
     <header>
       <span class="kind">{{ p.kind === 'log' ? (p.attrs.logType ?? 'log') : cfg.label }}</span>
       <Eye v-if="p.attrs.playersShouldKnow" :size="12" class="know" aria-label="Players should know" />
@@ -72,7 +79,7 @@ function award() {
       <button class="edit" aria-label="Edit panel" @click.stop="data.onEdit()"><Pencil :size="12" /></button>
     </header>
     <h4 v-if="title" :class="{ link: entryId }" @click="entryId && peek({ kind: 'entry', id: entryId })">{{ title }}</h4>
-    <ProseText v-if="p.body" class="body" :text="p.body" :campaign-id="p.campaignId" />
+    <ProseText v-if="p.body" class="body" :text="p.body" :campaign-id="p.campaignId" faces />
     <div v-if="p.kind === 'encounter'" class="acts">
       <template v-if="encounter">
         <span class="chip">{{ encounter.status }}</span>
@@ -91,11 +98,12 @@ function award() {
       <button v-if="p.status !== 'awarded'" class="btn" @click.stop="award">Award</button>
     </div>
     <div v-if="p.tags.length" class="tags"><span v-for="t in p.tags" :key="t">#{{ t }}</span></div>
-    <Handle type="source" :position="Position.Bottom" />
+    <Handle id="s-bottom" type="source" :position="Position.Bottom" />
   </div>
 </template>
 
 <style scoped>
+.panel-node :deep(.vue-flow__handle.side) { opacity: 0; pointer-events: none; }
 .panel-node { background: var(--bg-raised); border: 1px solid color-mix(in srgb, var(--k) 55%, var(--line)); border-top: 3px solid var(--k); border-radius: var(--radius); padding: .4rem .55rem .5rem; box-shadow: var(--shadow); cursor: grab; }
 .panel-node.sel { outline: 2px solid var(--accent); outline-offset: 1px; } .panel-node.faded { opacity: .55; }
 header { display: flex; align-items: center; gap: .3rem; } .grow { flex: 1; }

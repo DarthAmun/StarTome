@@ -9,14 +9,15 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ChevronLeft, ChevronRight, Maximize, X } from 'lucide-vue-next'
 import { partyLevel } from '@/domain/rules/party'
 import type { EntryType } from '@/domain/schema'
-import { entriesNamed } from '@/data/entries'
+import { createEntry, entriesNamed, saveEntry } from '@/data/entries'
 import { partyOf } from '@/data/party'
 import { workspace } from '@/data/repo'
 import { rulesSearch } from '@/data/rules'
-import { confirmDialog } from '@/ui/dialogs'
+import { confirmDialog, notify, reportError } from '@/ui/dialogs'
 import { ENTRY_TYPE_INFO } from '@/ui/entryTypes'
 import { useLive } from '@/ui/useLive'
 import { campaign, pins } from '@/ui/workbench'
+import { tableRows } from '@/domain/rules/sessionBoard'
 import { defaultLayout, ENTRY_KINDS, isTool, newWidget, readPresets, readWidgets, SINGLETONS, snap, tidy, TOOL_KINDS, TOOL_LABEL, type DeskPreset, type DeskWidget, type WidgetKind } from './desk'
 import EntryWidget from './widgets/EntryWidget.vue'
 import ToolWidget from './widgets/ToolWidget.vue'
@@ -62,6 +63,19 @@ function add(kind: WidgetKind, extra: Partial<DeskWidget> = {}) {
 }
 function remove(id: string) { widgets.value = widgets.value.filter(w => w.id !== id); picked.value.delete(id); save() }
 function setConfig(w: DeskWidget, config: Record<string, unknown>) { w.config = config; save() }
+const pinnedRules = computed(() => widgets.value.filter(w => w.kind === 'rules-entry' && w.rulesId).map(w => w.rulesId as string))
+
+/** The weather widget's list becomes a random table entry (decision F13), which takes the widget's place. */
+async function weatherToTable(w: DeskWidget, names: string[]) {
+  try {
+    const { die, rows } = tableRows(names)
+    const entry = await createEntry(props.campaignId, 'random-table', 'Weather')
+    await saveEntry(entry.id, { data: { die, rows } })
+    widgets.value = widgets.value.map(x => (x.id === w.id ? { id: x.id, kind: 'random-table' as WidgetKind, entryId: entry.id, x: x.x, y: x.y, width: x.width, height: x.height } : x))
+    save()
+    notify(`“${entry.name}” is a random table now: roll it here, link it with {{table: ${entry.name}}}.`, 'ok')
+  } catch (err) { reportError('Making the table', err) }
+}
 const titleOf = (w: DeskWidget) => (isTool(w.kind) ? TOOL_LABEL[w.kind] : names.value.get(w.entryId ?? '') ?? ENTRY_TYPE_INFO[w.kind as EntryType].label)
 const colorOf = (w: DeskWidget) => (isTool(w.kind) ? 'var(--accent-2)' : ENTRY_TYPE_INFO[w.kind as EntryType].color)
 
@@ -165,7 +179,7 @@ onBeforeUnmount(up)
         <section v-for="w in widgets" :key="w.id" class="widget panel" :class="{ picked: picked.has(w.id) }" :style="{ left: `${w.x}px`, top: `${w.y}px`, width: `${w.width}px`, height: `${w.height}px`, '--k': colorOf(w) }" :data-widget="titleOf(w)" @pointerdown.stop>
           <header @pointerdown="down($event, w, 'move')"><span class="t">{{ titleOf(w) }}</span><button class="btn btn-ghost btn-icon" :aria-label="`Remove ${titleOf(w)}`" @pointerdown.stop @click="remove(w.id)"><X :size="13" /></button></header>
           <div class="content">
-            <ToolWidget v-if="isTool(w.kind)" :widget="w" :campaign-id="campaignId" :game="game" :party-level="level" @config="setConfig(w, $event)" />
+            <ToolWidget v-if="isTool(w.kind)" :widget="w" :campaign-id="campaignId" :game="game" :party-level="level" :pinned-rules="pinnedRules" @config="setConfig(w, $event)" @to-table="weatherToTable(w, $event)" />
             <EntryWidget v-else-if="w.entryId" :entry-id="w.entryId" />
           </div>
           <span class="grip" title="Drag to resize" @pointerdown="down($event, w, 'resize')" />

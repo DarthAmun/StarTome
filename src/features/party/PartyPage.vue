@@ -11,9 +11,10 @@ import { isPartyMember, MAX_LEVEL, MIN_LEVEL, partyLevel } from '@/domain/rules/
 import type { Character, Entry } from '@/domain/schema'
 import { addCharacter, ledgerOf, partyOf, removeCharacter, undoXpAward, updateCharacter, type LevelUpEntry, type XpAwardEntry } from '@/data/party'
 import { entries as entryRepo } from '@/data/repo'
+import { convertOldRunes, oldRuneCount } from '@/data/oldRunes'
 import { loadPacing } from '@/data/wealth'
 import { offerHeroPoints, undoPartyLevelUp } from '@/services/characterLink/link'
-import { confirmDialog, reportError } from '@/ui/dialogs'
+import { confirmDialog, notify, reportError } from '@/ui/dialogs'
 import { imageUrlOf } from '@/ui/imageUrl'
 import { levelUpPrompt, xpPrompt } from '@/ui/partyPrompts'
 import { useLive } from '@/ui/useLive'
@@ -80,10 +81,22 @@ const levelUps = computed(() => ledger.value.filter((l): l is LevelUpEntry => l.
 const xpAwards = computed(() => ledger.value.filter((l): l is XpAwardEntry => l.kind === 'xpAward'))
 const firstActive = computed(() => levelUps.value.find(l => !l.undoneAt)?.id)
 const nameOf = (id: string) => characters.value.find(c => c.id === id)?.name ?? '(removed)'
-function triggerLabel(l: LevelUpEntry) { return l.trigger === 'quest' ? 'Milestone quest' : l.trigger === 'encounter' ? 'Encounter' : 'By hand' }
+// A level-up from a milestone quest names the quest
+const quests = useLive(() => entryRepo.ofType(props.campaignId, 'quest'), [])
+const questName = (id: string | null) => quests.value.find(q => q.id === id)?.name
+function triggerLabel(l: LevelUpEntry) { return l.trigger === 'quest' ? `Milestone quest${questName(l.refId) ? `: ${questName(l.refId)}` : ''}` : l.trigger === 'encounter' ? 'Encounter' : 'By hand' }
 function awardLabel(a: XpAwardEntry) { return a.source === 'encounter' ? (a.reason ? `Encounter: ${a.reason}` : 'Encounter') : a.reason || (a.refType === 'quest' ? 'Quest' : 'Accomplishment') }
 
 const inv = ref<InstanceType<typeof InventoryPanel> | null>(null)
+
+// Runes kept as a label on the item (older data): offered for conversion into attached runes
+const oldRunes = useLive(() => oldRuneCount(props.campaignId), 0)
+async function convertRunes() {
+  try {
+    const r = await convertOldRunes(props.campaignId)
+    notify(`${r.converted} item(s) now carry their runes as attached entries.${r.left.length ? ` Left as they were: ${r.left.map(l => `${l.item} (${l.missing.join(', ')} not found)`).join('; ')}. Sync the Pathfinder compendium if runes are missing.` : ''}`, r.left.length ? 'info' : 'ok', 15000)
+  } catch (err) { reportError('Converting the runes', err) }
+}
 </script>
 
 <template>
@@ -146,6 +159,7 @@ const inv = ref<InstanceType<typeof InventoryPanel> | null>(null)
 
     <LinkPanel :campaign-id="campaignId" :game="game" :characters="characters" />
 
+    <p v-if="oldRunes && game === 'pf2e'" class="old-runes dim" data-test="old-runes">{{ oldRunes }} item(s) carry runes as a label only, from older data. <button class="btn" @click="convertRunes">Turn them into attached runes</button></p>
     <InventoryPanel ref="inv" :campaign-id="campaignId" :game="game" :characters="characters" :party-level="party.level" :rules="rules" />
 
     <WealthPanel v-if="inv" :campaign-id="campaignId" :game="game" :rules="rules" :characters="characters" :party="party" :ledger="ledger"

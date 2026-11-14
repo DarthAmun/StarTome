@@ -58,10 +58,19 @@ export function onRulesChanged(fn: () => void): () => void {
   return () => { listeners.delete(fn) }
 }
 
+/** Other windows of the app (a second tab, the players' window) hear of a change here and reload their lists. */
+const channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('startome-rules')
+if (channel) {
+  channel.onmessage = () => { clearRulesIndex(); for (const fn of listeners) fn() }
+  // Under Node (the tests) an open channel would keep the process alive
+  ;(channel as unknown as { unref?: () => void }).unref?.()
+}
+
 function touch(before?: RulesEntity | null, after?: RulesEntity | null): void {
   if (!before && !after) clearRulesIndex()
   else patchRulesIndex(before ?? null, after ?? null)
   for (const fn of listeners) fn()
+  channel?.postMessage('changed')
 }
 
 /** For writers outside this module (the sync worker, imports): lists and counts reload. */

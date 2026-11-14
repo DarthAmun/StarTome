@@ -6,7 +6,9 @@
 import { liveQuery, type Observable } from 'dexie'
 import { COLLECTIONS, DEFAULT_SETTINGS, workspaceId, zSettings, type Campaign, type CollectionName, type Entry, type EntryType, type ImageRow, type RowOf, type RulesRow, type Settings } from '@/domain/schema'
 import { nowIso } from '@/domain/ids'
-import { getDb } from './db'
+import { getDb, onDatabaseChange } from './db'
+
+export { onDatabaseChange }
 
 export function parseRow<C extends CollectionName>(name: C, row: unknown): RowOf<C> {
   return COLLECTIONS[name].parse(row) as RowOf<C>

@@ -123,3 +123,34 @@ describe('backup version 3', () => {
     expect(await readSnapshot()).toEqual(before)
   })
 })
+
+describe('unused images', () => {
+  beforeEach(freshDb)
+
+  it('removes what no row names, keeps what is used and what is new', async () => {
+    const { findUnusedImages, removeUnusedImages, removeUnusedImagesIfDue } = await import('@/data/imageCleanup')
+    const { getDb } = await import('@/data/db')
+    await seed()
+    const db = getDb()
+    const before = await db.images.count()
+    const now = Date.parse('2026-11-14T12:00:00.000Z')
+    const blob = new Blob(['x'], { type: 'image/png' })
+    await db.images.bulkPut([
+      { id: 'orphan-old', mime: 'image/png', createdAt: '2026-11-01T00:00:00.000Z', blob },
+      { id: 'orphan-new', mime: 'image/png', createdAt: '2026-11-14T11:00:00.000Z', blob },
+      { id: 'in-rules', mime: 'image/png', createdAt: '2026-11-01T00:00:00.000Z', blob },
+    ])
+    await db.rows('rules').put({ id: 'hb.x', origin: 'user', kind: 'creature', game: 'pf2e', name: 'X', sortName: 'x', level: 1, img: 'img:in-rules' } as never)
+
+    // Everything the seeded rows use stays: the same rule a backup follows
+    expect((await findUnusedImages(now)).ids).toEqual(['orphan-old'])
+    expect((await removeUnusedImages(now)).ids).toEqual(['orphan-old'])
+    expect(await db.images.count()).toBe(before + 2)
+
+    // The daily run: due the first time, then not again within a day
+    expect(await removeUnusedImagesIfDue(now)).toEqual({ ids: [], bytes: 0 })
+    expect(await removeUnusedImagesIfDue(now + 3_600_000)).toBeNull()
+    // A day later the new orphan is old enough
+    expect((await removeUnusedImagesIfDue(now + 25 * 3_600_000))?.ids).toEqual(['orphan-new'])
+  })
+})

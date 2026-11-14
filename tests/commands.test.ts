@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseCommand } from '@/domain/commands'
+import { fieldChange } from '@/features/world/fields'
 
 describe('command bar commands', () => {
   it('reads new entries with type words and names', () => {
@@ -31,5 +32,20 @@ describe('command bar commands', () => {
     expect(parseCommand('dc level 5 hard')).toMatchObject({ kind: 'dc', dc: { dc: 22 } })
     expect(parseCommand('dc expert')).toMatchObject({ kind: 'dc', dc: { kind: 'simple', rank: 'expert', dc: 20 } })
     expect(parseCommand('dc of doom')).toBeNull()
+  })
+
+  it('sets a field of the open entry by its name', () => {
+    expect(parseCommand('set status imprisoned')).toEqual({ kind: 'set', text: 'status imprisoned' })
+    expect(fieldChange('npc', 'status Imprisoned in the Fort')).toMatchObject({ key: 'status', value: 'Imprisoned in the Fort' })
+    expect(fieldChange('npc', 'dead')).toMatchObject({ key: 'alive', value: false })
+    expect(fieldChange('npc', 'vital status yes')).toMatchObject({ key: 'alive', value: true })
+    expect(fieldChange('npc', 'Class / role Wizard')).toMatchObject({ key: 'class', value: 'Wizard' })
+    expect(fieldChange('quest', 'status comp')).toMatchObject({ key: 'status', value: 'completed' })
+    expect(fieldChange('quest', 'status sideways')).toBeNull()
+    expect(fieldChange('quest', 'milestone on')).toMatchObject({ key: 'milestone', value: true })
+    expect(fieldChange('location', 'discovery Destroyed')).toMatchObject({ key: 'status', value: 'destroyed' })
+    expect(fieldChange('rumor', 'status heard, false')).toMatchObject({ key: 'statuses', value: ['heard', 'false'] })
+    expect(fieldChange('npc', 'portrait x')).toBeNull()
+    expect(fieldChange('note', 'colour red')).toBeNull()
   })
 })

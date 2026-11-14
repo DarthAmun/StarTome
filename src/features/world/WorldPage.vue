@@ -10,6 +10,7 @@ import { useRouter } from 'vue-router'
 import { LayoutGrid, List, Plus, Search, Table2 } from 'lucide-vue-next'
 import type { Entry, EntryType } from '@/domain/schema'
 import { createEntry, saveEntry } from '@/data/entries'
+import { npcPlaces } from '@/data/relations'
 import { entries as entryRepo } from '@/data/repo'
 import { reportError } from '@/ui/dialogs'
 import { ENTRY_TYPE_INFO, ENTRY_TYPE_ORDER } from '@/ui/entryTypes'
@@ -21,7 +22,9 @@ import { useWorldQuery, type Density } from './worldQuery'
 
 const router = useRouter()
 const all = useLive<Entry[]>(() => (campaignId.value ? entryRepo.ofCampaign(campaignId.value) : Promise.resolve([])), [], [campaignId])
-const { state, oneType, counts, tags, facetOptions, shown, groups, groupChoices, flat, toggleType, toggleFacet, clear } = useWorldQuery(all, campaignId)
+// An NPC's factions and locations come from its links and pins
+const places = useLive(() => (campaignId.value ? npcPlaces(campaignId.value) : Promise.resolve({})), {}, [campaignId])
+const { state, facetsOf, oneType, counts, tags, facetOptions, shown, groups, groupChoices, flat, toggleType, toggleFacet, clear } = useWorldQuery(all, campaignId, places)
 
 const searchEl = ref<HTMLInputElement | null>(null)
 const focusId = ref<string | null>(null)
@@ -119,7 +122,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
               <template v-if="all.length">Nothing matches. <button class="btn" @click="clear">Clear filters</button></template>
               <template v-else>This campaign has no entries yet.</template>
             </div>
-            <WorldList :groups="groups" :density="state.density" :focus-id="focusId" :one-type="oneType" @pick="pick" @open="openFull" />
+            <WorldList :groups="groups" :density="state.density" :focus-id="focusId" :one-type="oneType" :facets-of="facetsOf" @pick="pick" @open="openFull" />
             <p v-if="shown.length" class="hint faint"><span class="kbd">↑</span> <span class="kbd">↓</span> move · <span class="kbd">Enter</span> open beside · <span class="kbd">Shift</span>+<span class="kbd">Enter</span> or double-click opens the page · <span class="kbd">Space</span> favourite</p>
           </div>
           <nav v-if="letters.length" class="rail" aria-label="Jump to letter"><button v-for="l in letters" :key="l" @click="jump(l)">{{ l }}</button></nav>

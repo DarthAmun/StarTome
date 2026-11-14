@@ -1,33 +1,74 @@
 <script setup lang="ts">
 /** The entries of the World list as rows, as a gallery of cards, or as a table. */
-import { computed } from 'vue'
-import { Star } from 'lucide-vue-next'
+import { computed, ref, watch } from 'vue'
+import { ChevronDown, ChevronRight, Star } from 'lucide-vue-next'
 import type { Entry, EntryType } from '@/domain/schema'
-import { entryFacets, entryMeta, isArchived } from '@/features/shared/facts'
+import { entryMeta, isArchived } from '@/features/shared/facts'
 import { ENTRY_TYPE_INFO } from '@/ui/entryTypes'
 import { excerpt } from '@/ui/markdown'
 import EntryThumb from './EntryThumb.vue'
 import type { Density } from './worldQuery'
 
-const props = defineProps<{ groups: { label: string; entries: Entry[] }[]; density: Density; focusId: string | null; oneType: EntryType | null }>()
+const props = defineProps<{ groups: { label: string; entries: Entry[] }[]; density: Density; focusId: string | null; oneType: EntryType | null; facetsOf: (e: Entry) => Record<string, string | string[]> }>()
 const emit = defineEmits<{ pick: [entry: Entry]; open: [entry: Entry] }>()
 
 /** Table columns: the fields of the one chosen type, or type and tags across types. */
 const columns = computed(() => {
   const first = props.groups.flatMap(g => g.entries)[0]
-  return props.oneType && first ? Object.keys(entryFacets(first)) : []
+  return props.oneType && first ? Object.keys(props.facetsOf(first)) : []
 })
-const cell = (e: Entry, label: string) => { const v = entryFacets(e)[label]; return (Array.isArray(v) ? v.join(', ') : v) || '—' }
+const cell = (e: Entry, label: string) => { const v = props.facetsOf(e)[label]; return (Array.isArray(v) ? v.join(', ') : v) || '—' }
 const typeStyle = (e: Entry) => ({ '--type': ENTRY_TYPE_INFO[e.type].color })
+
+/** Groups folded away (by label), and how many entries are drawn: long lists come a page at a time. */
+const PAGE = 200
+const folded = ref(new Set<string>())
+const limit = ref(PAGE)
+const total = computed(() => props.groups.reduce((n, g) => n + (folded.value.has(g.label) ? 0 : g.entries.length), 0))
+watch(() => props.groups.map(g => g.label).join('\u0001'), () => { limit.value = PAGE })
+
+function fold(label: string) {
+  const next = new Set(folded.value)
+  if (next.has(label)) next.delete(label)
+  else next.add(label)
+  folded.value = next
+}
+
+/** What is drawn: each open group's entries until the page limit is used up. */
+const drawn = computed(() => {
+  let left = limit.value
+  return props.groups.map((g) => {
+    const open = !folded.value.has(g.label)
+    const entries = open ? g.entries.slice(0, Math.max(0, left)) : []
+    left -= entries.length
+    return { label: g.label, count: g.entries.length, open, entries, preview: open ? '' : g.entries.slice(0, 6).map(e => e.name).join(' · ') + (g.entries.length > 6 ? ' …' : '') }
+  }).filter(g => !g.open || g.entries.length || !g.count)
+})
+
+// The arrow keys can reach an entry that is folded away or beyond the page: bring it on screen
+watch(() => props.focusId, (id) => {
+  if (!id) return
+  let before = 0
+  for (const g of props.groups) {
+    const at = g.entries.findIndex(e => e.id === id)
+    if (at < 0) { if (!folded.value.has(g.label)) before += g.entries.length; continue }
+    if (folded.value.has(g.label)) fold(g.label)
+    if (before + at >= limit.value) limit.value = Math.ceil((before + at + 1) / PAGE) * PAGE
+    return
+  }
+})
 
 </script>
 
 <template>
   <div class="world-list" :class="density">
-    <section v-for="g in groups" :key="g.label">
-      <h3 v-if="g.label" class="group"><span>{{ g.label }}</span><span class="num faint">{{ g.entries.length }}</span></h3>
+    <section v-for="g in drawn" :key="g.label">
+      <h3 v-if="g.label" class="group" :class="{ folded: !g.open }" :aria-expanded="g.open" data-test="world-group" @click="fold(g.label)">
+        <component :is="g.open ? ChevronDown : ChevronRight" :size="14" /><span>{{ g.label }}</span><span class="num faint">{{ g.count }}</span><span v-if="!g.open" class="preview">{{ g.preview }}</span>
+      </h3>
 
-      <table v-if="density === 'table'" class="table">
+      <template v-if="!g.open" />
+      <table v-else-if="density === 'table'" class="table">
         <thead><tr><th>Name</th><th v-if="!oneType">Type</th><th v-for="c in columns" :key="c">{{ c }}</th><th>Tags</th><th>Changed</th></tr></thead>
         <tbody>
           <tr v-for="e in g.entries" :key="e.id" :class="{ focus: e.id === focusId, archived: isArchived(e) }" :data-entry="e.id" :style="typeStyle(e)" @click="emit('pick', e)" @dblclick="emit('open', e)">
@@ -58,11 +99,16 @@ const typeStyle = (e: Entry) => ({ '--type': ENTRY_TYPE_INFO[e.type].color })
         </div>
       </template>
     </section>
+    <p v-if="total > limit" class="more"><button class="btn" data-test="world-more" @click="limit += PAGE">Show {{ Math.min(PAGE, total - limit) }} more</button> <button class="btn btn-ghost" @click="limit = total">All {{ total }}</button></p>
   </div>
 </template>
 
 <style scoped>
-.group { display: flex; gap: .7rem; align-items: baseline; margin: 1.1rem 0 .4rem; padding-bottom: .25rem; border-bottom: 1px solid var(--line-strong); color: var(--accent); }
+.group { display: flex; gap: .5rem; align-items: baseline; cursor: pointer; margin: 1.1rem 0 .4rem; padding-bottom: .25rem; border-bottom: 1px solid var(--line-strong); color: var(--accent); }
+.group.folded { color: var(--text-dim); }
+.group :deep(svg) { align-self: center; flex: none; }
+.preview { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-ui); font-size: .82rem; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--text-faint); }
+.more { margin: 1rem 0; display: flex; gap: .5rem; justify-content: center; }
 .row { display: grid; grid-template-columns: 38px 1fr auto; gap: .8rem; align-items: center; padding: .4rem .7rem; border-left: 2px solid transparent; border-bottom: var(--frame); cursor: pointer; }
 .row:hover, .card:hover, tbody tr:hover { background: var(--bg-hover); }
 .row.focus { border-left-color: var(--type); background: var(--bg-raised); }

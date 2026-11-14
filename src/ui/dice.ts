@@ -3,6 +3,7 @@
  * (`::dice[2d6]`), from stat blocks and from the command bar all land here,
  * with the buttons for what comes next (roll the damage, apply it).
  */
+import type { ZoneAreaSpec } from '@/domain/rules/sensorMap'
 import { computed, inject, reactive, shallowRef, type InjectionKey } from 'vue'
 import type { GameId } from '@/domain/game'
 import { rollExpression } from '@/domain/rules/rolls'
@@ -48,6 +49,8 @@ export function clearRolls(): void {
 export interface RollContext {
   roll(r: StatRoll): void
   placeArea?(spec: AreaSpec): void
+  /** A starship battle's sensor map takes zone areas (a 3-zone cone). */
+  zoneArea?(spec: ZoneAreaSpec): void
 }
 export const ROLL_CONTEXT: InjectionKey<RollContext> = Symbol('roll-context')
 
@@ -61,5 +64,7 @@ export function useStatRolls(game: () => GameId | undefined) {
     roll: (r: StatRoll) => { const c = ctx(); if (c) c.roll(r); else showRoll(resolveStatRoll(r, game() ?? 'pf2e')) },
     canPlaceArea: computed(() => !!ctx()?.placeArea),
     placeArea: (spec: AreaSpec) => ctx()?.placeArea?.(spec),
+    canZoneArea: computed(() => !!ctx()?.zoneArea),
+    zoneArea: (spec: ZoneAreaSpec) => ctx()?.zoneArea?.(spec),
   }
 }

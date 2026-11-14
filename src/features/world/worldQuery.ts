@@ -17,7 +17,15 @@ const DEFAULTS: Saved = { sort: 'name', group: 'none', density: 'list', showArch
 const values = (v: string | string[] | undefined) => (Array.isArray(v) ? v : [v ?? '']).filter(Boolean)
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
-export function useWorldQuery(all: Ref<Entry[]>, campaignId: Ref<string | null>) {
+/** Facts that come from links, not from the entry itself (an NPC's factions and locations), by entry id. */
+export type LinkedFacets = Record<string, Record<string, string[]>>
+
+export function useWorldQuery(all: Ref<Entry[]>, campaignId: Ref<string | null>, linked: Ref<LinkedFacets> = { value: {} } as Ref<LinkedFacets>) {
+  const facetsOf = (e: Entry): Record<string, string | string[]> => {
+    const extra = linked.value[e.id]
+    return e.type === 'npc' ? { ...entryFacets(e), Faction: extra?.Faction ?? [], Location: extra?.Location ?? [] } : entryFacets(e)
+  }
+
   const state = reactive({
     query: '', types: new Set<EntryType>(), favoritesOnly: false, tag: null as string | null,
     /** Field filters: label → the values ticked. Only offered while one type is chosen. */
@@ -54,7 +62,7 @@ export function useWorldQuery(all: Ref<Entry[]>, campaignId: Ref<string | null>)
     if (!state.showArchived && isArchived(e)) return false
     if (state.tag && !e.tags.includes(state.tag)) return false
     if (q && !(e.name.toLowerCase().includes(q) || e.tags.some(t => t.toLowerCase().includes(q)) || e.body.toLowerCase().includes(q))) return false
-    const facets = entryFacets(e)
+    const facets = facetsOf(e)
     for (const [label, wanted] of Object.entries(state.facets)) {
       if (label === skipFacet || !wanted.length) continue
       if (!values(facets[label]).some(v => wanted.includes(v))) return false
@@ -66,10 +74,10 @@ export function useWorldQuery(all: Ref<Entry[]>, campaignId: Ref<string | null>)
   const facetOptions = computed(() => {
     if (!oneType.value) return []
     const labels = new Set<string>()
-    for (const e of all.value) if (e.type === oneType.value) for (const k of Object.keys(entryFacets(e))) labels.add(k)
+    for (const e of all.value) if (e.type === oneType.value) for (const k of Object.keys(facetsOf(e))) labels.add(k)
     return [...labels].map((label) => {
       const c = new Map<string, number>()
-      for (const e of all.value) if (passes(e, label)) for (const v of values(entryFacets(e)[label])) c.set(v, (c.get(v) ?? 0) + 1)
+      for (const e of all.value) if (passes(e, label)) for (const v of values(facetsOf(e)[label])) c.set(v, (c.get(v) ?? 0) + 1)
       for (const v of state.facets[label] ?? []) if (!c.has(v)) c.set(v, 0)
       return { label, options: [...c.entries()].sort((a, b) => collator.compare(a[0], b[0])) }
     }).filter(f => f.options.length > 1 || (state.facets[f.label]?.length ?? 0) > 0)
@@ -85,7 +93,7 @@ export function useWorldQuery(all: Ref<Entry[]>, campaignId: Ref<string | null>)
   const groups = computed<{ label: string; entries: Entry[] }[]>(() => {
     if (state.group === 'none') return [{ label: '', entries: shown.value }]
     const map = new Map<string, Entry[]>()
-    const keyOf = (e: Entry) => (state.group === 'type' ? ENTRY_TYPE_INFO[e.type].plural : state.group === 'tag' ? e.tags[0] ?? '' : values(entryFacets(e)[state.group])[0] ?? '')
+    const keyOf = (e: Entry) => (state.group === 'type' ? ENTRY_TYPE_INFO[e.type].plural : state.group === 'tag' ? e.tags[0] ?? '' : values(facetsOf(e)[state.group])[0] ?? '')
     for (const e of shown.value) {
       const k = keyOf(e)
       map.set(k, [...(map.get(k) ?? []), e])
@@ -111,5 +119,5 @@ export function useWorldQuery(all: Ref<Entry[]>, campaignId: Ref<string | null>)
     state.query = ''; state.types = new Set(); state.favoritesOnly = false; state.tag = null; state.facets = {}; state.showArchived = true
   }
 
-  return { state, oneType, counts, tags, facetOptions, shown, groups, groupChoices, flat, toggleType, toggleFacet, clear }
+  return { state, facetsOf, oneType, counts, tags, facetOptions, shown, groups, groupChoices, flat, toggleType, toggleFacet, clear }
 }

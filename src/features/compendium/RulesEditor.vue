@@ -38,8 +38,13 @@ function set(path: string, value: unknown) {
   const defaults = SUB_DEFAULTS[head]
   if (defaults && rest.length && bag.value[head] === undefined) { set(head, setPath(defaults, rest.join('.'), value)); return }
   local.value = setPath(local.value, path, value)
-  // Whole top-level fields are written, so a synced entry's edit is one overlay entry per field
-  pending.set(head, bag.value[head])
+  // A field inside an object (saves.fort, hp.max) is written by itself, so a synced entry keeps following
+  // Foundry for its siblings; lists (strikes, abilities) are written whole, since their rows have no identity
+  if (rest.length && !pending.has(head) && !Array.isArray(bag.value[head]) && !rest.some(k => /^\d+$/.test(k))) pending.set(path, value)
+  else {
+    for (const key of [...pending.keys()]) if (key.startsWith(`${head}.`)) pending.delete(key)
+    pending.set(head, bag.value[head])
+  }
   if (timer) clearTimeout(timer)
   timer = setTimeout(() => { void flush() }, 350)
 }

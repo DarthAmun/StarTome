@@ -137,11 +137,17 @@ export async function requestInitiative(encounterId: string, chars: Character[],
   return linked.length
 }
 
-export interface DamageAsk { damage: { amount: number; type: string; persistent?: boolean }[]; conditions: { id: string; value?: number }[]; label?: string }
+/** `healing`: Hit Points given back (draft 2.1 of the API); `damage` and `conditions` may be empty. */
+export interface DamageAsk { damage: { amount: number; type: string; persistent?: boolean }[]; conditions: { id: string; value?: number }[]; healing?: number; label?: string }
 
 export async function requestDamage(c: Character, ask: DamageAsk): Promise<void> {
-  const what = [...ask.damage.map(d => `${d.amount} ${d.persistent ? 'persistent ' : ''}${d.type}`.trim()), ...ask.conditions.map(k => `${k.id}${k.value ? ` ${k.value}` : ''}`)].join(', ')
-  await create(c, { kind: 'damage', ...(ask.damage.length ? { damage: ask.damage } : {}), ...(ask.conditions.length ? { conditions: ask.conditions } : {}), ...(ask.label ? { label: ask.label } : {}) }, `${what} → ${c.name}`)
+  const what = [
+    ...ask.damage.map(d => `${d.amount} ${d.persistent ? 'persistent ' : ''}${d.type}`.trim()),
+    ...(ask.healing ? [`${ask.healing} healing`] : []),
+    ...ask.conditions.map(k => `${k.id}${k.value ? ` ${k.value}` : ''}`),
+  ].join(', ')
+  if (!what) return
+  await create(c, { kind: 'damage', ...(ask.damage.length ? { damage: ask.damage } : {}), ...(ask.healing ? { healing: ask.healing } : {}), ...(ask.conditions.length ? { conditions: ask.conditions } : {}), ...(ask.label ? { label: ask.label } : {}) }, `${what} → ${c.name}`)
 }
 
 // ── Level-ups ──────────────────────────────────────────────────────────────

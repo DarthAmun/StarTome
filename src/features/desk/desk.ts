@@ -29,7 +29,7 @@ export const TOOL_LABEL: Record<ToolKind, string> = {
 export const SINGLETONS: ToolKind[] = ['scratchpad', 'encounter-link', 'conditions-grid', 'dc-table', 'timer', 'rules-lookup', 'npc-generator', 'weather']
 const SIZES: Partial<Record<WidgetKind, [number, number]>> = {
   scratchpad: [600, 168], 'encounter-link': [384, 240], 'conditions-grid': [576, 240], 'dc-table': [432, 264], timer: [336, 192], 'rules-lookup': [432, 336],
-  'rules-entry': [384, 168], 'npc-generator': [432, 264], weather: [336, 216], session: [600, 264], location: [480, 264], note: [480, 240], 'random-table': [432, 264],
+  'rules-entry': [456, 480], 'npc-generator': [432, 264], weather: [336, 216], session: [600, 264], location: [480, 264], note: [480, 240], 'random-table': [432, 264],
 }
 export const SNAP = 24
 export const snap = (v: number) => Math.round(v / SNAP) * SNAP

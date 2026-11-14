@@ -282,6 +282,14 @@ describe('the link against the mock server', () => {
     await answer(dmg.remoteId, {})
     await until(async () => (await character(id)).link?.mirror?.basic?.hp.value === 88)
     expect((await character(id)).link?.mirror?.basic?.conditions.map(c => c.slug)).toEqual(['prone'])
+
+    // Healing travels the same way; a message with nothing in it is not sent
+    await pb.requestDamage(await character(id), { damage: [], conditions: [], healing: 7 })
+    await pb.requestDamage(await character(id), { damage: [], conditions: [] })
+    const heals = (await rows()).filter(r => r.kind === 'damage' && r.id !== dmg.id)
+    expect(heals.map(r => r.summary)).toEqual(['7 healing → Groknar'])
+    await answer(heals[0]!.remoteId, {})
+    await until(async () => (await character(id)).link?.mirror?.basic?.hp.value === 95)
   })
 
   it('gives an unidentified item under its player name and reveals it later', async () => {

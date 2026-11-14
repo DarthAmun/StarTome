@@ -65,8 +65,19 @@ export class StarTomeDb extends Dexie {
 
 let db: StarTomeDb | null = null
 
+const changeListeners = new Set<() => void>()
+
+/** Called when a newer version of the app, in another tab, upgrades the database: this tab's connection is closed. */
+export function onDatabaseChange(listener: () => void): void {
+  changeListeners.add(listener)
+}
+
 export function getDb(): StarTomeDb {
-  db ??= new StarTomeDb()
+  if (!db) {
+    db = new StarTomeDb()
+    const opened = db
+    opened.on('versionchange', () => { opened.close(); for (const l of changeListeners) l() })
+  }
   return db
 }
 

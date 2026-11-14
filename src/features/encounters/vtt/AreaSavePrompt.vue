@@ -87,7 +87,7 @@ function applyAll() {
     if (!d) continue
     logLine(r.token, 'roll', { note: `${AREA_SAVE_LABEL[e.save]} save vs ${a.label}`, value: (r.d20 ?? 0) + (r.modifier ?? 0), degree: d })
     const amount = damageOf(r) ?? 0
-    if (amount > 0) applyDamage(r.token.id, amount)
+    if (amount > 0) applyDamage(r.token.id, amount, e.damage?.type ? { type: e.damage.type } : {})
     addConditions(r.token.id, conditionsOf(r), (name) => { const info = conditionInfo(name); return info ? { color: info.color, icon: info.icon } : {} })
   }
   closeAreaPrompt(p.id)

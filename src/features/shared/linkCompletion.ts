@@ -47,3 +47,23 @@ export function linkCompletion(campaignId: () => string | null): CompleteFn {
     return names.length ? { from: open, items: names.map(n => ({ label: n, detail: type, apply: `{{${typed}: ${n}}}`, color })) } : null
   }
 }
+
+/**
+ * For one-line fields (the capture bar): `{{` completes as everywhere, and `@Name` finds any
+ * entry of the campaign by name and writes its link.
+ */
+export function mentionCompletion(campaignId: () => string | null): CompleteFn {
+  const links = linkCompletion(campaignId)
+  return async (before) => {
+    const viaBraces = await links(before)
+    if (viaBraces) return viaBraces
+    const m = /(^|[\s(])@([^@{}\n]{0,40})$/.exec(before)
+    const camp = campaignId()
+    if (!m || !camp) return null
+    const q = (m[2] ?? '').toLowerCase()
+    const found = (await entries.ofCampaign(camp)).filter(e => e.type !== 'session' && e.name.toLowerCase().includes(q))
+      .sort((a, b) => Number(b.name.toLowerCase().startsWith(q)) - Number(a.name.toLowerCase().startsWith(q)) || a.name.localeCompare(b.name)).slice(0, 12)
+    if (!found.length) return null
+    return { from: before.length - (m[2] ?? '').length - 1, items: found.map(e => ({ label: e.name, detail: ENTRY_TYPE_INFO[e.type].label, apply: `{{${e.type === 'random-table' ? 'table' : e.type}: ${e.name}}}`, color: ENTRY_TYPE_INFO[e.type].color })) }
+  }
+}

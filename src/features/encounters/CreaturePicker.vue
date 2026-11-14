@@ -20,6 +20,8 @@ watch([text, both], async () => {
   if (mine === run) results.value = page.items
 })
 function pick(e: RulesEntity) { emit('pick', e) }
+/** A result can be dragged onto the battle map, where it becomes a token on the square it is dropped on. */
+function drag(ev: DragEvent, e: RulesEntity) { ev.dataTransfer?.setData('application/x-startome-rules', e.id); ev.dataTransfer?.setData('text/plain', e.name) }
 </script>
 
 <template>
@@ -29,7 +31,7 @@ function pick(e: RulesEntity) { emit('pick', e) }
       <label class="faint both" title="Also search the other game's compendium"><input v-model="both" type="checkbox" /> both games</label>
     </div>
     <ul v-if="results.length">
-      <li v-for="e in results" :key="e.id"><button class="hit" :data-creature="e.name" @click="pick(e)"><span class="num lvl">{{ e.level }}</span><span class="name">{{ e.name }}</span><span class="faint">{{ e.kind }}</span></button></li>
+      <li v-for="e in results" :key="e.id"><button class="hit" draggable="true" title="Click to add, or drag onto the map" :data-creature="e.name" @click="pick(e)" @dragstart="drag($event, e)"><span class="num lvl">{{ e.level }}</span><span class="name">{{ e.name }}</span><span class="faint">{{ e.kind }}</span></button></li>
     </ul>
     <p v-else-if="text.trim().length >= 2" class="faint none">Nothing by that name. Sync the compendium or add a token by hand.</p>
   </div>

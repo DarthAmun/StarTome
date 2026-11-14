@@ -1,6 +1,6 @@
 # StarTome rework plan
 
-Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phases 1 to 7 and the Play Buddy half of Phase 8 are done on the `rework` branch (see section 11a). The other half of Phase 8 (settings, cheat sheet, offline checks, performance, parity audit, cut-over) is next.
+Status: **approved 2026-11-12 with the decisions in section 0.** Written against v0.41.0 (`67bc760`). Phase 0 is done (v0.42.0, on `main`). Phases 1 to 7 and the Play Buddy half of Phase 8 are done on the `rework` branch (see section 11a). Of the other half of Phase 8, the build, settings, the cheat sheet, the offline checks and the image clean-up are done, and so are most of the small open items (section 11a, last entry); what is left is the parity audit, publishing the preview and the cut-over (section 11b).
 
 How this was produced: the schema, types, format docs, backup/import code, the Play Buddy port and the app shell were read line by line. The large UI files (encounter page, GM screen, map maker, editors, session board) were read by extracting their templates, handlers, shortcuts and storage keys rather than every line. The app was started (`pnpm dev`), the main screens were opened, `pnpm test` (557 passed, 2 skipped) and `pnpm typecheck` ran clean. A real backup (`~/Downloads/startome-all-2026-11-03.json`, 578 MB) was inspected for its actual shape. Anything in the inventory I could not confirm by running it is still listed; Phase 3 verifies each line.
 
@@ -107,9 +107,9 @@ Checkbox = verified in the rework (all empty now). IDs are for reference in late
 - [x] A9 Floating Dice, Music and Search buttons on every GM page
 - [x] A10 Player routes (encounter player view, map player, graph player) render without any GM chrome
 - [x] A11 Notices (toasts) bottom right: failed saves, storage quota errors, sticky notices with an action
-- [ ] A12 "Updated in another tab" notice with Reload; "waiting for other tabs to close" notice during a schema upgrade
+- [x] A12 "Updated in another tab" notice with Reload; "waiting for other tabs to close" notice during a schema upgrade
 - [x] A13 New Campaign dialog reachable from sidebar and home (name, description, game)
-- [ ] A14 PWA install button when the browser offers it
+- [x] A14 PWA install button when the browser offers it
 - [ ] A15 Old routes redirect: `/dm-screen` → `/gm-screen`, `/graph` → `/graphs`, `/map` → `/locations` (flag F12)
 - [ ] A16 Click sparks and ink-write heading animation (flag F1)
 
@@ -413,15 +413,15 @@ Map maker
 ### R. Settings
 
 - [ ] R1 Themes: dark, void, forest, light, parchment (flag F2)
-- [ ] R2 Accent: eight presets or a custom colour
-- [ ] R3 Interface size: compact, normal, large; UI font: DM Sans, IM Fell, system (flag F2)
+- [x] R2 Accent: eight presets or a custom colour
+- [x] R3 Interface size: compact, normal, large; UI font: DM Sans, IM Fell, system (flag F2)
 - [ ] R4 Page animations, click sparks, ink-write switches (flag F1)
-- [ ] R5 Shortcut list; About with version
+- [x] R5 Shortcut list; About with version
 
 ### S. Offline and storage behaviour
 
-- [ ] S1 Everything works without a network after the first load (service worker caches the app, fonts are bundled)
-- [ ] S2 The only network calls: the GitHub latest-release check on the sync page, URL images and tracks, Play Buddy on `127.0.0.1`
+- [x] S1 Everything works without a network after the first load (service worker caches the app, fonts are bundled)
+- [x] S2 The only network calls: the GitHub latest-release check on the sync page, URL images and tracks, Play Buddy on `127.0.0.1`
 - [x] S3 All data in IndexedDB; storage is asked to persist during the big imports
 - [ ] S4 StarTome and DM's Tome can share an origin without sharing data (prefixed names)
 - [ ] S5 Changes written in one tab or a worker show up in the others
@@ -794,7 +794,7 @@ The new app is built on a `rework` branch and published to a second path (for ex
 | **6 Sessions and the table** ✅ | Session board, capture, recap and finish, session log, table bar, Tonight, Desk with all widgets, sounds. | F, N, Q, B | Run a whole Pathfinder session in the new app. |
 | **7 Starfinder** ✅ | Starship page, crew, interior map, sensor map, starship combat, starship encounters. | J5–J15 | Run a Starfinder session. |
 | **8a Link** ✅ | Character link (Play Buddy) against a rewritten API (`PLAYBUDDY_API.md`, draft 2). | K | Run a session with linked players, once Play Buddy implements the API. |
-| **8b Polish, cut-over** | Settings, shortcut cheat sheet, offline and install checks, performance pass with measurements, final parity audit, move the new app to the main path, tag the old one. Summary report. | R, A, T, the rest | Retire v0.41. |
+| **8b Polish, cut-over** (first part ✅) | Done: settings, shortcut cheat sheet, offline and install checks, the bundle split. Left: final parity audit, move the new app to the main path, tag the old one. Summary report. | R, A, T, the rest | Retire v0.41. |
 
 Order reasoning: data safety first; then the parts every later phase leans on (entries, compendium); party before encounters because resolution writes to the ledger and the stash; sessions after encounters because the table bar and board run encounters; Starfinder after its dependencies; the character link last because it touches party, inventory and encounters and has a mock server to test against.
 
@@ -1020,25 +1020,93 @@ Differences from v0.42, and what is left:
 - **Not exercised by a browser test:** coins, level-up offers, identify, the share file, the recap's hero points, the crew's shared skills, the outbox while offline (all unit-tested against the mock except the two screens' buttons).
 - **One existing browser test is flaky** (`world.spec.ts`, "commands, field filters, table view and an embedded card"): it fails now and then in a full run, with and without this phase's changes.
 
+**Phase 8b, first part, and the open items (done 2026-11-14, branch `rework`).**
+
+You asked for everything in section 11b that makes sense to build now. What was built, by area; what was left and why is in 11b.
+
+*The app itself*
+
+- **The production build works.** Every page but the first loads when it is opened, so the main script went from 2.38 MB to 342 kB (115 kB compressed) and the service worker is written again: 172 files, 5.0 MB, all stored for offline use. Checked in the built app: with the server stopped, a reload and a page not opened before both come from the device.
+- **A new version waits for you.** It is fetched in the background and a notice offers "Reload"; it never replaces the app under a running session. A database upgraded by a newer version in another tab gives the same notice.
+- **Settings** has a "This app" part (version and "Look for a new version", offline state, Install, storage used and whether the browser keeps it) and the shortcut list. **`?`** anywhere outside a text field opens the same list as a cheat sheet.
+- **Unused images are removed** (decision F11): once a day, an image that no row names and that is more than a day old is deleted. It is the rule a backup already follows for what it writes. Import & Backup shows how many are waiting and has "Remove now".
+- **Network calls** (S2) were checked by reading the code: the Foundry release check, and Play Buddy on `127.0.0.1`. Nothing else.
+
+*World*
+
+- The command bar takes **`set status imprisoned`**, `set dead`, `set discovery destroyed` and so on for the entry open in the dock (text, choice, switch and status-list fields).
+- **Callouts** other than GM-only (`> [!note]`, tip, warning, danger and their usual other names) are drawn as labelled boxes in four tones.
+- With NPCs chosen, **Faction and Location** are filters and groupings (from links either way, and from pins on a location's map).
+- **Groups fold** with a click on their heading and then show their first names; a list longer than 200 entries is drawn a page at a time.
+
+*Compendium*
+
+- An edit to a field inside a group (a creature's Fortitude, an item's hardness) is kept as **that field alone**, so the rest of the group keeps following Foundry.
+- A sync, import or edit in one window **refreshes the lists of the other windows**.
+
+*Party*
+
+- A level-up from a milestone quest **names the quest**.
+- Items that carry runes as a label only (older data) are counted on the Party page, and one button **turns them into attached runes** where the compendium has every rune of the item; the others keep their label and are listed with what was not found.
+
+*Encounters*
+
+- A **dice button per row** of the turn order rolls that one token's initiative (again, too).
+- A creature can be **dragged onto the map** from the encounter's creature search and from the Compendium list (also from a second window).
+- **"Build a creature"** in the encounter builder opens the creature builder there, at the party's level, and puts the result into the selection.
+- A **colour chosen for a condition is remembered** and used the next time that condition is added, in every campaign. (It is kept with the app, not written into the compendium entry, where a sync would overwrite it.)
+
+*Sessions*
+
+- The capture bar **completes links**: `{{` as everywhere, and `@Name` finds any entry and writes its link. The field empties the moment Enter is pressed.
+- **Renaming an entry** rewrites the text of session panels, on boards and in the drawer.
+- An NPC named in a panel's text shows its **portrait** beside the name.
+- **Connections** leave and arrive at the sides of the two panels that face each other.
+
+*Desk*
+
+- An entry widget has a pencil that **swaps the card for the entry's full view**, so it is edited where it stands.
+- A **location widget shows its map**; a pinned location with a map of its own steps into it, with Back.
+- A **compendium entry is its stat block**, with its rolls. The DC table lists **Recall Knowledge** for every creature and hazard pinned to the Desk.
+- The weather widget has **"Make it a random table"** (decision F13): an entry with the list as rows takes the widget's place.
+
+*Starfinder*
+
+- Crew are seated by **dragging names onto stations** (the selects stay).
+- A starship's stat block has a **"Zone area" button** on abilities with a zone area while a sensor map is open; it fills in shape, size, DC, save and damage for the selected ship.
+- `scripts/techcore/build.sh` was run against your Tech Core PDF: the 149 entries it writes pass the new app's homebrew check with no error and import.
+
+*Play Buddy* (API draft 2, one addition written into `PLAYBUDDY_API.md` §6 and §13)
+
+- **Healing** typed for a linked character's token is sent (`healing` on the damage message, new).
+- **Damage goes with its type**: type "12 fire" in the turn order's field, and an area's damage carries its own type.
+- **Conditions** put on a linked character's token (by hand or by an area's save) are sent. Taking one off cannot be sent: the API only adds them.
+
+Bugs found on the way and fixed: text typed into an NPC's Ancestry or Class could be wiped a moment after the field was entered (the suggestions arriving redrew it); this was also why the World browser test "commands, field filters…" failed now and then. A command typed and entered faster than the campaign's entries were read did nothing.
+
+Tests added: 6 unit tests (unused images, the set command, old runes, renamed entries in panels, sides of a connection, list to table rows; healing in the link test) and 5 browser tests (`e2e/polish.spec.ts`: cheat sheet and settings; set a field, a callout, folding groups; `@` in the capture bar and a rename; the Desk's entry editing and the weather table; one token's initiative). Totals: 517 unit tests and 28 browser tests, all passing, the browser tests three times in a row.
+
+Not exercised by a browser test: the update notice (needs two builds), dragging a creature onto the map, dragging crew, the zone area button, the location map on the Desk, remembered condition colours, portraits in panel text, converting runes and what is sent to Play Buddy from an encounter (the last two are unit-tested).
+
 ### 11b. Open items (one list)
 
 Everything left out or left open so far, gathered from the phase entries above. Each later phase updates this list: items it closes are removed, new ones are added. Nothing here blocks the phases; it is what the final parity audit in Phase 8 walks through.
 
-**Waiting for a later phase**
+**Left of Phase 8b**
 
-- *Phase 8b (polish and cut-over):* **the production build fails today** (`pnpm build`: the main script is 2.38 MB, above the limit the offline cache accepts, so no service worker is written; it failed the same way before Phase 8a; the fix is splitting the bundle by page, which is the performance pass); settings page in full and the shortcut cheat sheet (`?`); offline and install checks (S1, S2); "updated in another tab" notice; removing images nothing uses any more (decision F11); publishing the preview beside the old app; the performance pass; the final parity audit.
+- The final parity audit (walking section 2 line by line and ticking what is verified).
+- Publishing the preview beside the old app: it needs a change to the deploy workflow on `main`, which is yours to approve.
+- The cut-over: moving the new app to the main path, tagging v0.42, removing `legacy/`.
+- "Waiting for other tabs to close" during a database upgrade (the second half of A12): there is only one database version so far, so there is nothing to wait for yet.
 
 **Small things not built** (say which you want; none is planned otherwise)
 
-- *World:* collapsible groups with previews and paged rendering in the list (lists of a few hundred render at once); filtering NPCs by faction or location; `{{` completion and links for recorded historical states; the old "edit attribute" command in the command bar; callouts other than GM-only (`> [!note]`) show as plain quotes.
-- *Compendium:* your edits to a synced entry are kept per field, not per sub-field (changing a creature's Fortitude keeps your whole saves line, so a later Foundry change to its Will is reported as a conflict); a sync or import in another window does not refresh an open list; the Foundry sync still unpacks with JSZip.
-- *Party:* runes stored the old way (a "+1 striking" field) show as a label and count in the gear check but are not turned into attached rune entries; a level-up from a milestone quest says "Milestone quest" without the quest's name.
-- *Encounters:* no icon picker for conditions, and a condition's colour is not saved back to the compendium entry; the creature builder is a link to the compendium, not a dialog inside the encounter builder; a creature cannot be dragged from the compendium list onto the map (search, click or right-click the map instead); no per-token "roll initiative" button (type it, or "roll all" fills the empty ones); the players' window gets the whole scene on each change instead of single changes.
-- *Sessions:* the capture bar has no `{{` or `@` completion; NPC portraits are not drawn beside mentions in panel text; connections run from a panel's lower dot to another's upper dot, not between the nearest sides; renaming an entry does not rewrite session panel text.
-- *Desk:* entry widgets are not edited in place (the name opens the dock); a location widget has no map with drill-down; the DC widget has no Recall Knowledge line for a pinned creature; a compendium entry is a card that opens the stat block, not the stat block itself; weather stayed a widget with its list instead of becoming random tables (decision F13).
-- *Starfinder:* crew are seated with a select, not by dragging; a starship's stat block has no "Zone area" button that fills in the sensor map's zone area; `scripts/techcore/build.sh` was not re-run against the new app.
-- *Play Buddy:* everything is tested against the mock only, until Play Buddy implements draft 2 of the API; no party panel on the session board (the table bar shows HP, hero points and conditions); conditions and healing are not sent from the encounter, and damage is sent untyped; no dialog to match an item by hand.
-- *Backup folder:* each backup is a complete zip, so images are written every time (about 450 MB per backup for your data, three kept) instead of being shared between backups.
+- *World:* `{{` completion and links for recorded historical states (decision F4 cut their links).
+- *Compendium:* the Foundry sync still unpacks with JSZip (it works; switching to fflate would change nothing you see).
+- *Encounters:* no icon picker for conditions (tokens show conditions as coloured rings, not icons); the players' window gets the whole scene on each change instead of single changes (no slowness measured).
+- *Desk:* the entry widget's full view is the same as the dock's, so a small widget scrolls.
+- *Play Buddy:* everything is tested against the mock only, until Play Buddy implements draft 2 of the API; no party panel on the session board (the table bar shows HP, hero points and conditions); a condition cannot be taken off a player's character from here; no dialog to match an item by hand.
+- *Backup folder:* each backup is a complete zip, so images are written every time (about 450 MB per backup for your data, three kept) instead of being shared between backups. Sharing them means a second backup layout and a second restore path; worth it only if the size or the time bothers you.
 
 **Changed on purpose** (different from v0.42, not missing)
 
@@ -1053,9 +1121,9 @@ Everything left out or left open so far, gathered from the phase entries above. 
 - *Encounters:* dropping an image on the map, dragging tokens from the library, importing assets into the map maker, weak and elite stat blocks in the dock, lingering areas, the recovery and persistent damage prompts.
 - *Sessions and Desk:* dragging panels into frames, drawing connections, copying a scene from another campaign, random table and reward panels, saved Desk layouts.
 - *Sounds:* playing a real audio file and switching the output device.
-- *Starfinder:* upgrades and bays, crew presets, Emergency Repairs, zone areas, a builder-made starship encounter; and nothing of it against real Tech Core entries, which the preview's compendium does not hold yet.
+- *Starfinder:* upgrades and bays, crew presets, Emergency Repairs, zone areas, a builder-made starship encounter; and nothing of it in the browser against real Tech Core entries (the pack itself builds and passes the import check).
 - *Play Buddy:* offering coins, level-up offers, identify, the share file, hero points from the recap, the crew's shared skills (unit-tested against the mock).
-- *Flaky:* the World browser test "commands, field filters, table view and an embedded card" fails now and then in a full run.
+- *From 2026-11-14:* the update notice, dragging a creature onto the map, dragging crew onto stations, the zone area button, the location map on the Desk, remembered condition colours, portraits in panel text, converting old runes and what an encounter sends to Play Buddy (the last two are unit-tested).
 - *Data:* enemy tokens of imported encounters are named after their stat block, so they show as "Token" until the Foundry compendium is synced in the new app.
 
 ---

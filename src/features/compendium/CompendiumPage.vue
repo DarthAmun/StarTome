@@ -122,6 +122,10 @@ function sub(e: RulesEntity): string {
   else if (e.kind === 'spell') own = (e as Spell).traditions.join(', ')
   return [kind.value ? '' : RULES_KIND_CONFIG[e.kind].label, own, game].filter(Boolean).join(' · ')
 }
+
+/** Kinds a battle map takes as a token: dragged from this list onto an encounter's map, in this window's dock or another window. */
+const PLACEABLE: string[] = ['creature', 'hazard', 'vehicle']
+function drag(ev: DragEvent, e: { id: string; name: string }) { ev.dataTransfer?.setData('application/x-startome-rules', e.id); ev.dataTransfer?.setData('text/plain', e.name) }
 </script>
 
 <template>
@@ -172,7 +176,7 @@ function sub(e: RulesEntity): string {
           <button v-if="activeFilters" class="btn btn-ghost" @click="clear">Clear filters</button>
         </details>
         <div class="rows">
-          <button v-for="e in page.items" :key="e.id" class="row" :class="{ on: e.id === selectedId }" :data-rule="e.id" @click="select(e.id)">
+          <button v-for="e in page.items" :key="e.id" class="row" :class="{ on: e.id === selectedId }" :data-rule="e.id" :draggable="PLACEABLE.includes(e.kind)" :title="PLACEABLE.includes(e.kind) ? 'Drag onto a battle map (also one open in another window) to place it' : undefined" @click="select(e.id)" @dragstart="drag($event, e)">
             <span class="lvl-box num" :style="{ borderColor: RULES_KIND_CONFIG[e.kind].color }">{{ RULES_KIND_CONFIG[e.kind].hasLevel ? e.level : '·' }}</span>
             <span class="name">{{ e.name }}<Star v-if="e.isFavorite" :size="11" class="star" fill="currentColor" /><span v-if="e.localEdits" class="tag">edited</span><span v-if="e.origin === 'user'" class="tag">homebrew</span></span>
             <span v-if="e.rarity !== 'common'" class="dot" :style="{ background: RARITY_COLOR[e.rarity] }" :title="e.rarity" />

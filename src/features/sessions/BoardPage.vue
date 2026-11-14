@@ -10,7 +10,7 @@ import { MarkerType, useVueFlow, VueFlow, type Connection, type Edge, type Node,
 import { computed, markRaw, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, Archive, Maximize } from 'lucide-vue-next'
-import { PANEL_CONFIG, PANEL_ORDER, type PanelKind } from '@/domain/rules/sessionBoard'
+import { nearestSides, PANEL_CONFIG, PANEL_ORDER, type PanelKind } from '@/domain/rules/sessionBoard'
 import type { EntryOf, SessionEdge, SessionPanel } from '@/domain/schema'
 import { saveEntry } from '@/data/entries'
 import { entries } from '@/data/repo'
@@ -66,10 +66,17 @@ const nodes = computed<Node[]>(() => {
 const EDGE_STYLE: Record<SessionEdge['kind'], Record<string, string | number>> = {
   plan: { stroke: 'var(--text-faint)', strokeDasharray: '6 4', strokeWidth: 1.5 }, sequence: { stroke: 'var(--accent)', strokeWidth: 2.5 }, attach: { stroke: '#7cc44e', strokeDasharray: '2 3', strokeWidth: 1.5 },
 }
+/** A connection leaves and arrives at the sides of its two panels that face each other. */
+function sidesOf(e: SessionEdge): { sourceHandle: string; targetHandle: string } {
+  const a = panels.value.find(p => p.id === e.sourceId), b = panels.value.find(p => p.id === e.targetId)
+  if (!a || !b) return { sourceHandle: 's-bottom', targetHandle: 't-top' }
+  const [from, to] = nearestSides({ ...abs(a), w: a.w ?? PANEL_CONFIG[a.kind].width, h: a.h ?? 110 }, { ...abs(b), w: b.w ?? PANEL_CONFIG[b.kind].width, h: b.h ?? 110 })
+  return { sourceHandle: `s-${from}`, targetHandle: `t-${to}` }
+}
 const flowEdges = computed<Edge[]>(() => {
   const ids = new Set(panels.value.map(p => p.id))
   return edges.value.filter(e => ids.has(e.sourceId) && ids.has(e.targetId)).map(e => ({
-    id: e.id, source: e.sourceId, target: e.targetId, style: EDGE_STYLE[e.kind], data: e, zIndex: 1,
+    id: e.id, source: e.sourceId, target: e.targetId, ...sidesOf(e), style: EDGE_STYLE[e.kind], data: e, zIndex: 1,
     label: e.label || (e.kind === 'sequence' ? String(board.sequenceNumbers.value.get(e.id) ?? '') : undefined),
     markerEnd: e.kind === 'attach' ? undefined : MarkerType.ArrowClosed,
   }))
