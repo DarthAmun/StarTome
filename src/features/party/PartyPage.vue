@@ -190,7 +190,7 @@ async function convertRunes() {
 </template>
 
 <style scoped>
-.party { display: flex; flex-direction: column; gap: 2rem; max-width: 1180px; }
+.party { display: flex; flex-direction: column; gap: 2rem; }
 .page-head { margin-bottom: 0; align-items: center; }
 .title { flex: 1; } .title p { margin: .2rem 0 0; }
 .warn { color: var(--warn); }

@@ -9,6 +9,16 @@ import { Trash2, X } from 'lucide-vue-next'
 import { clearRolls, dice, rollDice, runRollAction } from '@/ui/dice'
 
 const DICE = [4, 6, 8, 10, 12, 20, 100] as const
+/** Each die drawn as its shape (outline in a 44×44 box), as v0.42 did; the d20 with its inner face. */
+const SHAPES: Record<(typeof DICE)[number], string> = {
+  4: 'M22 3 L42 40 L2 40 Z',
+  6: 'M6 4 H38 Q40 4 40 6 V38 Q40 40 38 40 H6 Q4 40 4 38 V6 Q4 4 6 4 Z',
+  8: 'M22 2 L42 22 L22 42 L2 22 Z',
+  10: 'M22 2 L41 19 L32 42 L12 42 L3 19 Z',
+  12: 'M22 2 L40 15 L36 38 L8 38 L4 15 Z',
+  20: 'M22 2 L40 12 L40 32 L22 42 L4 32 L4 12 Z M22 10 L34 30 L10 30 Z',
+  100: 'M22 3 A19 19 0 1 1 21.99 3 Z',
+}
 const pool = reactive<Record<number, number>>({ 4: 0, 6: 0, 8: 0, 10: 0, 12: 0, 20: 0, 100: 0 })
 const modifier = ref(0)
 
@@ -34,7 +44,9 @@ function roll() { if (expr.value) rollDice(expr.value) }
     </header>
     <div class="pool">
       <button v-for="d in DICE" :key="d" class="die" :class="{ on: pool[d] }" :title="`Add a d${d} (right-click removes one)`" @click="add(d, 1)" @contextmenu.prevent="add(d, -1)">
-        <span v-if="pool[d]" class="count">{{ pool[d] }}</span>d{{ d }}
+        <svg class="shape" viewBox="0 0 44 44" aria-hidden="true"><path :d="SHAPES[d]" /><text v-if="d === 100" x="22" y="27" text-anchor="middle">%</text></svg>
+        <span class="name">d{{ d }}</span>
+        <span v-if="pool[d]" class="count">{{ pool[d] }}</span>
       </button>
     </div>
     <div class="row">
@@ -68,8 +80,13 @@ function roll() { if (expr.value) rollDice(expr.value) }
 header, .row { display: flex; align-items: center; gap: .4rem; }
 .grow { flex: 1; }
 .pool { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
-.die { position: relative; padding: .45rem 0; background: var(--bg-sunken); border: var(--frame); border-radius: var(--radius); font-family: var(--font-mono); font-size: .8rem; color: var(--text-dim); }
-.die.on { border-color: var(--accent); color: var(--text); }
+.die { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: .4rem 0 .3rem; background: var(--bg-sunken); border: var(--frame); border-radius: var(--radius); font-family: var(--font-mono); font-size: .72rem; color: var(--text-dim); cursor: pointer; }
+.die:hover { color: var(--text); border-color: var(--line-strong); }
+.die.on { border-color: var(--accent); color: var(--accent); }
+.shape { width: 26px; height: 26px; }
+.shape path { fill: color-mix(in srgb, currentColor 14%, transparent); stroke: currentColor; stroke-width: 2.2; stroke-linejoin: round; }
+.shape text { fill: currentColor; font-size: 15px; font-weight: 700; font-family: var(--font-ui); }
+.die.on .name { color: var(--text); }
 .count { position: absolute; top: -6px; right: -4px; min-width: 16px; padding: 0 3px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); font-size: .68rem; }
 .mod { display: flex; align-items: center; gap: .4rem; flex: 1; font-size: .8rem; color: var(--text-faint); }
 .mod .input { width: 4.2rem; }
