@@ -105,6 +105,28 @@ describe('session boards', () => {
     expect(await body(next.id)).toContain('### Open beat')
   })
 
+  it('carries the connections between panels that go along, with their kind and label, onto the copies', async () => {
+    const s = await createSession(C), next = await createSession(C)
+    const a = await addPanel({ campaignId: C, sessionId: s.id, kind: 'beat', x: 0, y: 0, title: 'A' })
+    const b = await addPanel({ campaignId: C, sessionId: s.id, kind: 'scene', x: 300, y: 0, title: 'B', status: 'continued' })
+    const c = await addPanel({ campaignId: C, sessionId: s.id, kind: 'beat', x: 600, y: 0, title: 'C' })
+    const stays = await addPanel({ campaignId: C, sessionId: s.id, kind: 'beat', x: 900, y: 0, title: 'Stays' })
+    await addEdge(s.id, a.id, b.id, 'sequence')
+    await addEdge(s.id, b.id, c.id, 'plan')
+    await addEdge(s.id, c.id, stays.id, 'plan')
+    const ab = (await sessions.edges(s.id)).find(e => e.sourceId === a.id)!
+    await getDb().rows('sessionEdges').update(ab.id, { label: 'then' })
+
+    await sendToSession(s.id, next, [{ id: a.id, copy: false }, { id: b.id, copy: true }, { id: c.id, copy: false }], 'From Session 1')
+    const there = await sessions.panels(next.id)
+    const id = (title: string) => there.find(p => p.title === title)?.id
+    const lines = (await sessions.edges(next.id)).map(e => [there.find(p => p.id === e.sourceId)?.title, there.find(p => p.id === e.targetId)?.title, e.kind, e.label]).sort()
+    expect(lines).toEqual([['A', 'B', 'sequence', 'then'], ['B', 'C', 'plan', '']])
+    // The copy of B is a new panel; B itself and its board keep nothing of the moved ones
+    expect(id('B')).not.toBe(b.id)
+    expect(await sessions.edges(s.id)).toEqual([])
+  })
+
   it('copies a scene of another campaign into this drawer, fresh', async () => {
     await createCampaign({ id: 'other', name: 'Other', description: '', game: 'pf2e' })
     const theirs = await addPanel({ campaignId: 'other', sessionId: (await createSession('other')).id, kind: 'scene', x: 0, y: 0, title: 'Chase', status: 'played', tags: ['city'] })

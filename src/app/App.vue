@@ -124,8 +124,14 @@ function switchCampaign(e: Event) {
 .shell { height: 100%; display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr) auto; grid-template-rows: var(--bar-h) auto minmax(0, 1fr) var(--tray-h); }
 .top { grid-column: 2 / -1; display: flex; align-items: center; gap: 1rem; padding: 0 1rem; border-bottom: var(--frame); background: var(--bg-sunken); }
 .switch { display: flex; align-items: center; gap: .5rem; color: var(--text-faint); }
-.switch select { appearance: none; background: none; border: 0; font-family: var(--font-title); font-size: 1.02rem; letter-spacing: var(--title-tracking); text-transform: var(--title-transform); font-weight: var(--title-weight); color: var(--text); max-width: 320px; cursor: pointer; }
-.switch select option { background: var(--bg-raised); color: var(--text); font-family: var(--font-ui); text-transform: none; }
+.switch select { appearance: none; background: none; border: 0; padding: .15rem .3rem; line-height: 1.2; font-family: var(--font-title); font-size: 1.02rem; letter-spacing: var(--title-tracking); text-transform: var(--title-transform); font-weight: var(--title-weight); color: var(--text); max-width: 320px; cursor: pointer; }
+.switch select option { background: var(--bg-raised); color: var(--text); font-family: var(--font-ui); text-transform: none; letter-spacing: normal; font-weight: 400; font-size: .9rem; }
+/* The app's own list (see base.css): the closed select stays bare text beside the game chip, the arrow is the chevron icon */
+@supports (appearance: base-select) {
+  .switch select { appearance: base-select; display: inline-flex; align-items: center; }
+  .switch select::picker-icon { display: none; }
+  .switch select::picker(select) { min-width: 240px; }
+}
 .game { font-family: var(--font-mono); font-size: .7rem; padding: .1em .45em; border: 1px solid var(--accent); color: var(--accent); border-radius: var(--radius); }
 .find { flex: 1; max-width: 460px; margin: 0 auto; display: flex; align-items: center; gap: .6rem; padding: .32rem .7rem; background: var(--bg); border: var(--frame); border-radius: var(--radius); color: var(--text-faint); }
 .find span:first-of-type { flex: 1; text-align: left; }

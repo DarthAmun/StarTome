@@ -133,7 +133,8 @@ export async function copyToDrawer(source: SessionPanel, campaignId: string, ext
 /**
  * Puts panels on another session's board, in a new frame below what is there.
  * `copy` leaves the panel where it is and puts a fresh "planned" copy there
- * (a scene that continues); otherwise the panel moves.
+ * (a scene that continues); otherwise the panel moves. Connections between
+ * panels that go along come along; one to a panel that stays can't cross boards.
  */
 export async function sendToSession(fromId: string, target: Session, items: { id: string; copy: boolean }[], frameTitle: string): Promise<void> {
   if (!items.length) return
@@ -141,16 +142,25 @@ export async function sendToSession(fromId: string, target: Session, items: { id
   const group = await addPanel({ campaignId: target.campaignId, sessionId: target.id, kind: 'frame', x: frame.x, y: frame.y, title: frameTitle })
   await panels().update(group.id, { w: frame.w, h: frame.h })
   const ts = nowIso()
+  // Read before moving: a moved panel's connections are taken off the old board
+  const before = await sessions.edges(fromId)
+  const carried = new Map<string, string>()
   for (const [i, item] of items.entries()) {
     const panel = await panels().get(item.id), at = spots[i]
     if (!panel || !at) continue
+    carried.set(panel.id, item.copy ? newId() : panel.id)
     if (item.copy) {
-      await panels().put(zSessionPanel.parse({ ...plain(panel), ...at, id: newId(), sessionId: target.id, parentId: group.id, status: 'planned', attrs: { ...panel.attrs, continuedFrom: { sessionId: fromId, panelId: panel.id } }, originSessionId: panel.originSessionId ?? fromId, createdAt: ts, updatedAt: ts }))
+      await panels().put(zSessionPanel.parse({ ...plain(panel), ...at, id: carried.get(panel.id), sessionId: target.id, parentId: group.id, status: 'planned', attrs: { ...panel.attrs, continuedFrom: { sessionId: fromId, panelId: panel.id } }, originSessionId: panel.originSessionId ?? fromId, createdAt: ts, updatedAt: ts }))
     } else {
       await unhook(panel)
       await panels().put({ ...panel, ...at, sessionId: target.id, parentId: group.id, updatedAt: ts })
     }
   }
+  const along = before.flatMap((e) => {
+    const sourceId = carried.get(e.sourceId), targetId = carried.get(e.targetId)
+    return sourceId && targetId ? [zSessionEdge.parse({ ...plain(e), id: newId(), sessionId: target.id, sourceId, targetId })] : []
+  })
+  if (along.length) await edges().bulkPut(along)
   await syncSessionText(fromId)
   await syncSessionText(target.id)
 }
