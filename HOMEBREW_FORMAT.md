@@ -1,8 +1,8 @@
 # StarTome homebrew import format
 
-You are helping me homebrew content for **Starfinder 2e** (or Pathfinder 2e). When I ask for an importable file, output **one JSON file** in the format below, in a single ```json code block, nothing omitted. I import it in StarTome on the **Import & Export** page, by dropping the file or pasting your answer; it opens the homebrew import.
+You are helping me homebrew content for **Starfinder 2e** (or Pathfinder 2e). When I ask for an importable file, output **one JSON file** in the format below, in a single ```json code block, nothing omitted. I import it in StarTome under **Compendium › Homebrew**, by dropping the file or pasting your whole answer (the ```json fence is fine). A file dropped on **Import & Backup** is passed on to the same place.
 
-The importer checks every entry: it fixes small slips (text numbers, "350 credits", missing optional lists) and lists each fix, and leaves out entries it can't read. When I paste back its "problems" list, send a corrected file with the **same ids**. Aim for zero fixes: follow the shapes exactly.
+On that page I pick a game and a pack for the import; they apply to entries that set neither `game` nor `publication`. The importer checks every entry: it fixes small slips (text numbers, "350 credits", missing optional lists) and lists each fix, and leaves out entries it can't read. When I paste back its "problems" list, send a corrected file with the **same ids**. Aim for zero fixes: follow the shapes exactly.
 
 ## File wrapper
 
@@ -10,34 +10,35 @@ The importer checks every entry: it fixes small slips (text numbers, "350 credit
 {
   "version": 2,
   "app": "startome",
-  "type": "campaigns",
-  "exportedAt": "2026-10-30T12:00:00.000Z",
+  "type": "homebrew",
+  "exportedAt": "2026-11-15T12:00:00.000Z",
   "rules": [ /* entries, see below */ ]
 }
 ```
 
-Only `rules` is needed. (A bare array of entries also works.)
+This is also what StarTome writes when it exports a pack, so an exported pack is a complete example. Only `rules` is needed; a bare array of entries, or a single entry, also works. Keep `"type": "homebrew"`: older files say `"campaigns"` there, which StarTome still reads as homebrew, but only while the file holds nothing besides `rules`.
 
 ## Common fields (every entry)
 
 | Field | Type | Notes |
 |---|---|---|
-| `id` | string | A random UUID v4. **Keep the same id** when I ask you to revise an entry: re-importing replaces the row with that id. New entry → new UUID. |
+| `id` | string | A random UUID v4. **Keep the same id** when I ask you to revise an entry: re-importing replaces the row with that id (its picture stays). New entry → new UUID. Left out, StarTome makes one, but then a revision can't find the entry again. |
 | `origin` | `"user"` | Always `"user"`. |
 | `kind` | string | `item`, `creature`, `hazard`, `spell`, `feat`, `action`, `condition`, `ancestry`, `heritage`, `background`, `class`, `deity`, `relicGift`, `vehicle`, `starship`, `starshipFrame`, `battleStation`, `stationUpgrade`, `expansionBay` |
-| `game` | `"sf2e"` \| `"pf2e"` \| `"both"` | `"sf2e"` unless I say otherwise. |
+| `game` | `"sf2e"` \| `"pf2e"` \| `"both"` | `"sf2e"` unless I say otherwise. Left out, the game picked on the import page. |
 | `name` | string | Title Case. |
-| `sortName` | string | `name` lower-cased. |
+| `sortName` | string | `name` lower-cased (StarTome sets it anyway). |
 | `level` | number | Item/creature/hazard/feat level. **Spells: the rank**; cantrips use `1` plus trait `"cantrip"`. `0` for kinds without a level. |
 | `rarity` | `"common"` \| `"uncommon"` \| `"rare"` \| `"unique"` | |
 | `traits` | string[] | Lower-case slugs: `"fire"`, `"tech"`, `"analog"`, `"two-hand-d10"`, `"versatile-p"`. Do **not** put rarity or size in traits. Can be `[]`. |
 | `description` | string | Markdown (see "Text"). Can be `""`. |
 | `sourceRefs` | `[]` | Always an empty array. |
-| `publication` | object, optional | `{ "title": "Homebrew: <pack>", "remaster": true }`: the **pack** the entry belongs to. Use the same title for everything in one set (a class with its feats and subclasses, a setting's gear) and ask me which pack if unsure. |
+| `publication` | object, optional | `{ "title": "Homebrew: <pack>", "remaster": true }`: the **pack** the entry belongs to. Use the same title for everything in one set (a class with its feats and subclasses, a setting's gear) and ask me which pack if unsure. Optional `"license"` (e.g. `"ORC"`). Left out, the pack picked on the import page. |
 | `tags` | string[], optional | My own labels, e.g. `["homebrew", "act-2"]`. |
-| `createdAt`, `updatedAt` | string | ISO timestamp, e.g. `"2026-10-30T12:00:00.000Z"`. |
+| `gmNotes` | string, optional | Markdown notes only the GM sees, apart from the description. |
+| `createdAt`, `updatedAt` | string | ISO timestamp, e.g. `"2026-11-15T12:00:00.000Z"`. StarTome sets `updatedAt` on import. |
 
-Never set `img`, `tokenImg`, `localEdits`, `upstream`, `legacy` or `build`.
+Never set `img`, `tokenImg`, `localEdits`, `upstream`, `legacy`, `build` or `supersededBy`: StarTome owns them and leaves them out. Any other field not listed for the kind is left out too, with a note.
 
 ## Units
 
@@ -52,12 +53,14 @@ Never set `img`, `tokenImg`, `localEdits`, `upstream`, `legacy` or `build`.
 Markdown, plus:
 
 - `{{spell: Name}}`, `{{item: Name}}`, `{{creature: Name}}`, `{{condition: Frightened}}`, `{{feat: Name}}`, `{{action: Name}}` … link to compendium entries by name (any kind above).
-- `::dice[2d6+4]` → clickable roll. `::button[Label|2d6+4]` → roll with its own label.
+- `::dice[2d6+4]` → clickable roll. `::button[Label|2d6+4]` → roll with its own label. `{{roll: 2d6+4}}` works too.
+- `::table[Table name]` → rolls on a random table of the campaign; `::choose[a|b|c]` → picks one at random; `::clock[Alarm|0/4]` → a progress clock.
 - GM-only text (hidden from players):
   ```
   > [!hidden] GM notes
   > The vendor is a spy for the Azlanti.
   ```
+- Callouts: `> [!note] Title`, `> [!tip]`, `> [!warning]`, `> [!danger]` draw a labelled box.
 - Action glyphs in prose: `◆` `◆◆` `◆◆◆` `◇` (free) `↺` (reaction).
 - Use **Success / Failure** degree blocks as bold lines: `**Critical Success** …`.
 
@@ -78,9 +81,11 @@ Markdown, plus:
 
 - `category`: `weapon`, `armor`, `shield`, `equipment`, `consumable`, `treasure`, `container`, `ammunition`, `kit`
 - optional: `subcategory` (consumables/treasure: `"grenade"`, `"drug"`, `"serum"`, `"gem"`…), `baseItem`, `priceFor` (ammo bought in lots, e.g. `10`), `bulkNote`, `usage`, `hands` (`"1"`, `"2"`, `"1+"`), `uses: { "max": 3 }`
+- `unidentified`: `{ "name": "Strange Vial", "description": "…" }`, what the players see before it's identified.
+- `material`: `{ "type": "cold iron", "grade": "standard" }` (PF2e precious materials), or leave it out.
 - `activation`: `[{ "cost": 1, "traits": ["manipulate"], "text": "Interact" }]`
-- `weapon`: `{ "category": "simple"|"martial"|"advanced"|"unarmed", "group": "laser", "damage": { "dice": 1, "die": "d8", "type": "fire" }, "range": 60, "reload": "0", "ammo": { "type": "battery", "capacity": 10 }, "expend": 1, "grade": "commercial", "splash": 1 }` — only `category` and `damage` required.
-- `armor`: `{ "category": "light"|"medium"|"heavy"|"unarmored", "group": "composite", "acBonus": 2, "dexCap": 3, "checkPenalty": -1, "speedPenalty": 0, "strength": 1, "grade": "commercial" }` — `dexCap`/`strength` may be `null`.
+- `weapon`: `{ "category": "simple"|"martial"|"advanced"|"unarmed", "group": "laser", "damage": { "dice": 1, "die": "d8", "type": "fire" }, "range": 60, "reload": "0", "ammo": { "type": "battery", "capacity": 10 }, "expend": 1, "grade": "commercial", "splash": 1 }` — only `category` and `damage` required. PF2e runes: `"runes": { "potency": 1, "striking": 1, "property": ["flaming"] }`.
+- `armor`: `{ "category": "light"|"medium"|"heavy"|"unarmored", "group": "composite", "acBonus": 2, "dexCap": 3, "checkPenalty": -1, "speedPenalty": 0, "strength": 1, "grade": "commercial" }` — `dexCap`/`strength` may be `null`. PF2e runes: `"runes": { "potency": 1, "resilient": 1, "property": [] }`.
 - `shield`: `{ "acBonus": 2, "hardness": 5, "hp": 20, "bt": 10 }`
 - `container`: `{ "capacity": 40, "bulkReduction": 10 }`
 
@@ -132,7 +137,7 @@ All of these are required:
 - `skills` keys: lower-case skill names; lores as `"<topic> lore"`.
 - `abilities` are modifiers, not scores.
 - `actions[].section`: `interaction` (top: auras, languages-like passives), `defensive` (reactions, defensive passives), `offensive` (everything used on its turn). Optional `frequency`.
-- `spellcasting`: `[{ "name": "Arcane Innate Spells", "tradition": "arcane", "type": "innate", "dc": 22, "attack": 14, "spells": [{ "name": "Force Barrage", "rank": 2, "uses": 2 }] }]` — `type`: `prepared`, `spontaneous`, `innate`, `focus`, `ritual`. Name spells exactly as in the compendium so they link.
+- `spellcasting`: `[{ "name": "Arcane Innate Spells", "tradition": "arcane", "type": "innate", "dc": 22, "attack": 14, "spells": [{ "name": "Force Barrage", "rank": 2, "uses": 2 }] }]` — `type`: `prepared`, `spontaneous`, `innate`, `focus`, `ritual`. A spell cast above its rank: `"heightenedTo": 4`. Name spells exactly as in the compendium so they link.
 - optional: `acNote`, `saveNote` (e.g. `"+1 status to all saves vs. tech"`), `hpNote` (e.g. `"regeneration 10 (deactivated by cold)"`), `hardness`.
 - Build numbers from GM Core's creature-building tables for the creature's level (moderate/high/extreme as fits its role).
 
@@ -220,7 +225,7 @@ The import page also reads [pf2ools-data](https://github.com/Pf2ools/pf2ools-dat
 A vehicle (SF2e Tech Core "Vehicles", PF2e GM Core). It can stand on the map as a token with its AC and HP; it's worth no XP (its crew is).
 
 ```json
-{ "kind": "vehicle", "level": 9, "size": "lg", "price": "25,000 credits", "ac": 24, "fort": 18, "hardness": 15, "hp": 120,
+{ "kind": "vehicle", "level": 9, "size": "lg", "price": { "cp": 250000 }, "ac": 24, "fort": 18, "hardness": 15, "hp": 120,
   "immunities": [], "weaknesses": [], "resistances": [],
   "collision": { "dc": 24, "damage": "6d10" }, "crew": "1 pilot, 1 crew", "passengers": "",
   "pilotingCheck": "Piloting (DC 25)", "space": { "long": 10, "wide": 15, "high": 5 },
@@ -247,7 +252,7 @@ Foundry has no starship data, so tactical starship combat (Tech Core ch. 6–7) 
   "actions": [{ "name": "Auto Fire", "cost": 2, "section": "offensive", "traits": [], "text": "magnetar rail (3-zone cone) 1d12+3 piercing, DC 16 basic Reflex save" }] }
 ```
 
-- `shields`: `null` for a ship without a generator. `immunities`: `"starship immunities"` stands for the standard list.
+- `shields`: `null` for a ship without a generator. `immunities`: `"starship immunities"` stands for the standard list. `"living": true` marks a living starship.
 - Every NPC starship can Repair Self and Seek Starships; leave those out.
 
 **`starshipFrame`** — a player starship frame (bulwark, explorer, skirmisher) with its table "Statistics by Level".
@@ -270,6 +275,7 @@ Foundry has no starship data, so tactical starship combat (Tech Core ch. 6–7) 
   "actions": [{ "name": "Boost Thrusters", "cost": 1, "section": "offensive", "traits": ["concentrate", "manipulate", "station"], "frequency": "once per round", "text": "The starship moves up to its Speed …", "grade": "commercial" }] }
 ```
 
+- `benefits`: what the station gives while installed, helmed or not; `helmedBenefits`: what it adds while someone is at it.
 - `advancement[]`: `grade`, `level`, `upgrades` and the station's own columns: `helmed` (`ac`, `fort`, `ref`, `will`), `sensors` (zones added to sensor range), `damageDice` and `tracking` (gunnery), `drones` (drone console).
 - `actions[].grade`: the lowest grade that grants the action.
 
@@ -338,7 +344,7 @@ The group tag is `<class trait>-<choice>`, lower-case: `conduit-domain`, `envoy-
 
 ## Checklist before you answer
 
-1. Valid JSON (no comments, no trailing commas).
+1. Valid JSON (no comments, no trailing commas), wrapped as `"type": "homebrew"` with a `rules` array.
 2. Every entry has all common fields **and** its kind's required fields, arrays as `[]` when empty.
 3. `sortName` = lower-cased `name`; fresh UUIDs for new entries, same id for revisions.
 4. Prices in cp (credits × 10), bulk in tenths, distances in feet as numbers; starship distances in zones as numbers.

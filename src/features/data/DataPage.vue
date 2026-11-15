@@ -64,6 +64,20 @@ async function legacyFromBrowser() {
   if (got) { legacy.value = got; legacyFrom.value = 'browser' }
 }
 
+/**
+ * A file of compendium entries and nothing else is homebrew, whatever its header says: v0.42's
+ * homebrew files and older guides use the backup header (`"version": 2`), which would otherwise
+ * read as a v0.42 backup and replace everything. Backups always carry campaigns or entries.
+ */
+async function onlyRules(file: File): Promise<boolean> {
+  if (file.size > 50_000_000) return false
+  try {
+    const data = JSON.parse(await file.text()) as Record<string, unknown>
+    const has = (key: string) => Array.isArray(data[key]) && (data[key] as unknown[]).length > 0
+    return has('rules') && !has('campaigns') && !has('entities')
+  } catch { return false }
+}
+
 /** Files that are not backups go to the screen that reads them: a Foundry release, a homebrew file. */
 async function elsewhere(file: File, isZip: boolean): Promise<boolean> {
   let name: 'compendium-sync' | 'compendium-homebrew' | 'party' | null = null
@@ -71,7 +85,7 @@ async function elsewhere(file: File, isZip: boolean): Promise<boolean> {
   else {
     const head = await file.slice(0, 4096).text()
     if (/"format"\s*:\s*"playbuddy-share"/.test(head)) name = 'party'
-    else if (/"type"\s*:\s*"homebrew"/.test(head) || /^\s*(\[\s*)?\{[^{}]*"kind"\s*:/.test(head)) name = 'compendium-homebrew'
+    else if (/"type"\s*:\s*"homebrew"/.test(head) || /^\s*(\[\s*)?\{[^{}]*"kind"\s*:/.test(head) || await onlyRules(file)) name = 'compendium-homebrew'
   }
   if (!name) return false
   // A Play Buddy share file belongs to a party member: the Party page asks which

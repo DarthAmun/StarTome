@@ -152,3 +152,15 @@ test('an NPC joins a faction from its fields, and the faction lists it as a memb
   await expect(dock.locator('h1')).toHaveText('Lantern Wardens')
   await expect(dock.locator('.rel')).toContainText('Kib')
 })
+
+test('a homebrew file with the old backup header, picked on Import & Backup, opens the homebrew import', async ({ page }) => {
+  await newCampaign(page, 'Brew')
+  await command(page, 'import')
+  const file = { version: 2, app: 'startome', type: 'campaigns', exportedAt: '2026-11-15T12:00:00.000Z', rules: [{ kind: 'action', name: 'Brew Dash', cost: 1, level: 0, rarity: 'common', traits: [], description: '' }] }
+  const chooser = page.waitForEvent('filechooser')
+  await page.getByRole('button', { name: 'From a v0.42 backup file…' }).click()
+  await (await chooser).setFiles({ name: 'brew.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(file)) })
+  await expect(page).toHaveURL(/#\/compendium\/homebrew/)
+  await expect(page.getByTestId('homebrew-apply')).toContainText('Import 1 entry')
+  await expect(page.getByText('Brew Dash').first()).toBeVisible()
+})
