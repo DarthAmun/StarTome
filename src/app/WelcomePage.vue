@@ -90,6 +90,7 @@ const remove = (c: Campaign) => act('Deleting the campaign', async () => {
 .first { padding: 1.6rem 2rem; text-align: center; max-width: 480px; }
 .first h2 { margin-bottom: .5rem; }
 .new { display: flex; gap: .5rem; margin-top: 1.5rem; width: min(520px, 100%); }
+.new .game { width: auto; flex: none; }
 .game { width: auto; }
 .open { color: var(--text); } .open:hover { text-decoration: none; } .open:hover h2 { color: var(--accent); }
 .pills { display: flex; flex-wrap: wrap; gap: .2rem .9rem; font-size: .85rem; } .pill { color: var(--text-dim); } .pill b { color: var(--type); }

@@ -9,7 +9,7 @@ import type { AreaOverlay } from '@/domain/rules/areas'
 import type { Adjustment } from '@/domain/rules/combat'
 import type { TokenCondition, TokenTimer } from '@/domain/rules/conditions'
 import { encounterOwner } from '@/domain/rules/inventory'
-import type { Wall } from '@/domain/rules/walls'
+import { withHiddenDoorOutline, type Wall } from '@/domain/rules/walls'
 import { zActor, zCombatLogEntry, zCombatant, zEncounter, zEncounterMap, type Actor, type ActorRef, type CombatLogEntry, type Combatant, type Encounter, type EncounterMap, type ImageRef, type MapAsset, zMapAsset } from '@/domain/schema'
 import { getDb } from './db'
 
@@ -99,7 +99,8 @@ export const encounters = {
 }
 
 export const areasOf = (m: EncounterMap): AreaOverlay[] => m.areas as unknown as AreaOverlay[]
-export const wallsOf = (m: EncounterMap): Wall[] => m.walls
+/** The map's walls; a hidden door from a map made before gets its outline (domain/rules/walls.ts). */
+export const wallsOf = (m: EncounterMap): Wall[] => m.walls.map(withHiddenDoorOutline)
 
 // ── Encounters ─────────────────────────────────────────────────────────────
 

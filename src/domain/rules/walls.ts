@@ -19,6 +19,28 @@ export function isDoorWall(kind: string): boolean {
   return kind === 'door' || kind === 'secret'
 }
 
+/**
+ * A hidden door's wall: along both faces of its square that look onto floor, joined across the
+ * side, so sight stops at the faces exactly as at the wall around it. A line through the square's
+ * middle (as a door has) let players see half the square, a notch in the wall that gave it away.
+ * `horizontal`: the wall it sits in runs left to right.
+ */
+export function hiddenDoorOutline(col: number, row: number, horizontal: boolean): Point[] {
+  return horizontal
+    ? [{ x: col, y: row }, { x: col + 1, y: row }, { x: col + 1, y: row + 1 }, { x: col, y: row + 1 }]
+    : [{ x: col, y: row }, { x: col, y: row + 1 }, { x: col + 1, y: row + 1 }, { x: col + 1, y: row }]
+}
+
+/** A hidden door stored as a line through its square's middle (maps made before) gets its outline. */
+export function withHiddenDoorOutline<W extends Pick<Wall, 'kind' | 'points'>>(w: W): W {
+  if (w.kind !== 'secret' || w.points.length !== 2) return w
+  const [a, b] = w.points as [Point, Point]
+  const half = (n: number) => Math.abs(n - Math.floor(n) - 0.5) < 1e-9, whole = (n: number) => Math.abs(n - Math.round(n)) < 1e-9
+  if (a.y === b.y && half(a.y) && whole(a.x) && whole(b.x) && Math.abs(a.x - b.x) === 1) return { ...w, points: hiddenDoorOutline(Math.min(a.x, b.x), Math.floor(a.y), true) }
+  if (a.x === b.x && half(a.x) && whole(a.y) && whole(b.y) && Math.abs(a.y - b.y) === 1) return { ...w, points: hiddenDoorOutline(Math.floor(a.x), Math.min(a.y, b.y), false) }
+  return w
+}
+
 export function wallsToSegments(walls: Wall[]): WallSegment[] {
   const out: WallSegment[] = []
   for (const w of walls) {

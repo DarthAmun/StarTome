@@ -3,7 +3,7 @@ import {
   blankMap, floodFill, TILES, getTile, mapWalls, paintRoom, propAt, propImages, readBattleMap, resizeMap,
   restackProp, toPropFrame, fromPropFrame, type BattleMap, type MapProp,
 } from '@/domain/rules/battlemap'
-import { isDoorWall, wallsToSegments, type Wall, type WallKind } from '@/domain/rules/walls'
+import { isDoorWall, visibilityPolygon, wallsToSegments, withHiddenDoorOutline, type Wall, type WallKind } from '@/domain/rules/walls'
 
 /** A map from rows of tile characters. */
 function grid(...rows: string[]): BattleMap {
@@ -78,12 +78,43 @@ describe('battle map walls', () => {
     ])
   })
 
-  it('puts windows and hidden doors across the gap like doors', () => {
+  it('puts windows across the gap like doors, and hidden doors along their faces like the wall', () => {
     const openings = mapWalls(grid('#=%+#', 'sssss')).filter(w => w.coverType !== 'full')
     expect(openings.map(w => w.coverType)).toEqual(['window', 'secret', 'door'])
-    expect(openings.every(w => w.points[0].y === 0.5 && w.points[1].y === 0.5)).toBe(true)
+    expect(openings.filter(w => w.coverType !== 'secret').every(w => w.points[0].y === 0.5 && w.points[1].y === 0.5)).toBe(true)
+    // Top face, side, bottom face of square (2, 0)
+    expect(openings.find(w => w.coverType === 'secret')?.points).toEqual([{ x: 2, y: 0 }, { x: 3, y: 0 }, { x: 3, y: 1 }, { x: 2, y: 1 }])
     const upright = mapWalls(grid('#s', '=s', '%s', '#s')).filter(w => w.coverType !== 'full')
-    expect(upright.map(w => [w.coverType, w.points[0].x === w.points[1].x])).toEqual([['window', true], ['secret', true]])
+    expect(upright.map(w => w.coverType)).toEqual(['window', 'secret'])
+    expect(upright[1]?.points).toEqual([{ x: 0, y: 2 }, { x: 0, y: 3 }, { x: 1, y: 3 }, { x: 1, y: 2 }])
+  })
+
+  it('a closed hidden door hides as much of itself as the wall beside it does', () => {
+    const map = grid('sss', '#%#', 'sss')
+    const walls: Wall[] = mapWalls(map).map((w, i) => ({ id: `w${i}`, points: w.points, kind: w.coverType, open: false, generated: true }))
+    const seen = visibilityPolygon({ x: 1.5, y: 0.5 }, wallsToSegments(walls), Infinity, { w: 3, h: 3 })
+    const inside = (p: { x: number; y: number }) => {
+      let hit = false
+      for (let i = 0, j = seen.length - 1; i < seen.length; j = i++) {
+        const a = seen[i]!, b = seen[j]!
+        if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) hit = !hit
+      }
+      return hit
+    }
+    expect(inside({ x: 1.5, y: 0.9 })).toBe(true)
+    expect(inside({ x: 1.5, y: 1.25 })).toBe(false)
+    expect(inside({ x: 0.5, y: 1.25 })).toBe(false)
+    // Opened, sight goes through
+    const open = visibilityPolygon({ x: 1.5, y: 0.5 }, wallsToSegments(walls.map(w => (w.kind === 'secret' ? { ...w, open: true } : w))), Infinity, { w: 3, h: 3 })
+    expect(open.some(p => p.y > 2.5)).toBe(true)
+  })
+
+  it('gives hidden doors of maps made before their outline, and leaves other walls alone', () => {
+    const old = (points: { x: number; y: number }[], kind: WallKind = 'secret') => withHiddenDoorOutline({ kind, points })
+    expect(old([{ x: 2, y: 0.5 }, { x: 3, y: 0.5 }]).points).toEqual([{ x: 2, y: 0 }, { x: 3, y: 0 }, { x: 3, y: 1 }, { x: 2, y: 1 }])
+    expect(old([{ x: 0.5, y: 2 }, { x: 0.5, y: 3 }]).points).toEqual([{ x: 0, y: 2 }, { x: 0, y: 3 }, { x: 1, y: 3 }, { x: 1, y: 2 }])
+    expect(old([{ x: 2, y: 0.5 }, { x: 3, y: 0.5 }], 'door').points).toEqual([{ x: 2, y: 0.5 }, { x: 3, y: 0.5 }])
+    expect(old([{ x: 0, y: 0 }, { x: 4, y: 0 }]).points).toEqual([{ x: 0, y: 0 }, { x: 4, y: 0 }])
   })
 
   it('lets sight through windows and open (hidden) doors only', () => {

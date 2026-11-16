@@ -6,7 +6,7 @@
  * line-of-sight walls from it: wall tiles block; door, window and hidden door
  * tiles get a wall of that kind across the gap.
  */
-import type { WallKind } from './walls'
+import { hiddenDoorOutline, type WallKind } from './walls'
 
 export type TileId =
   | 'void' | 'stone' | 'wood' | 'carpet' | 'dirt' | 'grass' | 'sand' | 'snow' | 'ice' | 'rubble'
@@ -295,7 +295,8 @@ export function mapWalls(map: BattleMap): GeneratedWall[] {
   for (let r = 0; r < map.rows; r++) {
     for (let c = 0; c < map.cols; c++) {
       const coverType = OPENINGS[getTile(map, c, r)]
-      if (coverType) walls.push({ points: doorLine(map, c, r), coverType })
+      if (coverType === 'secret') walls.push({ points: hiddenDoorOutline(c, r, doorIsHorizontal(map, c, r)), coverType })
+      else if (coverType) walls.push({ points: doorLine(map, c, r), coverType })
     }
   }
   return walls

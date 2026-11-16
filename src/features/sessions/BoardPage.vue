@@ -54,14 +54,21 @@ const nodes = computed<Node[]>(() => {
   const s = session.value
   if (!s) return []
   const frames = new Set(panels.value.filter(p => p.kind === 'frame').map(p => p.id))
-  return [...panels.value].sort((a, b) => Number(b.kind === 'frame') - Number(a.kind === 'frame')).map((p) => {
+  // Frames lie under connections and panels; among frames the bigger one lies further back,
+  // so a small frame on a big one can always be reached
+  const area = (p: SessionPanel) => (p.w ?? 520) * (p.h ?? 320)
+  const frameLayer = new Map(panels.value.filter(p => p.kind === 'frame').sort((a, b) => area(b) - area(a)).map((p, i) => [p.id, i]))
+  const back = frameLayer.size
+  return [...panels.value].sort((a, b) => Number(b.kind === 'frame') - Number(a.kind === 'frame') || (frameLayer.get(a.id) ?? 0) - (frameLayer.get(b.id) ?? 0)).map((p) => {
     const inFrame = p.parentId && frames.has(p.parentId)
     const base = { id: p.id, position: { x: p.x, y: p.y }, ...(inFrame ? { parentNode: p.parentId ?? undefined } : {}), style: dim(p) ? { opacity: '0.35' } : undefined }
     return p.kind === 'frame'
-      ? { ...base, type: 'frame', zIndex: 0, data: { panel: p, onEdit: () => { editingId.value = p.id }, onResize: (w: number, h: number) => board.update(p.id, { w, h }, true) } }
-      : { ...base, type: 'panel', zIndex: 2, data: { panel: p, session: s, board, selected: selected.value?.id === p.id, onEdit: () => { editingId.value = p.id; board.select(p.id) } } }
+      ? { ...base, type: 'frame', zIndex: frameLayer.get(p.id) ?? 0, data: { panel: p, onEdit: () => { editingId.value = p.id }, onResize: (w: number, h: number) => board.update(p.id, { w, h }, true) } }
+      : { ...base, type: 'panel', zIndex: back + 2, data: { panel: p, session: s, board, selected: selected.value?.id === p.id, onEdit: () => { editingId.value = p.id; board.select(p.id) } } }
   })
 })
+
+const frameCount = computed(() => panels.value.filter(p => p.kind === 'frame').length)
 
 const EDGE_STYLE: Record<SessionEdge['kind'], Record<string, string | number>> = {
   plan: { stroke: 'var(--text-faint)', strokeDasharray: '6 4', strokeWidth: 1.5 }, sequence: { stroke: 'var(--accent)', strokeWidth: 2.5 }, attach: { stroke: '#7cc44e', strokeDasharray: '2 3', strokeWidth: 1.5 },
@@ -76,7 +83,7 @@ function sidesOf(e: SessionEdge): { sourceHandle: string; targetHandle: string }
 const flowEdges = computed<Edge[]>(() => {
   const ids = new Set(panels.value.map(p => p.id))
   return edges.value.filter(e => ids.has(e.sourceId) && ids.has(e.targetId)).map(e => ({
-    id: e.id, source: e.sourceId, target: e.targetId, ...sidesOf(e), style: EDGE_STYLE[e.kind], data: e, zIndex: 1,
+    id: e.id, source: e.sourceId, target: e.targetId, ...sidesOf(e), style: EDGE_STYLE[e.kind], data: e, zIndex: frameCount.value + 1,
     label: e.label || (e.kind === 'sequence' ? String(board.sequenceNumbers.value.get(e.id) ?? '') : undefined),
     markerEnd: e.kind === 'attach' ? undefined : MarkerType.ArrowClosed,
   }))
@@ -160,7 +167,7 @@ function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { menu.value = null }
     </div>
 
     <div class="canvas" data-test="session-board">
-      <VueFlow id="session-board" :nodes="nodes" :edges="flowEdges" :node-types="nodeTypes" :default-viewport="session.data.viewport" :min-zoom="0.15" :max-zoom="2" @node-drag-stop="onDragStop" @connect="onConnect" @edge-click="onEdgeClick" @pane-context-menu="onPaneMenu" @pane-click="menu = null; board.select(null)" @move-end="onMoveEnd" />
+      <VueFlow id="session-board" :nodes="nodes" :edges="flowEdges" :node-types="nodeTypes" :default-viewport="session.data.viewport" :min-zoom="0.15" :max-zoom="2" :elevate-nodes-on-select="false" @node-drag-stop="onDragStop" @connect="onConnect" @edge-click="onEdgeClick" @pane-context-menu="onPaneMenu" @pane-click="menu = null; board.select(null)" @move-end="onMoveEnd" />
       <p v-if="!panels.length" class="empty-note faint">An empty board. Add a scene to start, or place something from the drawer.</p>
       <div v-if="menu" class="menu panel" :style="{ left: `${menu.x}px`, top: `${menu.y}px` }" role="menu">
         <button v-for="k in PANEL_ORDER" :key="k" @click="add(k, menu.at)">{{ PANEL_CONFIG[k].label }}</button>

@@ -38,7 +38,7 @@ button { cursor: pointer; }
 /* Dropdown lists drawn by the app, not by the system: padded, in the skin's colours (Chrome 135+; elsewhere the system list) */
 @supports (appearance: base-select) {
   select, ::picker(select) { appearance: base-select; }
-  select { display: inline-flex; align-items: center; gap: .4em; }
+  select { display: inline-flex; align-items: center; gap: .4em; white-space: nowrap; }
   select::picker-icon { color: var(--text-faint); font-size: .8em; }
   ::picker(select) { background: var(--bg-raised); color: var(--text); border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: var(--shadow); padding: .3rem; margin-top: 2px; max-height: 60vh; }
   select option { padding: .35rem .65rem; border-radius: var(--radius); gap: .5rem; }
