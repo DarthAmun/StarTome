@@ -4,7 +4,7 @@
  * "happened next" chain, the panel the capture bar writes to.
  */
 import { computed, reactive, type Ref } from 'vue'
-import { SEQUENCE_KINDS, TOUCH_STATUS, TOUCHED } from '@/domain/rules/sessionBoard'
+import { SEQUENCE_KINDS, sequenceOrder, TOUCH_STATUS, TOUCHED } from '@/domain/rules/sessionBoard'
 import type { EntryOf, SessionPanel } from '@/domain/schema'
 import { addEdge, patchPanel, sessions } from '@/data/sessions'
 import { reportError } from '@/ui/dialogs'
@@ -72,8 +72,8 @@ export function useBoard(session: Ref<EntryOf<'session'> | null>) {
     else touch(panel)
   }
 
-  /** Sequence connections numbered in the order they were made. */
-  const sequenceNumbers = computed(() => new Map(edges.value.filter(e => e.kind === 'sequence').map((e, i) => [e.id, i + 1])))
+  /** "Happened next" connections numbered: by the step set on them, the rest in the order drawn. */
+  const sequenceNumbers = computed(() => new Map(sequenceOrder(edges.value).map((e, i) => [e.id, i + 1])))
 
   return { panels, edges, drawer, running, selected, select, update, flush, touch, setStatus, markLogged, sequenceNumbers }
 }

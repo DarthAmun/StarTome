@@ -174,3 +174,23 @@ export function tableRows(results: string[]): { die: string; rows: { min: number
   const die = TABLE_DICE.find(d => d >= list.length) ?? 100
   return { die: `d${die}`, rows: list.map((result, i) => ({ min: Math.floor(i * die / list.length) + 1, max: Math.floor((i + 1) * die / list.length), result })) }
 }
+
+/**
+ * The "happened next" connections in the order they happened: those given a step by hand by
+ * their step, then the rest in the order they were drawn (the order of `edges`).
+ */
+export function sequenceOrder<E extends { kind: string; order?: number | null }>(edges: E[]): E[] {
+  const seq = edges.filter(e => e.kind === 'sequence')
+  const stepped = seq.filter(e => e.order != null).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  return [...stepped, ...seq.filter(e => e.order == null)]
+}
+
+/** Moves one "happened next" connection to `step` (from 1) and numbers all of them 1, 2, 3 … again. */
+export function resequence<E extends { id: string; kind: string; order?: number | null }>(edges: E[], id: string, step: number): Map<string, number> {
+  const list = sequenceOrder(edges)
+  const moving = list.find(e => e.id === id)
+  if (!moving) return new Map()
+  const rest = list.filter(e => e.id !== id)
+  rest.splice(Math.min(Math.max(1, Math.round(step)), rest.length + 1) - 1, 0, moving)
+  return new Map(rest.map((e, i) => [e.id, i + 1]))
+}

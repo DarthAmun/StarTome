@@ -227,5 +227,7 @@ export const zSessionEdge = z.object({
   targetId: zId,
   kind: z.enum(['plan', 'sequence', 'attach']).default('plan'),
   label: z.string().default(''),
+  /** "Happened next" only: its step, set by hand; without one it comes after the numbered ones, in the order drawn. */
+  order: z.number().int().positive().nullable().default(null),
 })
 export type SessionEdge = z.infer<typeof zSessionEdge>

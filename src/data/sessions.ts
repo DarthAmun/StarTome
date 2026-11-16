@@ -4,7 +4,7 @@
  * and links read) is rebuilt from its panels whenever they change.
  */
 import { newId, nowIso } from '@/domain/ids'
-import { blankPanel, boardText, carryOverLayout, PANEL_CONFIG, type PanelKind } from '@/domain/rules/sessionBoard'
+import { blankPanel, boardText, carryOverLayout, PANEL_CONFIG, resequence, type PanelKind } from '@/domain/rules/sessionBoard'
 import { zSessionEdge, zSessionPanel, type EntryOf, type SessionEdge, type SessionPanel } from '@/domain/schema'
 import { getDb } from './db'
 import { createEntry, saveEntry } from './entries'
@@ -173,6 +173,12 @@ export async function addEdge(sessionId: string, sourceId: string, targetId: str
   await edges().put(zSessionEdge.parse({ id: newId(), sessionId, sourceId, targetId, kind }))
 }
 export const patchEdge = (id: string, patch: Partial<Pick<SessionEdge, 'kind' | 'label'>>) => edges().update(id, patch)
+
+/** Puts a "happened next" connection at `step` of the session's flow; the others move up or down. */
+export async function setSequenceStep(sessionId: string, edgeId: string, step: number): Promise<void> {
+  const steps = resequence(await sessions.edges(sessionId), edgeId, step)
+  await Promise.all([...steps].map(([id, order]) => edges().update(id, { order })))
+}
 export const removeEdge = (id: string) => edges().delete(id)
 
 /** A line of the session's log: a log panel, attached to the panel it is about (or free, as improvised). */

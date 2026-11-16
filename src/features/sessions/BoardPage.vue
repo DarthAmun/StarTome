@@ -14,7 +14,7 @@ import { nearestSides, PANEL_CONFIG, PANEL_ORDER, type PanelKind } from '@/domai
 import type { EntryOf, SessionEdge, SessionPanel } from '@/domain/schema'
 import { saveEntry } from '@/data/entries'
 import { entries } from '@/data/repo'
-import { addEdge, addPanel, deletePanel, moveToDrawer, patchEdge, placeFromDrawer, removeEdge } from '@/data/sessions'
+import { addEdge, addPanel, deletePanel, moveToDrawer, patchEdge, placeFromDrawer, removeEdge, setSequenceStep } from '@/data/sessions'
 import AppDialog from '@/ui/components/AppDialog.vue'
 import { confirmDialog, reportError } from '@/ui/dialogs'
 import { useLive } from '@/ui/useLive'
@@ -115,7 +115,22 @@ function onDragStop(e: { nodes: Node[] }) {
   }
 }
 const onConnect = (c: Connection) => { if (c.source && c.target) addEdge(props.sessionId, c.source, c.target, 'plan').catch(fail('Connecting')) }
-const onEdgeClick = (e: { edge: Edge }) => { if (e.edge.data) edgeEdit.value = { ...(e.edge.data as SessionEdge) } }
+const onEdgeClick = (e: { edge: Edge }) => {
+  if (!e.edge.data) return
+  const edge = e.edge.data as SessionEdge
+  edgeEdit.value = { ...edge }
+  edgeStep.value = board.sequenceNumbers.value.get(edge.id) ?? board.sequenceNumbers.value.size + 1
+}
+/** The step a "happened next" connection has in the session's flow, as shown on the line. */
+const edgeStep = ref(1)
+const stepCount = computed(() => board.sequenceNumbers.value.size + (edgeEdit.value && !board.sequenceNumbers.value.has(edgeEdit.value.id) ? 1 : 0))
+async function saveEdge() {
+  const e = edgeEdit.value
+  if (!e) return
+  await patchEdge(e.id, { kind: e.kind, label: e.label })
+  if (e.kind === 'sequence' && edgeStep.value !== board.sequenceNumbers.value.get(e.id)) await setSequenceStep(e.sessionId, e.id, edgeStep.value)
+  edgeEdit.value = null
+}
 function onPaneMenu(e: MouseEvent) { e.preventDefault(); menu.value = { x: e.clientX, y: e.clientY, at: screenToFlowCoordinate({ x: e.clientX, y: e.clientY }) } }
 function onMoveEnd(e: { flowTransform: { x: number; y: number; zoom: number } }) {
   const v = { x: Math.round(e.flowTransform.x), y: Math.round(e.flowTransform.y), zoom: Math.round(e.flowTransform.zoom * 100) / 100 }
@@ -180,10 +195,11 @@ function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { menu.value = null }
 
     <AppDialog v-if="edgeEdit" title="Connection" @close="edgeEdit = null">
       <label><span class="label">Kind</span><select v-model="edgeEdit.kind" class="input"><option value="plan">Planned path</option><option value="sequence">Happened next</option><option value="attach">Attached</option></select></label>
-      <label><span class="label">Label</span><input v-model="edgeEdit.label" class="input" placeholder="if they fail…" /></label>
+      <label v-if="edgeEdit.kind === 'sequence'"><span class="label">Step</span><input v-model.number="edgeStep" type="number" min="1" :max="stepCount" class="input" aria-label="Step" data-test="edge-step" /><span class="faint hint-line">Its place in what happened; the others move up or down.</span></label>
+      <label><span class="label">Label</span><input v-model="edgeEdit.label" class="input" :placeholder="edgeEdit.kind === 'sequence' ? 'Shown instead of the step number' : 'if they fail…'" /></label>
       <template #footer>
         <button class="btn btn-danger" @click="removeEdge(edgeEdit.id); edgeEdit = null">Remove</button>
-        <button class="btn btn-primary" @click="patchEdge(edgeEdit.id, { kind: edgeEdit.kind, label: edgeEdit.label }); edgeEdit = null">Save</button>
+        <button class="btn btn-primary" data-test="edge-save" @click="saveEdge">Save</button>
       </template>
     </AppDialog>
     <RecapDialog v-if="recap" :session="session" @close="recap = false" />
@@ -202,6 +218,7 @@ function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { menu.value = null }
 .seg { display: flex; border: var(--frame); border-radius: var(--radius); overflow: hidden; } .seg button { background: none; border: 0; padding: .3rem .8rem; color: var(--text-dim); } .seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .canvas { position: relative; min-height: 0; background: var(--bg-sunken); } .canvas :deep(.vue-flow__edge-textbg) { fill: var(--bg-raised); } .canvas :deep(.vue-flow__edge-text) { fill: var(--text); font-size: 11px; }
 .canvas :deep(.vue-flow__handle) { width: 9px; height: 9px; background: var(--line-strong); border-color: var(--bg); }
+.hint-line { display: block; font-size: .78rem; margin-top: .2rem; }
 .empty-note { position: absolute; inset: 40% 0 auto; text-align: center; pointer-events: none; }
 .menu { position: fixed; z-index: 30; display: flex; flex-direction: column; padding: .3rem; box-shadow: var(--shadow); } .menu button { background: none; border: 0; text-align: left; padding: .25rem .6rem; border-radius: var(--radius); } .menu button:hover { background: var(--bg-hover); }
 .cap { grid-column: 1; } .sidebar { grid-column: 2; grid-row: 3 / 5; min-height: 0; }

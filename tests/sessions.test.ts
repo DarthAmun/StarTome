@@ -7,10 +7,10 @@ import { createEntry, saveEntry } from '@/data/entries'
 import { addEntry, adjustPurse, inventory, purseOf } from '@/data/inventory'
 import { addCharacter, awardXp, ledgerOf, partyOf } from '@/data/party'
 import { campaigns, createCampaign, entries, workspace } from '@/data/repo'
-import { addEdge, addLog, addPanel, copyToDrawer, createSession, deletePanel, moveToDrawer, nextSession, patchPanel, placeFromDrawer, sendToSession, sessions } from '@/data/sessions'
+import { addEdge, addLog, addPanel, copyToDrawer, createSession, deletePanel, moveToDrawer, nextSession, patchPanel, placeFromDrawer, sendToSession, sessions, setSequenceStep } from '@/data/sessions'
 import { sounds } from '@/data/sounds'
 import { characterOwner } from '@/domain/rules/inventory'
-import { boardText, carryOverLayout, encounterOutcome, finishReviewRows, logsInOrder, nearestSides, rollOnTable, tableRows } from '@/domain/rules/sessionBoard'
+import { boardText, carryOverLayout, encounterOutcome, finishReviewRows, logsInOrder, nearestSides, resequence, rollOnTable, sequenceOrder, tableRows } from '@/domain/rules/sessionBoard'
 import type { SessionPanel } from '@/domain/schema'
 import { defaultLayout, freeSpot, newWidget, readPresets, readWidgets, tidy } from '@/features/desk/desk'
 
@@ -105,6 +105,28 @@ describe('session boards', () => {
     expect(await body(next.id)).toContain('### Open beat')
   })
 
+  it('a "happened next" connection can be put at another step; the others move, new ones go last', async () => {
+    const s = await createSession(C)
+    const p = await Promise.all(['A', 'B', 'C', 'D'].map((t, i) => addPanel({ campaignId: C, sessionId: s.id, kind: 'beat', x: i * 300, y: 0, title: t })))
+    for (let i = 0; i < 3; i++) await addEdge(s.id, p[i]!.id, p[i + 1]!.id, 'sequence')
+    await addEdge(s.id, p[0]!.id, p[3]!.id, 'plan')
+    const name = (e: { sourceId: string; targetId: string }) => `${p.find(x => x.id === e.sourceId)?.title}${p.find(x => x.id === e.targetId)?.title}`
+    const flow = async () => sequenceOrder(await sessions.edges(s.id)).map(name)
+    expect(await flow()).toEqual(['AB', 'BC', 'CD'])
+
+    const cd = (await sessions.edges(s.id)).find(e => name(e) === 'CD')!
+    await setSequenceStep(s.id, cd.id, 1)
+    expect(await flow()).toEqual(['CD', 'AB', 'BC'])
+    expect((await sessions.edges(s.id)).filter(e => e.kind === 'sequence').map(e => e.order).sort()).toEqual([1, 2, 3])
+    // Beyond the end means last; the planned path never gets a step
+    await setSequenceStep(s.id, cd.id, 9)
+    expect(await flow()).toEqual(['AB', 'BC', 'CD'])
+    expect((await sessions.edges(s.id)).find(e => e.kind === 'plan')?.order).toBeNull()
+
+    await addEdge(s.id, p[3]!.id, p[0]!.id, 'sequence')
+    expect(await flow()).toEqual(['AB', 'BC', 'CD', 'DA'])
+  })
+
   it('carries the connections between panels that go along, with their kind and label, onto the copies', async () => {
     const s = await createSession(C), next = await createSession(C)
     const a = await addPanel({ campaignId: C, sessionId: s.id, kind: 'beat', x: 0, y: 0, title: 'A' })
@@ -171,6 +193,14 @@ describe('session board rules', () => {
     expect(seven.die).toBe('d8')
     expect(seven.rows.at(-1)?.max).toBe(8)
     expect(seven.rows.every((r, i) => r.min <= r.max && (i === 0 ? r.min === 1 : r.min === (seven.rows[i - 1]?.max ?? 0) + 1))).toBe(true)
+  })
+
+  it('orders "happened next" by step, unnumbered ones after in the order drawn', () => {
+    const e = (id: string, kind: string, order: number | null = null) => ({ id, kind, order })
+    const edges = [e('a', 'sequence'), e('p', 'plan'), e('b', 'sequence', 2), e('c', 'sequence', 1), e('d', 'sequence')]
+    expect(sequenceOrder(edges).map(x => x.id)).toEqual(['c', 'b', 'a', 'd'])
+    expect([...resequence(edges, 'd', 2)]).toEqual([['c', 1], ['d', 2], ['b', 3], ['a', 4]])
+    expect(resequence(edges, 'p', 1).size).toBe(0)
   })
 
   it('connects panels at the sides that face each other', () => {
