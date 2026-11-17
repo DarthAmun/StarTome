@@ -8,7 +8,9 @@ import type { Actor } from '@/domain/schema'
 import { playlistNames, statLinkOf } from '@/data/encounters'
 import { partyOf } from '@/data/party'
 import { rulesGetMany } from '@/data/rules'
-import { pickImage, storeImage } from '@/services/images'
+import { ArrowDown, ArrowUp, ImageUp } from 'lucide-vue-next'
+import { reorderFloors } from '@/data/encounters'
+import { pickImage, pickImages, storeImage } from '@/services/images'
 import { reportError } from '@/ui/dialogs'
 import { lootPrompt } from '@/ui/partyPrompts'
 import { useLive } from '@/ui/useLive'
@@ -16,7 +18,8 @@ import CreaturePicker from '../CreaturePicker.vue'
 import DifficultyMeter from '../DifficultyMeter.vue'
 import { rate } from '../difficulty'
 import TokenLibrary from '../TokenLibrary.vue'
-import { currentFloor, floors, live, placeActor, placeCreature, saveEncounter, saveFloor } from './live'
+import { currentFloor, floors, flushSaves, live, placeActor, placeCreature, reloadMap, saveEncounter, saveFloor, showFloor, tokensOn } from './live'
+import { offerImages } from './floorImages'
 import { playerPrefs, setPlayerPrefs } from './playerSync'
 
 const emit = defineEmits<{ unlinked: [id: string] }>()
@@ -29,8 +32,25 @@ const entries = useLive(async () => new Map<string, RulesEntity>((await rulesGet
 const rated = computed(() => (enc.value ? rate(live.game, live.tokens, parseDefeated(enc.value.defeated), entries.value, party.value, enc.value.partyLevel) : null))
 
 async function chooseMap() {
+  await offerImages(await pickImages())
+}
+/** Floors top to bottom, for the list. */
+const floorList = computed(() => [...floors()].reverse())
+/** Moves a floor up or down one place, or makes it the ground floor; levels follow. */
+async function arrange(id: string, by: number, ground?: string) {
+  if (!enc.value) return
+  const ids = floors().map(f => f.id), at = ids.indexOf(id), to = at + by
+  if (to < 0 || to >= ids.length) return
+  ;[ids[at], ids[to]] = [ids[to]!, ids[at]!]
+  try {
+    await flushSaves()
+    await reorderFloors(enc.value.id, ids, ground ?? floors().find(f => f.level === 0)?.id)
+    await reloadMap()
+  } catch (err) { reportError('Reordering the floors', err) }
+}
+async function replaceImage(id: string) {
   const file = await pickImage()
-  if (file) saveFloor({ image: await storeImage(file) })
+  if (file) saveFloor({ image: await storeImage(file) }, true, id)
 }
 /** The floor the map section works on: the one shown. */
 const floor = computed(() => currentFloor())
@@ -61,8 +81,17 @@ function openLoot() {
         <button v-if="floor?.main !== false" class="btn" data-test="open-map-maker" @click="router.push({ name: 'map-maker', params: { campaignId: enc.campaignId, encounterId: enc.id } })">Map maker</button>
         <button v-if="floor?.image" class="btn btn-ghost" @click="saveFloor({ image: null })">Remove</button>
       </div>
+      <ol v-if="floors().length > 1" class="floor-list" data-test="floor-list">
+        <li v-for="f in floorList" :key="f.id" :class="{ on: f.id === floor?.id }" :data-floor="f.name">
+          <button class="name" :title="`Show ${f.name}`" @click="showFloor(f.id)">{{ f.name }}<span v-if="tokensOn(f.id).length" class="faint"> · {{ tokensOn(f.id).length }}</span></button>
+          <label class="faint" :title="`Make ${f.name} the ground floor: the others are counted from it`"><input type="radio" name="ground-floor" :checked="f.level === 0" :aria-label="`Ground floor: ${f.name}`" @change="arrange(f.id, 0, f.id)" /> ground</label>
+          <button class="btn btn-ghost btn-icon" :title="f.image ? 'Replace its image' : 'Choose its image'" :aria-label="`Image for ${f.name}`" @click="replaceImage(f.id)"><ImageUp :size="14" /></button>
+          <button class="btn btn-ghost btn-icon" title="Up a floor" :aria-label="`Move ${f.name} up`" :disabled="f.id === floorList[0]?.id" @click="arrange(f.id, 1)"><ArrowUp :size="14" /></button>
+          <button class="btn btn-ghost btn-icon" title="Down a floor" :aria-label="`Move ${f.name} down`" :disabled="f.id === floorList.at(-1)?.id" @click="arrange(f.id, -1)"><ArrowDown :size="14" /></button>
+        </li>
+      </ol>
       <input class="input" placeholder="…or a web address of an image" :value="floor?.image && 'url' in floor.image ? floor.image.url : ''" aria-label="Map image address" @change="mapUrl" />
-      <p class="faint">An image dropped on the map works too.</p>
+      <p class="faint">An image dropped on the map works too. Several images at once make one floor each.</p>
       <div class="row">
         <label><span class="label">Square (px)</span><input class="input num" type="number" min="8" :value="floor?.grid.size" aria-label="Grid square size" @change="grid('size', $event)" /></label>
         <label><span class="label">Offset X</span><input class="input num" type="number" :value="floor?.grid.offsetX" @change="grid('offsetX', $event)" /></label>
@@ -99,4 +128,8 @@ function openLoot() {
 .prep { display: flex; flex-direction: column; flex: none; }
 section { display: flex; flex-direction: column; gap: .45rem; padding: .6rem .7rem; border-bottom: var(--frame); }
 .row { display: flex; gap: .5rem; align-items: end; flex-wrap: wrap; } .num { width: 5.2rem; } p { margin: 0; font-size: .8rem; }
+.floor-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: var(--frame); border-radius: var(--radius); }
+.floor-list li { display: flex; align-items: center; gap: .3rem; padding: .1rem .3rem; } .floor-list li + li { border-top: var(--frame); }
+.floor-list li.on { background: var(--accent-soft); } .floor-list label { font-size: .78rem; display: flex; gap: .2rem; align-items: center; }
+.floor-list .name { flex: 1; background: none; border: 0; text-align: left; padding: .2rem; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

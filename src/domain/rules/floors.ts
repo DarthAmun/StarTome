@@ -146,6 +146,27 @@ export function orderFloors(enc: EncounterPart, map: MapPart, bottomToTop: strin
   }
 }
 
+/**
+ * Puts images on floors, bottom to top, `ground` (an index) on the ground
+ * floor (level 0, or the main floor). The others go on the floors above and
+ * below in turn: a floor that is there gets the image and the name and keeps
+ * its walls, fog and tokens; a missing one is made with the ground floor's grid.
+ */
+export function fillFloors(enc: EncounterPart, map: MapPart, items: { image: Floor['image']; name: string }[], ground: number): FloorWrite {
+  const all = floorsOf(enc, map)
+  const anchor = all.find(f => f.level === 0) ?? all.find(f => f.main)!
+  const byLevel = new Map(all.map(f => [f.level, f]))
+  const out: FloorWrite = { encounter: {}, map: { mainFloor: { ...map.mainFloor }, floors: map.floors.map(f => ({ ...f })) } }
+  items.forEach((item, k) => {
+    const level = anchor.level + k - ground, name = item.name.trim() || defaultFloorName(level)
+    const there = byLevel.get(level)
+    if (there?.main) { out.encounter.map = item.image; out.map.mainFloor = { name, level } }
+    else if (there) Object.assign(out.map.floors!.find(f => f.id === there.id)!, { image: item.image, name })
+    else out.map.floors!.push({ id: newId(), name, level, image: item.image, grid: { ...anchor.grid }, walls: [], fog: {}, battlemap: null })
+  })
+  return out
+}
+
 // ── Stairs ─────────────────────────────────────────────────────────────────
 
 /** One end of a stair as seen from its floor: where it is and where it leads. */

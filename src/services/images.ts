@@ -49,6 +49,19 @@ export function pickImage(): Promise<File | null> {
   })
 }
 
+/** Opens the file picker for several images. Resolves an empty list when nothing was picked. */
+export function pickImages(): Promise<File[]> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.multiple = true
+    input.onchange = () => resolve([...(input.files ?? [])])
+    input.oncancel = () => resolve([])
+    input.click()
+  })
+}
+
 /** The image as a JPEG (smaller, no transparency). Only on request: by itself the app never changes a format. */
 export async function toJpeg(file: Blob, quality = 0.88): Promise<Blob> {
   const bitmap = await createImageBitmap(file)

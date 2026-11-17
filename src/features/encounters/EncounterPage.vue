@@ -10,7 +10,6 @@ import { ArrowLeft, Maximize, MonitorPlay, Plus } from 'lucide-vue-next'
 import type { AreaOverlay } from '@/domain/rules/areas'
 import { statLinkOf } from '@/data/encounters'
 import { reopenEncounter } from '@/data/resolution'
-import { storeImage } from '@/services/images'
 import { playPlaylist } from '@/services/soundPlayer'
 import { sounds } from '@/data/sounds'
 import { useLive } from '@/ui/useLive'
@@ -22,8 +21,10 @@ import AreaDialog from './vtt/AreaDialog.vue'
 import AreaSavePrompt from './vtt/AreaSavePrompt.vue'
 import ConditionsDialog from './vtt/ConditionsDialog.vue'
 import type { Cell } from './vtt/engine/types'
-import { areas, flushSaves, getToken, live, loadEncounter, placeActor, placeCreature, saveEncounter, saveFloor, tokenFloor, type FovMode } from './vtt/live'
+import { areas, flushSaves, getToken, live, loadEncounter, placeActor, placeCreature, saveEncounter, tokenFloor, type FovMode } from './vtt/live'
 import FloorBar from './vtt/FloorBar.vue'
+import FloorImagesDialog from './vtt/FloorImagesDialog.vue'
+import { offerImages, pendingImages } from './vtt/floorImages'
 import StairPrompt from './vtt/StairPrompt.vue'
 import LogPanel from './vtt/LogPanel.vue'
 import MapCanvas from './vtt/MapCanvas.vue'
@@ -133,12 +134,12 @@ function stageClick(e: MouseEvent) {
 async function onDrop(e: DragEvent) {
   const at = canvas.value?.cellAt(e.clientX, e.clientY) ?? { col: 5, row: 5 }
   const actorId = e.dataTransfer?.getData('application/x-startome-actor'), rulesId = e.dataTransfer?.getData('application/x-startome-rules')
-  const file = [...(e.dataTransfer?.files ?? [])].find(f => f.type.startsWith('image/'))
+  const files = [...(e.dataTransfer?.files ?? [])].filter(f => f.type.startsWith('image/'))
   try {
     keepTurn()
     if (actorId) { const { token, unlinked } = await placeActor(actorId, at.col, at.row); if (token && unlinked) editId.value = token.id }
     else if (rulesId) await placeCreature(rulesId, at.col, at.row)
-    else if (file) saveFloor({ image: await storeImage(file) })
+    else if (files.length) await offerImages(files)
   } catch (err) { reportError('Dropping onto the map', err) }
 }
 
@@ -208,6 +209,7 @@ function onKey(e: KeyboardEvent) {
     <ConditionsDialog v-if="condId && getToken(condId)" :key="condId" :token="getToken(condId)!" @close="condId = null" />
     <AreaDialog v-if="editArea" :key="editArea.id" :area="editArea" @close="areaId = null" />
     <AreaSavePrompt />
+    <FloorImagesDialog v-if="pendingImages" :files="pendingImages" @close="pendingImages = null" />
     <QuickAdd v-if="quick" :cell="quick.cell" :start="quick.start" @close="quick = null" />
     <ResolveDialog v-if="resolving" :encounter-id="enc.id" @close="resolving = false" @resolved="load(enc.id)" />
   </div>

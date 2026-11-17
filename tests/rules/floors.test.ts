@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addFloor, defaultFloorName, newStair, stairsOn, stairUnder, floorBeside, floorById, floorsOf, floorWrite, MAIN_FLOOR, onFloor, orderFloors, removeFloor, storedFloorId } from '@/domain/rules/floors'
+import { addFloor, defaultFloorName, fillFloors, newStair, stairsOn, stairUnder, floorBeside, floorById, floorsOf, floorWrite, MAIN_FLOOR, onFloor, orderFloors, removeFloor, storedFloorId } from '@/domain/rules/floors'
 import { zEncounter, zEncounterMap, type Encounter, type EncounterMap } from '@/domain/schema'
 
 const IMG = { imageId: 'ground' }
@@ -103,5 +103,18 @@ describe('floors', () => {
     const out = removeFloor(s.enc, s.map, MAIN_FLOOR)!
     expect(out.promoted).toBe(down.floor.id)
     expect(out.write.map.stairs).toEqual([])
+  })
+
+  it('fills floors with images around the ground floor, keeping floors that are there and making the rest', () => {
+    let s = setup()
+    const up = addFloor(s.enc, s.map); s = { ...s, map: { ...s.map, ...up.map } }
+    const img = (id: string) => ({ imageId: id })
+    s = apply(s, fillFloors(s.enc, s.map, [{ image: img('cellar'), name: 'Cellar' }, { image: img('hall'), name: 'Hall' }, { image: img('up'), name: '' }, { image: img('roof'), name: 'Roof' }], 1))
+    expect(floorsOf(s.enc, s.map).map(f => [f.name, f.level, f.image, f.grid.size])).toEqual([
+      ['Cellar', -1, img('cellar'), 70], ['Hall', 0, img('hall'), 70], ['Floor 2', 1, img('up'), 70], ['Roof', 2, img('roof'), 70],
+    ])
+    // The main floor kept its walls and fog; the floor that was there kept its id
+    expect(floorById(s.enc, s.map, MAIN_FLOOR)?.walls).toHaveLength(1)
+    expect(floorsOf(s.enc, s.map)[2]!.id).toBe(up.floor.id)
   })
 })

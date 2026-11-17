@@ -94,3 +94,42 @@ test('floors: add one, move a token up from its menu, and take the stairs back d
   await expect(page.locator('[data-turn="Kip"]')).toBeVisible()
   expect(errors).toEqual([])
 })
+
+test('several map images become floors: order guessed from the names, fixed by hand, ground floor chosen', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', e => errors.push(e.message))
+  await newEncounter(page)
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64')
+  const file = (name: string) => ({ name, mimeType: 'image/png', buffer: png })
+  const chooser = page.waitForEvent('filechooser')
+  await page.getByTestId('choose-map').click()
+  await (await chooser).setFiles([file('Tavern 2.png'), file('Tavern Cellar.png'), file('Tavern 1.png')])
+
+  // Top floor first; the cellar goes under the ground floor
+  const rows = page.getByTestId('floor-images').locator('li')
+  await expect(rows).toHaveCount(3)
+  expect(await rows.evaluateAll(list => list.map(li => li.getAttribute('data-row')))).toEqual(['Tavern 2.png', 'Tavern 1.png', 'Tavern Cellar.png'])
+  await expect(page.getByLabel('Ground floor: Tavern 1.png')).toBeChecked()
+  await expect(page.getByLabel('Floor name for Tavern Cellar.png')).toHaveAttribute('placeholder', 'Basement')
+  await page.getByLabel('Floor name for Tavern 2.png').fill('Loft')
+  await page.getByTestId('floor-images-apply').click()
+
+  await expect(floorName(page)).toHaveText('Ground floor')
+  const list = page.getByTestId('floor-list').locator('li')
+  const names = () => list.evaluateAll(items => items.map(li => li.getAttribute('data-floor')))
+  await expect.poll(names).toEqual(['Loft', 'Ground floor', 'Basement'])
+
+  // Up one place: the basement goes above the ground floor
+  await page.getByLabel('Move Basement up').click()
+  await expect.poll(names).toEqual(['Loft', 'Basement', 'Ground floor'])
+  await expect(page.getByLabel('Ground floor: Ground floor')).toBeChecked()
+  // Another ground floor: the order stays, PgDn from the loft reaches the basement
+  await page.getByLabel('Ground floor: Loft').check()
+  await expect(page.getByLabel('Ground floor: Loft')).toBeChecked()
+  await expect.poll(names).toEqual(['Loft', 'Basement', 'Ground floor'])
+  await page.locator('[data-floor="Loft"] .name').click()
+  await expect(floorName(page)).toHaveText('Loft')
+  await page.keyboard.press('PageDown')
+  await expect(floorName(page)).toHaveText('Basement')
+  expect(errors).toEqual([])
+})

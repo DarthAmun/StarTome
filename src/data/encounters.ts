@@ -8,7 +8,7 @@ import { newId, nowIso } from '@/domain/ids'
 import type { AreaOverlay } from '@/domain/rules/areas'
 import type { Adjustment } from '@/domain/rules/combat'
 import type { TokenCondition, TokenTimer } from '@/domain/rules/conditions'
-import { addFloor, floorWrite, orderFloors, removeFloor, storedFloorId, type FloorChange, type FloorWrite } from '@/domain/rules/floors'
+import { addFloor, fillFloors, floorWrite, orderFloors, removeFloor, storedFloorId, type FloorChange, type FloorWrite } from '@/domain/rules/floors'
 import { encounterOwner } from '@/domain/rules/inventory'
 import { withHiddenDoorOutline, type Wall } from '@/domain/rules/walls'
 import { zActor, zCombatLogEntry, zCombatant, zEncounter, zEncounterMap, type Actor, type ActorRef, type CombatLogEntry, type Combatant, type Encounter, type EncounterMap, type Floor, type ImageRef, type MapAsset, zMapAsset } from '@/domain/schema'
@@ -152,6 +152,12 @@ export async function addFloorTo(id: string, init: Parameters<typeof addFloor>[2
   const { floor, map } = addFloor(enc, await encounters.map(id), init)
   await patchMap(id, map)
   return floor
+}
+
+/** Images on floors, bottom to top, `ground` (an index) on the ground floor; missing floors are made (fillFloors). */
+export async function setFloorImages(id: string, items: { image: ImageRef; name: string }[], ground: number): Promise<void> {
+  const enc = await table().get(id)
+  if (enc) await writeFloors(id, fillFloors(enc, await encounters.map(id), items, ground))
 }
 
 /** Puts the floors in order, bottom to top, `groundId` at level 0 (floorsOf ids). */
