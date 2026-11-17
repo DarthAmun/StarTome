@@ -2,13 +2,17 @@
 /**
  * The map maker: paint a battle map from tiles, place assets from your
  * library on it, and use it as the encounter's map. "Make walls" derives the
- * sight-blocking walls and doors from the tiles.
+ * sight-blocking walls and doors from the tiles. Every floor of the map is a
+ * tab with its own undo; all floors share one size, the one below shows
+ * faintly, and stair tiles become stairs between neighbouring floors.
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
-import { ArrowLeft, FlipHorizontal, Redo2, RotateCw, Trash2, Undo2 } from 'lucide-vue-next'
-import { EXPORT_CELL_PX, MAX_SIZE, MIN_SIZE, PROP_MIN_SIZE, TILES, blankMap, mapWalls, readBattleMap, tileChar, type BattleMap, type TileId } from '@/domain/rules/battlemap'
-import { applyBattleMap, encounters } from '@/data/encounters'
+import { ArrowLeft, FlipHorizontal, Redo2, RotateCw, Trash2, Undo2, X } from 'lucide-vue-next'
+import { EXPORT_CELL_PX, MAX_SIZE, MIN_SIZE, PROP_MIN_SIZE, TILES, blankMap, clampSize, mapWalls, pairStairs, readBattleMap, resizeMap, tileChar, type BattleMap, type TileId } from '@/domain/rules/battlemap'
+import { defaultFloorName, floorsOf } from '@/domain/rules/floors'
+import { newId } from '@/domain/ids'
+import { applyMadeFloors, encounters, type MadeFloor } from '@/data/encounters'
 import { images as imageRepo } from '@/data/repo'
 import { storeImage } from '@/services/images'
 import { confirmDialog, notify, reportError } from '@/ui/dialogs'
@@ -33,7 +37,29 @@ const viewEl = ref<HTMLElement | null>(null)
 /** Loaded images of placed assets, by image ref ("img:<id>"). */
 const loaded = new Map<string, HTMLImageElement>()
 const pending = new Map<string, Promise<void>>()
-const ed = useMapEditor(canvasEl, loaded)
+/** A floor in the map maker, bottom to top. The one being edited lives in the editor until another is shown. */
+interface MakerFloor {
+  key: string
+  /** Its id in the encounter (floorsOf); null for one made here. */
+  id: string | null
+  name: string
+  main: boolean
+  /** Its map came from here before (it has tiles); else it may have an uploaded image. */
+  hadTiles: boolean
+  uploaded: boolean
+  /** The map as loaded: unchanged floors with an uploaded image keep it. */
+  original: BattleMap | null
+  map: BattleMap
+  undo: BattleMap[]
+  redo: BattleMap[]
+}
+const stack = shallowRef<MakerFloor[]>([])
+const cur = ref(0)
+/** Floors of the encounter removed here, gone when the map is saved. */
+const removed = ref<string[]>([])
+/** Where the levels count from: the ground floor when the map maker opened. */
+let groundKey = ''
+const ed = useMapEditor(canvasEl, loaded, () => stack.value[cur.value - 1]?.map ?? null)
 const { map, tool, tileId, zoom, dirty, undoStack, redoStack, placing, selected, panning, spaceDown } = ed
 
 const name = ref('')
@@ -62,6 +88,7 @@ function loadImage(ref: string): Promise<void> {
   return p
 }
 watch(() => map.value?.props, (list) => { for (const p of list ?? []) void loadImage(p.image) })
+watch(stack, (list) => { for (const f of list) for (const p of f.map.props ?? []) void loadImage(p.image) })
 watch(placing, (a) => { if (a) void loadImage(`img:${a.imageId}`) })
 watch(map, (m) => { if (m) { cols.value = m.cols; rows.value = m.rows } })
 
@@ -84,7 +111,16 @@ onMounted(async () => {
   found.value = !!enc
   if (!enc) return
   name.value = enc.name
-  ed.load(readBattleMap((await encounters.map(enc.id)).battlemap) ?? blankMap(24, 18, 'void'))
+  const views = floorsOf(enc, await encounters.map(enc.id))
+  const maps = views.map(v => readBattleMap(v.battlemap))
+  const first = maps.find(m => m) ?? blankMap(24, 18, 'void')
+  stack.value = views.map((v, i) => {
+    const m = maps[i], fitted = m ? (m.cols === first.cols && m.rows === first.rows ? m : resizeMap(m, first.cols, first.rows)) : blankMap(first.cols, first.rows, 'void')
+    return { key: v.id, id: v.id, name: v.name, main: v.main, hadTiles: !!m, uploaded: !m && !!v.image, original: fitted, map: fitted, undo: [], redo: [] }
+  })
+  cur.value = Math.max(0, views.findIndex(v => v.level === 0))
+  groundKey = stack.value[cur.value]!.key
+  ed.load(stack.value[cur.value]!.map)
   await nextTick()
   drawSwatches()
   if (viewEl.value) {
@@ -120,6 +156,7 @@ function onKey(e: KeyboardEvent) {
     return
   }
   if (key === 'escape') { placing.value = null; ed.selectedId.value = null; ed.schedule(); return }
+  if (key === 'pageup' || key === 'pagedown') { e.preventDefault(); show(cur.value + (key === 'pageup' ? 1 : -1)); return }
   if (e.altKey) return
   if (key === '0') { ed.fit(); return }
   if (key === '+' || key === '=') { ed.zoomBy(1.25); return }
@@ -141,22 +178,82 @@ function onKey(e: KeyboardEvent) {
 
 const num = (e: Event) => Number((e.target as HTMLInputElement).value)
 function size(key: 'w' | 'h', e: Event) { if (Number.isFinite(num(e))) ed.patchSelected({ [key]: Math.max(PROP_MIN_SIZE, Math.round(num(e) * 100) / 100) }) }
+// ── Floors ──
+/** The floors with the one being edited as it is now. */
+function synced(): MakerFloor[] {
+  const list = [...stack.value], f = list[cur.value]
+  if (f && map.value) list[cur.value] = { ...f, map: map.value, undo: undoStack.value, redo: redoStack.value }
+  return list
+}
+function show(i: number) {
+  if (i < 0 || i >= stack.value.length || i === cur.value) return
+  stack.value = synced()
+  cur.value = i
+  ed.swap(stack.value[i]!)
+}
+const levelOf = (i: number) => i - Math.max(0, stack.value.findIndex(f => f.key === groundKey))
+function addFloor(top: boolean, copy = false) {
+  const list = synced(), here = list[cur.value]!
+  const m = copy ? { ...here.map, props: (here.map.props ?? []).map(p => ({ ...p, id: newId() })) } : blankMap(here.map.cols, here.map.rows, 'void')
+  const level = top ? levelOf(list.length - 1) + 1 : levelOf(0) - 1
+  const f: MakerFloor = { key: newId(), id: null, name: defaultFloorName(level), main: false, hadTiles: false, uploaded: false, original: null, map: m, undo: [], redo: [] }
+  stack.value = top ? [...list, f] : [f, ...list]
+  cur.value = top ? stack.value.length - 1 : 0
+  ed.swap(f)
+  dirty.value = true
+}
+async function removeFloor() {
+  const f = stack.value[cur.value]
+  if (!f || f.main || stack.value.length < 2) return
+  if (f.id && !await confirmDialog({ title: `Remove “${f.name}”?`, body: 'When you use the map, this floor goes from the encounter with its walls, fog and the tokens on it.', confirmLabel: 'Remove floor', danger: true })) return
+  if (f.id) removed.value = [...removed.value, f.id]
+  const list = synced().filter((_, i) => i !== cur.value)
+  stack.value = list
+  cur.value = Math.max(0, cur.value - 1)
+  ed.swap(list[cur.value]!)
+  dirty.value = true
+}
+function rename(e: Event) {
+  const n = (e.target as HTMLInputElement).value.trim()
+  if (!n) return
+  stack.value = stack.value.map((f, i) => (i === cur.value ? { ...f, name: n } : f))
+  dirty.value = true
+}
+/** One size for every floor: the one shown can undo it, the others too. */
+function resizeAll() {
+  const c = clampSize(cols.value), r = clampSize(rows.value)
+  stack.value = synced().map((f, i) => (i === cur.value || (f.map.cols === c && f.map.rows === r) ? f : { ...f, map: resizeMap(f.map, c, r), undo: [...f.undo, f.map], redo: [] }))
+  ed.resize(c, r)
+}
+const current = computed(() => stack.value[cur.value])
+
 async function startOver() {
   if (await confirmDialog({ title: 'Start over?', body: 'Every square becomes empty and placed assets are removed. Undo brings it back.', confirmLabel: 'Start over', danger: true })) ed.clear()
 }
 
 async function save() {
-  const m = map.value
-  if (!m) return
+  if (!map.value) return
   saving.value = true
   try {
-    await Promise.all((m.props ?? []).map(p => loadImage(p.image)))
-    const missing = (m.props ?? []).filter(p => !loaded.has(p.image)).length
-    const image = await storeImage(await battleMapPng(m, EXPORT_CELL_PX, loaded), { keepOriginal: true })
-    const walls = makeWalls.value ? mapWalls(m).map(w => ({ points: w.points, kind: w.coverType })) : null
-    await applyBattleMap(props.encounterId, JSON.parse(JSON.stringify(m)) as Record<string, unknown>, image, EXPORT_CELL_PX, walls)
+    const list = synced()
+    const all = list.flatMap(f => f.map.props ?? [])
+    await Promise.all(all.map(p => loadImage(p.image)))
+    const missing = all.filter(p => !loaded.has(p.image)).length
+    // A floor with an uploaded image keeps it unless it was painted here
+    const render = list.map(f => f.id === null || f.hadTiles || f.map !== f.original)
+    let wallCount = 0
+    const made: MadeFloor[] = await Promise.all(list.map(async (f, i) => {
+      if (!render[i]) return { id: f.id, name: f.name, made: null }
+      const image = await storeImage(await battleMapPng(f.map, EXPORT_CELL_PX, loaded), { keepOriginal: true })
+      const walls = makeWalls.value ? mapWalls(f.map).map(w => ({ points: w.points, kind: w.coverType })) : null
+      wallCount += walls?.length ?? 0
+      return { id: f.id, name: f.name, made: { battlemap: JSON.parse(JSON.stringify(f.map)) as Record<string, unknown>, image, walls } }
+    }))
+    const stairs = pairStairs(list.map((f, i) => (render[i] ? f.map : null)))
+    await applyMadeFloors(props.encounterId, made, removed.value, EXPORT_CELL_PX, stairs)
     dirty.value = false
-    notify(walls ? `Map saved with ${walls.length} walls and doors; sight is on.` : 'Map saved.', 'ok')
+    const parts = [list.length > 1 ? `${list.length} floors` : '', makeWalls.value ? `${wallCount} walls and doors` : '', stairs.length ? `${stairs.length} stairs` : ''].filter(Boolean)
+    notify(`Map saved${parts.length ? ` with ${parts.join(', ')}` : ''}${makeWalls.value ? '; sight is on' : ''}.`, 'ok')
     if (missing) notify(`${missing} placed assets have no image any more and were left out.`)
     await router.push({ name: 'encounter', params: { campaignId: props.campaignId, encounterId: props.encounterId } })
   } catch (err) { reportError('Saving the map', err) } finally { saving.value = false }
@@ -172,7 +269,7 @@ async function save() {
       <button class="btn btn-icon" title="Undo (Ctrl+Z)" :disabled="!undoStack.length" data-test="mm-undo" @click="ed.undo()"><Undo2 :size="15" /></button>
       <button class="btn btn-icon" title="Redo (Ctrl+Y)" :disabled="!redoStack.length" @click="ed.redo()"><Redo2 :size="15" /></button>
       <span class="grow" />
-      <label class="faint">Size <input v-model.number="cols" type="number" :min="MIN_SIZE" :max="MAX_SIZE" class="input num" aria-label="Columns" @change="ed.resize(cols, rows)" /> × <input v-model.number="rows" type="number" :min="MIN_SIZE" :max="MAX_SIZE" class="input num" aria-label="Rows" @change="ed.resize(cols, rows)" /></label>
+      <label class="faint">Size <input v-model.number="cols" type="number" :min="MIN_SIZE" :max="MAX_SIZE" class="input num" aria-label="Columns" @change="resizeAll" /> × <input v-model.number="rows" type="number" :min="MIN_SIZE" :max="MAX_SIZE" class="input num" aria-label="Rows" @change="resizeAll" /></label>
       <button class="btn" @click="startOver">Start over</button>
       <button class="btn btn-icon" title="Zoom out (−)" @click="ed.zoomBy(0.8)">−</button>
       <button class="btn" title="Fit (0)" @click="ed.fit()">{{ Math.round((zoom / ZOOM_BASE) * 100) }}%</button>
@@ -191,6 +288,21 @@ async function save() {
     <div ref="viewEl" class="view" :class="{ grabbing: panning, grab: spaceDown || (tool === 'pan' && !placing), plain: tool === 'select' && !placing }">
       <canvas ref="canvasEl" data-test="mm-canvas" @pointerdown="ed.down" @pointermove="ed.move" @pointerup="ed.up" @pointercancel="ed.up" @wheel.prevent="ed.wheel" @contextmenu.prevent />
       <p class="hint">{{ hint }}</p>
+      <div class="floors panel" data-test="mm-floors">
+        <template v-for="i in [...stack.keys()].reverse()" :key="stack[i]!.key">
+          <div v-if="i === cur" class="floor on">
+            <input class="input" :value="stack[i]!.name" aria-label="Floor name" @change="rename" @keydown.enter="($event.target as HTMLInputElement).blur()" />
+            <button v-if="!stack[i]!.main && stack.length > 1" class="btn btn-ghost btn-icon" title="Remove this floor" data-test="mm-floor-remove" @click="removeFloor"><X :size="13" /></button>
+          </div>
+          <button v-else class="floor" :data-floor="stack[i]!.name" @click="show(i)">{{ stack[i]!.name }}</button>
+        </template>
+        <div class="adds">
+          <button class="btn" title="An empty floor on top" data-test="mm-floor-add-top" @click="addFloor(true)">+ Above</button>
+          <button class="btn" title="An empty floor at the bottom" @click="addFloor(false)">+ Below</button>
+          <button class="btn" title="A copy of this floor on top" @click="addFloor(true, true)">Copy up</button>
+        </div>
+        <p v-if="current?.uploaded && current.map === current.original" class="faint note">This floor has an uploaded image: it stays unless you paint here.</p>
+      </div>
       <div v-if="selected" class="sel panel" data-test="mm-selected">
         <label>W <input class="input num" type="number" step="0.5" :value="selected.w" @change="size('w', $event)" /></label>
         <label>H <input class="input num" type="number" step="0.5" :value="selected.h" @change="size('h', $event)" /></label>
@@ -224,4 +336,9 @@ async function save() {
 .hint { position: absolute; left: .7rem; bottom: .5rem; margin: 0; font-size: .8rem; color: #b9b7c9; background: rgb(10 10 22 / .7); padding: .15rem .5rem; border-radius: var(--radius); pointer-events: none; max-width: 70%; }
 .sel { position: absolute; top: .6rem; left: 50%; transform: translateX(-50%); display: flex; gap: .35rem; align-items: center; padding: .3rem .5rem; flex-wrap: wrap; } .layer { width: auto; padding: .2em .4em; }
 .assets { border-left: var(--frame); }
+.floors { position: absolute; top: .6rem; left: .6rem; display: flex; flex-direction: column; gap: 2px; padding: .3rem; width: 12rem; }
+.floor { background: none; border: 1px solid transparent; border-radius: var(--radius); padding: .2rem .45rem; text-align: left; color: var(--text-dim); font-size: .85rem; }
+.floor:hover { background: var(--bg-hover); } .floor.on { display: flex; gap: .2rem; align-items: center; border-color: var(--accent); padding: 1px; }
+.floor.on .input { padding: .15em .35em; font-size: .85rem; } .adds { display: flex; gap: 2px; flex-wrap: wrap; margin-top: .2rem; } .adds .btn { font-size: .75rem; padding: .15rem .4rem; }
+.note { margin: .2rem 0 0; font-size: .74rem; }
 </style>

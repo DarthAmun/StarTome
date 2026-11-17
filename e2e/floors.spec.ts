@@ -133,3 +133,66 @@ test('several map images become floors: order guessed from the names, fixed by h
   await expect(floorName(page)).toHaveText('Basement')
   expect(errors).toEqual([])
 })
+
+test('the map maker paints two floors with stairs between them; the encounter gets both', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', e => errors.push(e.message))
+  await newEncounter(page)
+  await page.getByTestId('open-map-maker').click()
+  const canvas = page.getByTestId('mm-canvas')
+  await expect(canvas).toBeVisible()
+  await page.keyboard.press('0')
+  const box = (await canvas.boundingBox())!
+  // The map maker fits its 24 × 18 squares with 32 px to spare on each side (editor.fit)
+  const z = Math.min((box.width - 64) / 24, (box.height - 64) / 18)
+  const mm = (c: number, r: number) => [box.x + (box.width - 24 * z) / 2 + (c + 0.5) * z, box.y + (box.height - 18 * z) / 2 + (r + 0.5) * z] as const
+  const room = async () => { await page.mouse.move(...mm(8, 5)); await page.mouse.down(); await page.mouse.move(...mm(16, 12), { steps: 5 }); await page.mouse.up() }
+
+  await room()
+  await page.locator('[data-tool="brush"]').click()
+  await page.locator('[data-tile="stairsup"]').click()
+  await page.mouse.click(...mm(12, 9))
+  await page.getByTestId('mm-floor-add-top').click()
+  await expect(page.getByLabel('Floor name')).toHaveValue('Floor 2')
+  await page.locator('[data-tile="wood"]').click()
+  await page.locator('[data-tool="room"]').click()
+  await room()
+  await page.locator('[data-tool="brush"]').click()
+  await page.locator('[data-tile="stairsdown"]').click()
+  await page.mouse.click(...mm(12, 9))
+  await page.getByLabel('Floor name').fill('Upstairs')
+  await page.getByLabel('Floor name').press('Enter')
+  // Each floor keeps its own undo: back on the ground floor nothing of the upper one is undone
+  await page.keyboard.press('PageDown')
+  await expect(page.getByTestId('mm-floors').locator('[data-floor="Upstairs"]')).toBeVisible()
+  await page.keyboard.press('PageUp')
+  await expect(page.getByLabel('Floor name')).toHaveValue('Upstairs')
+
+  await page.getByTestId('mm-save').click()
+  await expect(page.getByText(/Map saved with 2 floors, \d+ walls and doors, 1 stairs/)).toBeVisible()
+
+  // On the encounter: both floors, the stairs where they were painted
+  await expect(page.getByTestId('floor-current')).toHaveText('Ground floor')
+  const map = (await page.getByTestId('encounter-map').boundingBox())!
+  const s = Math.max(0.1, Math.min(4, Math.min(map.width / (24 * 70), map.height / (18 * 70)) * 0.95))
+  const vtt = (c: number, r: number) => [map.x + (map.width - 24 * 70 * s) / 2 + (c + 0.5) * 70 * s, map.y + (map.height - 18 * 70 * s) / 2 + (r + 0.5) * 70 * s] as const
+  // The view fits the map once its image has loaded: ask again until it has
+  const menuAt = (text: string) => expect(async () => {
+    await page.keyboard.press('Escape')
+    await page.mouse.click(...vtt(12, 9), { button: 'right' })
+    await expect(page.getByTestId('map-menu')).toContainText(text, { timeout: 500 })
+  }).toPass()
+  await menuAt('Stairs up')
+  await page.keyboard.press('Escape')
+  await page.getByTestId('floor-up').click()
+  await expect(page.getByTestId('floor-current')).toHaveText('Upstairs')
+  await menuAt('Stairs down')
+  await page.keyboard.press('Escape')
+
+  // Opened again, the map maker shows both floors to edit
+  await page.getByTestId('floor-down').click()
+  await page.getByTestId('open-map-maker').click()
+  await expect(page.getByTestId('mm-floors').locator('[data-floor="Upstairs"]')).toBeVisible()
+  await expect(page.getByLabel('Floor name')).toHaveValue('Ground floor')
+  expect(errors).toEqual([])
+})

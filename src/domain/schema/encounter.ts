@@ -55,7 +55,11 @@ export const zFloor = z.object({
 export type Floor = z.infer<typeof zFloor>
 
 const zStairEnd = z.object({ floorId: zId.nullable(), x: z.number(), y: z.number() })
-export const zStair = z.object({ id: zId, a: zStairEnd, b: zStairEnd })
+export const zStair = z.object({
+  id: zId, a: zStairEnd, b: zStairEnd,
+  /** Made by the map maker from stair tiles; replaced when the map is saved again. */
+  generated: z.boolean().default(false),
+})
 export type Stair = z.infer<typeof zStair>
 
 export const ENCOUNTER_STATUS = ['prepared', 'active', 'resolved'] as const

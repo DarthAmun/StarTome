@@ -25,13 +25,15 @@ export interface DrawOptions {
   images?: Map<string, CanvasImageSource>
   /** GM-only marks, such as where hidden doors are (the editor; never in the encounter's image). */
   marks?: boolean
+  /** Draw over what is already there: void squares stay see-through and nothing is cleared first. */
+  over?: boolean
 }
 
 export function drawBattleMap(ctx: CanvasRenderingContext2D, map: BattleMap, px: number, opts: DrawOptions = {}) {
   ctx.save()
-  ctx.clearRect(0, 0, map.cols * px, map.rows * px)
+  if (!opts.over) ctx.clearRect(0, 0, map.cols * px, map.rows * px)
   for (let r = 0; r < map.rows; r++) {
-    for (let c = 0; c < map.cols; c++) drawCell(ctx, map, c, r, px)
+    for (let c = 0; c < map.cols; c++) drawCell(ctx, map, c, r, px, !!opts.over)
   }
   if (opts.marks) drawHiddenDoorMarks(ctx, map, px)
   const props = map.props ?? []
@@ -49,12 +51,14 @@ export function drawBattleMap(ctx: CanvasRenderingContext2D, map: BattleMap, px:
   ctx.restore()
 }
 
-function drawCell(ctx: CanvasRenderingContext2D, map: BattleMap, c: number, r: number, px: number) {
+function drawCell(ctx: CanvasRenderingContext2D, map: BattleMap, c: number, r: number, px: number, clearVoid: boolean) {
   const tile = tileByChar(getTile(map, c, r))
+  // Void is nothing: the floor below shows through it
+  if (clearVoid && tile.id === 'void') return
   const x = c * px
   const y = r * px
-  // Doors and windows stand on stone floor
-  const base = tile.id === 'door' || tile.id === 'window' ? tileByChar('s').color : tile.color
+  // Doors, windows and stairs stand on stone floor
+  const base = tile.id === 'door' || tile.id === 'window' || tile.id === 'stairsup' || tile.id === 'stairsdown' ? tileByChar('s').color : tile.color
   ctx.fillStyle = tile.id === 'void' ? base : shade(base, (hash(c, r, 1) - 0.5) * 0.06)
   ctx.fillRect(x, y, px, px)
 
@@ -280,9 +284,31 @@ function drawCell(ctx: CanvasRenderingContext2D, map: BattleMap, c: number, r: n
       else ctx.fillRect(fx, y + px / 2 - inset / 2, fw, inset)
       break
     }
+    case 'stairsup':
+    case 'stairsdown':
+      drawStairs(ctx, x, y, px, tile.id === 'stairsup')
+      break
     case 'void':
       break
   }
+}
+
+/** Steps rising to one side, darker as they go down, and an arrow up or down. */
+function drawStairs(ctx: CanvasRenderingContext2D, x: number, y: number, px: number, up: boolean) {
+  for (let i = 0; i < 4; i++) {
+    const depth = up ? i : 3 - i
+    ctx.fillStyle = `rgba(0,0,0,${0.08 + depth * 0.1})`
+    ctx.fillRect(x, y + (i * px) / 4, px, px / 4)
+    ctx.fillStyle = 'rgba(255,255,255,0.22)'
+    ctx.fillRect(x, y + (i * px) / 4, px, Math.max(1, px / 30))
+  }
+  const ax = x + px * 0.5, top = y + px * 0.18, bottom = y + px * 0.82, tip = up ? top : bottom, back = up ? top + px * 0.2 : bottom - px * 0.2
+  ctx.strokeStyle = 'rgba(232,192,106,0.95)'
+  ctx.lineWidth = Math.max(1.5, px / 16)
+  ctx.beginPath()
+  ctx.moveTo(ax, top); ctx.lineTo(ax, bottom)
+  ctx.moveTo(ax - px * 0.16, back); ctx.lineTo(ax, tip); ctx.lineTo(ax + px * 0.16, back)
+  ctx.stroke()
 }
 
 /** Dashed outline and door line on hidden doors, so the GM can find them while editing. */
@@ -371,6 +397,7 @@ export function battleMapPng(map: BattleMap, px: number, images?: Map<string, Ca
   const canvas = document.createElement('canvas')
   canvas.width = map.cols * px
   canvas.height = map.rows * px
-  drawBattleMap(canvas.getContext('2d')!, map, px, { images })
+  // Void stays transparent: in the encounter the floor below shows through it
+  drawBattleMap(canvas.getContext('2d')!, map, px, { images, over: true })
   return new Promise((resolve, reject) => canvas.toBlob(b => (b ? resolve(b) : reject(new Error('The map image could not be made'))), 'image/png'))
 }

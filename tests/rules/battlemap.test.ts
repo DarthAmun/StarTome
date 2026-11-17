@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   blankMap, floodFill, TILES, getTile, mapWalls, paintRoom, propAt, propImages, readBattleMap, resizeMap,
-  restackProp, toPropFrame, fromPropFrame, type BattleMap, type MapProp,
+  restackProp, toPropFrame, fromPropFrame, pairStairs, stairCells, type BattleMap, type MapProp,
 } from '@/domain/rules/battlemap'
 import { isDoorWall, visibilityPolygon, wallsToSegments, withHiddenDoorOutline, type Wall, type WallKind } from '@/domain/rules/walls'
 
@@ -169,4 +169,19 @@ describe('battle map assets', () => {
     expect(propImages(read)).toEqual(['img:a'])
   })
 
+})
+
+describe('stairs between map maker floors', () => {
+  it('pairs stairs up with the nearest stairs down on the floor above', () => {
+    const ground = grid('^ss^', 'ssss')
+    const upper = grid('ssvs', 'vsss')
+    const top = grid('ssss', 'ssss')
+    expect(stairCells(ground, 'up')).toEqual([[0, 0], [3, 0]])
+    expect(pairStairs([ground, upper, top])).toEqual([
+      { lower: 0, up: [0, 0], down: [0, 1] },
+      { lower: 0, up: [3, 0], down: [2, 0] },
+    ])
+    // Stairs down on the ground floor lead nowhere; a missing floor breaks the chain
+    expect(pairStairs([grid('vs'), null, grid('^s')])).toEqual([])
+  })
 })

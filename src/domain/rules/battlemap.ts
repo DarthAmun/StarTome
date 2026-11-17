@@ -10,7 +10,7 @@ import { hiddenDoorOutline, type WallKind } from './walls'
 
 export type TileId =
   | 'void' | 'stone' | 'wood' | 'carpet' | 'dirt' | 'grass' | 'sand' | 'snow' | 'ice' | 'rubble'
-  | 'swamp' | 'water' | 'deepwater' | 'fire' | 'magma' | 'wall' | 'window' | 'door' | 'secret'
+  | 'swamp' | 'water' | 'deepwater' | 'fire' | 'magma' | 'wall' | 'window' | 'door' | 'secret' | 'stairsup' | 'stairsdown'
 
 export interface TileDef {
   id: TileId
@@ -41,6 +41,8 @@ export const TILES: TileDef[] = [
   { id: 'window', char: '=', label: 'Window (sight passes)', color: '#8a8478', solid: false },
   { id: 'door',   char: '+', label: 'Door',        color: '#8a8478', solid: false },
   { id: 'secret', char: '%', label: 'Hidden door (players see a wall)', color: '#3a3631', solid: false },
+  { id: 'stairsup', char: '^', label: 'Stairs up (to the floor above)', color: '#8a8478', solid: false },
+  { id: 'stairsdown', char: 'v', label: 'Stairs down (to the floor below)', color: '#8a8478', solid: false },
   { id: 'void',   char: '.', label: 'Void',        color: '#121212', solid: true },
 ]
 
@@ -326,4 +328,33 @@ function doorLine(map: BattleMap, c: number, r: number): { x: number; y: number 
   return doorIsHorizontal(map, c, r)
     ? [{ x: c, y: r + 0.5 }, { x: c + 1, y: r + 0.5 }]
     : [{ x: c + 0.5, y: r }, { x: c + 0.5, y: r + 1 }]
+}
+
+/** Squares with stairs up or down. */
+export function stairCells(map: BattleMap, dir: 'up' | 'down'): [number, number][] {
+  const ch = tileChar(dir === 'up' ? 'stairsup' : 'stairsdown'), out: [number, number][] = []
+  for (let i = map.tiles.indexOf(ch); i >= 0; i = map.tiles.indexOf(ch, i + 1)) out.push([i % map.cols, Math.floor(i / map.cols)])
+  return out
+}
+
+/**
+ * Stairs between neighbouring floors (bottom to top): stairs up on a floor
+ * meet stairs down on the one above, the nearest first. Returns pairs of
+ * floor indexes and squares; stairs left without a partner lead nowhere.
+ */
+export function pairStairs(floors: (BattleMap | null)[]): { lower: number; up: [number, number]; down: [number, number] }[] {
+  const out: { lower: number; up: [number, number]; down: [number, number] }[] = []
+  for (let i = 0; i + 1 < floors.length; i++) {
+    const lo = floors[i], hi = floors[i + 1]
+    if (!lo || !hi) continue
+    const ups = stairCells(lo, 'up'), downs = stairCells(hi, 'down')
+    const pairs = ups.flatMap((u, a) => downs.map((d, b) => ({ a, b, dist: Math.hypot(u[0] - d[0], u[1] - d[1]) }))).sort((x, y) => x.dist - y.dist || x.a - y.a || x.b - y.b)
+    const usedA = new Set<number>(), usedB = new Set<number>()
+    for (const p of pairs) {
+      if (usedA.has(p.a) || usedB.has(p.b)) continue
+      usedA.add(p.a); usedB.add(p.b)
+      out.push({ lower: i, up: ups[p.a]!, down: downs[p.b]! })
+    }
+  }
+  return out
 }

@@ -201,6 +201,6 @@ export function stairUnder(enc: EncounterPart, map: MapPart, id: string | null |
 }
 
 /** A stair between two squares (floor ids as in FloorView). */
-export function newStair(a: { floorId: string; x: number; y: number }, b: { floorId: string; x: number; y: number }): Stair {
-  return { id: newId(), a: { ...a, floorId: storedFloorId(a.floorId) }, b: { ...b, floorId: storedFloorId(b.floorId) } }
+export function newStair(a: { floorId: string; x: number; y: number }, b: { floorId: string; x: number; y: number }, generated = false): Stair {
+  return { id: newId(), a: { ...a, floorId: storedFloorId(a.floorId) }, b: { ...b, floorId: storedFloorId(b.floorId) }, generated }
 }

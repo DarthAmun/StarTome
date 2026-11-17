@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { StarTomeDb, getDb, useDbForTests } from '@/data/db'
 import { createEncounterFromBuild, readBuild, columnPlacer } from '@/data/encounterBuild'
-import { actors, addCombatant, addFloorTo, cloneEncounter, combatLog, createEncounter, deleteEncounter, encounters, makeLogEntry, patchCombatant, patchEncounter, patchFloor, patchMap, removeFloorFrom, reorderFloors } from '@/data/encounters'
+import { actors, addCombatant, addFloorTo, applyMadeFloors, cloneEncounter, combatLog, createEncounter, deleteEncounter, encounters, makeLogEntry, patchCombatant, patchEncounter, patchFloor, patchMap, removeFloorFrom, reorderFloors } from '@/data/encounters'
 import { createEntry } from '@/data/entries'
 import { addEntry, adjustPurse, inventory, purseOf } from '@/data/inventory'
 import { addCharacter, addCharacterFor, ledgerOf, partyOf, updateCampaignRules } from '@/data/party'
@@ -117,6 +117,41 @@ describe('floors', () => {
     expect(map.areas).toEqual([{ id: 'b', kind: 'burst', floorId: null }])
     expect((await encounters.combatants(enc.id)).map(t => [t.label, t.floorId])).toEqual([['Above', null]])
     expect(await removeFloorFrom(enc.id, MAIN_FLOOR)).toBe(false)
+  })
+})
+
+describe('saving the map maker\'s floors', () => {
+  it('adds new floors in order, renders changed ones, keeps an uploaded image, and replaces the stairs it made', async () => {
+    const enc = await createEncounter(C, 'Keep', { map: { imageId: 'old' } })
+    const top = (await addFloorTo(enc.id, { image: { imageId: 'upload' }, name: 'Tower' }))!
+    await patchMap(enc.id, { walls: [{ id: 'hand', points: [{ x: 0, y: 0 }, { x: 1, y: 0 }], kind: 'full', open: false, generated: false }] })
+    const wall = { points: [{ x: 2, y: 2 }, { x: 3, y: 2 }], kind: 'full' as const }
+    const tiles = (img: string) => ({ battlemap: { cols: 4, rows: 4, tiles: 's'.repeat(16) }, image: { imageId: img }, walls: [wall] })
+    await applyMadeFloors(enc.id, [
+      { id: null, name: 'Cellar', made: tiles('cellar') },
+      { id: MAIN_FLOOR, name: 'Hall', made: tiles('hall') },
+      { id: top.id, name: 'Tower', made: null },
+    ], [], 70, [{ lower: 0, up: [1, 1], down: [2, 2] }])
+    const read = async () => floorsOf((await encounters.get(enc.id))!, await encounters.map(enc.id))
+    expect((await read()).map(f => [f.name, f.level, f.image, f.grid.size, f.walls.length])).toEqual([
+      ['Cellar', -1, { imageId: 'cellar' }, 70, 1], ['Hall', 0, { imageId: 'hall' }, 70, 2], ['Tower', 1, { imageId: 'upload' }, 40, 0],
+    ])
+    expect((await encounters.get(enc.id))!.fovEnabled).toBe(true)
+    const cellar = (await read())[0]!.id
+    expect((await encounters.map(enc.id)).stairs).toMatchObject([{ a: { floorId: cellar, x: 1, y: 1 }, b: { floorId: null, x: 2, y: 2 }, generated: true }])
+
+    // Saved again: the made stairs are replaced, a hand-placed one stays; the hand-drawn wall stays too
+    const mapRow = await encounters.map(enc.id)
+    await patchMap(enc.id, { stairs: [...mapRow.stairs, { id: 'own', a: { floorId: null, x: 0, y: 0 }, b: { floorId: top.id, x: 0, y: 0 }, generated: false }] })
+    await applyMadeFloors(enc.id, [{ id: cellar, name: 'Cellar', made: null }, { id: MAIN_FLOOR, name: 'Hall', made: tiles('hall2') }, { id: top.id, name: 'Tower', made: null }], [], 70, [])
+    expect((await encounters.map(enc.id)).stairs.map(st => st.id)).toEqual(['own'])
+    expect((await read())[1]!.walls.map(w => w.id)).toContain('hand')
+
+    // A floor removed in the map maker goes with its tokens
+    await addCombatant(enc.id, { x: 0, y: 0, floorId: top.id, label: 'Lookout' })
+    await applyMadeFloors(enc.id, [{ id: cellar, name: 'Cellar', made: null }, { id: MAIN_FLOOR, name: 'Hall', made: null }], [top.id], 70, [])
+    expect((await read()).map(f => f.name)).toEqual(['Cellar', 'Hall'])
+    expect(await encounters.combatants(enc.id)).toEqual([])
   })
 })
 

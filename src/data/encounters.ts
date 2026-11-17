@@ -8,7 +8,7 @@ import { newId, nowIso } from '@/domain/ids'
 import type { AreaOverlay } from '@/domain/rules/areas'
 import type { Adjustment } from '@/domain/rules/combat'
 import type { TokenCondition, TokenTimer } from '@/domain/rules/conditions'
-import { addFloor, fillFloors, floorWrite, orderFloors, removeFloor, storedFloorId, type FloorChange, type FloorWrite } from '@/domain/rules/floors'
+import { addFloor, fillFloors, floorById, floorWrite, MAIN_FLOOR, newStair, orderFloors, removeFloor, storedFloorId, type FloorChange, type FloorWrite } from '@/domain/rules/floors'
 import { encounterOwner } from '@/domain/rules/inventory'
 import { withHiddenDoorOutline, type Wall } from '@/domain/rules/walls'
 import { zActor, zCombatLogEntry, zCombatant, zEncounter, zEncounterMap, type Actor, type ActorRef, type CombatLogEntry, type Combatant, type Encounter, type EncounterMap, type Floor, type ImageRef, type MapAsset, zMapAsset } from '@/domain/schema'
@@ -308,16 +308,49 @@ export async function playlistNames(): Promise<{ id: string; name: string }[]> {
 
 // ── Map maker ──────────────────────────────────────────────────────────────
 
+/** One floor as the map maker saves it. */
+export interface MadeFloor {
+  /** The floor's id as in floorsOf; null for a floor made in the map maker. */
+  id: string | null
+  name: string
+  /** The tiles, and the rendered image with the walls derived from them; null when the floor was not changed. */
+  made: { battlemap: Record<string, unknown>; image: ImageRef; walls: { points: { x: number; y: number }[]; kind: Wall['kind'] }[] | null } | null
+}
+
 /**
- * Makes a map maker's map the encounter's map: the rendered image, a grid that
- * fits it, the tiles for editing again, and (when given) the walls derived
- * from the tiles in place of the ones derived before. Walls drawn by hand stay.
+ * Makes the map maker's floors the encounter's (FLOORS_PLAN.md step 4), bottom
+ * to top. Changed floors get the rendered image, a grid that fits it, the
+ * tiles for editing again and (when given) the walls derived from the tiles in
+ * place of the ones derived before; walls drawn by hand stay. Floors made in
+ * the map maker are added, `removed` ones go with what stands on them (never
+ * the main floor). Stairs between floors replace those made the last time.
  */
-export async function applyBattleMap(id: string, battlemap: Record<string, unknown>, image: ImageRef, cellPx: number, walls: { points: { x: number; y: number }[]; kind: Wall['kind'] }[] | null): Promise<void> {
-  await patchEncounter(id, { map: image, grid: { size: cellPx, offsetX: 0, offsetY: 0 }, ...(walls ? { fovEnabled: true } : {}) })
-  const map = await encounters.map(id)
-  const next = walls ? [...map.walls.filter(w => !w.generated), ...walls.map(w => ({ id: newId(), points: w.points, kind: w.kind, open: false, generated: true }))] : map.walls
-  await patchMap(id, { battlemap, walls: next, viewport: { x: 0, y: 0, scale: 1 } })
+export async function applyMadeFloors(id: string, floors: MadeFloor[], removed: string[], cellPx: number, stairs: { lower: number; up: [number, number]; down: [number, number] }[]): Promise<void> {
+  for (const f of removed) if (f !== MAIN_FLOOR) await removeFloorFrom(id, f)
+  // New floors first, then the order the map maker shows (keeping the ground floor where it is)
+  const ids: string[] = []
+  for (const f of floors) ids.push(f.id ?? (await addFloorTo(id, { name: f.name }))!.id)
+  await reorderFloors(id, ids)
+  const enc = (await table().get(id))!
+  let map = await encounters.map(id)
+  const encPatch: EncounterPatch = {}
+  for (const [i, f] of floors.entries()) {
+    const view = floorById(enc, map, ids[i])!
+    const change: FloorChange = { name: f.name }
+    if (f.made) {
+      Object.assign(change, { image: f.made.image, grid: { size: cellPx, offsetX: 0, offsetY: 0 }, battlemap: f.made.battlemap })
+      if (f.made.walls) {
+        change.walls = [...view.walls.filter(w => !w.generated), ...f.made.walls.map(w => ({ id: newId(), points: w.points, kind: w.kind, open: false, generated: true }))]
+        encPatch.fovEnabled = true
+      }
+    }
+    const write = floorWrite(map, ids[i], change)
+    Object.assign(encPatch, write.encounter)
+    map = { ...map, ...write.map }
+  }
+  const made = stairs.map(st => newStair({ floorId: ids[st.lower]!, x: st.up[0], y: st.up[1] }, { floorId: ids[st.lower + 1]!, x: st.down[0], y: st.down[1] }, true))
+  await patchEncounter(id, encPatch)
+  await patchMap(id, { mainFloor: map.mainFloor, floors: map.floors, walls: map.walls, battlemap: map.battlemap, stairs: [...map.stairs.filter(st => !st.generated), ...made], viewport: { x: 0, y: 0, scale: 1 } })
 }
 
 export const mapAssets = {

@@ -18,7 +18,8 @@ export const ZOOM_BASE = 40
 const round2 = (v: number) => Math.round(v * 100) / 100
 const turn = (deg: number) => ((deg % 360) + 360) % 360
 
-export function useMapEditor(canvasEl: Ref<HTMLCanvasElement | null>, images: Map<string, HTMLImageElement>) {
+/** `below`: the floor under the one being edited, drawn faintly where this one is void. */
+export function useMapEditor(canvasEl: Ref<HTMLCanvasElement | null>, images: Map<string, HTMLImageElement>, below: () => BattleMap | null = () => null) {
   const map = shallowRef<BattleMap | null>(null)
   const tool = ref<Tool>('room')
   const tileId = ref<TileId>('stone')
@@ -107,7 +108,9 @@ export function useMapEditor(canvasEl: Ref<HTMLCanvasElement | null>, images: Ma
     ctx.beginPath()
     ctx.rect(0, 0, m.cols * px, m.rows * px)
     ctx.clip()
-    drawBattleMap(ctx, dragStart && hover ? shape(m, dragStart, hover) : m, px, { grid: true, images, marks: true })
+    const under = below()
+    if (under) { ctx.globalAlpha = 0.3; drawBattleMap(ctx, under, px, { images, over: true }); ctx.globalAlpha = 1 }
+    drawBattleMap(ctx, dragStart && hover ? shape(m, dragStart, hover) : m, px, { grid: true, images, marks: true, over: true })
     ctx.restore()
     if (placing.value && pointer) {
       ctx.globalAlpha = 0.6
@@ -163,6 +166,8 @@ export function useMapEditor(canvasEl: Ref<HTMLCanvasElement | null>, images: Ma
   const undo = () => step(undoStack, redoStack)
   const redo = () => step(redoStack, undoStack)
   function load(m: BattleMap) { map.value = m; undoStack.value = []; redoStack.value = []; dirty.value = false; schedule() }
+  /** Another floor's map with its own undo and redo (switching floors); not a change. */
+  function swap(s: { map: BattleMap; undo: BattleMap[]; redo: BattleMap[] }) { map.value = s.map; undoStack.value = s.undo; redoStack.value = s.redo; selectedId.value = null; placing.value = null; schedule() }
   function resize(cols: number, rows: number) { if (map.value) commit(resizeMap(map.value, clampSize(cols), clampSize(rows))) }
   function clear() { if (map.value) { selectedId.value = null; commit(blankMap(map.value.cols, map.value.rows, 'void')) } }
 
@@ -271,7 +276,7 @@ export function useMapEditor(canvasEl: Ref<HTMLCanvasElement | null>, images: Ma
 
   return {
     map, tool, tileId, zoom, dirty, undoStack, redoStack, placing, selectedId, selected, panning, spaceDown,
-    schedule, fit, zoomBy, resized, wheel, load, commit, undo, redo, resize, clear, setTool, pickTile, startPlacing,
+    schedule, fit, zoomBy, resized, wheel, load, swap, commit, undo, redo, resize, clear, setTool, pickTile, startPlacing,
     patchSelected, rotateSelected, restack, duplicateSelected, removeSelected, down, move, up,
   }
 }
