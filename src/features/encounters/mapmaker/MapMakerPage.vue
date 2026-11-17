@@ -6,30 +6,34 @@
  * tab with its own undo; all floors share one size, the one below shows
  * faintly, and stair tiles become stairs between neighbouring floors.
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Component } from 'vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
-import { ArrowLeft, FlipHorizontal, Redo2, RotateCw, Trash2, Undo2, X } from 'lucide-vue-next'
-import { EXPORT_CELL_PX, MAX_SIZE, MIN_SIZE, PROP_MIN_SIZE, TILES, blankMap, clampSize, mapWalls, pairStairs, readBattleMap, resizeMap, tileChar, type BattleMap, type TileId } from '@/domain/rules/battlemap'
+import { ArrowLeft, Brush, FlipHorizontal, Frame, Hand, MousePointer2, PaintBucket, Redo2, RotateCw, Square, Trash2, Undo2, X } from 'lucide-vue-next'
+import { EXPORT_CELL_PX, MAX_SIZE, MIN_SIZE, PROP_MIN_SIZE, ROLE_LABEL, SCIFI_TILES, TILES, blankMap, clampSize, mapWalls, pairStairs, readBattleMap, resizeMap, type BattleMap, type TileDef, type TileId } from '@/domain/rules/battlemap'
+import type { MapAsset } from '@/domain/schema'
+import { imageUrlOf } from '@/ui/imageUrl'
+import { useLive } from '@/ui/useLive'
 import { defaultFloorName, floorsOf } from '@/domain/rules/floors'
 import { newId } from '@/domain/ids'
-import { applyMadeFloors, encounters, type MadeFloor } from '@/data/encounters'
+import { applyMadeFloors, encounters, mapAssets, type MadeFloor } from '@/data/encounters'
 import { images as imageRepo } from '@/data/repo'
 import { storeImage } from '@/services/images'
 import { confirmDialog, notify, reportError } from '@/ui/dialogs'
 import AssetLibrary from './AssetLibrary.vue'
 import { battleMapPng, drawBattleMap } from './draw'
-import { useMapEditor, ZOOM_BASE, type Tool } from './editor'
+import { useMapEditor, ZOOM_BASE, type BrushKey, type ImageTiles, type Tool } from './editor'
+import ImageTileDialog from './ImageTileDialog.vue'
 
 const props = defineProps<{ campaignId: string; encounterId: string }>()
 const router = useRouter()
 
-const TOOLS: { id: Tool; label: string; key: string; hint: string }[] = [
-  { id: 'select', label: 'Select', key: 'v', hint: 'Click an asset to select it, drag to move it; the corner resizes, the top handle rotates; Shift turns snapping off. Drag empty space to pan.' },
-  { id: 'pan', label: 'Pan', key: 'h', hint: 'Drag to move the view (also: middle button, Alt-drag, Space-drag).' },
-  { id: 'brush', label: 'Brush', key: 'b', hint: 'Click or drag to paint squares. Right-click picks a tile.' },
-  { id: 'rect', label: 'Rectangle', key: 'm', hint: 'Drag to fill a rectangle.' },
-  { id: 'room', label: 'Room', key: 'w', hint: 'Drag for a room: the tile inside, walls around it.' },
-  { id: 'fill', label: 'Fill', key: 'g', hint: 'Click to fill an area of the same tile.' },
+const TOOLS: { id: Tool; label: string; key: string; hint: string; icon: Component }[] = [
+  { id: 'select', label: 'Select', key: 'v', hint: 'Click an asset to select it, drag to move it; the corner resizes, the top handle rotates; Shift turns snapping off. Drag empty space to pan.', icon: MousePointer2 },
+  { id: 'pan', label: 'Pan', key: 'h', hint: 'Drag to move the view (also: middle button, Alt-drag, Space-drag).', icon: Hand },
+  { id: 'brush', label: 'Brush', key: 'b', hint: 'Click or drag to paint squares. Right-click picks a tile.', icon: Brush },
+  { id: 'rect', label: 'Rectangle', key: 'm', hint: 'Drag to fill a rectangle.', icon: Square },
+  { id: 'room', label: 'Room', key: 'w', hint: 'Drag for a room: the tile inside, walls around it.', icon: Frame },
+  { id: 'fill', label: 'Fill', key: 'g', hint: 'Click to fill an area of the same tile.', icon: PaintBucket },
 ]
 
 const canvasEl = ref<HTMLCanvasElement | null>(null)
@@ -59,7 +63,28 @@ const cur = ref(0)
 const removed = ref<string[]>([])
 /** Where the levels count from: the ground floor when the map maker opened. */
 let groundKey = ''
-const ed = useMapEditor(canvasEl, loaded, () => stack.value[cur.value - 1]?.map ?? null)
+/** Image tiles from the library (assets with a tile role). */
+const tileAssets = useLive(async () => (await mapAssets.list()).filter(a => a.tileRole), [] as MapAsset[])
+const tileThumbs = ref<Record<string, string>>({})
+watch(tileAssets, (list) => { for (const a of list) if (!(a.imageId in tileThumbs.value)) void imageUrlOf({ imageId: a.imageId }).then((u) => { if (u) tileThumbs.value = { ...tileThumbs.value, [a.imageId]: u } }) }, { immediate: true })
+const tileDialog = ref<{ asset: MapAsset | null } | null>(null)
+const imageTiles: ImageTiles = {
+  tile(key) {
+    const a = tileAssets.value.find(x => `asset:${x.id}` === key)
+    return a?.tileRole ? { image: `img:${a.imageId}`, role: a.tileRole, label: a.name } : null
+  },
+  keyOf(t) {
+    const a = tileAssets.value.find(x => `img:${x.imageId}` === t.image && x.tileRole === t.role)
+    return a ? `asset:${a.id}` : null
+  },
+}
+const ed = useMapEditor(canvasEl, loaded, () => stack.value[cur.value - 1]?.map ?? null, imageTiles)
+const fantasy = TILES.filter(t => !SCIFI_TILES.has(t.id)), scifi = TILES.filter(t => SCIFI_TILES.has(t.id))
+async function removeTile(a: MapAsset) {
+  if (!await confirmDialog({ title: `Remove the tile “${a.name}”?`, body: 'Maps already painted with it keep it.', confirmLabel: 'Remove', danger: true })) return
+  await mapAssets.remove([a.id])
+  if (tileId.value === `asset:${a.id}`) ed.pickTile('stone')
+}
 const { map, tool, tileId, zoom, dirty, undoStack, redoStack, placing, selected, panning, spaceDown } = ed
 
 const name = ref('')
@@ -68,6 +93,7 @@ const makeWalls = ref(true)
 const saving = ref(false)
 const cols = ref(24), rows = ref(18)
 const swatches: Partial<Record<TileId, HTMLCanvasElement>> = {}
+const brushOn = (key: BrushKey) => tileId.value === key && tool.value !== 'select' && tool.value !== 'pan' && !placing.value
 let observer: ResizeObserver | null = null
 const hint = computed(() => (placing.value ? `Click to place “${placing.value.name}”; Shift places it off the grid; Esc stops.` : TOOLS.find(t => t.id === tool.value)?.hint ?? ''))
 
@@ -87,8 +113,11 @@ function loadImage(ref: string): Promise<void> {
   }
   return p
 }
-watch(() => map.value?.props, (list) => { for (const p of list ?? []) void loadImage(p.image) })
-watch(stack, (list) => { for (const f of list) for (const p of f.map.props ?? []) void loadImage(p.image) })
+/** Pictures a map shows: placed assets and image tiles. */
+const imagesOf = (m: BattleMap | null | undefined) => [...(m?.props ?? []).map(p => p.image), ...(m?.customTiles ?? []).map(t => t.image)]
+watch(map, (m) => { for (const i of imagesOf(m)) void loadImage(i) })
+watch(stack, (list) => { for (const f of list) for (const i of imagesOf(f.map)) void loadImage(i) })
+watch(tileAssets, (list) => { for (const a of list) void loadImage(`img:${a.imageId}`) })
 watch(placing, (a) => { if (a) void loadImage(`img:${a.imageId}`) })
 watch(map, (m) => { if (m) { cols.value = m.cols; rows.value = m.rows } })
 
@@ -96,9 +125,9 @@ function drawSwatches() {
   for (const t of TILES) {
     const ctx = swatches[t.id]?.getContext('2d')
     if (!ctx) continue
-    // The tile in the middle of a 3×3 map, so a door sits between walls
-    const opening = t.id === 'door' || t.id === 'window' || t.id === 'secret'
-    const sample: BattleMap = { cols: 3, rows: 3, tiles: opening ? `sss#${tileChar(t.id)}#sss` : tileChar(t.id).repeat(9) }
+    // The tile in the middle of a 3×3 map, so a door sits between walls (hull for a starship's)
+    const opening = t.role === 'door' || t.role === 'window' || t.role === 'secret', ship = SCIFI_TILES.has(t.id)
+    const sample: BattleMap = { cols: 3, rows: 3, tiles: opening ? (ship ? `SSSW${t.char}WSSS` : `sss#${t.char}#sss`) : t.char.repeat(9) }
     ctx.save()
     ctx.translate(-28, -28)
     drawBattleMap(ctx, sample, 28, { marks: true })
@@ -237,7 +266,7 @@ async function save() {
   try {
     const list = synced()
     const all = list.flatMap(f => f.map.props ?? [])
-    await Promise.all(all.map(p => loadImage(p.image)))
+    await Promise.all(list.flatMap(f => imagesOf(f.map)).map(loadImage))
     const missing = all.filter(p => !loaded.has(p.image)).length
     // A floor with an uploaded image keeps it unless it was painted here
     const render = list.map(f => f.id === null || f.hadTiles || f.map !== f.original)
@@ -265,7 +294,7 @@ async function save() {
     <header class="top">
       <button class="btn btn-ghost btn-icon" title="Back to the encounter" @click="router.push({ name: 'encounter', params: { campaignId, encounterId } })"><ArrowLeft :size="16" /></button>
       <h2>Map maker <span class="faint">· {{ name }}</span></h2>
-      <div class="seg" role="toolbar" aria-label="Tools"><button v-for="t in TOOLS" :key="t.id" :class="{ on: tool === t.id && !placing }" :title="`${t.label} (${t.key.toUpperCase()}): ${t.hint}`" :data-tool="t.id" @click="ed.setTool(t.id)">{{ t.label }}</button></div>
+      <div class="seg" role="toolbar" aria-label="Tools"><button v-for="t in TOOLS" :key="t.id" :class="{ on: tool === t.id && !placing }" :title="`${t.label} (${t.key.toUpperCase()}): ${t.hint}`" :data-tool="t.id" :aria-label="t.label" @click="ed.setTool(t.id)"><component :is="t.icon" :size="16" /></button></div>
       <button class="btn btn-icon" title="Undo (Ctrl+Z)" :disabled="!undoStack.length" data-test="mm-undo" @click="ed.undo()"><Undo2 :size="15" /></button>
       <button class="btn btn-icon" title="Redo (Ctrl+Y)" :disabled="!redoStack.length" @click="ed.redo()"><Redo2 :size="15" /></button>
       <span class="grow" />
@@ -279,10 +308,18 @@ async function save() {
     </header>
 
     <aside class="tiles">
-      <span class="eyebrow">Tiles</span>
-      <button v-for="t in TILES" :key="t.id" class="tile" :class="{ on: tileId === t.id && tool !== 'select' && tool !== 'pan' && !placing }" :title="t.label" :data-tile="t.id" @click="ed.pickTile(t.id)">
-        <canvas :ref="el => { if (el) swatches[t.id] = el as HTMLCanvasElement }" width="28" height="28" /><span>{{ t.label.replace(/ \(.*/, '') }}</span>
-      </button>
+      <template v-for="[group, list] in ([['Tiles', fantasy], ['Starship', scifi]] as [string, TileDef[]][])" :key="group">
+        <span class="eyebrow">{{ group }}</span>
+        <button v-for="t in list" :key="t.id" class="tile" :class="{ on: brushOn(t.id as TileId) }" :title="t.label" :data-tile="t.id" @click="ed.pickTile(t.id as TileId)">
+          <canvas :ref="el => { if (el) swatches[t.id as TileId] = el as HTMLCanvasElement }" width="28" height="28" /><span>{{ t.label.replace(/ \(.*/, '') }}</span>
+        </button>
+      </template>
+      <span class="eyebrow">Image tiles</span>
+      <div v-for="a in tileAssets" :key="a.id" class="tile img" :class="{ on: brushOn(`asset:${a.id}`) }" :title="`${a.name} · ${ROLE_LABEL[a.tileRole!]}`" :data-tile="`asset:${a.name}`" role="button" tabindex="0" @click="ed.pickTile(`asset:${a.id}`)" @keydown.enter="ed.pickTile(`asset:${a.id}`)">
+        <img v-if="tileThumbs[a.imageId]" :src="tileThumbs[a.imageId]" alt="" /><span>{{ a.name }}</span>
+        <button class="del" :aria-label="`Remove the tile ${a.name}`" @click.stop="removeTile(a)"><X :size="11" /></button>
+      </div>
+      <button class="btn add-tile" data-test="mm-new-tile" title="A tile from an image: floor, wall, door or window" @click="tileDialog = { asset: null }">+ Image tile</button>
     </aside>
 
     <div ref="viewEl" class="view" :class="{ grabbing: panning, grab: spaceDown || (tool === 'pan' && !placing), plain: tool === 'select' && !placing }">
@@ -317,7 +354,8 @@ async function save() {
       </div>
     </div>
 
-    <AssetLibrary class="assets" :placing-id="placing?.id ?? null" @place="ed.startPlacing($event)" @gone="ids => { if (placing && ids.includes(placing.id)) placing = null }" />
+    <AssetLibrary class="assets" :placing-id="placing?.id ?? null" @place="ed.startPlacing($event)" @gone="ids => { if (placing && ids.includes(placing.id)) placing = null }" @tile="a => (tileDialog = { asset: a })" />
+    <ImageTileDialog v-if="tileDialog" :asset="tileDialog.asset" @close="tileDialog = null" @made="a => ed.pickTile(`asset:${a.id}`)" />
   </div>
   <p v-else-if="found === false" class="empty">This encounter is gone. <RouterLink :to="{ name: 'encounters', params: { campaignId } }">All encounters</RouterLink></p>
 </template>
@@ -326,11 +364,14 @@ async function save() {
 .mm { height: 100%; display: grid; grid-template-columns: 150px minmax(0, 1fr) 280px; grid-template-rows: auto minmax(0, 1fr); }
 .top { grid-column: 1 / -1; display: flex; align-items: center; gap: .45rem; padding: .4rem .7rem; border-bottom: var(--frame); background: var(--bg-raised); flex-wrap: wrap; }
 .grow { flex: 1; } .num { width: 4.2rem; display: inline-block; padding: .2em .4em; }
-.seg { display: flex; border: var(--frame); border-radius: var(--radius); overflow: hidden; } .seg button { background: none; border: 0; padding: .3rem .6rem; color: var(--text-dim); }
+.seg { display: flex; border: var(--frame); border-radius: var(--radius); overflow: hidden; } .seg button { background: none; border: 0; padding: .3rem .55rem; color: var(--text-dim); display: flex; align-items: center; }
 .seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .tiles { overflow: auto; padding: .5rem; display: flex; flex-direction: column; gap: 2px; border-right: var(--frame); background: var(--bg-raised); }
 .tile { display: flex; align-items: center; gap: .45rem; background: none; border: 1px solid transparent; border-radius: var(--radius); padding: 2px 4px; font-size: .8rem; text-align: left; color: var(--text-dim); }
-.tile:hover { background: var(--bg-hover); } .tile.on { border-color: var(--accent); color: var(--text); } .tile canvas { border-radius: 3px; flex: none; }
+.tile:hover { background: var(--bg-hover); }
+.tiles .eyebrow { margin-top: .4rem; } .tile.img { position: relative; cursor: pointer; } .tile.img img { width: 28px; height: 28px; object-fit: cover; border-radius: 3px; flex: none; }
+.tile .del { position: absolute; right: 2px; display: none; background: none; border: 0; color: var(--danger); padding: 0 2px; } .tile.img:hover .del { display: block; }
+.add-tile { margin-top: .3rem; font-size: .8rem; } .tile.on { border-color: var(--accent); color: var(--text); } .tile canvas { border-radius: 3px; flex: none; }
 .view { position: relative; overflow: hidden; background: #15151f; cursor: crosshair; } .view.plain { cursor: default; } .view.grab { cursor: grab; } .view.grabbing { cursor: grabbing; }
 .view canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
 .hint { position: absolute; left: .7rem; bottom: .5rem; margin: 0; font-size: .8rem; color: #b9b7c9; background: rgb(10 10 22 / .7); padding: .15rem .5rem; border-radius: var(--radius); pointer-events: none; max-width: 70%; }

@@ -11,44 +11,78 @@ import { hiddenDoorOutline, type WallKind } from './walls'
 export type TileId =
   | 'void' | 'stone' | 'wood' | 'carpet' | 'dirt' | 'grass' | 'sand' | 'snow' | 'ice' | 'rubble'
   | 'swamp' | 'water' | 'deepwater' | 'fire' | 'magma' | 'wall' | 'window' | 'door' | 'secret' | 'stairsup' | 'stairsdown'
+  | 'steel' | 'grating' | 'hazard' | 'hull' | 'airlock' | 'viewport' | 'forcefield'
+
+/**
+ * What a tile does, whatever it looks like: floor is open; a wall blocks sight
+ * (walls are drawn along its edges to open tiles); door, window and hidden
+ * door sit in a wall and get a wall of that kind across them; stairs join
+ * floors (rules/floors.ts); void is nothing.
+ */
+export type TileRole = 'floor' | 'wall' | 'door' | 'window' | 'secret' | 'void' | 'stairsup' | 'stairsdown'
+/** The roles an image tile can have. */
+export const IMAGE_TILE_ROLES = ['floor', 'wall', 'door', 'window', 'secret'] as const
+export type ImageTileRole = typeof IMAGE_TILE_ROLES[number]
+export const ROLE_LABEL: Record<ImageTileRole, string> = { floor: 'Floor', wall: 'Wall', door: 'Door', window: 'Window (sight passes)', secret: 'Hidden door (players see a wall)' }
 
 export interface TileDef {
-  id: TileId
+  /** A built-in tile's id, or `custom:<char>` for an image tile of the map. */
+  id: TileId | `custom:${string}`
   char: string
   label: string
-  /** Base colour; the renderer adds texture on top. */
+  /** Base colour; the renderer adds texture on top (an image tile's colour while its image loads). */
   color: string
-  /** Blocks sight: walls are drawn along its edges to open tiles. */
+  role: TileRole
+  /** Blocks sight (walls and void). */
   solid: boolean
+  /** Openings and stairs: the floor tile drawn under them. */
+  under?: string
+  /** An image tile's picture ("img:<id>"), drawn on every square. */
+  image?: string
 }
 
-export const TILES: TileDef[] = [
-  { id: 'stone',  char: 's', label: 'Stone floor', color: '#8a8478', solid: false },
-  { id: 'wood',   char: 'w', label: 'Wood floor',  color: '#9a6b3f', solid: false },
-  { id: 'dirt',   char: 'd', label: 'Dirt',        color: '#7b6247', solid: false },
-  { id: 'grass',  char: 'g', label: 'Grass',       color: '#5d7d3a', solid: false },
-  { id: 'carpet', char: 'c', label: 'Carpet',      color: '#7a2630', solid: false },
-  { id: 'sand',   char: 'n', label: 'Sand',        color: '#c9b07a', solid: false },
-  { id: 'snow',   char: 'o', label: 'Snow',        color: '#dfe6ec', solid: false },
-  { id: 'ice',    char: 'i', label: 'Ice',         color: '#9cc9dc', solid: false },
-  { id: 'rubble', char: 'r', label: 'Rubble (difficult)', color: '#6f6a60', solid: false },
-  { id: 'swamp',  char: 'm', label: 'Swamp',       color: '#4a5530', solid: false },
-  { id: 'water',  char: 'a', label: 'Water',       color: '#3b6e8f', solid: false },
-  { id: 'deepwater', char: 'q', label: 'Deep water', color: '#1f4563', solid: false },
-  { id: 'fire',   char: 'f', label: 'Fire',        color: '#3a2418', solid: false },
-  { id: 'magma',  char: 'l', label: 'Magma',       color: '#2b1410', solid: false },
-  { id: 'wall',   char: '#', label: 'Wall',        color: '#3a3631', solid: true },
-  { id: 'window', char: '=', label: 'Window (sight passes)', color: '#8a8478', solid: false },
-  { id: 'door',   char: '+', label: 'Door',        color: '#8a8478', solid: false },
-  { id: 'secret', char: '%', label: 'Hidden door (players see a wall)', color: '#3a3631', solid: false },
-  { id: 'stairsup', char: '^', label: 'Stairs up (to the floor above)', color: '#8a8478', solid: false },
-  { id: 'stairsdown', char: 'v', label: 'Stairs down (to the floor below)', color: '#8a8478', solid: false },
-  { id: 'void',   char: '.', label: 'Void',        color: '#121212', solid: true },
+type Builtin = Omit<TileDef, 'solid'> & { id: TileId }
+const BUILTIN: Builtin[] = [
+  { id: 'stone',  char: 's', label: 'Stone floor', color: '#8a8478', role: 'floor' },
+  { id: 'wood',   char: 'w', label: 'Wood floor',  color: '#9a6b3f', role: 'floor' },
+  { id: 'dirt',   char: 'd', label: 'Dirt',        color: '#7b6247', role: 'floor' },
+  { id: 'grass',  char: 'g', label: 'Grass',       color: '#5d7d3a', role: 'floor' },
+  { id: 'carpet', char: 'c', label: 'Carpet',      color: '#7a2630', role: 'floor' },
+  { id: 'sand',   char: 'n', label: 'Sand',        color: '#c9b07a', role: 'floor' },
+  { id: 'snow',   char: 'o', label: 'Snow',        color: '#dfe6ec', role: 'floor' },
+  { id: 'ice',    char: 'i', label: 'Ice',         color: '#9cc9dc', role: 'floor' },
+  { id: 'rubble', char: 'r', label: 'Rubble (difficult)', color: '#6f6a60', role: 'floor' },
+  { id: 'swamp',  char: 'm', label: 'Swamp',       color: '#4a5530', role: 'floor' },
+  { id: 'water',  char: 'a', label: 'Water',       color: '#3b6e8f', role: 'floor' },
+  { id: 'deepwater', char: 'q', label: 'Deep water', color: '#1f4563', role: 'floor' },
+  { id: 'fire',   char: 'f', label: 'Fire',        color: '#3a2418', role: 'floor' },
+  { id: 'magma',  char: 'l', label: 'Magma',       color: '#2b1410', role: 'floor' },
+  { id: 'wall',   char: '#', label: 'Wall',        color: '#3a3631', role: 'wall' },
+  { id: 'window', char: '=', label: 'Window (sight passes)', color: '#8a8478', role: 'window', under: 's' },
+  { id: 'door',   char: '+', label: 'Door',        color: '#8a8478', role: 'door', under: 's' },
+  { id: 'secret', char: '%', label: 'Hidden door (players see a wall)', color: '#3a3631', role: 'secret' },
+  { id: 'stairsup', char: '^', label: 'Stairs up (to the floor above)', color: '#8a8478', role: 'stairsup', under: 's' },
+  { id: 'stairsdown', char: 'v', label: 'Stairs down (to the floor below)', color: '#8a8478', role: 'stairsdown', under: 's' },
+  // Starships and stations
+  { id: 'steel',  char: 'S', label: 'Steel deck',  color: '#6b727b', role: 'floor' },
+  { id: 'grating', char: 'G', label: 'Grating',    color: '#3f454c', role: 'floor' },
+  { id: 'hazard', char: 'H', label: 'Hazard stripes', color: '#5d6168', role: 'floor' },
+  { id: 'hull',   char: 'W', label: 'Hull wall',   color: '#262b31', role: 'wall' },
+  { id: 'airlock', char: 'A', label: 'Airlock door', color: '#6b727b', role: 'door', under: 'S' },
+  { id: 'viewport', char: 'P', label: 'Viewport (sight passes)', color: '#6b727b', role: 'window', under: 'S' },
+  { id: 'forcefield', char: 'E', label: 'Force field (sight passes)', color: '#6b727b', role: 'window', under: 'S' },
+  { id: 'void',   char: '.', label: 'Void',        color: '#121212', role: 'void' },
 ]
+const solidRole = (role: TileRole) => role === 'wall' || role === 'void'
+export const TILES: (TileDef & { id: TileId })[] = BUILTIN.map(t => ({ ...t, solid: solidRole(t.role) }))
+/** Fantasy first, then starship tiles: the palette's groups. */
+export const SCIFI_TILES = new Set<TileId>(['steel', 'grating', 'hazard', 'hull', 'airlock', 'viewport', 'forcefield'])
+
 
 const BY_CHAR = new Map(TILES.map(t => [t.char, t]))
 const BY_ID = new Map(TILES.map(t => [t.id, t]))
 
+/** A built-in tile by its character (void for anything else). */
 export function tileByChar(c: string): TileDef {
   return BY_CHAR.get(c) ?? BY_ID.get('void')!
 }
@@ -57,11 +91,16 @@ export function tileChar(id: TileId): string {
   return BY_ID.get(id)!.char
 }
 
+/** An image tile used on a map: its own character in `tiles`, its picture and what it does. */
+export interface CustomTile { char: string; image: string; role: ImageTileRole; label: string }
+
 export interface BattleMap {
   cols: number
   rows: number
-  /** cols × rows characters, row by row (TILES[].char). */
+  /** cols × rows characters, row by row (TILES[].char, or a customTiles char). */
   tiles: string
+  /** Image tiles this map uses. */
+  customTiles?: CustomTile[]
   /** Placed assets, drawn in array order within their layer. */
   props?: MapProp[]
 }
@@ -107,11 +146,51 @@ export function blankMap(cols: number, rows: number, fill: TileId = 'stone'): Ba
 /** A map read from an encounter row: anything malformed becomes null, malformed props are dropped. */
 export function readBattleMap(v: unknown): BattleMap | null {
   if (!v || typeof v !== 'object') return null
-  const { cols, rows, tiles, props } = v as Partial<BattleMap>
+  const { cols, rows, tiles, props, customTiles } = v as Partial<BattleMap>
   if (typeof cols !== 'number' || typeof rows !== 'number' || typeof tiles !== 'string') return null
   if (cols !== clampSize(cols) || rows !== clampSize(rows) || tiles.length !== cols * rows) return null
   const placed = Array.isArray(props) ? props.filter(isProp) : []
-  return placed.length ? { cols, rows, tiles, props: placed } : { cols, rows, tiles }
+  const custom = Array.isArray(customTiles) ? customTiles.filter(isCustomTile) : []
+  return { cols, rows, tiles, ...(placed.length ? { props: placed } : {}), ...(custom.length ? { customTiles: custom } : {}) }
+}
+
+function isCustomTile(t: unknown): t is CustomTile {
+  const q = t as Partial<CustomTile> | null
+  return !!q && typeof q.char === 'string' && q.char.length === 1 && !BY_CHAR.has(q.char) && typeof q.image === 'string'
+    && typeof q.label === 'string' && (IMAGE_TILE_ROLES as readonly string[]).includes(q.role as string)
+}
+
+/** What a character of this map is: a built-in tile or one of its image tiles (void when unknown). */
+export function tileOf(map: BattleMap, ch: string): TileDef {
+  const builtin = BY_CHAR.get(ch)
+  if (builtin) return builtin
+  const t = map.customTiles?.find(x => x.char === ch)
+  return t ? { id: `custom:${t.char}`, char: t.char, label: t.label, color: CUSTOM_COLOR[t.role], role: t.role, solid: solidRole(t.role), image: t.image } : BY_ID.get('void')!
+}
+const CUSTOM_COLOR: Record<ImageTileRole, string> = { floor: '#77746c', wall: '#3a3631', door: '#8a6a40', window: '#8aaebd', secret: '#3a3631' }
+
+/** The tile on a square. */
+export const tileAt = (map: BattleMap, col: number, row: number): TileDef => tileOf(map, getTile(map, col, row))
+
+/** Characters image tiles get: none of them is a built-in tile's. */
+const CUSTOM_CHARS = '0123456789BCDFIJKLMNOQRTUVXYZbehjkptuxyz!$&*:;<>?@~'
+
+/**
+ * The character for an image tile on this map, adding it to the map's image
+ * tiles when it is new (the same picture and role reuse one). Null when the
+ * map has no characters left.
+ */
+export function withCustomTile(map: BattleMap, t: Omit<CustomTile, 'char'>): { map: BattleMap; char: string } | null {
+  const list = map.customTiles ?? []
+  const there = list.find(x => x.image === t.image && x.role === t.role)
+  if (there) return { map, char: there.char }
+  const char = [...CUSTOM_CHARS].find(c => !list.some(x => x.char === c))
+  return char ? { map: { ...map, customTiles: [...list, { ...t, char }] }, char } : null
+}
+
+/** Image refs of the map's image tiles. */
+export function customTileImages(map: unknown): string[] {
+  return readBattleMap(map)?.customTiles?.map(t => t.image) ?? []
 }
 
 function isProp(p: unknown): p is MapProp {
@@ -219,11 +298,10 @@ export function rectCells(c1: number, r1: number, c2: number, r2: number): [numb
   return out
 }
 
-/** A room: `floor` inside the rectangle, walls on its border. */
-export function paintRoom(map: BattleMap, c1: number, r1: number, c2: number, r2: number, floor: string): BattleMap {
+/** A room: `floor` inside the rectangle, `wall` (stone wall unless given) on its border. */
+export function paintRoom(map: BattleMap, c1: number, r1: number, c2: number, r2: number, floor: string, wall = tileChar('wall')): BattleMap {
   const [x0, x1] = [Math.min(c1, c2), Math.max(c1, c2)]
   const [y0, y1] = [Math.min(r1, r2), Math.max(r1, r2)]
-  const wall = tileChar('wall')
   const border: [number, number][] = []
   const inside: [number, number][] = []
   for (const [c, r] of rectCells(x0, y0, x1, y1)) {
@@ -254,7 +332,7 @@ export function floodFill(map: BattleMap, col: number, row: number, char: string
 }
 
 function isSolid(map: BattleMap, col: number, row: number): boolean {
-  return tileByChar(getTile(map, col, row)).solid
+  return tileAt(map, col, row).solid
 }
 
 export interface GeneratedWall { points: { x: number; y: number }[]; coverType: WallKind }
@@ -296,7 +374,7 @@ export function mapWalls(map: BattleMap): GeneratedWall[] {
   // Doors, windows and hidden doors
   for (let r = 0; r < map.rows; r++) {
     for (let c = 0; c < map.cols; c++) {
-      const coverType = OPENINGS[getTile(map, c, r)]
+      const coverType = OPENINGS[tileAt(map, c, r).role]
       if (coverType === 'secret') walls.push({ points: hiddenDoorOutline(c, r, doorIsHorizontal(map, c, r)), coverType })
       else if (coverType) walls.push({ points: doorLine(map, c, r), coverType })
     }
@@ -304,12 +382,12 @@ export function mapWalls(map: BattleMap): GeneratedWall[] {
   return walls
 }
 
-/** Tiles that sit in a wall and get a wall of their own across them, by tile character. */
-const OPENINGS: Record<string, WallKind> = { '+': 'door', '=': 'window', '%': 'secret' }
+/** Tiles that sit in a wall and get a wall of their own across them, by role. */
+const OPENINGS: Partial<Record<TileRole, WallKind>> = { door: 'door', window: 'window', secret: 'secret' }
 
 /** Door, window or hidden door. */
-export function isOpening(ch: string): boolean {
-  return ch in OPENINGS
+export function isOpening(t: TileDef): boolean {
+  return t.role in OPENINGS
 }
 
 /**
@@ -318,7 +396,7 @@ export function isOpening(ch: string): boolean {
  * and windows wider than one square) next to it. Left to right when that's even.
  */
 export function doorIsHorizontal(map: BattleMap, col: number, row: number): boolean {
-  const inWall = (c: number, r: number) => isSolid(map, c, r) || isOpening(getTile(map, c, r))
+  const inWall = (c: number, r: number) => isSolid(map, c, r) || isOpening(tileAt(map, c, r))
   const across = Number(inWall(col - 1, row)) + Number(inWall(col + 1, row))
   const upright = Number(inWall(col, row - 1)) + Number(inWall(col, row + 1))
   return across >= upright

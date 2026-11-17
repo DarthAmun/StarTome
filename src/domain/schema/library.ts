@@ -35,6 +35,8 @@ export const zMapAsset = z.object({
   pxWidth: z.number(),
   pxHeight: z.number(),
   folder: z.string().nullable().default(null),
+  /** An image tile for the map maker, with what it does (rules/battlemap.ts ImageTileRole); null = an asset to place. */
+  tileRole: z.enum(['floor', 'wall', 'door', 'window', 'secret']).nullable().default(null),
   createdAt: zIso,
 })
 export type MapAsset = z.infer<typeof zMapAsset>

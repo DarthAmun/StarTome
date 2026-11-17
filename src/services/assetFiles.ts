@@ -28,12 +28,12 @@ async function sized(file: File): Promise<{ blob: Blob; width: number; height: n
   } finally { URL.revokeObjectURL(url) }
 }
 
-/** Stores one file as a library asset, named after the file and filed under its folders. */
-export async function importAsset(source: AssetSource): Promise<MapAsset> {
+/** Stores one file as a library asset, named after the file and filed under its folders; with `tile`, as an image tile. */
+export async function importAsset(source: AssetSource, tile?: { name: string; role: NonNullable<MapAsset['tileRole']> }): Promise<MapAsset> {
   const { blob, width, height } = await sized(source.file)
   const ref = await storeImage(blob, { keepOriginal: true })
   if (!('imageId' in ref)) throw new Error('The image could not be stored')
-  return mapAssets.add({ name: assetName(source.file.name), imageId: ref.imageId, pxWidth: width, pxHeight: height, folder: assetFolder(source.path) || null })
+  return mapAssets.add({ name: tile?.name ?? assetName(source.file.name), imageId: ref.imageId, pxWidth: width, pxHeight: height, folder: tile ? null : assetFolder(source.path) || null, tileRole: tile?.role ?? null })
 }
 
 function pick(configure: (input: HTMLInputElement) => void): Promise<File[]> {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   blankMap, floodFill, TILES, getTile, mapWalls, paintRoom, propAt, propImages, readBattleMap, resizeMap,
-  restackProp, toPropFrame, fromPropFrame, pairStairs, stairCells, type BattleMap, type MapProp,
+  restackProp, toPropFrame, fromPropFrame, pairStairs, stairCells, tileAt, tileOf, withCustomTile, type BattleMap, type MapProp,
 } from '@/domain/rules/battlemap'
 import { isDoorWall, visibilityPolygon, wallsToSegments, withHiddenDoorOutline, type Wall, type WallKind } from '@/domain/rules/walls'
 
@@ -183,5 +183,38 @@ describe('stairs between map maker floors', () => {
     ])
     // Stairs down on the ground floor lead nowhere; a missing floor breaks the chain
     expect(pairStairs([grid('vs'), null, grid('^s')])).toEqual([])
+  })
+})
+
+describe('tile roles: starship and image tiles', () => {
+  it('makes walls and doors from hull and airlock tiles like from stone ones', () => {
+    const stone = mapWalls(grid('#+#', 'sss'))
+    const ship = mapWalls(grid('WAW', 'SSS'))
+    expect(ship).toEqual(stone)
+    expect(ship.some(w => w.coverType === 'door')).toBe(true)
+    expect(mapWalls(grid('WPW', 'SSS')).some(w => w.coverType === 'window')).toBe(true)
+  })
+
+  it('adds an image tile once per picture and role, with a character no built-in tile uses', () => {
+    let m: BattleMap = blankMap(4, 4, 'void')
+    const wall = withCustomTile(m, { image: 'img:rock', role: 'wall', label: 'Rock' })!
+    m = wall.map
+    expect(withCustomTile(m, { image: 'img:rock', role: 'wall', label: 'Rock' })).toEqual({ map: m, char: wall.char })
+    const floor = withCustomTile(m, { image: 'img:rock', role: 'floor', label: 'Rock floor' })!
+    expect(floor.char).not.toBe(wall.char)
+    for (const ch of [wall.char, floor.char]) expect(TILES.some(t => t.char === ch)).toBe(false)
+    // An image wall blocks sight like a wall; an image door gets a door
+    const door = withCustomTile(floor.map, { image: 'img:hatch', role: 'door', label: 'Hatch' })!
+    const painted = { ...door.map, cols: 3, rows: 2, tiles: `${wall.char}${door.char}${wall.char}${floor.char.repeat(3)}` }
+    expect(tileAt(painted, 0, 0)).toMatchObject({ role: 'wall', solid: true, image: 'img:rock', label: 'Rock' })
+    expect(mapWalls(painted)).toEqual(mapWalls(grid('#+#', 'sss')))
+    // Read back from the encounter with its image tiles; unknown characters are void
+    expect(readBattleMap(JSON.parse(JSON.stringify(door.map)))?.customTiles).toHaveLength(3)
+    expect(tileOf(painted, '7').role).toBe('void')
+    expect(readBattleMap({ ...door.map, customTiles: [{ char: 's', image: 'img:x', role: 'wall', label: 'Clash' }] })?.customTiles).toBeUndefined()
+  })
+
+  it('paints a room with the wall tile given', () => {
+    expect(paintRoom(blankMap(4, 4, 'void'), 0, 0, 3, 3, 'S', 'W').tiles).toBe(grid('WWWW', 'WSSW', 'WSSW', 'WWWW').tiles)
   })
 })

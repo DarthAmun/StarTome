@@ -6,8 +6,8 @@
 import { computed, ref, shallowRef, type Ref } from 'vue'
 import { newId } from '@/domain/ids'
 import {
-  PROP_MIN_SIZE, blankMap, clampSize, floodFill, getTile, paintCells, paintRoom, propAt, rectCells, resizeMap, restackProp, snap, tileByChar, tileChar, toPropFrame, updateProp,
-  type BattleMap, type MapProp, type TileId,
+  PROP_MIN_SIZE, blankMap, clampSize, floodFill, paintCells, paintRoom, propAt, rectCells, resizeMap, restackProp, snap, tileAt, tileByChar, tileChar, toPropFrame, updateProp, withCustomTile,
+  type BattleMap, type CustomTile, type MapProp, type TileId, type TileRole,
 } from '@/domain/rules/battlemap'
 import type { MapAsset } from '@/domain/schema'
 import { drawBattleMap, drawProp } from './draw'
@@ -18,11 +18,27 @@ export const ZOOM_BASE = 40
 const round2 = (v: number) => Math.round(v * 100) / 100
 const turn = (deg: number) => ((deg % 360) + 360) % 360
 
+/**
+ * What the brush holds: a built-in tile's id, or `asset:<id>` for an image
+ * tile from the library, which the page resolves (and finds again from a map's
+ * image tile, for right-click).
+ */
+export type BrushKey = TileId | `asset:${string}`
+export interface ImageTiles {
+  tile(key: string): Omit<CustomTile, 'char'> | null
+  keyOf(t: { image?: string; role: TileRole }): BrushKey | null
+}
+const roleOfBuiltin = (key: BrushKey): TileRole => tileByChar(key.startsWith('asset:') ? '.' : tileChar(key as TileId)).role
+
 /** `below`: the floor under the one being edited, drawn faintly where this one is void. */
-export function useMapEditor(canvasEl: Ref<HTMLCanvasElement | null>, images: Map<string, HTMLImageElement>, below: () => BattleMap | null = () => null) {
+export function useMapEditor(canvasEl: Ref<HTMLCanvasElement | null>, images: Map<string, HTMLImageElement>, below: () => BattleMap | null = () => null, imageTiles: ImageTiles = { tile: () => null, keyOf: () => null }) {
   const map = shallowRef<BattleMap | null>(null)
   const tool = ref<Tool>('room')
-  const tileId = ref<TileId>('stone')
+  const tileId = ref<BrushKey>('stone')
+  /** The room tool's tiles: the last floor and the last wall picked. */
+  const roomFloor = ref<BrushKey>('stone')
+  const roomWall = ref<BrushKey>('wall')
+  const roleOf = (key: BrushKey): TileRole => (key.startsWith('asset:') ? imageTiles.tile(key)?.role ?? 'floor' : roleOfBuiltin(key))
   const zoom = ref(36)
   const dirty = ref(false)
   const undoStack = shallowRef<BattleMap[]>([])
@@ -79,9 +95,19 @@ export function useMapEditor(canvasEl: Ref<HTMLCanvasElement | null>, images: Ma
   // ── Drawing ──
   function schedule() { if (!frame) frame = requestAnimationFrame(() => { frame = 0; draw() }) }
 
-  function shape(m: BattleMap, [c1, r1]: [number, number], [c2, r2]: [number, number]): BattleMap {
-    const ch = tileChar(tileId.value)
-    return tool.value === 'room' ? paintRoom(m, c1, r1, c2, r2, ch) : paintCells(m, rectCells(c1, r1, c2, r2), ch)
+  /** The map ready for a tile (an image tile added to it when new) and the tile's character. */
+  function charOf(m: BattleMap, key: BrushKey): { m: BattleMap; ch: string } {
+    if (!key.startsWith('asset:')) return { m, ch: tileChar(key as TileId) }
+    const t = imageTiles.tile(key), got = t ? withCustomTile(m, t) : null
+    return got ? { m: got.map, ch: got.char } : { m, ch: tileChar('stone') }
+  }
+  function shape(m0: BattleMap, [c1, r1]: [number, number], [c2, r2]: [number, number]): BattleMap {
+    if (tool.value === 'room') {
+      const f = charOf(m0, roomFloor.value), w = charOf(f.m, roomWall.value)
+      return paintRoom(w.m, c1, r1, c2, r2, f.ch, w.ch)
+    }
+    const { m, ch } = charOf(m0, tileId.value)
+    return paintCells(m, rectCells(c1, r1, c2, r2), ch)
   }
 
   /** A new prop of the asset centred on a point: its short side one square, its long side at most PLACE_MAX. */
@@ -172,7 +198,14 @@ export function useMapEditor(canvasEl: Ref<HTMLCanvasElement | null>, images: Ma
   function clear() { if (map.value) { selectedId.value = null; commit(blankMap(map.value.cols, map.value.rows, 'void')) } }
 
   function setTool(t: Tool) { tool.value = t; placing.value = null; if (t !== 'select' && t !== 'pan') selectedId.value = null; schedule() }
-  function pickTile(id: TileId) { tileId.value = id; if (tool.value === 'select' || tool.value === 'pan' || placing.value) setTool('brush') }
+  function pickTile(id: BrushKey) {
+    tileId.value = id
+    const role = roleOf(id)
+    if (role === 'wall') roomWall.value = id
+    else if (role === 'floor') roomFloor.value = id
+    // A door, window or stairs is no room's floor or wall: the brush puts it in place
+    if (tool.value === 'select' || tool.value === 'pan' || placing.value || (tool.value === 'room' && role !== 'wall' && role !== 'floor')) setTool('brush')
+  }
   function startPlacing(a: MapAsset) { placing.value = placing.value?.id === a.id ? null : a; selectedId.value = null; schedule() }
 
   function patchSelected(patch: Partial<MapProp>) { const p = selected.value; if (p && map.value) commit(updateProp(map.value, p.id, { ...p, ...patch })) }
@@ -229,12 +262,16 @@ export function useMapEditor(canvasEl: Ref<HTMLCanvasElement | null>, images: Ma
     const cell = cellAt(e)
     if (!cell) return
     // Right-click picks the tile under the pointer
-    if (e.button === 2) { tileId.value = tileByChar(getTile(m, cell[0], cell[1])).id; return }
+    if (e.button === 2) {
+      const t = tileAt(m, cell[0], cell[1]), key = t.image ? imageTiles.keyOf(t) : t.id as TileId
+      if (key) pickTile(key)
+      return
+    }
     if (e.button !== 0) return
     canvasEl.value?.setPointerCapture(e.pointerId)
     hover = cell
-    if (tool.value === 'fill') commit(floodFill(m, cell[0], cell[1], tileChar(tileId.value)))
-    else if (tool.value === 'brush') { strokeStart = m; map.value = paintCells(m, [cell], tileChar(tileId.value)) }
+    if (tool.value === 'fill') { const b = charOf(m, tileId.value); commit(floodFill(b.m, cell[0], cell[1], b.ch)) }
+    else if (tool.value === 'brush') { strokeStart = m; const b = charOf(m, tileId.value); map.value = paintCells(b.m, [cell], b.ch) }
     else dragStart = cell
     schedule()
   }
@@ -260,7 +297,7 @@ export function useMapEditor(canvasEl: Ref<HTMLCanvasElement | null>, images: Ma
     const cell = cellAt(e)
     if (cell?.[0] === hover?.[0] && cell?.[1] === hover?.[1]) return
     if (cell) hover = cell
-    if (strokeStart && cell && map.value) map.value = paintCells(map.value, [cell], tileChar(tileId.value))
+    if (strokeStart && cell && map.value) { const b = charOf(map.value, tileId.value); map.value = paintCells(b.m, [cell], b.ch) }
     schedule()
   }
 
@@ -275,7 +312,7 @@ export function useMapEditor(canvasEl: Ref<HTMLCanvasElement | null>, images: Ma
   }
 
   return {
-    map, tool, tileId, zoom, dirty, undoStack, redoStack, placing, selectedId, selected, panning, spaceDown,
+    map, tool, tileId, roomFloor, roomWall, zoom, dirty, undoStack, redoStack, placing, selectedId, selected, panning, spaceDown,
     schedule, fit, zoomBy, resized, wheel, load, swap, commit, undo, redo, resize, clear, setTool, pickTile, startPlacing,
     patchSelected, rotateSelected, restack, duplicateSelected, removeSelected, down, move, up,
   }

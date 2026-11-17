@@ -3,7 +3,8 @@
  * and for the image the encounter gets. Textures are drawn from a hash of the
  * cell, so a map looks the same every time it is drawn.
  */
-import { doorIsHorizontal, getTile, tileByChar, type BattleMap, type MapProp } from '@/domain/rules/battlemap'
+import { doorIsHorizontal, tileAt, tileByChar, type BattleMap, type MapProp } from '@/domain/rules/battlemap'
+import { drawStarshipTile, plates } from './drawStarship'
 
 /** 0…1, the same for the same cell and salt. */
 function hash(c: number, r: number, salt: number): number {
@@ -33,7 +34,7 @@ export function drawBattleMap(ctx: CanvasRenderingContext2D, map: BattleMap, px:
   ctx.save()
   if (!opts.over) ctx.clearRect(0, 0, map.cols * px, map.rows * px)
   for (let r = 0; r < map.rows; r++) {
-    for (let c = 0; c < map.cols; c++) drawCell(ctx, map, c, r, px, !!opts.over)
+    for (let c = 0; c < map.cols; c++) drawCell(ctx, map, c, r, px, !!opts.over, opts.images)
   }
   if (opts.marks) drawHiddenDoorMarks(ctx, map, px)
   const props = map.props ?? []
@@ -51,16 +52,20 @@ export function drawBattleMap(ctx: CanvasRenderingContext2D, map: BattleMap, px:
   ctx.restore()
 }
 
-function drawCell(ctx: CanvasRenderingContext2D, map: BattleMap, c: number, r: number, px: number, clearVoid: boolean) {
-  const tile = tileByChar(getTile(map, c, r))
+function drawCell(ctx: CanvasRenderingContext2D, map: BattleMap, c: number, r: number, px: number, clearVoid: boolean, images?: Map<string, CanvasImageSource>) {
+  const tile = tileAt(map, c, r)
   // Void is nothing: the floor below shows through it
-  if (clearVoid && tile.id === 'void') return
+  if (clearVoid && tile.role === 'void') return
   const x = c * px
   const y = r * px
-  // Doors, windows and stairs stand on stone floor
-  const base = tile.id === 'door' || tile.id === 'window' || tile.id === 'stairsup' || tile.id === 'stairsdown' ? tileByChar('s').color : tile.color
-  ctx.fillStyle = tile.id === 'void' ? base : shade(base, (hash(c, r, 1) - 0.5) * 0.06)
+  // Doors, windows and stairs stand on a floor
+  const base = tile.under ? tileByChar(tile.under).color : tile.color
+  ctx.fillStyle = tile.role === 'void' ? base : shade(base, (hash(c, r, 1) - 0.5) * 0.06)
   ctx.fillRect(x, y, px, px)
+  // An image tile: its picture on the square (its colour until the picture has loaded)
+  if (tile.image) { const img = images?.get(tile.image); if (img) ctx.drawImage(img, x, y, px, px); return }
+  if (tile.under === 'S') plates(ctx, x, y, px)
+  if (drawStarshipTile(ctx, map, tile, c, r, x, y, px)) return
 
   switch (tile.id) {
     case 'stone': {
@@ -318,7 +323,7 @@ function drawHiddenDoorMarks(ctx: CanvasRenderingContext2D, map: BattleMap, px: 
   ctx.lineWidth = Math.max(1.5, px / 22)
   for (let r = 0; r < map.rows; r++) {
     for (let c = 0; c < map.cols; c++) {
-      if (tileByChar(getTile(map, c, r)).id !== 'secret') continue
+      if (tileAt(map, c, r).role !== 'secret') continue
       const x = c * px
       const y = r * px
       ctx.setLineDash([Math.max(2, px / 8), Math.max(2, px / 10)])
@@ -354,8 +359,8 @@ function drawWallShadows(ctx: CanvasRenderingContext2D, map: BattleMap, px: numb
   const w = px * 0.18
   // Hidden doors cast a wall's shadow too, or they'd give themselves away
   const solid = (c: number, r: number) => {
-    const t = tileByChar(getTile(map, c, r))
-    return t.solid || t.id === 'secret'
+    const t = tileAt(map, c, r)
+    return t.solid || t.role === 'secret'
   }
   for (let r = 0; r < map.rows; r++) {
     for (let c = 0; c < map.cols; c++) {

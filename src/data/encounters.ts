@@ -354,8 +354,9 @@ export async function applyMadeFloors(id: string, floors: MadeFloor[], removed: 
 }
 
 export const mapAssets = {
-  list: async (): Promise<MapAsset[]> => (await getDb().rows('mapAssets').toArray()).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })),
-  async add(input: Omit<MapAsset, 'id' | 'createdAt'>): Promise<MapAsset> {
+  /** Assets to place and image tiles (`tileRole` set), by name. */
+  list: async (): Promise<MapAsset[]> => (await getDb().rows('mapAssets').toArray()).map(a => ({ ...a, tileRole: a.tileRole ?? null })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })),
+  async add(input: Omit<MapAsset, 'id' | 'createdAt' | 'tileRole'> & { tileRole?: MapAsset['tileRole'] }): Promise<MapAsset> {
     const row = zMapAsset.parse({ ...input, id: newId(), createdAt: nowIso() })
     await getDb().rows('mapAssets').put(row)
     return row

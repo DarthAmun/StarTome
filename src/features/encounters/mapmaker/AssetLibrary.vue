@@ -5,7 +5,7 @@
  * Importing a folder again skips what is already there.
  */
 import { computed, ref, watch } from 'vue'
-import { FolderPlus, ImagePlus, Trash2 } from 'lucide-vue-next'
+import { FolderPlus, Grid2x2, ImagePlus, Trash2 } from 'lucide-vue-next'
 import { assetFolder, assetFolders, assetKey, assetName, filterAssets, type AssetSource } from '@/domain/rules/mapAssets'
 import type { MapAsset } from '@/domain/schema'
 import { mapAssets } from '@/data/encounters'
@@ -15,10 +15,11 @@ import { imageUrlOf } from '@/ui/imageUrl'
 import { useLive } from '@/ui/useLive'
 
 defineProps<{ placingId: string | null }>()
-const emit = defineEmits<{ place: [asset: MapAsset]; gone: [ids: string[]] }>()
+const emit = defineEmits<{ place: [asset: MapAsset]; gone: [ids: string[]]; tile: [asset: MapAsset] }>()
 
 const PAGE = 120
-const assets = useLive(() => mapAssets.list(), [])
+// Image tiles are in the tile palette, not here
+const assets = useLive(async () => (await mapAssets.list()).filter(a => !a.tileRole), [])
 /** null = all folders, '' = loose files. */
 const folder = ref<string | null>(null)
 const query = ref('')
@@ -88,12 +89,15 @@ async function drop(e: DragEvent) {
         <select v-model="folder" class="input" aria-label="Folder"><option :value="null">All folders</option><option value="">Loose files</option><option v-for="f in folders" :key="f" :value="f">{{ f }}</option></select>
         <button v-if="folder !== null" class="btn btn-icon btn-danger" title="Remove this folder's assets" @click="remove(shown, `${shown.length} assets in “${folder || 'Loose files'}”`)"><Trash2 :size="14" /></button>
       </div>
+      <div class="scroll">
       <ul>
         <li v-for="a in visible" :key="a.id" :class="{ on: placingId === a.id }" :title="a.folder ? `${a.name} · ${a.folder}` : a.name" :data-asset="a.name" @click="emit('place', a)">
           <img v-if="thumbs[a.imageId]" :src="thumbs[a.imageId]" alt="" loading="lazy" /><span>{{ a.name }}</span>
           <button class="del" :aria-label="`Remove ${a.name}`" @click.stop="remove([a], `“${a.name}”`)"><Trash2 :size="11" /></button>
+          <button class="mk" title="Make an image tile from it" :aria-label="`Make a tile from ${a.name}`" @click.stop="emit('tile', a)"><Grid2x2 :size="11" /></button>
         </li>
       </ul>
+      </div>
       <button v-if="shown.length > visible.length" class="btn" @click="limit += PAGE">Show more ({{ shown.length - visible.length }} left)</button>
     </template>
     <p v-else-if="!progress" class="faint">Import images of furniture, trees, rugs… or drop files and folders here. Click an asset, then click the map to place it.</p>
@@ -103,9 +107,11 @@ async function drop(e: DragEvent) {
 <style scoped>
 .lib { display: flex; flex-direction: column; gap: .45rem; padding: .5rem; min-height: 0; background: var(--bg-raised); } .lib.dropping { outline: 2px dashed var(--accent); outline-offset: -4px; }
 .row { display: flex; gap: .3rem; align-items: center; } .grow { flex: 1; } p { margin: 0; font-size: .82rem; }
-ul { list-style: none; margin: 0; padding: 0; overflow: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; align-content: start; flex: 1; }
+/* The grid scrolls inside its own box: held to the panel's height, it would squeeze its rows instead */
+.scroll { flex: 1; min-height: 0; overflow: auto; }
+ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
 li { position: relative; aspect-ratio: 1; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-sunken); cursor: pointer; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 li:hover { border-color: var(--line-strong); } li.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 li img { max-width: 100%; max-height: 100%; object-fit: contain; } li span { position: absolute; inset: auto 0 0 0; font-size: .62rem; padding: 0 2px; background: rgb(0 0 0 / .6); color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.del { position: absolute; top: 1px; right: 1px; display: none; background: rgb(0 0 0 / .7); border: 0; color: var(--danger); border-radius: 3px; padding: 1px 3px; } li:hover .del { display: block; }
+.del, .mk { position: absolute; top: 1px; right: 1px; display: none; background: rgb(0 0 0 / .7); border: 0; color: var(--danger); border-radius: 3px; padding: 1px 3px; } .mk { right: auto; left: 1px; color: #ddd; } li:hover .del, li:hover .mk { display: block; }
 </style>
