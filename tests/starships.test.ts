@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { StarTomeDb, useDbForTests } from '@/data/db'
 import { createEncounterFromBuild } from '@/data/encounterBuild'
-import { addCombatant, encounters } from '@/data/encounters'
+import { addCombatant, addFloorTo, encounters } from '@/data/encounters'
 import { addCharacter } from '@/data/party'
 import { createCampaign } from '@/data/repo'
 import { notifyRulesChanged, rulesTable } from '@/data/rules'
@@ -86,6 +86,8 @@ describe('starships', () => {
     const interiorId = await createInterior(ship)
     expect(shipInfo(await encounters.get(interiorId))).toMatchObject({ shipId: ship.id, role: 'interior' })
     await addCombatant(interiorId, { x: 9, y: 9, label: 'Turret drone' })
+    const deck = (await addFloorTo(interiorId, { name: 'Engine deck', walls: [{ id: 'w', points: [{ x: 0, y: 0 }, { x: 1, y: 0 }], kind: 'full', open: false, generated: true }] }))!
+    await addCombatant(interiorId, { x: 3, y: 3, label: 'Maintenance bot', floorId: deck.id })
     await setMarker(ship.id, 1, { x: 4, y: 2 })
     await assign(ship.id, zo.id, 1)
     await assign(ship.id, kip.id, null)
@@ -102,6 +104,11 @@ describe('starships', () => {
     const free = tokens.find(t => t.name === 'Kip')
     expect(free && Math.max(Math.abs(free.x - 4), Math.abs(free.y - 2))).toBe(1)
     expect(tokens.some(t => t.name === 'Turret drone')).toBe(true)
+    // Every deck comes along, with what stands on it
+    const decks = (await encounters.map(id)).floors
+    expect(decks.map(f => [f.id, f.name, f.walls.length])).toEqual([[deck.id, 'Engine deck', 1]])
+    expect(decks[0]!.walls[0]!.id).not.toBe('w')
+    expect(tokens.find(t => t.name === 'Maintenance bot')?.floorId).toBe(deck.id)
 
     await writeBackShip(ship.id, { hp: 0, sp: 0, conditions: [{ name: 'Compromised', value: 2 }, { name: 'Frightened', value: 1 }] })
     expect(await starships.get(ship.id)).toMatchObject({ hpCurrent: 0, spCurrent: 0, conditions: [{ name: 'Compromised', value: 2 }] })

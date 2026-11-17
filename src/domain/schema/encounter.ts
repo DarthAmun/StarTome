@@ -27,6 +27,33 @@ export const zActor = z.object({
 })
 export type Actor = z.infer<typeof zActor>
 
+export const WALL_KINDS = ['full', 'greater', 'standard', 'lesser', 'window', 'door', 'secret'] as const
+
+const zWall = z.object({
+  id: zId,
+  points: z.array(zPoint),
+  kind: z.enum(WALL_KINDS).default('full'),
+  open: z.boolean().default(false),
+  /** Made by the map maker from the tiles; replaced when the map is saved again. */
+  generated: z.boolean().default(false),
+})
+
+export const zGrid = z.object({ size: z.number(), offsetX: z.number(), offsetY: z.number() })
+
+/** A floor besides the main one: its own image, grid, walls, fog and map-maker tiles. */
+export const zFloor = z.object({
+  id: zId,
+  name: z.string(),
+  /** Orders the floors, lower is further down; unique within a map. */
+  level: z.number(),
+  image: zImageRef.nullable().default(null),
+  grid: zGrid.default({ size: 40, offsetX: 0, offsetY: 0 }),
+  walls: z.array(zWall).default([]),
+  fog: z.record(z.string(), z.string()).default({}),
+  battlemap: zOpaque.nullable().default(null),
+})
+export type Floor = z.infer<typeof zFloor>
+
 export const ENCOUNTER_STATUS = ['prepared', 'active', 'resolved'] as const
 
 export const zEncounter = z.object({
@@ -35,7 +62,7 @@ export const zEncounter = z.object({
   name: z.string(),
   status: z.enum(ENCOUNTER_STATUS).default('prepared'),
   map: zImageRef.nullable().default(null),
-  grid: z.object({ size: z.number(), offsetX: z.number(), offsetY: z.number() }).default({ size: 40, offsetX: 0, offsetY: 0 }),
+  grid: zGrid.default({ size: 40, offsetX: 0, offsetY: 0 }),
   fovEnabled: z.boolean().default(false),
   playlistId: zId.nullable().default(null),
   initiativeFormula: z.string().nullable().default(null),
@@ -55,25 +82,24 @@ export const zEncounter = z.object({
 })
 export type Encounter = z.infer<typeof zEncounter>
 
-export const WALL_KINDS = ['full', 'greater', 'standard', 'lesser', 'window', 'door', 'secret'] as const
-
 /** The parts of an encounter that change with every stroke and click; one row per encounter, same id. */
 export const zEncounterMap = z.object({
   id: zId,
   fog: z.record(z.string(), z.string()).default({}),
   viewport: z.object({ x: z.number(), y: z.number(), scale: z.number() }).default({ x: 0, y: 0, scale: 1 }),
-  walls: z.array(z.object({
-    id: zId,
-    points: z.array(zPoint),
-    kind: z.enum(WALL_KINDS).default('full'),
-    open: z.boolean().default(false),
-    /** Made by the map maker from the tiles; replaced when the map is saved again. */
-    generated: z.boolean().default(false),
-  })).default([]),
+  walls: z.array(zWall).default([]),
+  /** Each may carry `floorId` (missing or null = the main floor). */
   areas: z.array(zOpaque).default([]),
   /** The map maker's tiles and placed assets. */
   battlemap: zOpaque.nullable().default(null),
   sensorMap: zOpaque.nullable().default(null),
+  /**
+   * The floor stored in the fields above (`Encounter.map`/`grid` and this row's
+   * walls, fog, battlemap): every map has it. Further floors are in `floors`.
+   * Read and write floors through domain/rules/floors.ts (FLOORS_PLAN.md §2).
+   */
+  mainFloor: z.object({ name: z.string(), level: z.number() }).default({ name: 'Ground floor', level: 0 }),
+  floors: z.array(zFloor).default([]),
 })
 export type EncounterMap = z.infer<typeof zEncounterMap>
 
@@ -101,6 +127,8 @@ export const zCombatant = z.object({
   /** Shares vision with the players and shows exact HP in the player view. */
   playerToken: z.boolean().default(false),
   elevation: z.number().nullable().default(null),
+  /** The floor it stands on; null = the map's main floor. */
+  floorId: zId.nullable().default(null),
   conditions: z.array(zOpaque).default([]),
   timers: z.array(zOpaque).default([]),
   actsWhileHidden: z.boolean().default(false),

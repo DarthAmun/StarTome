@@ -156,6 +156,8 @@ export interface AreaOverlay extends AreaShape {
   effect?: AreaEffect | null
   /** Stays and asks again: when a token enters, or starts or ends its turn inside. */
   lingering?: { trigger: AreaTrigger; untilRound?: number | null } | null
+  /** The floor it lies on; missing or null = the main floor (domain/rules/floors.ts). */
+  floorId?: string | null
 }
 
 export const AREA_SAVE_LABEL: Record<AreaSave, string> = { fort: 'Fortitude', ref: 'Reflex', will: 'Will' }

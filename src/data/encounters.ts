@@ -8,9 +8,10 @@ import { newId, nowIso } from '@/domain/ids'
 import type { AreaOverlay } from '@/domain/rules/areas'
 import type { Adjustment } from '@/domain/rules/combat'
 import type { TokenCondition, TokenTimer } from '@/domain/rules/conditions'
+import { addFloor, floorWrite, orderFloors, removeFloor, storedFloorId, type FloorChange, type FloorWrite } from '@/domain/rules/floors'
 import { encounterOwner } from '@/domain/rules/inventory'
 import { withHiddenDoorOutline, type Wall } from '@/domain/rules/walls'
-import { zActor, zCombatLogEntry, zCombatant, zEncounter, zEncounterMap, type Actor, type ActorRef, type CombatLogEntry, type Combatant, type Encounter, type EncounterMap, type ImageRef, type MapAsset, zMapAsset } from '@/domain/schema'
+import { zActor, zCombatLogEntry, zCombatant, zEncounter, zEncounterMap, type Actor, type ActorRef, type CombatLogEntry, type Combatant, type Encounter, type EncounterMap, type Floor, type ImageRef, type MapAsset, zMapAsset } from '@/domain/schema'
 import { getDb } from './db'
 
 const table = () => getDb().rows('encounters')
@@ -129,6 +130,59 @@ export async function patchMap(id: string, patch: Partial<Omit<EncounterMap, 'id
     const row = await encounters.map(id)
     await maps().put(zEncounterMap.parse({ ...row, ...JSON.parse(JSON.stringify(patch)) as Partial<EncounterMap>, id }))
   })
+}
+
+// ── Floors (domain/rules/floors.ts) ────────────────────────────────────────
+
+/** Changes one floor's image, grid, walls, fog, tiles, name or level. */
+export async function patchFloor(id: string, floorId: string | null, change: FloorChange): Promise<void> {
+  const write = floorWrite(await encounters.map(id), floorId, change)
+  await writeFloors(id, write)
+}
+
+async function writeFloors(id: string, write: FloorWrite): Promise<void> {
+  if (Object.keys(write.encounter).length) await patchEncounter(id, write.encounter)
+  if (Object.keys(write.map).length) await patchMap(id, write.map)
+}
+
+/** Adds a floor on top (or at the bottom); returns it. */
+export async function addFloorTo(id: string, init: Parameters<typeof addFloor>[2] = {}): Promise<Floor | null> {
+  const enc = await table().get(id)
+  if (!enc) return null
+  const { floor, map } = addFloor(enc, await encounters.map(id), init)
+  await patchMap(id, map)
+  return floor
+}
+
+/** Puts the floors in order, bottom to top, `groundId` at level 0 (floorsOf ids). */
+export async function reorderFloors(id: string, bottomToTop: string[], groundId?: string): Promise<void> {
+  const enc = await table().get(id)
+  if (enc) await patchMap(id, orderFloors(enc, await encounters.map(id), bottomToTop, groundId))
+}
+
+/**
+ * Removes a floor with the tokens and areas on it. The last floor stays.
+ * Returns false when nothing was removed.
+ */
+export async function removeFloorFrom(id: string, floorId: string | null): Promise<boolean> {
+  const db = getDb()
+  let done = false
+  await db.transaction('rw', table(), maps(), tokens(), async () => {
+    const enc = await table().get(id)
+    const map = await encounters.map(id)
+    const out = enc ? removeFloor(enc, map, floorId) : null
+    if (!out) return
+    const gone = storedFloorId(floorId)
+    // What stood on the promoted floor now stands on the main one
+    const retarget = <T extends { floorId?: string | null }>(x: T): T => (out.promoted && x.floorId === out.promoted ? { ...x, floorId: null } : x)
+    const areas = areasOf(map).filter(a => (a.floorId ?? null) !== gone).map(retarget)
+    await writeFloors(id, { encounter: out.write.encounter, map: { ...out.write.map, areas: areas as unknown as EncounterMap['areas'] } })
+    const rows = await encounters.combatants(id)
+    await tokens().bulkDelete(rows.filter(t => !t.sensor && (t.floorId ?? null) === gone).map(t => t.id))
+    if (out.promoted) await tokens().bulkPut(rows.filter(t => t.floorId === out.promoted).map(retarget))
+    done = true
+  })
+  return done
 }
 
 /** A copy with its map, walls, fog and tokens, back in preparation and without a log. */

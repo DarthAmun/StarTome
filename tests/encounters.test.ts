@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { StarTomeDb, getDb, useDbForTests } from '@/data/db'
 import { createEncounterFromBuild, readBuild, columnPlacer } from '@/data/encounterBuild'
-import { actors, addCombatant, cloneEncounter, combatLog, createEncounter, deleteEncounter, encounters, makeLogEntry, patchCombatant, patchEncounter, patchMap } from '@/data/encounters'
+import { actors, addCombatant, addFloorTo, cloneEncounter, combatLog, createEncounter, deleteEncounter, encounters, makeLogEntry, patchCombatant, patchEncounter, patchFloor, patchMap, removeFloorFrom, reorderFloors } from '@/data/encounters'
 import { createEntry } from '@/data/entries'
 import { addEntry, adjustPurse, inventory, purseOf } from '@/data/inventory'
 import { addCharacter, addCharacterFor, ledgerOf, partyOf, updateCampaignRules } from '@/data/party'
@@ -12,6 +12,7 @@ import { rulesTable } from '@/data/rules'
 import { loadWealth } from '@/data/wealth'
 import { rateTokens } from '@/domain/rules/difficulty'
 import { newRulesEntity } from '@/domain/rules/factory'
+import { floorsOf, MAIN_FLOOR } from '@/domain/rules/floors'
 import { encounterOwner, STASH } from '@/domain/rules/inventory'
 import { DEFAULT_PLAYER_PREFS, toPlayerScene, type PlayerSource } from '@/domain/rules/playerView'
 import type { Creature, Item, RulesEntity } from '@/domain/rules/types'
@@ -79,6 +80,43 @@ describe('encounters', () => {
     const t = await addCombatant(enc.id, { x: 0, y: 0 })
     await patchCombatant(t.id, { conditions: [{ name: 'Prone', value: null }], hp: { current: 5, max: 9, temp: 2 }, dead: true })
     expect((await encounters.combatants(enc.id))[0]).toMatchObject({ conditions: [{ name: 'Prone', value: null }], hp: { temp: 2 }, dead: true, visible: true })
+  })
+})
+
+describe('floors', () => {
+  it('adds, changes, orders and copies floors; tokens and areas keep theirs', async () => {
+    const enc = await createEncounter(C, 'Tower', { map: { imageId: 'ground' } })
+    const up = (await addFloorTo(enc.id, { image: { imageId: 'up' } }))!
+    await patchFloor(enc.id, up.id, { fog: { '1,1': 'hidden' } })
+    await patchFloor(enc.id, MAIN_FLOOR, { name: 'Hall', grid: { size: 50, offsetX: 1, offsetY: 2 } })
+    await addCombatant(enc.id, { x: 1, y: 1, floorId: up.id, label: 'Up there' })
+    await patchMap(enc.id, { areas: [{ id: 'a', kind: 'burst', floorId: up.id }] })
+    const read = async (id: string) => floorsOf((await encounters.get(id))!, await encounters.map(id))
+    expect((await read(enc.id)).map(f => [f.name, f.level, f.image])).toEqual([['Hall', 0, { imageId: 'ground' }], ['Floor 2', 1, { imageId: 'up' }]])
+    expect((await encounters.get(enc.id))!.grid).toEqual({ size: 50, offsetX: 1, offsetY: 2 })
+
+    await reorderFloors(enc.id, [up.id, MAIN_FLOOR], up.id)
+    expect((await read(enc.id)).map(f => [f.id, f.level])).toEqual([[up.id, 0], [MAIN_FLOOR, 1]])
+
+    const copy = (await cloneEncounter(enc.id))!
+    expect((await read(copy.id)).map(f => [f.id, f.fog])).toEqual([[up.id, { '1,1': 'hidden' }], [MAIN_FLOOR, {}]])
+    expect((await encounters.combatants(copy.id))[0]!.floorId).toBe(up.id)
+    expect((await encounters.map(copy.id)).areas[0]).toMatchObject({ floorId: up.id })
+  })
+
+  it('removes a floor with what stands on it; removing the main floor promotes the nearest', async () => {
+    const enc = await createEncounter(C, 'Tower', { map: { imageId: 'ground' } })
+    const up = (await addFloorTo(enc.id, { image: { imageId: 'up' } }))!
+    await addCombatant(enc.id, { x: 1, y: 1, label: 'Below' })
+    await addCombatant(enc.id, { x: 1, y: 1, floorId: up.id, label: 'Above' })
+    await patchMap(enc.id, { areas: [{ id: 'a', kind: 'burst' }, { id: 'b', kind: 'burst', floorId: up.id }] })
+    expect(await removeFloorFrom(enc.id, MAIN_FLOOR)).toBe(true)
+    expect((await encounters.get(enc.id))!.map).toEqual({ imageId: 'up' })
+    const map = await encounters.map(enc.id)
+    expect(map.floors).toEqual([])
+    expect(map.areas).toEqual([{ id: 'b', kind: 'burst', floorId: null }])
+    expect((await encounters.combatants(enc.id)).map(t => [t.label, t.floorId])).toEqual([['Above', null]])
+    expect(await removeFloorFrom(enc.id, MAIN_FLOOR)).toBe(false)
   })
 })
 

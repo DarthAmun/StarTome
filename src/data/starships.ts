@@ -165,7 +165,11 @@ export async function startStarshipBattle(ship: Starship, name?: string, init: {
   await patchMap(enc.id, { sensorMap: { zones: DEFAULT_ZONES } })
   if (interior) {
     const map = await encounters.map(interior.id)
-    await patchMap(enc.id, { walls: map.walls.map(w => ({ ...w, id: newId() })), battlemap: map.battlemap })
+    // Every deck comes along; fog does not (as on the main floor)
+    await patchMap(enc.id, {
+      walls: map.walls.map(w => ({ ...w, id: newId() })), battlemap: map.battlemap, mainFloor: map.mainFloor,
+      floors: map.floors.map(f => ({ ...f, walls: f.walls.map(w => ({ ...w, id: newId() })), fog: {} })),
+    })
     for (const { id: _id, encounterId: _e, ...row } of (await encounters.combatants(interior.id)).filter(t => !t.playerToken && !t.sensor)) await addCombatant(enc.id, { ...row, initiative: null, conditions: [], timers: [] })
   }
   // The party's ship on the sensor map: zone 3, facing right. The generator starts every encounter with full Shield Points; wrecked and the like stay with the ship.
