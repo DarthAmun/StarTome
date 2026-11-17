@@ -28,6 +28,11 @@ async function draw(s: PlayerScene | null) {
   const mapKey = JSON.stringify(s.map)
   if (mapKey !== shownMap) { shownMap = mapKey; await engine.setMap(await imageUrlOf(s.map, true)); engine.fit() }
   engine.setFog(s.fog)
+  // The floor below shows where this one is empty, under the same darkness
+  void engine.setBelow(s.below ? {
+    url: await imageUrlOf(s.below.map, true), grid: s.below.grid, fog: s.below.fog,
+    tokens: await toSceneTokens(s.below.tokens.map(t => ({ ...t, visible: true, timers: [], conditions: [], hp: t.hp, health: t.health }))),
+  } : null)
   engine.setAreas(s.areas.map(a => ({ id: a.id, cells: a.cells, color: hexNumber(a.color) })))
   engine.setFov({ lit: s.lit, outlines: [] })
   engine.setTokens(await toSceneTokens(s.tokens.map(t => ({

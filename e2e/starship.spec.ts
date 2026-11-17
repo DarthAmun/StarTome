@@ -57,14 +57,20 @@ test('a starship is built, crewed and fought: shields first, then the hull, then
   await expect(page.getByTestId('stations-panel')).toContainText('interior map')
   const box = await page.getByTestId('encounter-map').boundingBox()
   if (!box) throw new Error('no map')
+  // On a second deck: the battle seats the pilot there, so the console counts as helmed
+  await page.getByTestId('floor-current').click()
+  await page.getByTestId('floor-add-above').click()
+  await expect(page.getByTestId('floor-current')).toHaveText('Floor 2')
   await page.locator('[data-place="1"]').click()
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
   await expect(page.locator('[data-station-row="Pilot’s Console"]')).toContainText('move')
+  await expect(page.locator('[data-station-row="Pilot’s Console"]')).toContainText('Floor 2')
   await page.getByRole('link', { name: 'Party' }).click()
   await page.getByTestId('open-starship').click()
   await page.getByTestId('ship-battle').click()
   await expect(page.getByTestId('stations-panel')).toContainText('battle')
   await expect(page.locator('[data-station-row="Pilot’s Console"]')).toContainText('Zo')
+  await expect(page.locator('[data-station-row="Pilot’s Console"]')).toContainText('Floor 2')
   await expect(page.getByTestId('stations-panel')).toContainText('AC 17')   // 16, +1 for the helmed console
   await expect(page.getByTestId('stations-panel')).toContainText('Fly the Ship')
 

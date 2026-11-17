@@ -13,7 +13,7 @@ import { hullIntegrityDc } from '@/domain/rules/starshipCombat'
 import { setCrew, stationsOf } from '@/data/starships'
 import ProseText from '@/features/shared/ProseText.vue'
 import { notify } from '@/ui/dialogs'
-import { getToken, live, mapTokens } from './live'
+import { floorOf, floors, getToken, live, mapTokens, showFloor, tokenFloor } from './live'
 import { defenses, helm, hullIntegrity, info, loadShip, malfunctioning, markers, pilotDc, placeMarker, setMalfunctioning, sheet, ship, shipState, shipToken } from './starshipLive'
 
 /** The slot whose marker the next click on the map places; the page watches it. */
@@ -60,6 +60,7 @@ async function saveAsCrew() {
       <li v-for="r in rows" :key="r.slot" :class="{ off: malfunctioning(r.slot), placing: placing === r.slot }" :data-station-row="r.name">
         <b class="num n">{{ r.slot }}</b><span class="name">{{ r.name }}</span>
         <span v-if="r.helm" class="helm">{{ r.helm }}</span><span v-else-if="r.marker" class="faint">nobody</span>
+        <button v-if="r.marker && floors().length > 1" class="deck faint" :title="`Show ${floorOf(tokenFloor(r.marker))?.name}`" @click="showFloor(tokenFloor(r.marker!))">{{ floorOf(tokenFloor(r.marker))?.name }}</button>
         <span class="grow" />
         <button v-if="info.role === 'battle' && r.marker" class="btn btn-ghost" :title="malfunctioning(r.slot) ? 'Repaired (Repair Station)' : 'No station actions until repaired'" @click="setMalfunctioning([r.slot], !malfunctioning(r.slot))">{{ malfunctioning(r.slot) ? 'malfunctioning' : 'ok' }}</button>
         <button class="btn btn-ghost" :title="r.marker ? 'Click a square to move it; right-click here removes it' : 'Click a square of the map'" :data-place="r.slot" @click="placing = placing === r.slot ? null : r.slot" @contextmenu.prevent="placeMarker(r.slot, null)">{{ placing === r.slot ? 'click the map…' : r.marker ? 'move' : 'place' }}</button>
@@ -81,6 +82,7 @@ async function saveAsCrew() {
 </template>
 
 <style scoped>
+.deck { background: none; border: 0; padding: 0 .2rem; font-size: .75rem; text-decoration: underline dotted; }
 .stations { display: flex; flex-direction: column; gap: .4rem; padding: .5rem .6rem; border-bottom: var(--frame); } header { display: flex; align-items: center; gap: .5rem; } .eyebrow { color: var(--accent); }
 ul { list-style: none; margin: 0; padding: 0; } li { display: flex; align-items: center; gap: .4rem; padding: .1rem 0; } li.off .name { color: #e0803a; } li.placing { background: var(--accent-soft); }
 .n { color: #4ab8e8; width: 1.1rem; } .helm { color: #3bbfa8; } .grow { flex: 1; } li .btn { padding: .05em .45em; font-size: .8rem; }

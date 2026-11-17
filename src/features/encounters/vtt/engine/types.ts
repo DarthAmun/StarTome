@@ -41,7 +41,7 @@ export interface SceneArea { id: string; cells: string[]; color: number }
 export interface SceneStair { id: string; x: number; y: number; dir: 'up' | 'down' }
 
 /** The floor below, drawn faded under this one: it shows where this floor's map is empty or transparent. */
-export interface SceneBelow { url: string | null; grid: Grid; tokens: SceneToken[] }
+export interface SceneBelow { url: string | null; grid: Grid; fog: Record<string, string>; tokens: SceneToken[] }
 
 export type Tool = 'select' | 'fog' | 'measure' | 'area' | 'wall' | 'ping' | 'stairs'
 

@@ -24,7 +24,8 @@ export interface StationSlot {
   /** Built into the default station by the frame; not counted against the limit. */
   builtInUpgradeIds?: string[]
   /** Where the station stands on the interior map (grid square), P5. */
-  marker?: { x: number; y: number } | null
+  /** Where it stands on the interior map; `floorId` is its deck (missing or null = the main floor). */
+  marker?: { x: number; y: number; floorId?: string | null } | null
 }
 
 export interface BaySlot { bayId: string; option?: string | null }
@@ -233,7 +234,8 @@ export function starshipLevelChanges(before: StarshipSheet, now: StarshipSheet):
 
 // ── On the map (P5) ───────────────────────────────────────────────────────
 
-export interface StationMarker { slot: number; x: number; y: number; name: string }
+/** A station on the map; `floorId` is its deck (missing or null = the main floor). */
+export interface StationMarker { slot: number; x: number; y: number; name: string; floorId?: string | null }
 
 /**
  * What makes an encounter a starship encounter: its ship, whether it's the
@@ -250,7 +252,7 @@ export interface EncounterStarship {
   concierge?: boolean
 }
 
-export interface MapTokenLike { id: string; x: number; y: number; size: number; dead?: boolean; conditions?: { name: string }[] }
+export interface MapTokenLike { id: string; x: number; y: number; size: number; dead?: boolean; conditions?: { name: string }[]; floorId?: string | null }
 
 const OUT = /^(unconscious|dying|dead)$/i
 
@@ -258,7 +260,7 @@ const OUT = /^(unconscious|dying|dead)$/i
 export function helmingTokens(markers: StationMarker[], tokens: MapTokenLike[]): Map<number, string> {
   const out = new Map<number, string>()
   for (const m of markers) {
-    const t = tokens.find(t => !t.dead && !(t.conditions ?? []).some(c => OUT.test(c.name))
+    const t = tokens.find(t => !t.dead && !(t.conditions ?? []).some(c => OUT.test(c.name)) && (t.floorId ?? null) === (m.floorId ?? null)
       && m.x >= t.x && m.x < t.x + Math.max(1, t.size) && m.y >= t.y && m.y < t.y + Math.max(1, t.size))
     if (t) out.set(m.slot, t.id)
   }
@@ -291,7 +293,7 @@ export function freeSquaresNear(x: number, y: number, taken: Set<string>, count:
 
 /** Markers for a battle copied from the ship's stations. */
 export function markersFromStations(slots: StationSlot[], nameOf: (stationId: string | null) => string): StationMarker[] {
-  return slots.flatMap(s => (s.marker && s.stationId ? [{ slot: s.slot, x: s.marker.x, y: s.marker.y, name: nameOf(s.stationId) }] : []))
+  return slots.flatMap(s => (s.marker && s.stationId ? [{ slot: s.slot, x: s.marker.x, y: s.marker.y, name: nameOf(s.stationId), ...(s.marker.floorId ? { floorId: s.marker.floorId } : {}) }] : []))
 }
 
 type SharedSkills = { skills?: { skills: Record<string, number> }; defenses?: { perception: number } }

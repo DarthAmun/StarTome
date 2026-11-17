@@ -100,7 +100,7 @@ export const setStation = (id: string, slot: number, stationId: string | null) =
 export const addUpgrade = (id: string, slot: number, upgradeId: string) => editStations(id, slots => slots.map(s => (s.slot === slot && !s.upgradeIds.includes(upgradeId) ? { ...s, upgradeIds: [...s.upgradeIds, upgradeId] } : s)))
 export const removeUpgrade = (id: string, slot: number, upgradeId: string) => editStations(id, slots => slots.map(s => (s.slot === slot ? { ...s, upgradeIds: s.upgradeIds.filter(u => u !== upgradeId) } : s)))
 /** Where a station stands on the interior map; null removes the marker. */
-export const setMarker = (id: string, slot: number, marker: { x: number; y: number } | null) => editStations(id, slots => slots.map(s => (s.slot === slot ? { ...s, marker } : s)))
+export const setMarker = (id: string, slot: number, marker: { x: number; y: number; floorId?: string | null } | null) => editStations(id, slots => slots.map(s => (s.slot === slot ? { ...s, marker } : s)))
 export const addBay = (id: string, bayId: string, option: string | null = null) => editBays(id, b => [...b, { bayId, option }])
 export const removeBay = (id: string, index: number) => editBays(id, b => b.filter((_, i) => i !== index))
 export const setBayOption = (id: string, index: number, option: string | null) => editBays(id, b => b.map((x, i) => (i === index ? { ...x, option } : x)))
@@ -185,8 +185,10 @@ export async function startStarshipBattle(ship: Starship, name?: string, init: {
   for (const a of ship.crew) {
     const c = members.get(a.characterId), actor = c ? await actors.forCharacter(c.id) : null
     if (!c || !actor) continue
-    const at = markers.find(m => m.slot === a.slot) ?? free.shift() ?? { x: anchor.x + 1, y: anchor.y }
-    await addCombatant(enc.id, { x: at.x, y: at.y, actorId: actor.id, ref: { kind: 'character', characterId: c.id }, statBlock: actor.statBlock, playerToken: c.role === 'pc' })
+    // At its station, on that deck; free crew beside the first station
+    const station = markers.find(m => m.slot === a.slot), at = station ?? free.shift() ?? { x: anchor.x + 1, y: anchor.y }
+    const floorId = (station ?? markers[0])?.floorId ?? null
+    await addCombatant(enc.id, { x: at.x, y: at.y, floorId, actorId: actor.id, ref: { kind: 'character', characterId: c.id }, statBlock: actor.statBlock, playerToken: c.role === 'pc' })
   }
   return enc.id
 }

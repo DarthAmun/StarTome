@@ -15,7 +15,7 @@ async function newEncounter(page: Page) {
 const floorName = (page: Page) => page.getByTestId('floor-current')
 const menu = (page: Page) => page.getByTestId('map-menu')
 
-test('floors: add one, move a token up from its menu, and take the stairs back down', async ({ page }) => {
+test('floors: add one, move a token up from its menu, and take the stairs back down', async ({ page, context }) => {
   const errors: string[] = []
   page.on('pageerror', e => errors.push(e.message))
   await newEncounter(page)
@@ -40,6 +40,19 @@ test('floors: add one, move a token up from its menu, and take the stairs back d
   await page.getByTestId('floor-add-above').click()
   await expect(floorName(page)).toHaveText('Floor 2')
   await expect(page.getByText('Map · Floor 2')).toBeVisible()
+
+  // The players' window shows the GM's floor, or the one it is kept on
+  const players = await context.newPage()
+  await players.goto('/#/player/encounter')
+  await expect(players.getByTestId('player-floor')).toHaveText('Floor 2')
+  await page.getByTestId('floor-lock').click()
+  await page.getByTestId('floor-down').click()
+  await expect(floorName(page)).toHaveText('Ground floor')
+  await expect(players.getByTestId('player-floor')).toHaveText('Floor 2')
+  await page.getByTestId('floor-lock').click()
+  await expect(players.getByTestId('player-floor')).toHaveText('Ground floor')
+  await players.close()
+  await page.getByTestId('floor-up').click()
 
   // Kip stands on the ground floor, not up here
   await rightClick(cx, cy)

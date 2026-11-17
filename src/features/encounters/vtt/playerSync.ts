@@ -8,6 +8,7 @@ import { DEFAULT_PLAYER_PREFS, readPlayerPrefs, toPlayerScene, type PlayerViewPr
 import { workspace } from '@/data/repo'
 import { onPlayerMessage, openPlayerWindow, sendToPlayers, type PlayerMessage } from '@/services/playerLink'
 import { areaCells } from './areasLive'
+import { floorBeside } from '@/domain/rules/floors'
 import { areasOn, floorOf, floors, floorWalls, live, tokensOn } from './live'
 import { sightFor } from './scene'
 import { zones } from './starshipLive'
@@ -28,12 +29,14 @@ function send(): void {
   const floor = floorOf(live.playerFloorId ?? live.floorId)
   if (!floor) return
   const tokens = tokensOn(floor.id)
+  const below = floorBeside(enc, map, floor.id, -1)
   // The state is reactive; a message must be plain data
   sendToPlayers(JSON.parse(JSON.stringify({
     type: 'encounter',
     scene: toPlayerScene({
       encounterId: enc.id, map: floor.image, grid: floor.grid, fog: floor.fog, tokens: [...live.tokens.filter(t => t.sensor), ...tokens], order: order.value,
       floorName: floors().length > 1 ? floor.name : null,
+      below: below ? { map: below.image, grid: below.grid, fog: below.fog, tokens: tokensOn(below.id) } : null,
       zones: live.tokens.some(t => t.sensor) ? zones.value : null,
       areas: areasOn(floor.id).map(a => ({ id: a.id, color: a.color, hidden: a.hidden, cells: [...areaCells(a)] })),
       // With sight on and the GM seeing everything, players see what their tokens see together

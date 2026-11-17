@@ -7,7 +7,7 @@
 import { computed, reactive, watch } from 'vue'
 import { conditionInfo, type TokenCondition } from '@/domain/rules/conditions'
 import type { Degree } from '@/domain/rules/dcs'
-import { helmingTokens, starshipSheet, stationKey, crewSkill, type EncounterStarship, type Lookup, type StationMarker, type StarshipSheet } from '@/domain/rules/playerStarship'
+import { helmingTokens, markersFromStations, starshipSheet, stationKey, crewSkill, type EncounterStarship, type Lookup, type StationMarker, type StarshipSheet } from '@/domain/rules/playerStarship'
 import { clampZone, DEFAULT_ZONES, type Heading, type SensorRole } from '@/domain/rules/sensorMap'
 import { hullIntegrityCheck, playerShipHpChange, shipDamage, shipStateOf, withShipState, type ShipStateChange } from '@/domain/rules/starshipCombat'
 import { tokenStats } from '@/domain/rules/combat'
@@ -17,7 +17,7 @@ import { partyOf } from '@/data/party'
 import { rulesGet } from '@/data/rules'
 import { baysOf, setMarker, sheetOf, shipInfo, starships, stationsOf, writeBackShip } from '@/data/starships'
 import { reportError } from '@/ui/dialogs'
-import { getToken, live, logLine, mapTokens, refreshTokens, saveEncounter, saveMap, shipHooks, updateToken } from './live'
+import { getToken, live, logLine, mapTokens, refreshTokens, saveEncounter, saveMap, shipHooks, storedFloorId, updateToken } from './live'
 
 export const ship = reactive({ row: null as ShipRow | null, lookup: null as Lookup | null, level: 1, party: [] as Character[] })
 export const info = computed<EncounterStarship | null>(() => shipInfo(live.encounter))
@@ -38,7 +38,7 @@ export const markers = computed<StationMarker[]>(() => {
   const i = info.value, row = ship.row
   if (!i) return []
   if (i.role === 'battle') return i.markers
-  return row ? stationsOf(row).flatMap(s => (s.marker && s.stationId ? [{ slot: s.slot, x: s.marker.x, y: s.marker.y, name: ship.lookup?.stations.get(s.stationId)?.name ?? 'Station' }] : [])) : []
+  return row ? markersFromStations(stationsOf(row), sid => ship.lookup?.stations.get(sid ?? '')?.name ?? 'Station') : []
 })
 /** Slot → the token standing on its station. */
 export const helm = computed(() => helmingTokens(markers.value, mapTokens()))
@@ -146,9 +146,12 @@ export async function addSensorToken(input: { rulesId: string | null; zone: numb
 }
 
 /** Saves where a station stands: on the ship for its interior, on the encounter for a battle. */
-export async function placeMarker(slot: number, at: { x: number; y: number } | null): Promise<void> {
+export async function placeMarker(slot: number, cell: { x: number; y: number } | null): Promise<void> {
   const i = info.value, row = ship.row
   if (!i || !row) return
+  // On the deck the GM looks at
+  const floorId = storedFloorId(live.floorId)
+  const at = cell ? { ...cell, ...(floorId ? { floorId } : {}) } : null
   if (i.role === 'interior') { await setMarker(row.id, slot, at); await loadShip(); return }
   const name = ship.lookup?.stations.get(stationsOf(row).find(s => s.slot === slot)?.stationId ?? '')?.name ?? 'Station'
   setInfo({ markers: [...i.markers.filter(m => m.slot !== slot), ...(at ? [{ slot, ...at, name }] : [])].sort((a, b) => a.slot - b.slot) })

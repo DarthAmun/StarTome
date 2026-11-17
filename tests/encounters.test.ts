@@ -294,6 +294,15 @@ describe('the players\' view of an encounter', () => {
     expect(JSON.stringify(scene)).not.toMatch(/Lurker|Doomed|Breath|1d6|initiative|notes|"ac"/)
   })
 
+  it('shows the floor below with its fog and only the tokens players may see there, as players see them', () => {
+    const scene = toPlayerScene({ ...input(), floorName: 'Floor 2', below: { map: { imageId: 'down' }, grid: { size: 50, offsetX: 0, offsetY: 0 }, fog: { '2,2': 'hidden' }, tokens: [foe, lurker] } })
+    expect(scene.floorName).toBe('Floor 2')
+    expect(scene.below).toMatchObject({ map: { imageId: 'down' }, fog: { '2,2': 'hidden' } })
+    expect(scene.below?.tokens.map(t => [t.id, t.hp, t.health])).toEqual([['f', null, 'critical']])
+    expect(JSON.stringify(scene.below)).not.toMatch(/Lurker|Doomed|Breath/)
+    expect(toPlayerScene(input()).below).toBeNull()
+  })
+
   it('shows a hidden combatant\'s turn as "?" when asked to', () => {
     const scene = toPlayerScene(input({ ...DEFAULT_PLAYER_PREFS, hiddenTurns: 'mystery' }))
     expect(scene.turns[0]).toEqual({ id: 'l', name: '?', image: null, dead: false, party: false, mystery: true })

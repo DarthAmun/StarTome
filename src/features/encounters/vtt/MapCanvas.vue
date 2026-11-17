@@ -3,13 +3,13 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { newId } from '@/domain/ids'
 import { healthState } from '@/domain/rules/conditions'
-import { floorBeside, stairsOn } from '@/domain/rules/floors'
+import { floorBeside, MAIN_FLOOR, stairsOn } from '@/domain/rules/floors'
 import { isDoorWall, type Wall } from '@/domain/rules/walls'
 import { imageUrlOf } from '@/ui/imageUrl'
 import { areaCells } from './areasLive'
 import { MapEngine } from './engine/engine'
 import type { Cell } from './engine/types'
-import { areasOn, currentFloor, floorWalls, live, moveToken, saveFloor, saveMap, tokensOn } from './live'
+import { areasOn, currentFloor, floorWalls, live, moveToken, saveFloor, saveMap, tokenFloor, tokensOn } from './live'
 import type { Token } from '@/data/encounters'
 import { mapSquares, pingPlayers } from './playerSync'
 import { hexNumber, sightFor, toSceneTokens } from './scene'
@@ -62,7 +62,7 @@ async function refreshBelow() {
   const below = live.encounter && live.map ? floorBeside(live.encounter, live.map, live.floorId, -1) : undefined
   if (!below) { void engine?.setBelow(null); return }
   const [url, tokens] = await Promise.all([imageUrlOf(below.image, true), sceneOf(tokensOn(below.id))])
-  void engine?.setBelow({ url, grid: below.grid, tokens })
+  void engine?.setBelow({ url, grid: below.grid, fog: below.fog, tokens })
 }
 
 function refreshStairs() {
@@ -106,12 +106,12 @@ onMounted(async () => {
   stops.push(watch(() => currentFloor()?.walls, (walls) => { e.setWalls(walls ?? []); refreshSight() }, { immediate: true }))
   stops.push(watch(() => [areasOn(), tokensOn().map(t => [t.id, t.x, t.y, t.size])], () => e.setAreas(areasOn().map(a => ({ id: a.id, cells: [...areaCells(a)], color: hexNumber(a.color) }))), { immediate: true, deep: true }))
   stops.push(watch(() => [live.tokens, live.activeId, live.encounter?.status, live.floorId], () => { void refreshTokens(); refreshSight() }, { immediate: true, deep: true }))
-  stops.push(watch(() => [live.floorId, live.map?.floors.map(f => [f.id, f.level, f.image]), live.map?.mainFloor, live.encounter?.map, live.tokens], () => { void refreshBelow() }, { immediate: true, deep: true }))
+  stops.push(watch(() => [live.floorId, live.map?.floors.map(f => [f.id, f.level, f.image, f.fog]), live.map?.mainFloor, live.map?.fog, live.encounter?.map, live.tokens], () => { void refreshBelow() }, { immediate: true, deep: true }))
   stops.push(watch(() => [live.floorId, live.map?.stairs, live.map?.floors.length, live.map?.mainFloor.level], refreshStairs, { immediate: true, deep: true }))
   stops.push(watch(() => [live.fovMode, live.encounter?.fovEnabled], refreshSight))
   stops.push(watch(() => tools.tool, () => e.toolChanged()))
-  // Station markers stand on the main deck (FLOORS_PLAN.md step 5 gives them a floor)
-  stops.push(watch(() => [markers.value, info.value?.malfunctioning, currentFloor()?.main], () => e.setMarkers(currentFloor()?.main === false ? [] : markers.value.map(m => ({ slot: m.slot, x: m.x, y: m.y, off: malfunctioning(m.slot) }))), { immediate: true, deep: true }))
+  // Station markers on the deck shown (one placed before decks were possible stands on the main deck)
+  stops.push(watch(() => [markers.value, info.value?.malfunctioning, live.floorId], () => e.setMarkers(markers.value.filter(m => tokenFloor(m) === (currentFloor()?.id ?? MAIN_FLOOR)).map(m => ({ slot: m.slot, x: m.x, y: m.y, off: malfunctioning(m.slot) }))), { immediate: true, deep: true }))
 })
 
 onBeforeUnmount(() => { stops.forEach(stop => stop()); observer?.disconnect(); engine?.destroy(); engine = null })

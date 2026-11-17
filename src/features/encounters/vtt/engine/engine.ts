@@ -17,7 +17,7 @@ export class MapEngine {
   /** The floor below, faded; this floor's map covers it where it is not empty. */
   private belowC = new PIXI.Container()
   private belowMap = new PIXI.Sprite()
-  private belowTokens = new PIXI.Container()
+  private belowTokens = new PIXI.Container(); private belowFog = new PIXI.Graphics()
   private below: SceneBelow | null = null
   private belowUrl: string | null = null
   private map = new PIXI.Sprite()
@@ -71,7 +71,7 @@ export class MapEngine {
     await this.app.init({ resizeTo: this.container, backgroundColor: 0x0e0e1a, antialias: true, autoDensity: true, resolution: window.devicePixelRatio || 1 })
     if (this.dead) { this.app.destroy(true); return }
     this.container.appendChild(this.app.canvas)
-    this.belowC.addChild(this.belowMap, this.belowTokens)
+    this.belowC.addChild(this.belowMap, this.belowTokens, this.belowFog)
     this.belowC.alpha = 0.35
     this.belowC.eventMode = 'none'
     this.world.addChild(this.belowC, this.map, this.gridG, this.areasG, this.fogG, this.wallsG, this.stairsC, this.markersC, this.tokensC, this.draftG, this.rulerC, this.previewG)
@@ -160,6 +160,9 @@ export class MapEngine {
       this.belowMap.texture = texture ?? PIXI.Texture.EMPTY
     }
     if (!this.ready || this.below !== below) return
+    // Fog of the floor below hides what is there, as on that floor
+    if (below && this.belowMap.texture !== PIXI.Texture.EMPTY) drawFog(this.belowFog, below.fog, below.grid, this.belowMap.texture.width, this.belowMap.texture.height, this.gm ? 0.6 : 1)
+    else this.belowFog.clear()
     const list = below?.tokens ?? []
     const textures = await Promise.all(list.map(t => (t.image ? PIXI.Assets.load<PIXI.Texture>({ src: t.image, parser: 'texture' }).catch(() => null) : null)))
     if (this.dead || this.below !== below) return

@@ -110,6 +110,8 @@ export interface PlayerScene {
   prefs: PlayerViewPrefs
   /** The floor shown, when the map has more than one. */
   floorName: string | null
+  /** The floor below, drawn faded where this one is empty: its map, fog and the tokens players may see on it. */
+  below: { map: ImageRef | null; grid: PlayerScene['grid']; fog: Record<string, string>; tokens: PlayerToken[] } | null
 }
 
 export function toPlayerToken(t: PlayerSource): PlayerToken {
@@ -151,6 +153,7 @@ export interface PlayerSceneInput {
   prefs: PlayerViewPrefs
   /** The floor shown, when the map has more than one; the tokens given are those on it. */
   floorName?: string | null
+  below?: { map: ImageRef | null; grid: PlayerScene['grid']; fog: Record<string, string>; tokens: PlayerSource[] } | null
 }
 
 export function toPlayerScene(i: PlayerSceneInput): PlayerScene {
@@ -164,6 +167,7 @@ export function toPlayerScene(i: PlayerSceneInput): PlayerScene {
     // A hidden token's turn is nobody's turn, unless it shows as "?"
     activeId: turns.some(t => t.id === i.activeId) ? i.activeId : null,
     turns, prefs: { ...i.prefs }, floorName: i.floorName ?? null,
+    below: i.below ? { map: i.below.map, grid: { ...i.below.grid }, fog: { ...i.below.fog }, tokens: i.below.tokens.filter(t => t.visible && !t.sensor).map(toPlayerToken) } : null,
     sensor: i.zones ? { zones: i.zones, ships: i.tokens.filter(t => t.visible && t.sensor).map(toPlayerShip) } : null,
   }
 }

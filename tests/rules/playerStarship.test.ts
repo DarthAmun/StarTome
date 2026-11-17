@@ -129,6 +129,17 @@ describe('stations on the map', () => {
     expect(slotHelmedBy(markers, tokens, 12)).toBe(2)
     expect(slotHelmedBy(markers, tokens, 11)).toBeNull()
   })
+  it('a station on a deck is helmed only from that deck', () => {
+    const decked = [{ slot: 1, x: 3, y: 3, name: 'Pilot', floorId: 'bridge' }, { slot: 2, x: 6, y: 3, name: 'Engineering' }]
+    const tokens = [
+      { id: 'below', x: 3, y: 3, size: 1 },
+      { id: 'up', x: 3, y: 3, size: 1, floorId: 'bridge' },
+      { id: 'wrong', x: 6, y: 3, size: 1, floorId: 'bridge' },
+    ]
+    expect([...helmingTokens(decked, tokens)]).toEqual([[1, 'up']])
+    const slots = [{ slot: 1, stationId: 'st', isDefault: true, upgradeIds: [], marker: { x: 3, y: 3, floorId: 'bridge' } }] as StationSlot[]
+    expect(markersFromStations(slots, () => 'Pilot')).toEqual([{ slot: 1, x: 3, y: 3, name: 'Pilot', floorId: 'bridge' }])
+  })
   it('free squares ring outward and skip taken ones', () => {
     const taken = new Set(['3,3', '2,2'])
     const spots = freeSquaresNear(3, 3, taken, 3)
