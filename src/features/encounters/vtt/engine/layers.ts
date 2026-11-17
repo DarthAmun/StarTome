@@ -1,7 +1,7 @@
 /** Drawing the still parts of a scene: grid, fog, walls, areas, the ruler, sight and pings. */
 import * as PIXI from 'pixi.js'
 import { isDoorWall } from '@/domain/rules/walls'
-import type { Grid, Point, SceneArea, Viewport, Wall, WallKind } from './types'
+import type { Grid, Point, SceneArea, SceneStair, Viewport, Wall, WallKind } from './types'
 
 export const WALL_COLORS: Record<WallKind, number> = { full: 0xffffff, greater: 0xb8860b, standard: 0xc86414, lesser: 0xc83214, window: 0x9fd4ff, door: 0x64c8dc, secret: 0xc77dff }
 const PING_COLOR = 0xffd24a
@@ -148,4 +148,19 @@ export function playPing(app: PIXI.Application, layer: PIXI.Container, at: Point
     g.circle(s.x, s.y, 5).fill({ color: PING_COLOR, alpha: 0.95 * fade }).stroke({ color: 0x000000, width: 1.5, alpha: 0.6 * fade })
   }
   app.ticker.add(tick)
+}
+
+/** Stairs: a square with three steps and an arrow pointing to the other end, up or down. */
+export function drawStairs(c: PIXI.Container, stairs: SceneStair[], grid: Grid): void {
+  c.removeChildren().forEach(x => x.destroy({ children: true }))
+  const s = grid.size, color = 0xe8c06a
+  for (const st of stairs) {
+    const x = grid.offsetX + st.x * s, y = grid.offsetY + st.y * s
+    const g = new PIXI.Graphics().roundRect(x + s * 0.08, y + s * 0.08, s * 0.84, s * 0.84, 4).fill({ color: 0x1a1408, alpha: 0.55 }).stroke({ color, width: 2, alpha: 0.9 })
+    for (let i = 0; i < 3; i++) g.rect(x + s * (0.22 + i * 0.12), y + s * (0.62 - i * 0.14), s * 0.12, s * (0.14 + i * 0.14)).fill({ color, alpha: 0.85 })
+    const ax = x + s * 0.74, top = y + s * 0.24, bottom = y + s * 0.6, tip = st.dir === 'up' ? top : bottom, back = st.dir === 'up' ? top + s * 0.12 : bottom - s * 0.12
+    g.moveTo(ax, top).lineTo(ax, bottom).stroke({ color, width: 2 })
+    g.moveTo(ax - s * 0.08, back).lineTo(ax, tip).lineTo(ax + s * 0.08, back).stroke({ color, width: 2 })
+    c.addChild(g)
+  }
 }

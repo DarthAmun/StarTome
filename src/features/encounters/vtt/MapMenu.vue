@@ -3,18 +3,28 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { conditionInfo } from '@/domain/rules/conditions'
 import { isDoorWall, WALL_KINDS, WALL_LABEL, type WallKind } from '@/domain/rules/walls'
-import { statLinkOf, wallsOf } from '@/data/encounters'
+import { floorBeside, stairsOn } from '@/domain/rules/floors'
+import { statLinkOf } from '@/data/encounters'
 import { peek } from '@/ui/workbench'
 import { openAreaPrompt, removeArea } from './areasLive'
 import type { Cell } from './engine/types'
-import { applyDamage, areas, getToken, grantTempHp, live, removeTokens, saveMap, updateToken } from './live'
+import { applyDamage, areas, currentFloor, floorWalls, getToken, grantTempHp, live, moveToFloor, removeTokens, saveFloor, saveMap, showFloor, tokenFloor, updateToken } from './live'
 
-const props = defineProps<{ hit: { tokenId: string | null; wallId: string | null; areaId: string | null; cell: Cell }; x: number; y: number }>()
+const props = defineProps<{ hit: { tokenId: string | null; wallId: string | null; areaId: string | null; stairId?: string | null; cell: Cell }; x: number; y: number }>()
 const emit = defineEmits<{ close: []; edit: [id: string]; conditions: [id: string]; area: [id: string]; add: [cell: Cell, kind: 'token' | 'creature'] }>()
 
 const QUICK = ['Off-Guard', 'Prone', 'Frightened', 'Grabbed', 'Concealed', 'Hidden']
 const token = computed(() => getToken(props.hit.tokenId))
-const wall = computed(() => (live.map ? wallsOf(live.map).find(w => w.id === props.hit.wallId) : undefined))
+const wall = computed(() => floorWalls(currentFloor()).find(w => w.id === props.hit.wallId))
+const stair = computed(() => (live.encounter && live.map && props.hit.stairId ? stairsOn(live.encounter, live.map, live.floorId).find(e => e.stairId === props.hit.stairId) : undefined))
+/** The floors above and below the token's. */
+const beside = computed(() => {
+  const t = token.value
+  if (!t || t.sensor || !live.encounter || !live.map) return { up: undefined, down: undefined }
+  const at = tokenFloor(t)
+  return { up: floorBeside(live.encounter, live.map, at, 1), down: floorBeside(live.encounter, live.map, at, -1) }
+})
+function removeStair(id: string) { if (live.map) saveMap({ stairs: live.map.stairs.filter(s => s.id !== id) }, true); emit('close') }
 const area = computed(() => areas().find(a => a.id === props.hit.areaId))
 const amount = ref<number | null>(null)
 const el = ref<HTMLElement | null>(null)
@@ -29,9 +39,9 @@ function toggleCondition(name: string) {
   updateToken(t.id, { conditions: has ? t.conditions.filter(c => c.name !== name) : [...t.conditions, { name, value: info?.valued ? 1 : null, color: info?.color, icon: info?.icon }] })
 }
 function setWalls(fn: (kind: WallKind, open: boolean) => { kind: WallKind; open: boolean } | null) {
-  if (!live.map || !wall.value) return
+  if (!wall.value) return
   const id = wall.value.id
-  saveMap({ walls: wallsOf(live.map).flatMap((w) => { if (w.id !== id) return [w]; const next = fn(w.kind, w.open); return next ? [{ ...w, ...next }] : [] }) }, true)
+  saveFloor({ walls: floorWalls(currentFloor()).flatMap((w) => { if (w.id !== id) return [w]; const next = fn(w.kind, w.open); return next ? [{ ...w, ...next }] : [] }) }, true)
   emit('close')
 }
 function outside(e: MouseEvent) { if (el.value && !el.value.contains(e.target as Node)) emit('close') }
@@ -61,6 +71,11 @@ onBeforeUnmount(() => { document.removeEventListener('mousedown', outside); docu
       <button @click="done(() => updateToken(token!.id, { dead: !token!.dead }))">{{ token.dead ? 'Not dead' : 'Dead' }}</button>
       <button @click="done(() => updateToken(token!.id, { playerToken: !token!.playerToken }))">{{ token.playerToken ? '✓ ' : '' }}Player token</button>
       <button @click="done(() => updateToken(token!.id, { ally: !token!.ally }))">{{ token.ally ? '✓ ' : '' }}Ally</button>
+      <template v-if="beside.up || beside.down">
+        <hr />
+        <button v-if="beside.up" data-test="menu-floor-up" @click="done(() => moveToFloor(token!.id, beside.up!.id))">Move up to {{ beside.up.name }}</button>
+        <button v-if="beside.down" data-test="menu-floor-down" @click="done(() => moveToFloor(token!.id, beside.down!.id))">Move down to {{ beside.down.name }}</button>
+      </template>
       <hr />
       <button class="danger" @click="done(() => removeTokens([token!.id], live.encounter?.status === 'active'))">Remove</button>
     </template>
@@ -77,6 +92,12 @@ onBeforeUnmount(() => { document.removeEventListener('mousedown', outside); docu
       <button v-if="area.effect" @click="done(() => openAreaPrompt(area!.id))">Ask for saves</button>
       <hr />
       <button class="danger" @click="done(() => removeArea(area!.id))">Remove</button>
+    </template>
+    <template v-else-if="stair">
+      <header>Stairs {{ stair.dir }}</header>
+      <button @click="done(() => showFloor(stair!.to.floorId))">Show the other end</button>
+      <hr />
+      <button class="danger" data-test="menu-remove-stairs" @click="removeStair(stair.stairId)">Remove stairs</button>
     </template>
     <template v-else>
       <button data-test="menu-add-creature" @click="done(() => emit('add', hit.cell, 'creature'))">Add creature here…</button>

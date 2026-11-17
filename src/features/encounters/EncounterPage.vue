@@ -22,7 +22,9 @@ import AreaDialog from './vtt/AreaDialog.vue'
 import AreaSavePrompt from './vtt/AreaSavePrompt.vue'
 import ConditionsDialog from './vtt/ConditionsDialog.vue'
 import type { Cell } from './vtt/engine/types'
-import { areas, flushSaves, getToken, live, loadEncounter, placeActor, placeCreature, saveEncounter, type FovMode } from './vtt/live'
+import { areas, flushSaves, getToken, live, loadEncounter, placeActor, placeCreature, saveEncounter, saveFloor, tokenFloor, type FovMode } from './vtt/live'
+import FloorBar from './vtt/FloorBar.vue'
+import StairPrompt from './vtt/StairPrompt.vue'
 import LogPanel from './vtt/LogPanel.vue'
 import MapCanvas from './vtt/MapCanvas.vue'
 import MapMenu from './vtt/MapMenu.vue'
@@ -47,7 +49,8 @@ const router = useRouter()
 
 const loaded = ref<boolean | null>(null)
 const canvas = ref<InstanceType<typeof MapCanvas> | null>(null)
-const menu = ref<{ hit: { tokenId: string | null; wallId: string | null; areaId: string | null; cell: Cell }; x: number; y: number } | null>(null)
+const menu = ref<{ hit: { tokenId: string | null; wallId: string | null; areaId: string | null; stairId: string | null; cell: Cell }; x: number; y: number } | null>(null)
+const floorBar = ref<InstanceType<typeof FloorBar> | null>(null)
 const editId = ref<string | null>(null)
 const condId = ref<string | null>(null)
 const areaId = ref<string | null>(null)
@@ -64,6 +67,11 @@ const enc = computed(() => live.encounter)
 const mode = computed(() => (enc.value?.status === 'active' ? 'run' : enc.value?.status === 'resolved' ? 'resolved' : 'prepare'))
 const selected = computed(() => getToken(live.selectedId))
 const editArea = computed<AreaOverlay | undefined>(() => areas().find(a => a.id === areaId.value))
+// When the turn passes to a token on another floor, the view goes there
+watch(() => live.activeId, (id) => {
+  const t = getToken(id)
+  if (t && !t.sensor && enc.value?.status === 'active') live.floorId = tokenFloor(t)
+})
 const FOV: [FovMode, string, string][] = [['gm', 'All', 'You see everything; players see what their tokens see'], ['active', 'Acting', 'Only what the acting token sees'], ['group', 'Party', 'What the players\' tokens see together']]
 
 async function load(id: string) {
@@ -130,7 +138,7 @@ async function onDrop(e: DragEvent) {
     keepTurn()
     if (actorId) { const { token, unlinked } = await placeActor(actorId, at.col, at.row); if (token && unlinked) editId.value = token.id }
     else if (rulesId) await placeCreature(rulesId, at.col, at.row)
-    else if (file) saveEncounter({ map: await storeImage(file) })
+    else if (file) saveFloor({ image: await storeImage(file) })
   } catch (err) { reportError('Dropping onto the map', err) }
 }
 
@@ -141,6 +149,7 @@ function onKey(e: KeyboardEvent) {
   if (e.key.toLowerCase() === 'a' && !e.ctrlKey && !e.metaKey && !e.altKey && mode.value === 'run') { e.preventDefault(); quick.value = { cell: { col: 6, row: 6 }, start: 'creature' } }
   else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && tools.tool === 'wall') { if (canvas.value?.undoWall()) e.preventDefault() }
   else if (e.key === 'Escape' && tools.tool !== 'select') tools.tool = 'select'
+  else if (e.key === 'PageUp' || e.key === 'PageDown') { e.preventDefault(); floorBar.value?.step(e.key === 'PageUp' ? 1 : -1) }
 }
 </script>
 
@@ -169,6 +178,8 @@ function onKey(e: KeyboardEvent) {
     <div class="stage" :class="{ placing: placing !== null }" @dragover.prevent @drop.prevent="onDrop" @click="stageClick">
       <MapCanvas ref="canvas" @context="(hit, x, y) => (menu = { hit, x, y })" />
       <ToolBar />
+      <FloorBar ref="floorBar" />
+      <StairPrompt />
       <TurnPrompts v-if="mode === 'run'" />
     </div>
 

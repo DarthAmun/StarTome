@@ -108,6 +108,8 @@ export interface PlayerScene {
   /** The sensor map of a starship battle: its zones and who is in them. */
   sensor: { zones: number; ships: PlayerShip[] } | null
   prefs: PlayerViewPrefs
+  /** The floor shown, when the map has more than one. */
+  floorName: string | null
 }
 
 export function toPlayerToken(t: PlayerSource): PlayerToken {
@@ -147,6 +149,8 @@ export interface PlayerSceneInput {
   /** Zones of the sensor map; null when the encounter has none. */
   zones?: number | null
   prefs: PlayerViewPrefs
+  /** The floor shown, when the map has more than one; the tokens given are those on it. */
+  floorName?: string | null
 }
 
 export function toPlayerScene(i: PlayerSceneInput): PlayerScene {
@@ -159,7 +163,7 @@ export function toPlayerScene(i: PlayerSceneInput): PlayerScene {
     running: i.running, round: i.round,
     // A hidden token's turn is nobody's turn, unless it shows as "?"
     activeId: turns.some(t => t.id === i.activeId) ? i.activeId : null,
-    turns, prefs: { ...i.prefs },
+    turns, prefs: { ...i.prefs }, floorName: i.floorName ?? null,
     sensor: i.zones ? { zones: i.zones, ships: i.tokens.filter(t => t.visible && t.sensor).map(toPlayerShip) } : null,
   }
 }

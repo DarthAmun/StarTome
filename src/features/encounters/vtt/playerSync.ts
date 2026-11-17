@@ -5,11 +5,10 @@
  */
 import { ref, watch } from 'vue'
 import { DEFAULT_PLAYER_PREFS, readPlayerPrefs, toPlayerScene, type PlayerViewPrefs } from '@/domain/rules/playerView'
-import { wallsOf } from '@/data/encounters'
 import { workspace } from '@/data/repo'
 import { onPlayerMessage, openPlayerWindow, sendToPlayers, type PlayerMessage } from '@/services/playerLink'
 import { areaCells } from './areasLive'
-import { areas, live, mapTokens } from './live'
+import { areasOn, floorOf, floors, floorWalls, live, tokensOn } from './live'
 import { sightFor } from './scene'
 import { zones } from './starshipLive'
 import { order, round } from './turns'
@@ -25,16 +24,20 @@ function send(): void {
   queued = false
   const enc = live.encounter, map = live.map
   if (!enc || !map) return
-  const tokens = mapTokens()
+  // The GM's floor, unless the players are kept on one
+  const floor = floorOf(live.playerFloorId ?? live.floorId)
+  if (!floor) return
+  const tokens = tokensOn(floor.id)
   // The state is reactive; a message must be plain data
   sendToPlayers(JSON.parse(JSON.stringify({
     type: 'encounter',
     scene: toPlayerScene({
-      encounterId: enc.id, map: enc.map, grid: enc.grid, fog: map.fog, tokens: live.tokens, order: order.value,
+      encounterId: enc.id, map: floor.image, grid: floor.grid, fog: floor.fog, tokens: [...live.tokens.filter(t => t.sensor), ...tokens], order: order.value,
+      floorName: floors().length > 1 ? floor.name : null,
       zones: live.tokens.some(t => t.sensor) ? zones.value : null,
-      areas: areas().map(a => ({ id: a.id, color: a.color, hidden: a.hidden, cells: [...areaCells(a)] })),
+      areas: areasOn(floor.id).map(a => ({ id: a.id, color: a.color, hidden: a.hidden, cells: [...areaCells(a)] })),
       // With sight on and the GM seeing everything, players see what their tokens see together
-      lit: sightFor(enc.fovEnabled, live.fovMode === 'gm' ? 'group' : live.fovMode, tokens, live.activeId, wallsOf(map), mapSquares.value, false).lit,
+      lit: sightFor(enc.fovEnabled, live.fovMode === 'gm' ? 'group' : live.fovMode, tokens, live.activeId, floorWalls(floor), mapSquares.value, false).lit,
       running: enc.status === 'active', round: round.value, activeId: live.activeId, prefs: playerPrefs.value,
     }),
   })) as PlayerMessage)
@@ -51,7 +54,7 @@ export function startPlayerSync(campaignId: string): () => void {
   stop?.()
   void workspace.get<unknown>(campaignId, 'playerView', null).then((raw) => { playerPrefs.value = readPlayerPrefs(raw) })
   const offHello = onPlayerMessage('hello', (m) => { if (m.channel === 'encounter') send() })
-  const offWatch = watch([() => live.encounter, () => live.map, () => live.tokens, () => live.activeId, () => live.fovMode, playerPrefs, mapSquares], schedule, { deep: true })
+  const offWatch = watch([() => live.encounter, () => live.map, () => live.tokens, () => live.activeId, () => live.fovMode, () => live.floorId, () => live.playerFloorId, playerPrefs, mapSquares], schedule, { deep: true })
   send()
   stop = () => { offHello(); offWatch(); sendToPlayers({ type: 'encounter', scene: null }); stop = null }
   return stop

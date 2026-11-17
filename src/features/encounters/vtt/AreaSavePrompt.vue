@@ -14,7 +14,7 @@ import { statLinkOf, type Token } from '@/data/encounters'
 import { rulesGet } from '@/data/rules'
 import AppDialog from '@/ui/components/AppDialog.vue'
 import { areaCells, asAreaToken, closeAreaPrompt } from './areasLive'
-import { addConditions, applyDamage, areas, live, logLine, mapTokens } from './live'
+import { addConditions, applyDamage, areaFloor, areas, live, logLine, tokensOn } from './live'
 import { sharedOf } from './linkLive'
 import { defenses } from './starshipLive'
 
@@ -50,7 +50,7 @@ watch(() => prompt.value?.id, async () => {
   const p = prompt.value, a = area.value, e = effect.value
   if (!p || !a || !e) { rows.value = []; return }
   // Named tokens may stand on the sensor map; "everyone inside" is about the battle map
-  const alive = (p.tokenIds ? live.tokens : mapTokens()).filter(t => !t.dead)
+  const alive = (p.tokenIds ? live.tokens : tokensOn(areaFloor(a))).filter(t => !t.dead)
   const inside = new Set(tokensInArea(areaCells(a), alive.map(asAreaToken)).map(t => t.id))
   const tokens = p.tokenIds ? alive.filter(t => p.tokenIds?.includes(t.id)) : alive.filter(t => inside.has(t.id))
   rows.value = await Promise.all(tokens.map(async t => ({ token: t, modifier: await saveModifier(t, e.save), d20: null, damageOverride: null })))

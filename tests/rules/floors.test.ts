@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addFloor, defaultFloorName, floorBeside, floorById, floorsOf, floorWrite, MAIN_FLOOR, onFloor, orderFloors, removeFloor, storedFloorId } from '@/domain/rules/floors'
+import { addFloor, defaultFloorName, newStair, stairsOn, stairUnder, floorBeside, floorById, floorsOf, floorWrite, MAIN_FLOOR, onFloor, orderFloors, removeFloor, storedFloorId } from '@/domain/rules/floors'
 import { zEncounter, zEncounterMap, type Encounter, type EncounterMap } from '@/domain/schema'
 
 const IMG = { imageId: 'ground' }
@@ -82,5 +82,26 @@ describe('floors', () => {
     expect(onFloor({}, null)).toBe(true)
     expect(onFloor({ floorId: 'x' }, 'x')).toBe(true)
     expect(onFloor({ floorId: 'x' }, MAIN_FLOOR)).toBe(false)
+  })
+
+  it('finds stairs from either end, says up or down, and drops those to a removed floor', () => {
+    let s = setup()
+    const up = addFloor(s.enc, s.map); s = { ...s, map: { ...s.map, ...up.map } }
+    const down = addFloor(s.enc, s.map, { below: true }); s = { ...s, map: { ...s.map, ...down.map } }
+    const toTop = newStair({ floorId: MAIN_FLOOR, x: 2, y: 3 }, { floorId: up.floor.id, x: 5, y: 5 })
+    const toCellar = newStair({ floorId: down.floor.id, x: 0, y: 0 }, { floorId: MAIN_FLOOR, x: 1, y: 1 })
+    expect(toTop.a.floorId).toBeNull()
+    s = { ...s, map: { ...s.map, stairs: [toTop, toCellar] } }
+    expect(stairsOn(s.enc, s.map, MAIN_FLOOR).map(e => [e.dir, e.to.floorId, e.x, e.y])).toEqual([['up', up.floor.id, 2, 3], ['down', down.floor.id, 1, 1]])
+    expect(stairsOn(s.enc, s.map, up.floor.id)).toMatchObject([{ dir: 'down', to: { floorId: MAIN_FLOOR, x: 2, y: 3 } }])
+    // A large token stands on it when any of its squares does
+    expect(stairUnder(s.enc, s.map, MAIN_FLOOR, 1, 2, 2)?.stairId).toBe(toTop.id)
+    expect(stairUnder(s.enc, s.map, MAIN_FLOOR, 3, 3, 1)).toBeUndefined()
+
+    expect(removeFloor(s.enc, s.map, up.floor.id)!.write.map.stairs).toEqual([toCellar])
+    // Without the main floor: both others are one away, the lower takes its place; no stair is left
+    const out = removeFloor(s.enc, s.map, MAIN_FLOOR)!
+    expect(out.promoted).toBe(down.floor.id)
+    expect(out.write.map.stairs).toEqual([])
   })
 })

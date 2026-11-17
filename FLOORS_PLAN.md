@@ -86,7 +86,7 @@ Each step can ship on its own.
 ## 4. Progress
 
 - [x] Step 1: data model (2026-11-17). Schema, [floors.ts](src/domain/rules/floors.ts), `patchFloor` / `addFloorTo` / `reorderFloors` / `removeFloorFrom` in [data/encounters.ts](src/data/encounters.ts) (removing a floor deletes its tokens and areas), starship battles copy every deck. Tests: [floors.test.ts](tests/rules/floors.test.ts), floors in [encounters.test.ts](tests/encounters.test.ts) and [starships.test.ts](tests/starships.test.ts). Nothing in the UI uses floors yet.
-- [ ] Step 2: game table
+- [x] Step 2: game table (2026-11-17). `live.floorId` with `currentFloor` / `tokensOn` / `areasOn` / `saveFloor` in [live.ts](src/features/encounters/vtt/live.ts); [FloorBar.vue](src/features/encounters/vtt/FloorBar.vue) (switch, PgUp / PgDn, counts, add, rename, remove, lock the players' floor); [StairPrompt.vue](src/features/encounters/vtt/StairPrompt.vue); stairs tool in the toolbar; `EncounterMap.stairs`. The Prepare panel's image, web address and grid work on the floor shown; the map maker button shows only on the main floor until step 4. Station markers show on the main deck only until step 5. An area lies on the floor it was placed on; an emanation goes with its token. Browser test: [floors.spec.ts](e2e/floors.spec.ts).
 - [ ] Step 3: uploading several images
 - [ ] Step 4: map maker
 - [ ] Step 5: starships and the rest

@@ -5,16 +5,24 @@
  */
 import * as PIXI from 'pixi.js'
 import { isDoorWall, wallAt } from '@/domain/rules/walls'
-import { drawArea, drawFog, drawGrid, drawRuler, drawSight, drawWallDraft, drawWalls, playPing } from './layers'
+import { drawArea, drawFog, drawGrid, drawStairs, drawRuler, drawSight, drawWallDraft, drawWalls, playPing } from './layers'
 import { drawToken } from './tokens'
-import type { Cell, EngineHandlers, FovView, Grid, Point, SceneArea, SceneToken, Viewport, Wall } from './types'
+import type { Cell, EngineHandlers, FovView, Grid, Point, SceneArea, SceneBelow, SceneStair, SceneToken, Viewport, Wall } from './types'
 
 const LONG_PRESS_MS = 550
 
 export class MapEngine {
   private app = new PIXI.Application()
   private world = new PIXI.Container()
+  /** The floor below, faded; this floor's map covers it where it is not empty. */
+  private belowC = new PIXI.Container()
+  private belowMap = new PIXI.Sprite()
+  private belowTokens = new PIXI.Container()
+  private below: SceneBelow | null = null
+  private belowUrl: string | null = null
   private map = new PIXI.Sprite()
+  private stairsC = new PIXI.Container()
+  private stairs: SceneStair[] = []
   private gridG = new PIXI.Graphics()
   private areasG = new PIXI.Container()
   private fogG = new PIXI.Graphics()
@@ -63,7 +71,10 @@ export class MapEngine {
     await this.app.init({ resizeTo: this.container, backgroundColor: 0x0e0e1a, antialias: true, autoDensity: true, resolution: window.devicePixelRatio || 1 })
     if (this.dead) { this.app.destroy(true); return }
     this.container.appendChild(this.app.canvas)
-    this.world.addChild(this.map, this.gridG, this.areasG, this.fogG, this.wallsG, this.markersC, this.tokensC, this.draftG, this.rulerC, this.previewG)
+    this.belowC.addChild(this.belowMap, this.belowTokens)
+    this.belowC.alpha = 0.35
+    this.belowC.eventMode = 'none'
+    this.world.addChild(this.belowC, this.map, this.gridG, this.areasG, this.fogG, this.wallsG, this.stairsC, this.markersC, this.tokensC, this.draftG, this.rulerC, this.previewG)
     // The darkness is its own render group, so punching holes in it leaves the map below alone
     const sight = new PIXI.Container()
     sight.filters = [new PIXI.AlphaFilter()]
@@ -136,6 +147,30 @@ export class MapEngine {
       t.position.set(cx - s * 0.4, cy - s * 0.44)
       this.markersC.addChild(g, t)
     }
+  }
+
+  /** The floor below, drawn faded under this one (null: none). */
+  async setBelow(below: SceneBelow | null): Promise<void> {
+    this.below = below
+    const url = below?.url ?? null
+    if (url !== this.belowUrl) {
+      this.belowUrl = url
+      const texture = url ? await PIXI.Assets.load<PIXI.Texture>({ src: url, parser: 'texture' }).catch(() => null) : null
+      if (this.dead || this.belowUrl !== url) return
+      this.belowMap.texture = texture ?? PIXI.Texture.EMPTY
+    }
+    if (!this.ready || this.below !== below) return
+    const list = below?.tokens ?? []
+    const textures = await Promise.all(list.map(t => (t.image ? PIXI.Assets.load<PIXI.Texture>({ src: t.image, parser: 'texture' }).catch(() => null) : null)))
+    if (this.dead || this.below !== below) return
+    this.belowTokens.removeChildren().forEach(c => c.destroy({ children: true }))
+    for (const [i, t] of list.entries()) this.belowTokens.addChild(drawToken(t, below!.grid, textures[i] ?? null, { gm: this.gm, active: false, screenCell: 0 }))
+  }
+
+  setStairs(stairs: SceneStair[]): void {
+    this.stairs = stairs
+    if (!this.ready) return
+    drawStairs(this.stairsC, stairs, this.grid)
   }
 
   setTokens(tokens: SceneToken[], activeId: string | null): void {
@@ -218,6 +253,7 @@ export class MapEngine {
     if (this.gm) drawWalls(this.wallsG, this.walls, this.grid)
     this.setAreas(this.areas)
     this.setMarkers(this.markers)
+    this.setStairs(this.stairs)
     this.redrawSight()
   }
 
@@ -279,6 +315,7 @@ export class MapEngine {
     if (e.button !== 0 || !this.gm) return
     const g = this.toGrid(x, y)
     if (tool === 'ping') { this.emitPing(g, e.shiftKey); return }
+    if (tool === 'stairs') { this.handlers.onStairClick?.({ col: Math.floor(g.x), row: Math.floor(g.y) }); return }
     if (tool === 'select') {
       const door = wallAt(this.walls, g.x, g.y, 8 / this.view.scale / this.grid.size)
       if (door && isDoorWall(door.kind)) { this.handlers.onDoorToggle?.(door.id); return }
@@ -373,8 +410,9 @@ export class MapEngine {
     const token = [...this.tokens].reverse().find(t => g.x >= t.x && g.x < t.x + t.size && g.y >= t.y && g.y < t.y + t.size)
     const wall = token ? null : wallAt(this.walls, g.x, g.y, 12 / this.view.scale / this.grid.size)
     const key = `${cell.col},${cell.row}`
-    const area = token || wall ? null : [...this.areas].reverse().find(a => a.cells.includes(key))
-    this.handlers.onContext?.({ tokenId: token?.id ?? null, wallId: wall?.id ?? null, areaId: area?.id ?? null, cell }, e.clientX, e.clientY)
+    const stair = token || wall ? null : this.stairs.find(s => s.x === cell.col && s.y === cell.row)
+    const area = token || wall || stair ? null : [...this.areas].reverse().find(a => a.cells.includes(key))
+    this.handlers.onContext?.({ tokenId: token?.id ?? null, wallId: wall?.id ?? null, areaId: area?.id ?? null, stairId: stair?.id ?? null, cell }, e.clientX, e.clientY)
   }
 
   private key(e: KeyboardEvent): void {

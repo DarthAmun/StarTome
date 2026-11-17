@@ -17,8 +17,10 @@ import type { TokenCondition } from '@/domain/rules/conditions'
 import { damageWithTemp, grantTemp } from '@/domain/rules/hp'
 import { hpChangeEffects, type ConditionChange, type Degree, type TurnPromptSeed } from '@/domain/rules/turnEffects'
 import type { Hazard, RulesEntity } from '@/domain/rules/types'
+import { floorById, floorsOf, floorWrite, MAIN_FLOOR, onFloor, stairsOn, stairUnder, storedFloorId, type FloorChange, type FloorView } from '@/domain/rules/floors'
 import type { ActorRef, CombatLogEntry, Encounter, EncounterMap } from '@/domain/schema'
-import { actors, addCombatant, areasOf, combatLog, encounters, imageOfRules, makeLogEntry, patchCombatant, patchEncounter, patchMap, removeCombatants, statLinkOf, type CombatantInput, type CombatantPatch, type EncounterPatch, type LogInput, type Token } from '@/data/encounters'
+import { withHiddenDoorOutline, type Wall } from '@/domain/rules/walls'
+import { actors, addCombatant, addFloorTo, areasOf, combatLog, encounters, imageOfRules, makeLogEntry, patchCombatant, patchEncounter, patchMap, removeCombatants, statLinkOf, type CombatantInput, type CombatantPatch, type EncounterPatch, type LogInput, type Token } from '@/data/encounters'
 import { campaignSettings } from '@/data/party'
 import { rulesGet, rulesGetMany } from '@/data/rules'
 import { reportError } from '@/ui/dialogs'
@@ -44,10 +46,75 @@ export const live = reactive({
   /** Reminders for the token whose turn it is (actions lost or gained). */
   turnNotes: [] as { tokenId: string; text: string }[],
   areaPrompts: [] as AreaPrompt[],
+  /** The floor the GM looks at (a FloorView id; domain/rules/floors.ts). */
+  floorId: MAIN_FLOOR as string,
+  /** The players' window stays on this floor instead of following the GM; null = follows. */
+  playerFloorId: null as string | null,
+  /** A token that ended its move on a stair: offered the other end. */
+  stairPrompt: null as { tokenId: string; stairId: string } | null,
 })
 
 const fail = (what: string) => (err: unknown) => reportError(what, err)
 export const areas = (): AreaOverlay[] => (live.map ? areasOf(live.map) : [])
+
+// ── Floors ─────────────────────────────────────────────────────────────────
+
+/** Every floor, bottom to top. */
+export const floors = (): FloorView[] => (live.encounter && live.map ? floorsOf(live.encounter, live.map) : [])
+/** A floor by its FloorView id; the main floor when it is gone. */
+export const floorOf = (id: string | null | undefined): FloorView | null =>
+  (live.encounter && live.map ? floorById(live.encounter, live.map, id) ?? floorById(live.encounter, live.map, MAIN_FLOOR)! : null)
+/** The floor the GM looks at. */
+export const currentFloor = (): FloorView | null => floorOf(live.floorId)
+/** A floor's walls; a hidden door from a map made before gets its outline. */
+export const floorWalls = (f: FloorView | null): Wall[] => (f?.walls ?? []).map(withHiddenDoorOutline)
+/** The FloorView id a token stands on (one whose floor is gone stands on the main floor). */
+export const tokenFloor = (t: { floorId?: string | null }): string => (t.floorId && live.map?.floors.some(f => f.id === t.floorId) ? t.floorId : MAIN_FLOOR)
+/** Tokens on a floor's battle map (the GM's floor unless given). */
+export const tokensOn = (floorId: string = live.floorId): Token[] => mapTokens().filter(t => tokenFloor(t) === (storedFloorId(floorId) ?? MAIN_FLOOR))
+/** The floor an area lies on: an emanation goes with its token. */
+export function areaFloor(a: AreaOverlay): string {
+  const owner = typeof a.attachedTokenId === 'string' ? getToken(a.attachedTokenId) : undefined
+  return owner ? tokenFloor(owner) : (storedFloorId(a.floorId) && live.map?.floors.some(f => f.id === a.floorId) ? a.floorId! : MAIN_FLOOR)
+}
+export const areasOn = (floorId: string = live.floorId): AreaOverlay[] => areas().filter(a => areaFloor(a) === (storedFloorId(floorId) ?? MAIN_FLOOR))
+
+/** Changes a floor (the GM's unless given): its image and grid on the encounter, the rest on the map row. */
+export function saveFloor(change: FloorChange, now = false, floorId: string = live.floorId): void {
+  if (!live.map) return
+  const write = floorWrite(live.map, floorId, change)
+  if (Object.keys(write.encounter).length) saveEncounter(write.encounter)
+  if (Object.keys(write.map).length) saveMap(write.map, now)
+}
+
+/** Shows another floor. */
+export function showFloor(id: string): void {
+  if (floors().some(f => f.id === id)) live.floorId = id
+}
+
+/** Adds a floor on top (or at the bottom) and shows it. */
+export async function addFloorHere(below = false): Promise<void> {
+  if (!live.encounter) return
+  await flushSaves()
+  const floor = await addFloorTo(live.encounter.id, { below })
+  await reloadMap()
+  if (floor) live.floorId = floor.id
+}
+
+/** Reads the encounter and its map again after a change made in the database. */
+export async function reloadMap(): Promise<void> {
+  if (!live.encounter) return
+  const id = live.encounter.id
+  const [encounter, map] = await Promise.all([encounters.get(id), encounters.map(id)])
+  if (!encounter) return
+  live.encounter = encounter
+  live.map = map
+  await refreshTokens()
+  if (!floors().some(f => f.id === live.floorId)) live.floorId = MAIN_FLOOR
+  if (live.playerFloorId && !floors().some(f => f.id === live.playerFloorId)) live.playerFloorId = null
+}
+
+export { onFloor, storedFloorId }
 export const getToken = (id: string | null | undefined): Token | undefined => live.tokens.find(t => t.id === id)
 export const usesDying = (t: Token): boolean => t.usesDying ?? t.playerToken
 /** Tokens on the battle map (starships stand on the sensor map instead). */
@@ -63,6 +130,7 @@ export async function loadEncounter(id: string): Promise<boolean> {
   Object.assign(live, {
     encounter, map, tokens, log, game: settings.game, automation: settings.rules.automation, selectedId: null,
     turnPrompts: [], turnNotes: [], areaPrompts: [], fovMode: 'gm', activeId: null,
+    floorId: MAIN_FLOOR, playerFloorId: null, stairPrompt: null,
   })
   return true
 }
@@ -224,6 +292,29 @@ export function moveToken(id: string, x: number, y: number): void {
   t.x = x
   t.y = y
   saveToken(id, { x, y })
+  // Ending a move on a stair offers the other end
+  const stair = live.encounter && live.map ? stairUnder(live.encounter, live.map, tokenFloor(t), x, y, t.size) : undefined
+  live.stairPrompt = stair ? { tokenId: id, stairId: stair.stairId } : live.stairPrompt?.tokenId === id ? null : live.stairPrompt
+}
+
+/** Puts a token on another floor (same square unless given). Areas around it go along. */
+export function moveToFloor(id: string, floorId: string, at?: { x: number; y: number }): void {
+  const t = getToken(id)
+  if (!t) return
+  const patch = { floorId: storedFloorId(floorId), ...(at ? { x: at.x, y: at.y } : {}) }
+  Object.assign(t, patch)
+  saveToken(id, patch)
+  if (live.stairPrompt?.tokenId === id) live.stairPrompt = null
+}
+
+/** Takes the stair a token stands on to its other end; the GM's view follows. */
+export function takeStair(tokenId: string, stairId: string): void {
+  const t = getToken(tokenId)
+  const end = t && live.encounter && live.map ? stairsOn(live.encounter, live.map, tokenFloor(t)).find(e => e.stairId === stairId) : undefined
+  live.stairPrompt = null
+  if (!t || !end) return
+  moveToFloor(tokenId, end.to.floorId, { x: end.to.x, y: end.to.y })
+  live.floorId = end.to.floorId
 }
 /** Lets areasLive.ts ask for saves when a token walks into a lingering area. */
 export const moveHooks: ((t: Token, x: number, y: number) => void)[] = []
@@ -255,13 +346,14 @@ export interface PlaceOptions { count?: number; /** Look for free squares even f
 function spots(x: number, y: number, size: number, opts: PlaceOptions): { x: number; y: number }[] {
   const count = Math.max(1, Math.min(20, Math.floor(opts.count ?? 1)))
   if (count === 1 && !opts.spread) return [{ x, y }]
-  return freeSpots({ x, y }, mapTokens().map(t => ({ gridX: t.x, gridY: t.y, size: t.size })), count, size)
+  return freeSpots({ x, y }, tokensOn().map(t => ({ gridX: t.x, gridY: t.y, size: t.size })), count, size)
 }
 
 async function place(inputs: CombatantInput[], opts: PlaceOptions): Promise<Token[]> {
   if (!live.encounter) return []
   const ids: string[] = []
-  for (const input of inputs) ids.push((await addCombatant(live.encounter.id, { ...input, ally: opts.ally ?? input.ally ?? false })).id)
+  // New tokens stand on the floor the GM looks at
+  for (const input of inputs) ids.push((await addCombatant(live.encounter.id, { floorId: storedFloorId(live.floorId), ...input, ally: opts.ally ?? input.ally ?? false })).id)
   await refreshTokens()
   const added = live.tokens.filter(t => ids.includes(t.id))
   if (opts.announce) for (const t of added) logLine(t, 'note', { note: 'joined the fight' })

@@ -12,7 +12,9 @@ import type { AreaSpec } from '@/domain/rules/statRolls'
 import type { WallKind } from '@/domain/rules/walls'
 import { addArea, asAreaToken, openAreaPrompt } from './areasLive'
 import type { Cell, SceneArea, Tool } from './engine/types'
-import { mapTokens } from './live'
+import { newStair } from '@/domain/rules/floors'
+import { notify } from '@/ui/dialogs'
+import { floorOf, live, saveMap, storedFloorId, tokensOn } from './live'
 import { hexNumber } from './scene'
 
 export const tools = reactive({
@@ -25,12 +27,14 @@ export const tools = reactive({
   areaColor: '#e8a040',
   /** An ability being placed from a stat block: its name and effect go onto the next area. */
   pending: null as { label: string; effect: AreaEffect } | null,
+  /** The stairs tool's first end, waiting for the other one on another floor. */
+  stairStart: null as { floorId: string; x: number; y: number } | null,
 })
 
 const tokenAt = (p: Cell) => {
   const c = Math.floor(p.col), r = Math.floor(p.row)
   // Topmost first: the last placed wins, as on the map
-  return [...mapTokens()].reverse().find(t => c >= t.x && c < t.x + Math.max(1, t.size) && r >= t.y && r < t.y + Math.max(1, t.size))
+  return [...tokensOn()].reverse().find(t => c >= t.x && c < t.x + Math.max(1, t.size) && r >= t.y && r < t.y + Math.max(1, t.size))
 }
 
 /** The shape a click at `at` (after a first click at `anchor`) places; null while it needs a first click. */
@@ -50,14 +54,14 @@ function shapeFor(anchor: Cell | null, at: Cell): AreaShape | null {
 export function areaDraft(anchor: Cell | null, at: Cell): SceneArea {
   const shape = shapeFor(anchor, at)
   // Before the first click of a cone or line: the square it starts from
-  const cells = shape ? [...cellsInArea(shape, mapTokens().map(asAreaToken))] : [`${Math.floor(at.col)},${Math.floor(at.row)}`]
+  const cells = shape ? [...cellsInArea(shape, tokensOn().map(asAreaToken))] : [`${Math.floor(at.col)},${Math.floor(at.row)}`]
   return { id: 'draft', cells, color: hexNumber(tools.areaColor) }
 }
 
 function commit(shape: AreaShape): void {
   const p = tools.pending
   tools.pending = null
-  const area: AreaOverlay = { ...shape, id: newId(), color: tools.areaColor, label: p?.label ?? `${shape.sizeFt}-foot ${shape.kind}`, ...(p ? { effect: p.effect } : {}) }
+  const area: AreaOverlay = { ...shape, id: newId(), floorId: storedFloorId(live.floorId), color: tools.areaColor, label: p?.label ?? `${shape.sizeFt}-foot ${shape.kind}`, ...(p ? { effect: p.effect } : {}) }
   addArea(area)
   // An ability's area asks for its saves right away
   if (area.effect) { openAreaPrompt(area.id); tools.tool = 'select' }
@@ -76,4 +80,18 @@ export function startArea(spec: AreaSpec, sourceTokenId: string | null): void {
   Object.assign(tools, { areaKind: spec.kind, areaFt: spec.sizeFt, pending: { label: spec.label, effect: spec.effect } })
   if (spec.kind === 'emanation' && sourceTokenId) commit({ kind: 'emanation', originX: 0, originY: 0, sizeFt: spec.sizeFt, attachedTokenId: sourceTokenId })
   else tools.tool = 'area'
+}
+
+/** Stairs tool: the first click sets one end, a click on another floor the other. */
+export function stairClick(at: Cell): void {
+  const here = { floorId: live.floorId, x: at.col, y: at.row }
+  const start = tools.stairStart
+  if (!start || start.floorId === here.floorId) {
+    tools.stairStart = here
+    return
+  }
+  tools.stairStart = null
+  if (!live.map || !floorOf(start.floorId) || storedFloorId(floorOf(start.floorId)!.id) !== storedFloorId(start.floorId)) return
+  saveMap({ stairs: [...live.map.stairs, newStair(start, here)] }, true)
+  notify(`Stairs to ${floorOf(start.floorId)?.name ?? 'the other floor'} placed.`, 'ok')
 }

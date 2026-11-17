@@ -37,7 +37,13 @@ export interface SceneToken {
 /** An area as drawn: its squares ("col,row") and colour. */
 export interface SceneArea { id: string; cells: string[]; color: number }
 
-export type Tool = 'select' | 'fog' | 'measure' | 'area' | 'wall' | 'ping'
+/** One end of a stair on the floor shown; `dir` is where the other end is. */
+export interface SceneStair { id: string; x: number; y: number; dir: 'up' | 'down' }
+
+/** The floor below, drawn faded under this one: it shows where this floor's map is empty or transparent. */
+export interface SceneBelow { url: string | null; grid: Grid; tokens: SceneToken[] }
+
+export type Tool = 'select' | 'fog' | 'measure' | 'area' | 'wall' | 'ping' | 'stairs'
 
 export interface EngineHandlers {
   tool(): Tool
@@ -46,7 +52,9 @@ export interface EngineHandlers {
   onTokenMoved?(id: string, x: number, y: number): void
   onTokenClick?(id: string): void
   /** Right-click: on a token, a wall, an area, or the bare map (all null). Screen position for the menu. */
-  onContext?(hit: { tokenId: string | null; wallId: string | null; areaId: string | null; cell: Cell }, clientX: number, clientY: number): void
+  onContext?(hit: { tokenId: string | null; wallId: string | null; areaId: string | null; stairId: string | null; cell: Cell }, clientX: number, clientY: number): void
+  /** Stairs tool click on a square. */
+  onStairClick?(cell: Cell): void
   onFogPaint?(keys: string[], hide: boolean): void
   onWallDone?(points: Point[], kind: WallKind): void
   onDoorToggle?(wallId: string): void

@@ -5,12 +5,13 @@
  */
 import { cellsInArea, tokenInCells, type AreaOverlay, type AreaToken, type AreaTrigger } from '@/domain/rules/areas'
 import type { Token } from '@/data/encounters'
-import { areas, live, mapTokens, moveHooks, saveMap } from './live'
+import { areaFloor, areas, live, moveHooks, saveMap, tokenFloor, tokensOn } from './live'
 import { turnHooks } from './turns'
 
 let nextPromptId = 1
 export const asAreaToken = (t: Pick<Token, 'id' | 'x' | 'y' | 'size'>): AreaToken => ({ id: t.id, gridX: t.x, gridY: t.y, size: t.size })
-export const areaCells = (a: AreaOverlay): Set<string> => cellsInArea(a, mapTokens().map(asAreaToken))
+/** An area's squares; an emanation finds its token among those on the area's floor. */
+export const areaCells = (a: AreaOverlay): Set<string> => cellsInArea(a, tokensOn(areaFloor(a)).map(asAreaToken))
 
 function write(list: AreaOverlay[]): void {
   saveMap({ areas: list as unknown as Record<string, unknown>[] }, true)
@@ -34,15 +35,16 @@ export function closeAreaPrompt(id: number): void {
   live.areaPrompts = live.areaPrompts.filter(p => p.id !== id)
 }
 
-const lingering = (trigger: AreaTrigger) => areas().filter(a => a.effect && a.lingering?.trigger === trigger)
+/** Lingering areas with this trigger on the token's floor. */
+const lingering = (trigger: AreaTrigger, t: Token) => areas().filter(a => a.effect && a.lingering?.trigger === trigger && areaFloor(a) === tokenFloor(t))
 
 function ask(token: Token, trigger: AreaTrigger, verb: string): void {
-  for (const a of lingering(trigger)) if (tokenInCells(areaCells(a), asAreaToken(token))) openAreaPrompt(a.id, [token.id], `${token.name} ${verb} ${a.label}`)
+  for (const a of lingering(trigger, token)) if (tokenInCells(areaCells(a), asAreaToken(token))) openAreaPrompt(a.id, [token.id], `${token.name} ${verb} ${a.label}`)
 }
 
 // A token walking into a lingering area: inside after the move, not before
 moveHooks.push((t, x, y) => {
-  for (const a of lingering('enter')) {
+  for (const a of lingering('enter', t)) {
     const cells = areaCells(a)
     if (!tokenInCells(cells, asAreaToken(t)) && tokenInCells(cells, asAreaToken({ ...t, x, y }))) openAreaPrompt(a.id, [t.id], `${t.name} enters ${a.label}`)
   }

@@ -16,7 +16,7 @@ import CreaturePicker from '../CreaturePicker.vue'
 import DifficultyMeter from '../DifficultyMeter.vue'
 import { rate } from '../difficulty'
 import TokenLibrary from '../TokenLibrary.vue'
-import { live, placeActor, placeCreature, saveEncounter } from './live'
+import { currentFloor, floors, live, placeActor, placeCreature, saveEncounter, saveFloor } from './live'
 import { playerPrefs, setPlayerPrefs } from './playerSync'
 
 const emit = defineEmits<{ unlinked: [id: string] }>()
@@ -30,12 +30,14 @@ const rated = computed(() => (enc.value ? rate(live.game, live.tokens, parseDefe
 
 async function chooseMap() {
   const file = await pickImage()
-  if (file) saveEncounter({ map: await storeImage(file) })
+  if (file) saveFloor({ image: await storeImage(file) })
 }
-function mapUrl(e: Event) { const url = (e.target as HTMLInputElement).value.trim(); if (url) saveEncounter({ map: { url } }) }
+/** The floor the map section works on: the one shown. */
+const floor = computed(() => currentFloor())
+function mapUrl(e: Event) { const url = (e.target as HTMLInputElement).value.trim(); if (url) saveFloor({ image: { url } }) }
 function grid(field: 'size' | 'offsetX' | 'offsetY', e: Event) {
   const v = Number((e.target as HTMLInputElement).value)
-  if (enc.value && Number.isFinite(v)) saveEncounter({ grid: { ...enc.value.grid, [field]: field === 'size' ? Math.max(8, v) : v } })
+  if (floor.value && Number.isFinite(v)) saveFloor({ grid: { ...floor.value.grid, [field]: field === 'size' ? Math.max(8, v) : v } })
 }
 async function addCreature(e: RulesEntity) { await placeCreature(e.id, 10, 5, null, { spread: true }).catch(err => reportError('Placing the creature', err)) }
 async function addActor(a: Actor) {
@@ -53,18 +55,18 @@ function openLoot() {
 <template>
   <div v-if="enc" class="prep">
     <section>
-      <span class="eyebrow">Map</span>
+      <span class="eyebrow">Map<template v-if="floors().length > 1"> · {{ floor?.name }}</template></span>
       <div class="row">
         <button class="btn" data-test="choose-map" @click="chooseMap">Choose image…</button>
-        <button class="btn" data-test="open-map-maker" @click="router.push({ name: 'map-maker', params: { campaignId: enc.campaignId, encounterId: enc.id } })">Map maker</button>
-        <button v-if="enc.map" class="btn btn-ghost" @click="saveEncounter({ map: null })">Remove</button>
+        <button v-if="floor?.main !== false" class="btn" data-test="open-map-maker" @click="router.push({ name: 'map-maker', params: { campaignId: enc.campaignId, encounterId: enc.id } })">Map maker</button>
+        <button v-if="floor?.image" class="btn btn-ghost" @click="saveFloor({ image: null })">Remove</button>
       </div>
-      <input class="input" placeholder="…or a web address of an image" :value="enc.map && 'url' in enc.map ? enc.map.url : ''" aria-label="Map image address" @change="mapUrl" />
+      <input class="input" placeholder="…or a web address of an image" :value="floor?.image && 'url' in floor.image ? floor.image.url : ''" aria-label="Map image address" @change="mapUrl" />
       <p class="faint">An image dropped on the map works too.</p>
       <div class="row">
-        <label><span class="label">Square (px)</span><input class="input num" type="number" min="8" :value="enc.grid.size" aria-label="Grid square size" @change="grid('size', $event)" /></label>
-        <label><span class="label">Offset X</span><input class="input num" type="number" :value="enc.grid.offsetX" @change="grid('offsetX', $event)" /></label>
-        <label><span class="label">Offset Y</span><input class="input num" type="number" :value="enc.grid.offsetY" @change="grid('offsetY', $event)" /></label>
+        <label><span class="label">Square (px)</span><input class="input num" type="number" min="8" :value="floor?.grid.size" aria-label="Grid square size" @change="grid('size', $event)" /></label>
+        <label><span class="label">Offset X</span><input class="input num" type="number" :value="floor?.grid.offsetX" @change="grid('offsetX', $event)" /></label>
+        <label><span class="label">Offset Y</span><input class="input num" type="number" :value="floor?.grid.offsetY" @change="grid('offsetY', $event)" /></label>
       </div>
       <label class="dim"><input type="checkbox" :checked="enc.fovEnabled" data-test="fov-switch" @change="saveEncounter({ fovEnabled: !enc.fovEnabled })" /> Sight and walls: tokens see only what walls allow</label>
       <label v-if="playlists.length"><span class="label">Music</span>

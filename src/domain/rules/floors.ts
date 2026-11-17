@@ -10,13 +10,13 @@
  * main floor's odd storage stays in this file.
  */
 import { newId } from '@/domain/ids'
-import type { Encounter, EncounterMap, Floor } from '@/domain/schema'
+import type { Encounter, EncounterMap, Floor, Stair } from '@/domain/schema'
 
 /** The main floor's id in a FloorView; stored as null on tokens and areas. */
 export const MAIN_FLOOR = 'main'
 
 type EncounterPart = Pick<Encounter, 'map' | 'grid'>
-type MapPart = Pick<EncounterMap, 'mainFloor' | 'floors' | 'walls' | 'fog' | 'battlemap'>
+type MapPart = Pick<EncounterMap, 'mainFloor' | 'floors' | 'walls' | 'fog' | 'battlemap'> & Partial<Pick<EncounterMap, 'stairs'>>
 
 /** One floor, whichever way it is stored. */
 export interface FloorView extends Floor {
@@ -106,9 +106,13 @@ export function addFloor(enc: EncounterPart, map: MapPart, init: Partial<Omit<Fl
  */
 export function removeFloor(enc: EncounterPart, map: MapPart, id: string | null | undefined): { write: FloorWrite; promoted: string | null } | null {
   const key = storedFloorId(id)
+  // Stairs to the floor that goes lead nowhere; those to the promoted floor now reach the main one
+  const stairs = (promoted: string | null) => (map.stairs ?? [])
+    .filter(st => st.a.floorId !== key && st.b.floorId !== key)
+    .map(st => (promoted ? { ...st, a: st.a.floorId === promoted ? { ...st.a, floorId: null } : st.a, b: st.b.floorId === promoted ? { ...st.b, floorId: null } : st.b } : st))
   if (key !== null) {
     if (!map.floors.some(f => f.id === key)) return null
-    return { write: { encounter: {}, map: { floors: map.floors.filter(f => f.id !== key) } }, promoted: null }
+    return { write: { encounter: {}, map: { floors: map.floors.filter(f => f.id !== key), stairs: stairs(null) } }, promoted: null }
   }
   const level = map.mainFloor.level
   const next = [...map.floors].sort((a, b) => Math.abs(a.level - level) - Math.abs(b.level - level) || a.level - b.level)[0]
@@ -116,7 +120,7 @@ export function removeFloor(enc: EncounterPart, map: MapPart, id: string | null 
   return {
     write: {
       encounter: { map: next.image, grid: next.grid },
-      map: { mainFloor: { name: next.name, level: next.level }, walls: next.walls, fog: next.fog, battlemap: next.battlemap, floors: map.floors.filter(f => f.id !== next.id) },
+      map: { mainFloor: { name: next.name, level: next.level }, walls: next.walls, fog: next.fog, battlemap: next.battlemap, floors: map.floors.filter(f => f.id !== next.id), stairs: stairs(next.id) },
     },
     promoted: next.id,
   }
@@ -140,4 +144,42 @@ export function orderFloors(enc: EncounterPart, map: MapPart, bottomToTop: strin
     mainFloor: { ...map.mainFloor, level: level.get(MAIN_FLOOR)! },
     floors: map.floors.map(f => ({ ...f, level: level.get(f.id)! })),
   }
+}
+
+// ── Stairs ─────────────────────────────────────────────────────────────────
+
+/** One end of a stair as seen from its floor: where it is and where it leads. */
+export interface StairEnd {
+  stairId: string
+  x: number
+  y: number
+  /** The other end, its floor as a FloorView id. */
+  to: { floorId: string; x: number; y: number }
+  /** Whether the other end is above or below. */
+  dir: 'up' | 'down'
+}
+
+/** The ends of stairs on the floor shown as `id`. */
+export function stairsOn(enc: EncounterPart, map: MapPart, id: string | null | undefined): StairEnd[] {
+  const key = storedFloorId(id)
+  const level = new Map(floorsOf(enc, map).map(f => [storedFloorId(f.id), f.level]))
+  const out: StairEnd[] = []
+  for (const st of map.stairs ?? []) {
+    for (const [here, there] of [[st.a, st.b], [st.b, st.a]] as const) {
+      if (here.floorId !== key || !level.has(there.floorId)) continue
+      out.push({ stairId: st.id, x: here.x, y: here.y, to: { floorId: there.floorId ?? MAIN_FLOOR, x: there.x, y: there.y }, dir: level.get(there.floorId)! > level.get(key)! ? 'up' : 'down' })
+    }
+  }
+  return out
+}
+
+/** The stair end a token at x, y of `size` squares stands on, on the floor shown as `id`. */
+export function stairUnder(enc: EncounterPart, map: MapPart, id: string | null | undefined, x: number, y: number, size: number): StairEnd | undefined {
+  const s = Math.max(1, size)
+  return stairsOn(enc, map, id).find(e => e.x >= x && e.x < x + s && e.y >= y && e.y < y + s)
+}
+
+/** A stair between two squares (floor ids as in FloorView). */
+export function newStair(a: { floorId: string; x: number; y: number }, b: { floorId: string; x: number; y: number }): Stair {
+  return { id: newId(), a: { ...a, floorId: storedFloorId(a.floorId) }, b: { ...b, floorId: storedFloorId(b.floorId) } }
 }

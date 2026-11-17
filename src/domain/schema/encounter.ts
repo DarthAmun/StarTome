@@ -54,6 +54,10 @@ export const zFloor = z.object({
 })
 export type Floor = z.infer<typeof zFloor>
 
+const zStairEnd = z.object({ floorId: zId.nullable(), x: z.number(), y: z.number() })
+export const zStair = z.object({ id: zId, a: zStairEnd, b: zStairEnd })
+export type Stair = z.infer<typeof zStair>
+
 export const ENCOUNTER_STATUS = ['prepared', 'active', 'resolved'] as const
 
 export const zEncounter = z.object({
@@ -100,6 +104,8 @@ export const zEncounterMap = z.object({
    */
   mainFloor: z.object({ name: z.string(), level: z.number() }).default({ name: 'Ground floor', level: 0 }),
   floors: z.array(zFloor).default([]),
+  /** Stairs between two floors: a token on one end is offered the other (floorId null = the main floor). */
+  stairs: z.array(zStair).default([]),
 })
 export type EncounterMap = z.infer<typeof zEncounterMap>
 
