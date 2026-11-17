@@ -2,12 +2,14 @@
 /** Settings: light or dark, accent, interface size, motion. The skin follows the open campaign's game. */
 import { onMounted, ref } from 'vue'
 import ShortcutList from '@/ui/components/ShortcutList.vue'
+import { build, compareToLatest, fetchLatestCommit, REPO_PAGE, type LatestCommit } from '@/services/appRelease'
 import { notify } from '@/ui/dialogs'
 import { canInstall, checkForUpdate, installApp, installed, offline, reloadForUpdate, updateReady } from '@/ui/pwa'
 import { patchSettings, settings } from '@/ui/workbench'
 
 const ACCENTS = ['#c9973a', '#4cc9f0', '#a3423a', '#86c06a', '#a98be0', '#e59a55', '#d182b4', '#5fe0a0']
-const version = __APP_VERSION__
+const builtOn = new Date(build.built).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
 const storage = ref<{ usage: number; quota: number; persisted: boolean } | null>(null)
 async function readStorage() {
@@ -24,12 +26,22 @@ async function keepData() {
 }
 
 const checking = ref(false)
+const latest = ref<LatestCommit | null>(null)
+const status = ref<ReturnType<typeof compareToLatest> | null>(null)
+/** Asks GitHub for the newest commit on main, and the server for a new offline copy when GitHub has one. */
 async function check() {
   checking.value = true
   try {
-    if (!await checkForUpdate()) notify('This copy has no offline cache to update (it runs from a development server).')
-    else setTimeout(() => { if (!updateReady.value) notify('You have the newest version.', 'ok') }, 1500)
-  } catch { notify('Could not reach the server to look for a new version.', 'error') } finally { checking.value = false }
+    latest.value = await fetchLatestCommit()
+    status.value = compareToLatest(latest.value)
+    if (status.value === 'same') { notify('You have the newest version.', 'ok'); return }
+    if (status.value !== 'behind') return
+    // The deployed copy may already have it: fetch it now so the Reload offer comes up
+    if (!await checkForUpdate().catch(() => false)) return
+    setTimeout(() => { if (!updateReady.value) notify('GitHub has a newer version that is not online yet (it deploys a few minutes after each change). Try again shortly.') }, 1500)
+  } catch (err) {
+    notify(`Could not ask GitHub for the newest version: ${err instanceof Error ? err.message : String(err)}`, 'error')
+  } finally { checking.value = false }
 }
 </script>
 
@@ -65,9 +77,16 @@ async function check() {
     <h2 class="sec">This app</h2>
     <div class="panel block" data-test="settings-app">
       <div class="row">
-        <div><div class="name">Version {{ version }}</div><div class="faint">{{ updateReady ? 'A new version is downloaded and waits for a reload.' : 'A new version is fetched in the background and waits for your reload; it never replaces the app under a running session.' }}</div></div>
+        <div>
+          <div class="name" data-test="app-version">Version {{ build.version }}<template v-if="build.short"> · <a :href="`${REPO_PAGE}/commit/${build.commit}`" target="_blank" rel="noopener"><code>{{ build.short }}</code></a></template></div>
+          <div class="faint">Built {{ builtOn }}. {{ updateReady ? 'A new version is downloaded and waits for a reload.' : 'A new version is fetched in the background and waits for your reload; it never replaces the app under a running session.' }}</div>
+          <div v-if="latest" class="faint" data-test="latest-commit">
+            Newest on GitHub: <a :href="latest.url" target="_blank" rel="noopener"><code>{{ latest.short }}</code></a> “{{ latest.message }}”, {{ when(latest.date) }} —
+            {{ status === 'same' ? 'this is it.' : status === 'behind' ? 'newer than this copy.' : status === 'other' ? 'this copy was built from a different (later) commit.' : 'this copy does not know which commit it was built from.' }}
+          </div>
+        </div>
         <button v-if="updateReady" class="btn btn-primary" @click="reloadForUpdate">Reload now</button>
-        <button v-else class="btn" :disabled="checking" @click="check">Look for a new version</button>
+        <button v-else class="btn" :disabled="checking" data-test="check-update" @click="check">{{ checking ? 'Checking GitHub…' : 'Check for a new version' }}</button>
       </div>
       <div class="row">
         <div><div class="name">Works offline</div><div class="faint">{{ offline === 'ready' ? 'The whole app is stored on this device. Only the Foundry release check, pictures and sounds given as web addresses, and Play Buddy use a connection.' : offline === 'preparing' ? 'Storing the app on this device…' : 'Not in this copy: it runs from a development server.' }}</div></div>
@@ -86,7 +105,7 @@ async function check() {
     </div>
     <h2 class="sec">Keyboard shortcuts <span class="faint hint">press <span class="kbd">?</span> anywhere</span></h2>
     <div class="panel block keys"><ShortcutList /></div>
-    <p class="faint about">StarTome {{ version }}. Pathfinder campaigns wear the Tome skin, Starfinder campaigns the Star skin.<br>
+    <p class="faint about">StarTome {{ build.version }}. Pathfinder campaigns wear the Tome skin, Starfinder campaigns the Star skin.<br>
       StarTome is unofficial and not affiliated with Paizo Inc.</p>
   </div>
 </template>

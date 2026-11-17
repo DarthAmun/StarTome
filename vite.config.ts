@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
@@ -6,9 +7,15 @@ import pkg from './package.json' with { type: 'json' }
 
 const base = process.env.APP_BASE_URL ?? '/'
 
+/** The commit this build was made from: GitHub Actions names it, a local build asks git. Empty when neither knows. */
+function commit(): string {
+  if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA
+  try { return execSync('git rev-parse HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() } catch { return '' }
+}
+
 export default defineConfig({
   base,
-  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  define: { __APP_VERSION__: JSON.stringify(pkg.version), __APP_COMMIT__: JSON.stringify(commit()), __APP_BUILT__: JSON.stringify(new Date().toISOString()) },
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   worker: { format: 'es' },
   // The text editor (CodeMirror) is one chunk of about 550 kB, loaded with the first editor

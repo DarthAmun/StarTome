@@ -2,6 +2,8 @@
 /** The rail: seven places instead of a tree of links. */
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { build } from '@/services/appRelease'
+import { updateReady } from '@/ui/pwa'
 import { campaignId } from '@/ui/workbench'
 import { PLACES, UTILITIES, type Place } from './places'
 
@@ -26,6 +28,10 @@ function to(p: Place) {
     <RouterLink v-for="p in UTILITIES" :key="p.name" :to="to(p)" class="place small" :class="{ on: active === p.name, later: p.phase }" :title="p.label">
       <component :is="p.icon" :size="18" :stroke-width="1.6" />
     </RouterLink>
+    <RouterLink :to="{ name: 'settings' }" class="version" :class="{ fresh: updateReady }" data-test="rail-version"
+      :title="updateReady ? 'A new version is ready: open Settings to reload' : `StarTome ${build.version}${build.short ? ` (${build.short})` : ''}`">
+      v{{ build.version }}<span v-if="updateReady" class="dot" />
+    </RouterLink>
   </nav>
 </template>
 
@@ -41,4 +47,8 @@ function to(p: Place) {
 .place.off { pointer-events: none; opacity: .3; }
 .place.small { padding: .55rem 0; }
 .gap { flex: 1; }
+.version { position: relative; display: block; text-align: center; padding: .3rem 0 .1rem; font-family: var(--font-mono); font-size: .58rem; color: var(--text-faint); opacity: .7; white-space: nowrap; overflow: hidden; }
+.version:hover { opacity: 1; text-decoration: none; color: var(--text-dim); }
+.version.fresh { color: var(--accent); opacity: 1; }
+.dot { display: inline-block; width: 5px; height: 5px; margin-left: 3px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
 </style>
