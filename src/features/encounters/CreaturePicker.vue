@@ -1,24 +1,19 @@
 <script setup lang="ts">
 /** Finds a creature, hazard or vehicle in the compendium by name; both games' entries can be used. */
-import { ref, shallowRef, watch } from 'vue'
+import { ref } from 'vue'
 import type { GameId } from '@/domain/game'
 import type { RulesEntity, RulesKind } from '@/domain/rules/types'
-import { rulesQuery } from '@/data/rules'
+import { useRulesSearch } from './useRulesSearch'
 
 const props = withDefaults(defineProps<{ game: GameId; kinds?: RulesKind[]; placeholder?: string; limit?: number }>(), { kinds: () => ['creature', 'hazard', 'vehicle'], placeholder: 'Creature, hazard or vehicle…', limit: 12 })
 const emit = defineEmits<{ pick: [entity: RulesEntity] }>()
 
 const text = ref('')
 const both = ref(false)
-const results = shallowRef<RulesEntity[]>([])
-let run = 0
-watch([text, both], async () => {
-  const mine = ++run
+const { results, total, more } = useRulesSearch(() => {
   const q = text.value.trim()
-  if (q.length < 2) { results.value = []; return }
-  const page = await rulesQuery({ kinds: props.kinds, text: q, games: both.value ? [] : [props.game], limit: props.limit, sort: 'name' })
-  if (mine === run) results.value = page.items
-})
+  return q.length < 2 ? null : { kinds: props.kinds, text: q, games: both.value ? [] : [props.game], sort: 'name' }
+}, { page: props.limit, sources: [text, both] })
 function pick(e: RulesEntity) { emit('pick', e) }
 /** A result can be dragged onto the battle map, where it becomes a token on the square it is dropped on. */
 function drag(ev: DragEvent, e: RulesEntity) { ev.dataTransfer?.setData('application/x-startome-rules', e.id); ev.dataTransfer?.setData('text/plain', e.name) }
@@ -33,6 +28,7 @@ function drag(ev: DragEvent, e: RulesEntity) { ev.dataTransfer?.setData('applica
     <ul v-if="results.length">
       <li v-for="e in results" :key="e.id"><button class="hit" draggable="true" title="Click to add, or drag onto the map" :data-creature="e.name" @click="pick(e)" @dragstart="drag($event, e)"><span class="num lvl">{{ e.level }}</span><span class="name">{{ e.name }}</span><span class="faint">{{ e.kind }}</span></button></li>
     </ul>
+    <p v-if="results.length" class="faint count"><span>{{ results.length < total ? `${results.length} of ${total} matches` : `${total} ${total === 1 ? 'match' : 'matches'}` }}</span><button v-if="results.length < total" class="btn btn-ghost more" data-test="creature-more" @click="more">Show more</button></p>
     <p v-else-if="text.trim().length >= 2" class="faint none">Nothing by that name. Sync the compendium or add a token by hand.</p>
   </div>
 </template>
@@ -46,4 +42,6 @@ ul { list-style: none; margin: .3rem 0 0; padding: 0; max-height: 15rem; overflo
 .lvl { width: 1.6rem; text-align: right; color: var(--accent); }
 .name { flex: 1; }
 .none { margin: .4rem 0 0; font-size: .85rem; }
+.count { display: flex; gap: .5rem; align-items: center; margin: .3rem 0 0; font-size: .8rem; }
+.more { padding: .1rem .5rem; font-size: .8rem; }
 </style>

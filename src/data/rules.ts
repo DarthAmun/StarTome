@@ -41,6 +41,11 @@ export interface RulesQuery {
   /** Homebrew packs (publication title; '' = no pack). Only your own entries match. */
   packs?: string[]
   sort?: 'name' | 'level'
+  /**
+   * With text: closest names first (whole name, name start, whole word, word
+   * start, anywhere), the sort order within each; typo matches come last.
+   */
+  rank?: boolean
   dir?: 'asc' | 'desc'
   offset?: number
   limit?: number

@@ -7,7 +7,7 @@
 import { withLocalEdits } from '@/domain/rules/edits'
 import { packOf } from '@/domain/rules/packs'
 import type { Rarity, RulesEntity, RulesKind, RulesOrigin } from '@/domain/rules/types'
-import { buildNameIndex, searchNames, type NameIndex } from '@/domain/search'
+import { buildNameIndex, nameMatchTier, searchNames, type NameIndex } from '@/domain/search'
 import { getDb } from './db'
 import type { RulesQuery } from './rules'
 
@@ -39,7 +39,8 @@ function facetsOf(raw: RulesEntity): Facets {
 
 type Filters = Omit<RulesQuery, 'offset' | 'limit'>
 
-function matcher(q: Filters): (e: Facets) => boolean {
+/** `typos`: `kind:key` of names the word search finds that the text is not in. */
+function matcher(q: Filters, typos: Set<string> | null): (e: Facets) => boolean {
   const text = q.text?.trim().toLowerCase() ?? ''
   const kinds = q.kind ? new Set([q.kind]) : q.kinds?.length ? new Set(q.kinds) : null
   const games = q.games?.length ? new Set<string>([...q.games, 'both']) : null
@@ -60,7 +61,7 @@ function matcher(q: Filters): (e: Facets) => boolean {
     if (q.levelMin !== null && q.levelMin !== undefined && e.level < q.levelMin) return false
     if (q.levelMax !== null && q.levelMax !== undefined && e.level > q.levelMax) return false
     if (traits.length && !traits.every(t => e.traits.includes(t))) return false
-    if (text && !e.sortName.includes(text) && !e.traits.some(t => t === text)) return false
+    if (text && !e.sortName.includes(text) && !e.traits.some(t => t === text) && !typos?.has(`${e.kind}:${e.key}`)) return false
     return true
   }
 }
@@ -115,7 +116,9 @@ export async function indexedIds(q: Filters): Promise<string[]> {
   if (hit) return hit
   const list = await rows()
   const sorted = q.sort === 'level' ? [...list].sort((a, b) => a.level - b.level || byName(a, b)) : list
-  const keep = matcher(q)
+  const text = q.rank ? q.text?.trim() ?? '' : ''
+  const keep = matcher(q, text ? new Set(await searchKeys(text)) : null)
+  const tiers = new Map<string, number>()
   const ids: string[] = []
   // Both releases ship the same conditions (same Foundry document id): across games one is shown, the PF2e copy
   const twins = !q.games?.length ? new Map<string, number>() : null
@@ -123,6 +126,7 @@ export async function indexedIds(q: Filters): Promise<string[]> {
   for (let i = 0; i < sorted.length; i++) {
     const row = sorted[desc ? sorted.length - 1 - i : i] as Facets
     if (!keep(row)) continue
+    if (text) tiers.set(row.id, nameMatchTier(row.sortName, text))
     const docId = twins && row.kind === 'condition' && row.origin === 'foundry' && row.game !== 'both' ? row.id.split(':').pop() ?? null : null
     if (twins && docId) {
       const at = twins.get(docId)
@@ -131,17 +135,25 @@ export async function indexedIds(q: Filters): Promise<string[]> {
     }
     ids.push(row.id)
   }
+  if (text) {
+    // Stable: within a tier the chosen sort stays
+    ids.sort((a, b) => (tiers.get(a) ?? 5) - (tiers.get(b) ?? 5))
+  }
   if (queryCache.size > 20) queryCache.clear()
   queryCache.set(cacheKey, ids)
   return ids
 }
 
-/** [kind, stored sortName] of the names a text finds, best first. */
-export async function searchRuleNames(text: string): Promise<[string, string][]> {
+async function searchKeys(text: string): Promise<string[]> {
   const q = text.trim().toLowerCase()
   if (!q) return []
   names ??= buildNameIndex(new Set((await rows()).map(r => `${r.kind}:${r.key}`)))
-  return searchNames(names, q).map((k) => { const sep = k.indexOf(':'); return [k.slice(0, sep), k.slice(sep + 1)] as [string, string] })
+  return searchNames(names, q)
+}
+
+/** [kind, stored sortName] of the names a text finds, best first. */
+export async function searchRuleNames(text: string): Promise<[string, string][]> {
+  return (await searchKeys(text)).map((k) => { const sep = k.indexOf(':'); return [k.slice(0, sep), k.slice(sep + 1)] as [string, string] })
 }
 
 /** Whether a compendium entry of this kind and name exists (for drawing references). */

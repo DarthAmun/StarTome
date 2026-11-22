@@ -157,3 +157,23 @@ export function searchNames(index: NameIndex, query: string): string[] {
   const contains = index.keys.filter(k => !seen.has(k) && nameOf(k).includes(q)).sort()
   return [...scored.map(s => s.key), ...contains]
 }
+
+/**
+ * How closely a name matches a search, lower is closer: 0 the whole name,
+ * 1 the name's start, 2 a whole word in it, 3 a word's start, 4 anywhere
+ * in it, 5 not in the name at all (a typo match, a trait).
+ */
+export function nameMatchTier(name: string, query: string): number {
+  const n = foldTerm(name.trim()), q = foldTerm(query.trim())
+  if (!q) return 5
+  if (n === q) return 0
+  if (n.startsWith(q)) return 1
+  const at = (i: number) => i < 0 || i >= n.length || !/[\p{L}\p{N}]/u.test(n[i] as string)
+  let tier = 5
+  for (let i = n.indexOf(q); i >= 0; i = n.indexOf(q, i + 1)) {
+    const starts = at(i - 1)
+    if (starts && at(i + q.length)) return 2
+    tier = Math.min(tier, starts ? 3 : 4)
+  }
+  return tier
+}

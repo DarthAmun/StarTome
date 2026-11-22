@@ -44,7 +44,7 @@ const query = ref('')
 const addZone = ref(0)
 const found = useLive(async () => {
   if (!query.value.trim()) return []
-  const [ships, hazards] = await Promise.all([rulesQuery({ kind: 'starship', text: query.value, limit: 12, sort: 'name' }), rulesQuery({ kind: 'hazard', text: query.value, limit: 30, sort: 'name' })])
+  const [ships, hazards] = await Promise.all([rulesQuery({ kind: 'starship', text: query.value, limit: 12, sort: 'name', rank: true }), rulesQuery({ kind: 'hazard', text: query.value, limit: 30, sort: 'name', rank: true })])
   return [...ships.items, ...hazards.items.filter(h => (h as { traits?: string[] }).traits?.includes('starship'))].slice(0, 15)
 }, [], [query])
 async function add(r: RulesEntity | null) {

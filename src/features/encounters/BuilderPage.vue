@@ -17,7 +17,7 @@ import { createEncounterFromBuild, emptyBuild, readBuild, type BuildSlot, type B
 import { campaignSettings, partyOf } from '@/data/party'
 import { workspace } from '@/data/repo'
 import { rulesCount } from '@/data/repo'
-import { rulesGetMany, rulesQuery } from '@/data/rules'
+import { rulesGetMany } from '@/data/rules'
 import { starships } from '@/data/starships'
 import { loadWealth } from '@/data/wealth'
 import { confirmDialog, notify, reportError } from '@/ui/dialogs'
@@ -25,6 +25,7 @@ import { useLive } from '@/ui/useLive'
 import { peek } from '@/ui/workbench'
 import CreatureBuilder from '@/features/compendium/CreatureBuilder.vue'
 import DifficultyMeter from './DifficultyMeter.vue'
+import { useRulesSearch } from './useRulesSearch'
 import EncounterTabs from './EncounterTabs.vue'
 
 const props = defineProps<{ campaignId: string }>()
@@ -47,20 +48,15 @@ const compendium = useLive(() => rulesCount(), 1)
 // ── Search ──
 const ship = useLive(() => starships.active(props.campaignId), null, [() => props.campaignId])
 const text = ref(''), levelMin = ref<number | ''>(''), levelMax = ref<number | ''>(''), kind = ref<'both' | 'creature' | 'hazard' | 'starship'>('both'), rarity = ref<Rarity | ''>(''), traitText = ref(''), bothGames = ref(false)
-const results = shallowRef<RulesEntity[]>([])
-const total = ref(0)
-let run = 0
-watch([text, levelMin, levelMax, kind, rarity, traitText, bothGames, game, () => build.value.starship], async () => {
+const { results, total, more } = useRulesSearch(() => {
   if (!build.value.starship && kind.value === 'starship') kind.value = 'both'
-  const mine = ++run
   const num = (v: number | '') => (v === '' || !Number.isFinite(v) ? null : v)
-  const page = await rulesQuery({
-    kinds: kind.value === 'both' ? (build.value.starship ? ['starship', 'creature', 'hazard'] : ['creature', 'hazard']) : [kind.value], text: text.value.trim(), games: bothGames.value ? [] : [game.value], limit: 60, sort: 'level',
+  return {
+    kinds: kind.value === 'both' ? (build.value.starship ? ['starship', 'creature', 'hazard'] : ['creature', 'hazard']) : [kind.value], text: text.value.trim(), games: bothGames.value ? [] : [game.value], sort: 'level',
     levelMin: num(levelMin.value), levelMax: num(levelMax.value), rarities: rarity.value ? [rarity.value] : undefined,
     traits: traitText.value.split(',').map(t => t.trim().toLowerCase().replace(/\s+/g, '-')).filter(Boolean),
-  })
-  if (mine === run) { results.value = page.items; total.value = page.total }
-}, { immediate: true })
+  }
+}, { page: 60, sources: [text, levelMin, levelMax, kind, rarity, traitText, bothGames, game, () => build.value.starship], immediate: true })
 /** The level range that gives XP against this party. */
 function nearParty() { levelMin.value = level.value - 4; levelMax.value = level.value + MAX_LEVEL_ABOVE }
 const xpOfEntry = (e: RulesEntity) => { const x = xpEntryOf(e, null); return x ? entryXp(game.value, x, level.value) : 0 }
@@ -135,7 +131,7 @@ async function create() {
             </tr>
           </tbody>
         </table>
-        <p v-if="compendium && total > results.length" class="faint">{{ results.length }} of {{ total }}: narrow the search for the rest.</p>
+        <p v-if="compendium && total > results.length" class="faint">{{ results.length }} of {{ total }} matches <button class="btn" data-test="builder-more" @click="more">Show more</button></p>
         <p class="faint">Need one that does not exist? <button class="btn" data-test="build-creature" @click="building = true">Build a creature</button></p>
         <CreatureBuilder :open="building" :game="game" :start-level="level" @close="building = false" @saved="built" />
       </section>
