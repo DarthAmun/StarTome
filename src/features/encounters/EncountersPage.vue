@@ -72,6 +72,6 @@ const reopen = (e: Encounter) => act('Re-opening the encounter', async () => {
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .4rem; }
 .list li { display: flex; align-items: center; gap: .4rem; padding: .3rem .5rem; }
 .main { flex: 1; display: flex; align-items: baseline; gap: .7rem; background: none; border: 0; text-align: left; padding: .35rem .3rem; min-width: 0; }
-.main:hover b { color: var(--accent); }
+button.main:hover > b { color: var(--accent); }
 .chip.active { color: var(--accent); border-color: var(--accent); } .chip.resolved { color: var(--text-faint); }
 </style>

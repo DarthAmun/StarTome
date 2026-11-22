@@ -7,6 +7,7 @@ import { ENTRY_TYPES, type SessionPanel } from '@/domain/schema'
 import { encounters } from '@/data/encounters'
 import { entriesNamed } from '@/data/entries'
 import ProseEditor from '@/features/shared/ProseEditor.vue'
+import DraftInput from '@/ui/components/DraftInput.vue'
 import { useLive } from '@/ui/useLive'
 import type { Board } from './board'
 
@@ -18,6 +19,8 @@ const cfg = computed(() => PANEL_CONFIG[p.value.kind])
 const encounterList = useLive(() => encounters.ofCampaign(p.value.campaignId), [], [() => p.value.campaignId])
 const entryList = useLive(() => entriesNamed(p.value.campaignId, p.value.kind === 'random-table' ? ['random-table'] : ENTRY_TYPES.filter(t => t !== 'session')), [], [() => p.value.kind])
 const set = (patch: Parameters<Board['update']>[1], now = false) => props.board.update(p.value.id, patch, now)
+/** Bound to one panel, so a save still lands there after the editor moved on to another. */
+const saveTitle = (id: string) => (title: string) => props.board.update(id, { title }, true)
 const attr = (patch: Record<string, unknown>) => set({ attrs: { ...p.value.attrs, ...patch } }, true)
 function pickEntry(e: Event) {
   const hit = entryList.value.find(x => x.id === (e.target as HTMLSelectElement).value)
@@ -42,7 +45,7 @@ function pickEncounter(e: Event) {
     <label v-else-if="panel.kind === 'entity' || panel.kind === 'random-table'"><span class="label">{{ panel.kind === 'entity' ? 'Entry' : 'Random table' }}</span>
       <select class="input" :value="panel.attrs.entryId ?? ''" aria-label="Entry" @change="pickEntry"><option value="">None</option><option v-for="e in entryList" :key="e.id" :value="e.id">{{ e.name }}{{ panel.kind === 'entity' ? ` · ${e.type}` : '' }}</option></select>
     </label>
-    <label v-else><span class="label">Title</span><input class="input" :value="panel.title" aria-label="Panel title" @input="set({ title: ($event.target as HTMLInputElement).value })" /></label>
+    <label v-else><span class="label">Title</span><DraftInput :key="panel.id" class="input" :value="panel.title" :save="saveTitle(panel.id)" aria-label="Panel title" /></label>
     <div class="row">
       <label v-if="cfg.statuses"><span class="label">Status</span><select class="input" :value="panel.status ?? ''" @change="board.setStatus(panel, ($event.target as HTMLSelectElement).value)"><option v-for="s in cfg.statuses" :key="s" :value="s">{{ s }}</option></select></label>
       <label v-if="panel.kind === 'log'"><span class="label">What kind</span><select class="input" :value="panel.attrs.logType ?? 'happened'" @change="attr({ logType: ($event.target as HTMLSelectElement).value })"><option v-for="t in LOG_TYPES" :key="t" :value="t">{{ t }}</option></select></label>

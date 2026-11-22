@@ -18,6 +18,7 @@ import { partyOf } from '@/data/party'
 import { baysOf, createInterior, createStarship, loadCatalog, lookupFor, removeStarship, setActive, setFrame, sheetOf, starships, startStarshipBattle, stationsOf, updateStarship } from '@/data/starships'
 import { pickImage, storeImage } from '@/services/images'
 import AppDialog from '@/ui/components/AppDialog.vue'
+import DraftInput from '@/ui/components/DraftInput.vue'
 import { confirmDialog, notify, reportError } from '@/ui/dialogs'
 import { useImageUrl } from '@/ui/imageUrl'
 import { useLive } from '@/ui/useLive'
@@ -58,6 +59,8 @@ function condition(name: string, e: Event) {
   void updateStarship(s.id, { conditions: on ? [...rest, { name, value: valued ? Number(v.value) : null }] : rest })
 }
 const condValue = (name: string) => ship.value?.conditions.find(c => c.name === name)
+/** Bound to one ship; an empty name keeps the old one. */
+const saveName = (id: string) => (name: string) => (name.trim() ? updateStarship(id, { name: name.trim() }) : false)
 async function setImage() { const f = await pickImage(); if (f && ship.value) await updateStarship(ship.value.id, { image: await storeImage(f) }) }
 
 // ── On the map ──
@@ -94,7 +97,7 @@ function rollRepair() {
         <img v-if="img" :src="img" alt="" class="pic" />
         <div class="main">
           <div class="row">
-            <input class="title" :value="ship.name" aria-label="Starship name" @change="updateStarship(ship.id, { name: ($event.target as HTMLInputElement).value.trim() || ship.name })" />
+            <DraftInput :key="ship.id" class="title" :value="ship.name" :save="saveName(ship.id)" aria-label="Starship name" />
             <select class="input auto" :value="ship.frameId ?? ''" aria-label="Frame" @change="setFrame(ship.id, ($event.target as HTMLSelectElement).value)"><option value="" disabled>No frame</option><option v-for="f in catalog.frames" :key="f.id" :value="f.id">{{ f.name }}</option></select>
             <label class="faint">Level <input class="input num" :value="ship.levelPinned ?? ''" :placeholder="String(level)" aria-label="Pinned level" title="Empty follows the party's level" @change="updateStarship(ship.id, { levelPinned: numOrNull($event) })" /></label>
             <span class="grow" />

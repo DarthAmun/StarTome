@@ -16,6 +16,7 @@ import { saveEntry } from '@/data/entries'
 import { entries } from '@/data/repo'
 import { addEdge, addPanel, deletePanel, moveToDrawer, patchEdge, placeFromDrawer, removeEdge, setSequenceStep } from '@/data/sessions'
 import AppDialog from '@/ui/components/AppDialog.vue'
+import DraftInput from '@/ui/components/DraftInput.vue'
 import { confirmDialog, reportError } from '@/ui/dialogs'
 import { useLive } from '@/ui/useLive'
 import { useBoard } from './board'
@@ -148,6 +149,7 @@ function place(id: string) { void placeFromDrawer(id, props.sessionId, screenToF
 const attachedTo = (p: SessionPanel) => edges.value.filter(e => e.kind === 'attach' && (e.sourceId === p.id || e.targetId === p.id)).map(e => panels.value.find(x => x.id === (e.sourceId === p.id ? e.targetId : e.sourceId))?.title ?? '').filter(Boolean)
 
 // ── The session itself ──
+const saveName = (id: string) => (name: string) => (name.trim() ? saveEntry(id, { name: name.trim() }).catch(fail('Renaming the session')) : false)
 const setData = (data: Record<string, unknown>) => saveEntry(props.sessionId, { data }).catch(fail('Saving the session'))
 async function start() {
   const s = session.value
@@ -163,7 +165,7 @@ function onKey(e: KeyboardEvent) { if (e.key === 'Escape') { menu.value = null }
   <div v-if="session" class="board" :class="{ wide: editing || side === 'drawer' }" @keydown="onKey">
     <header class="top">
       <button class="btn btn-ghost btn-icon" title="All sessions" @click="router.push({ name: 'sessions', params: { campaignId } })"><ArrowLeft :size="16" /></button>
-      <input class="title" :value="session.name" aria-label="Session name" @change="saveEntry(sessionId, { name: ($event.target as HTMLInputElement).value })" />
+      <DraftInput :key="sessionId" class="title" :value="session.name" :save="saveName(sessionId)" aria-label="Session name" />
       <label class="faint">No. <input class="input num" :value="session.data.number" aria-label="Session number" @change="setData({ number: ($event.target as HTMLInputElement).value.trim() })" /></label>
       <input class="input date" type="date" :value="session.data.date" aria-label="Date played" @change="setData({ date: ($event.target as HTMLInputElement).value })" />
       <div class="seg" role="group" aria-label="Mode">

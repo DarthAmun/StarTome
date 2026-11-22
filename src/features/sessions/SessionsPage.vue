@@ -72,7 +72,7 @@ const time = (at: unknown) => (typeof at === 'string' && !Number.isNaN(Date.pars
 <style scoped>
 .tabs { display: flex; gap: .2rem; margin-bottom: 1.1rem; border-bottom: var(--frame); } .tabs button { background: none; border: 0; padding: .4rem .9rem; color: var(--text-dim); border-bottom: 2px solid transparent; margin-bottom: -1px; } .tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .4rem; } .list li { display: flex; align-items: center; gap: .4rem; padding: .3rem .5rem; }
-.main { flex: 1; display: flex; align-items: baseline; gap: .7rem; background: none; border: 0; text-align: left; padding: .35rem .3rem; min-width: 0; } .main:hover b { color: var(--accent); } .n { color: var(--accent); width: 2rem; text-align: right; }
+.main { flex: 1; display: flex; align-items: baseline; gap: .7rem; background: none; border: 0; text-align: left; padding: .35rem .3rem; min-width: 0; } button.main:hover > b { color: var(--accent); } .n { color: var(--accent); width: 2rem; text-align: right; }
 .chip.running { color: var(--accent); border-color: var(--accent); } .chip.finished { color: var(--text-faint); }
 .log { display: flex; flex-direction: column; gap: .7rem; } .log section { padding: .6rem .9rem; } .log header { display: flex; gap: .8rem; align-items: baseline; cursor: pointer; } .grow { flex: 1; }
 ol { list-style: none; margin: .5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .35rem; } ol li { display: grid; grid-template-columns: 3.2rem 10px 1fr; gap: .5rem; align-items: baseline; }

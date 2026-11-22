@@ -8,6 +8,7 @@ import { entriesNamed } from '@/data/entries'
 import { graphs } from '@/data/graphs'
 import { workspace } from '@/data/repo'
 import { onPlayerMessage, openPlayerWindow, sendToPlayers } from '@/services/playerLink'
+import DraftInput from '@/ui/components/DraftInput.vue'
 import { confirmDialog, notify } from '@/ui/dialogs'
 import { ENTRY_TYPES } from '@/domain/schema'
 import { useLive } from '@/ui/useLive'
@@ -19,6 +20,7 @@ const router = useRouter()
 
 const list = useLive(() => graphs.ofCampaign(props.campaignId), [], [() => props.campaignId])
 const graph = computed(() => list.value.find(g => g.id === props.graphId) ?? null)
+const renameGraph = (id: string) => (name: string) => graphs.rename(id, name)
 watch([list, () => props.graphId], ([all, id]) => { if (!id && all[0]) void router.replace({ name: 'graphs', params: { campaignId: props.campaignId, graphId: all[0].id } }) }, { immediate: true })
 
 watch(() => props.graphId, id => sendToPlayers({ type: 'graph', graphId: id ?? null }), { immediate: true })
@@ -76,7 +78,7 @@ async function deleteEdge() {
       </select>
       <button class="btn" @click="create"><Plus :size="14" /> New graph</button>
       <template v-if="graph">
-        <input class="input name" :value="graph.name" aria-label="Graph name" @change="graphs.rename(graph.id, ($event.target as HTMLInputElement).value)" />
+        <DraftInput :key="graph.id" class="input name" :value="graph.name" :save="renameGraph(graph.id)" aria-label="Graph name" />
         <input v-model="addName" class="input add" list="graph-candidates" placeholder="Add an entry…" aria-label="Add an entry" @change="addEntry" />
         <datalist id="graph-candidates"><option v-for="c in candidates" :key="c.id" :value="c.name">{{ c.type }}</option></datalist>
         <label class="check"><input v-model="mentions" type="checkbox" /> Mentions</label>

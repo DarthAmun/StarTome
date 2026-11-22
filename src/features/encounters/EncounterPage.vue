@@ -12,6 +12,7 @@ import { statLinkOf } from '@/data/encounters'
 import { reopenEncounter } from '@/data/resolution'
 import { playPlaylist } from '@/services/soundPlayer'
 import { sounds } from '@/data/sounds'
+import DraftInput from '@/ui/components/DraftInput.vue'
 import { useLive } from '@/ui/useLive'
 import { confirmDialog, notify, reportError } from '@/ui/dialogs'
 import { activeRollContext } from '@/ui/dice'
@@ -117,7 +118,7 @@ async function reopen() {
   } catch (err) { reportError('Re-opening the encounter', err) }
 }
 
-function rename(e: Event) { const name = (e.target as HTMLInputElement).value.trim(); if (name) saveEncounter({ name }) }
+function rename(value: string) { const name = value.trim(); if (!name) return false; saveEncounter({ name }) }
 function openStat() {
   const t = selected.value, link = t ? statLinkOf(t) : null
   if (link) peek({ kind: 'rules', id: link.rulesId, adjustment: link.adjustment })
@@ -158,7 +159,7 @@ function onKey(e: KeyboardEvent) {
   <div v-if="loaded && enc" class="enc" :class="mode">
     <header class="top">
       <button class="btn btn-ghost btn-icon" title="All encounters" @click="router.push({ name: 'encounters', params: { campaignId } })"><ArrowLeft :size="16" /></button>
-      <input class="title" :value="enc.name" aria-label="Encounter name" @change="rename" />
+      <DraftInput :key="enc.id" class="title" :value="enc.name" :save="rename" aria-label="Encounter name" />
       <div v-if="mode !== 'resolved'" class="seg" role="group" aria-label="Mode">
         <button :class="{ on: mode === 'prepare' }" data-test="mode-prepare" @click="prepare">Prepare</button>
         <button :class="{ on: mode === 'run' }" data-test="mode-run" @click="run">Run</button>
