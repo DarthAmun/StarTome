@@ -15,13 +15,15 @@ import { rollDice } from '@/ui/dice'
 import { rulesImageRef, useImageUrl } from '@/ui/imageUrl'
 import { rulesRevision } from '@/ui/rulesLive'
 import FieldNotes from './FieldNotes.vue'
+import SpellDamage from './SpellDamage.vue'
 import StatActor from './StatActor.vue'
 import StatStarship from './StatStarship.vue'
 import './stat.css'
 import { formatDefense, humanize, md, ordinal } from './statText'
 
-const props = defineProps<{ entity: RulesEntity; game?: GameId }>()
-const emit = defineEmits<{ open: [id: string] }>()
+const props = defineProps<{ entity: RulesEntity; game?: GameId; /** A spell: the rank it is cast at (opened from a caster's list). */ rank?: number }>()
+/** `rank`: a spell opened from a caster's list, at the rank they cast it. */
+const emit = defineEmits<{ open: [id: string, rank?: number] }>()
 
 const ORIGIN_LABEL = { foundry: 'Foundry compendium', user: 'Homebrew', legacy: 'Imported from DM’s Tome' } as const
 const ACTOR: RulesKind[] = ['creature', 'hazard', 'vehicle']
@@ -76,10 +78,10 @@ watch(() => [e.value, rulesRevision.value] as const, async ([entry]) => {
   classFeats.value = feats; optionParents.value = parents; optionClass.value = cls
 }, { immediate: true })
 
-async function openByName(kind: RulesKind, name: string) {
+async function openByName(kind: RulesKind, name: string, rank?: number) {
   const own = kind === 'feat' ? classFeats.value.find(f => f.name.toLowerCase() === name.toLowerCase()) : undefined
   const target = own ?? await rulesFindByName(kind, name, props.game ?? (e.value.game === 'both' ? undefined : e.value.game))
-  if (target) emit('open', target.id)
+  if (target) emit('open', target.id, rank)
   else notify(`“${name}” is not in the compendium.`)
 }
 
@@ -92,7 +94,7 @@ function onClick(ev: MouseEvent) {
   if (!link) return
   ev.preventDefault()
   const kind = RULES_KINDS.find(k => k.toLowerCase() === (link.dataset.refType ?? '').toLowerCase())
-  if (kind) void openByName(kind, link.dataset.refName ?? '')
+  if (kind) void openByName(kind, link.dataset.refName ?? '', Number(link.dataset.refRank) || undefined)
 }
 </script>
 
@@ -139,6 +141,7 @@ function onClick(ev: MouseEvent) {
       <p v-if="spell.traditions.length" class="line"><b>Traditions</b> {{ spell.traditions.join(', ') }}</p>
       <p class="line"><b>Cast</b> <span class="glyph">{{ formatActionCost(spell.cast) || '—' }}</span><template v-if="spell.range">; <b>Range</b> {{ spell.range }}</template><template v-if="spell.area">; <b>Area</b> {{ spell.area }}</template><template v-if="spell.targets">; <b>Targets</b> {{ spell.targets }}</template></p>
       <p v-if="spell.defense || spell.duration" class="line"><template v-if="spell.defense"><b>Defense</b> {{ formatDefense(spell.defense) }}</template><template v-if="spell.defense && spell.duration">; </template><template v-if="spell.duration"><b>Duration</b> {{ spell.sustained ? 'sustained up to ' : '' }}{{ spell.duration }}</template></p>
+      <SpellDamage v-if="spell.damage?.length" :spell="spell" :game="game" :rank="rank" />
     </template>
 
     <template v-if="featLike">

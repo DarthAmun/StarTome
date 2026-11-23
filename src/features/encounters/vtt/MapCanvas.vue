@@ -110,6 +110,7 @@ onMounted(async () => {
   stops.push(watch(() => [live.floorId, live.map?.stairs, live.map?.floors.length, live.map?.mainFloor.level], refreshStairs, { immediate: true, deep: true }))
   stops.push(watch(() => [live.fovMode, live.encounter?.fovEnabled], refreshSight))
   stops.push(watch(() => tools.tool, () => e.toolChanged()))
+  stops.push(watch(() => !!live.map?.cellLabels, on => e.setCellLabels(on), { immediate: true }))
   // Station markers on the deck shown (one placed before decks were possible stands on the main deck)
   stops.push(watch(() => [markers.value, info.value?.malfunctioning, live.floorId], () => e.setMarkers(markers.value.filter(m => tokenFloor(m) === (currentFloor()?.id ?? MAIN_FLOOR)).map(m => ({ slot: m.slot, x: m.x, y: m.y, off: malfunctioning(m.slot) }))), { immediate: true, deep: true }))
 })

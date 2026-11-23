@@ -11,7 +11,8 @@ import { DEFAULT_SETTINGS } from '@/domain/schema'
 import { settings as settingsRepo, workspace } from '@/data/repo'
 
 /** `adjustment`: a stat block shown as its weak or elite version (a token's). */
-export type PeekTarget = { kind: 'entry'; id: string } | { kind: 'rules'; id: string; adjustment?: 'weak' | 'elite' | null }
+/** `rank`: a spell opened from a caster's list, at the rank they cast it. */
+export type PeekTarget = { kind: 'entry'; id: string } | { kind: 'rules'; id: string; adjustment?: 'weak' | 'elite' | null; rank?: number }
 export interface Pin { kind: PeekTarget['kind']; id: string; label: string; type: string }
 
 export const campaigns = ref<Campaign[]>([])

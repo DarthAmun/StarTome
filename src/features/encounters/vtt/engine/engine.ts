@@ -5,7 +5,8 @@
  */
 import * as PIXI from 'pixi.js'
 import { isDoorWall, wallAt } from '@/domain/rules/walls'
-import { drawArea, drawFog, drawGrid, drawStairs, drawRuler, drawSight, drawWallDraft, drawWalls, playPing } from './layers'
+import { drawArea, drawFog, drawGrid, drawMarkers, drawStairs, drawRuler, drawSight, drawWallDraft, drawWalls, playPing } from './layers'
+import { CellLabels } from './labels'
 import { drawToken } from './tokens'
 import type { Cell, EngineHandlers, FovView, Grid, Point, SceneArea, SceneBelow, SceneStair, SceneToken, Viewport, Wall } from './types'
 
@@ -37,6 +38,7 @@ export class MapEngine {
   private erase = new PIXI.Graphics()
   private outline = new PIXI.Graphics()
   private pings = new PIXI.Container()
+  private labels: CellLabels | null = null
 
   private view: Viewport = { x: 0, y: 0, scale: 1 }
   private grid: Grid = { size: 40, offsetX: 0, offsetY: 0 }
@@ -71,6 +73,7 @@ export class MapEngine {
     await this.app.init({ resizeTo: this.container, backgroundColor: 0x0e0e1a, antialias: true, autoDensity: true, resolution: window.devicePixelRatio || 1 })
     if (this.dead) { this.app.destroy(true); return }
     this.container.appendChild(this.app.canvas)
+    this.labels = new CellLabels(this.container)
     this.belowC.addChild(this.belowMap, this.belowTokens, this.belowFog)
     this.belowC.alpha = 0.35
     this.belowC.eventMode = 'none'
@@ -103,6 +106,7 @@ export class MapEngine {
     // Calls that still arrive (a watcher firing late) find nothing to draw on
     this.ready = false
     if (was) this.app.destroy(true, { children: true })
+    this.labels?.destroy()
   }
 
   // ── What to draw ─────────────────────────────────────────────────────────
@@ -127,6 +131,8 @@ export class MapEngine {
   setFog(fog: Record<string, string>): void { this.fog = fog; this.redrawFog() }
   setWalls(walls: Wall[]): void { this.walls = walls; if (this.gm && this.ready) drawWalls(this.wallsG, walls, this.grid) }
   setFov(fov: FovView): void { this.fov = fov; this.redrawSight() }
+  /** Square names ("A1") in a corner of each square. */
+  setCellLabels(on: boolean): void { if (this.labels) { this.labels.shown = on; this.redrawSight() } }
 
   setAreas(areas: SceneArea[]): void {
     this.areas = areas
@@ -139,15 +145,7 @@ export class MapEngine {
   setMarkers(markers: { slot: number; x: number; y: number; off?: boolean }[]): void {
     this.markers = markers
     if (!this.ready) return
-    this.markersC.removeChildren().forEach(c => c.destroy({ children: true }))
-    const s = this.grid.size
-    for (const m of markers) {
-      const color = m.off ? 0xe0803a : 0x4ab8e8, cx = this.grid.offsetX + (m.x + 0.5) * s, cy = this.grid.offsetY + (m.y + 0.5) * s
-      const g = new PIXI.Graphics().roundRect(cx - s * 0.46, cy - s * 0.46, s * 0.92, s * 0.92, 4).fill({ color, alpha: 0.18 }).stroke({ color, width: 2, alpha: 0.9 })
-      const t = new PIXI.Text({ text: String(m.slot), style: { fontSize: s * 0.3, fill: color, fontFamily: 'system-ui', fontWeight: 'bold' } })
-      t.position.set(cx - s * 0.4, cy - s * 0.44)
-      this.markersC.addChild(g, t)
-    }
+    drawMarkers(this.markersC, markers, this.grid)
   }
 
   /** The floor below, drawn faded under this one (null: none). */
@@ -269,6 +267,7 @@ export class MapEngine {
     if (!this.ready) return
     const map = { w: this.mapSize.w || this.app.screen.width / this.view.scale, h: this.mapSize.h || this.app.screen.height / this.view.scale }
     drawSight(this.dark, this.erase, this.outline, this.fov.lit, this.fov.outlines, this.grid, this.view, map, this.gm ? 0.72 : 1)
+    this.labels?.draw(this.view, this.grid, { w: this.mapSize.w || 60 * this.grid.size, h: this.mapSize.h || 40 * this.grid.size })
   }
 
   private async drawTokens(): Promise<void> {

@@ -3,6 +3,7 @@
 import { computed } from 'vue'
 import type { GameId } from '@/domain/game'
 import { formatMoney, signed, titleCase } from '@/domain/rules/format'
+import { autoHeightenRank } from '@/domain/rules/spellDamage'
 import type { AbilityKey, Creature, Hazard, RulesEntity, StatAction, Vehicle } from '@/domain/rules/types'
 import { useStatRolls } from '@/ui/dice'
 import ActionLine from './ActionLine.vue'
@@ -62,7 +63,7 @@ function check(label: string, modifier: number) {
       <b>{{ sc.name }}</b> DC {{ sc.dc }}<template v-if="sc.attack !== undefined">, attack <button class="roll" title="Roll a spell attack" @click.stop="roll({ kind: 'attack', label: `${entity.name}: ${sc.name} spell attack`, modifier: sc.attack })">{{ signed(sc.attack) }}</button></template>;
       <template v-for="(group, gi) in spellsByRank(sc)" :key="gi">
         <b>{{ group.label }}</b>{{ ' ' }}
-        <template v-for="(sp, si) in group.spells" :key="si"><a class="ref" data-ref-type="spell" :data-ref-name="sp.name">{{ sp.name }}</a><template v-if="sp.uses"> (×{{ sp.uses }})</template><template v-if="si < group.spells.length - 1">, </template></template><template v-if="gi < spellsByRank(sc).length - 1">; </template>
+        <template v-for="(sp, si) in group.spells" :key="si"><a class="ref" data-ref-type="spell" :data-ref-name="sp.name" :data-ref-rank="(sp.heightenedTo ?? sp.rank) || autoHeightenRank(entity.level)">{{ sp.name }}</a><template v-if="sp.uses"> (×{{ sp.uses }})</template><template v-if="si < group.spells.length - 1">, </template></template><template v-if="gi < spellsByRank(sc).length - 1">; </template>
       </template>
     </p>
     <ActionLine v-for="a in actionsIn('offensive')" :key="a.name" :action="a" :owner="entity.name" :can-place-area="canPlaceArea" @area="placeArea" />

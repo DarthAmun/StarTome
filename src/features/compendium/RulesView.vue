@@ -16,7 +16,7 @@ import CreatureBuilder from './CreatureBuilder.vue'
 import RulesEditor from './RulesEditor.vue'
 import StatBlock from './StatBlock.vue'
 
-const props = defineProps<{ rulesId: string; startEditing?: boolean; inPage?: boolean; /** Shown as its weak or elite version (a token in an encounter). */ adjustment?: 'weak' | 'elite' | null }>()
+const props = defineProps<{ rulesId: string; startEditing?: boolean; inPage?: boolean; /** Shown as its weak or elite version (a token in an encounter). */ adjustment?: 'weak' | 'elite' | null; /** A spell: the rank it is cast at. */ rank?: number }>()
 /** `open`: another entry was asked for (only beside the list; in the dock it opens as a tab). */
 const emit = defineEmits<{ open: [id: string, edit?: boolean]; gone: [] }>()
 
@@ -35,10 +35,10 @@ const edited = computed(() => !!entity.value?.localEdits && Object.keys(entity.v
 const own = computed(() => entity.value?.origin !== 'foundry')
 const built = computed(() => (entity.value?.kind === 'creature' && entity.value.origin === 'user' && entity.value.build ? entity.value as Creature : null))
 
-function open(id: string, edit = false) {
+function open(id: string, edit = false, rank?: number) {
   // Beside the list the page follows; in the dock the entry opens as another tab
   if (props.inPage) emit('open', id, edit)
-  else peek({ kind: 'rules', id })
+  else peek({ kind: 'rules', id, ...(rank ? { rank } : {}) })
 }
 
 async function act(what: string, work: () => Promise<void>) {
@@ -76,7 +76,7 @@ const remove = () => act('Deleting the entry', async () => {
       <button class="btn" :class="{ 'btn-primary': editing }" data-test="rules-edit" @click="toggleEdit"><Pencil :size="14" /> {{ editing ? 'Done' : 'Edit' }}</button>
     </div>
     <RulesEditor v-if="editing" ref="editor" :key="entity.id" :entity="entity" />
-    <StatBlock v-else :entity="adjustment ? applyAdjustment(entity, adjustment) : entity" :game="game" @open="open($event)" />
+    <StatBlock v-else :entity="adjustment ? applyAdjustment(entity, adjustment) : entity" :game="game" :rank="rank" @open="(id, r) => open(id, false, r)" />
     <CreatureBuilder v-if="built" :open="rebuilding" :game="built.game === 'sf2e' ? 'sf2e' : 'pf2e'" :base="built" @close="rebuilding = false" @saved="rebuilding = false" />
   </div>
   <p v-else-if="entity === null" class="empty">Not in the compendium.</p>

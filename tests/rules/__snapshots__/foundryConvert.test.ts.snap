@@ -175,6 +175,13 @@ exports[`Foundry converter — whole output > pf2e/Electric Arc 1`] = `
 
 **Heightened (+1)** The damage increases by 1d4.",
   "game": "pf2e",
+  "heightening": {
+    "damage": [
+      "1d4",
+    ],
+    "interval": 1,
+    "type": "interval",
+  },
   "id": "fvtt:pf2e:spells-srd:kBhaPuzLUSwS6vVf",
   "kind": "spell",
   "level": 1,
@@ -474,6 +481,13 @@ exports[`Foundry converter — whole output > pf2e/Fireball 1`] = `
 
 **Heightened (+1)** The damage increases by 2d6.",
   "game": "pf2e",
+  "heightening": {
+    "damage": [
+      "2d6",
+    ],
+    "interval": 1,
+    "type": "interval",
+  },
   "id": "fvtt:pf2e:spells-srd:sxQZ6yqTn0czJxVd",
   "kind": "spell",
   "level": 3,
@@ -807,6 +821,13 @@ exports[`Foundry converter — whole output > pf2e/Heal 1`] = `
 
 **Heightened (+1)** The amount of healing or damage increases by 1d8, and the extra healing for the 2-action version increases by 8.",
   "game": "pf2e",
+  "heightening": {
+    "damage": [
+      "1d8",
+    ],
+    "interval": 1,
+    "type": "interval",
+  },
   "id": "fvtt:pf2e:spells-srd:rfZpqmj0AIIdkVIs",
   "kind": "spell",
   "level": 1,
@@ -1949,6 +1970,14 @@ If the globe overlaps with an area of magical light or affects a creature affect
 
 **Heightened (+1)** The cold damage increases by 1d10 and the void damage against the living increases by 1d4.",
   "game": "sf2e",
+  "heightening": {
+    "damage": [
+      "1d10",
+      "1d4",
+    ],
+    "interval": 1,
+    "type": "interval",
+  },
   "id": "fvtt:sf2e:spells:0jadeyQIItIuRgeH",
   "kind": "spell",
   "level": 7,

@@ -10,6 +10,7 @@ import { onPlayerMessage, sendToPlayers } from '@/services/playerLink'
 import { imageUrlOf } from '@/ui/imageUrl'
 import TokenThumb from './TokenThumb.vue'
 import { MapEngine } from './vtt/engine/engine'
+import MapCompass from './vtt/MapCompass.vue'
 import { conditionColor, hexNumber, toSceneTokens } from './vtt/scene'
 
 const host = ref<HTMLElement | null>(null)
@@ -25,6 +26,7 @@ async function draw(s: PlayerScene | null) {
   scene.value = s
   if (!engine || !s) return
   engine.setGrid(s.grid)
+  engine.setCellLabels(!!s.cellLabels)
   const mapKey = JSON.stringify(s.map)
   if (mapKey !== shownMap) { shownMap = mapKey; await engine.setMap(await imageUrlOf(s.map, true)); engine.fit() }
   engine.setFog(s.fog)
@@ -59,6 +61,7 @@ onBeforeUnmount(() => { offs.forEach(off => off()); observer?.disconnect(); engi
 <template>
   <div class="players" :class="scene ? [`rail-${scene.prefs.railPosition}`, `size-${scene.prefs.railSize}`] : []">
     <div ref="host" class="map" />
+    <MapCompass v-if="scene" :class="{ raised: !!scene.sensor }" />
     <p v-if="scene?.floorName" class="floor" data-test="player-floor">{{ scene.floorName }}</p>
     <p v-if="!scene" class="wait">Waiting for the GM to open an encounter…</p>
     <ol v-else-if="scene.running && scene.turns.length" class="rail" data-test="player-turns">
@@ -89,6 +92,7 @@ onBeforeUnmount(() => { offs.forEach(off => off()); observer?.disconnect(); engi
 .map { position: absolute; inset: 0; }
 .floor { position: absolute; left: .6rem; top: .6rem; margin: 0; padding: .2rem .6rem; border-radius: 6px; background: rgb(10 10 22 / .72); font-family: var(--font-title); letter-spacing: .08em; color: #c9b27a; }
 .rail-left .floor { left: auto; right: .6rem; }
+.compass.raised { bottom: 6.5rem; }
 .wait { position: absolute; inset: 0; display: grid; place-items: center; color: #8a88a0; margin: 0; }
 .rail { position: absolute; list-style: none; margin: 0; padding: .5rem; display: flex; gap: .4rem; background: rgb(10 10 22 / .72); border-radius: 8px; max-height: 96vh; max-width: 96vw; overflow: hidden; }
 .rail-right .rail { right: .6rem; top: .6rem; flex-direction: column; } .rail-left .rail { left: .6rem; top: .6rem; flex-direction: column; } .rail-top .rail { top: .6rem; left: 50%; transform: translateX(-50%); align-items: center; }

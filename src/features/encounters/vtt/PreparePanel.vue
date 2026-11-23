@@ -18,7 +18,7 @@ import CreaturePicker from '../CreaturePicker.vue'
 import DifficultyMeter from '../DifficultyMeter.vue'
 import { rate } from '../difficulty'
 import TokenLibrary from '../TokenLibrary.vue'
-import { currentFloor, floors, flushSaves, live, placeActor, placeCreature, reloadMap, saveEncounter, saveFloor, showFloor, tokensOn } from './live'
+import { currentFloor, floors, flushSaves, live, placeActor, placeCreature, reloadMap, saveEncounter, saveFloor, saveMap, showFloor, tokensOn } from './live'
 import { offerImages } from './floorImages'
 import { playerPrefs, setPlayerPrefs } from './playerSync'
 
@@ -97,6 +97,7 @@ function openLoot() {
         <label><span class="label">Offset X</span><input class="input num" type="number" :value="floor?.grid.offsetX" @change="grid('offsetX', $event)" /></label>
         <label><span class="label">Offset Y</span><input class="input num" type="number" :value="floor?.grid.offsetY" @change="grid('offsetY', $event)" /></label>
       </div>
+      <label class="dim" title="Letters for columns, numbers for rows, small in a corner of each square; the players' window shows them too"><input type="checkbox" :checked="!!live.map?.cellLabels" data-test="cell-labels-switch" @change="saveMap({ cellLabels: !live.map?.cellLabels }, true)" /> Square names on the grid (A1, B2 …)</label>
       <label class="dim"><input type="checkbox" :checked="enc.fovEnabled" data-test="fov-switch" @change="saveEncounter({ fovEnabled: !enc.fovEnabled })" /> Sight and walls: tokens see only what walls allow</label>
       <label v-if="playlists.length"><span class="label">Music</span>
         <select class="input" :value="enc.playlistId ?? ''" @change="saveEncounter({ playlistId: ($event.target as HTMLSelectElement).value || null })"><option value="">None</option><option v-for="p in playlists" :key="p.id" :value="p.id">{{ p.name }}</option></select>

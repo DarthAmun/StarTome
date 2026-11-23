@@ -42,7 +42,7 @@ function send(): void {
     type: 'encounter',
     scene: toPlayerScene({
       encounterId: enc.id, map: floor.image, grid: floor.grid, fog: floor.fog, tokens: [...live.tokens.filter(t => t.sensor), ...tokens], order: order.value,
-      floorName: floors().length > 1 ? floor.name : null,
+      floorName: floors().length > 1 ? floor.name : null, cellLabels: map.cellLabels,
       below: below ? { map: below.floor.image, grid: below.floor.grid, fog: below.floor.fog, tokens: below.tokens } : null,
       zones: live.tokens.some(t => t.sensor) ? zones.value : null,
       areas: areasOn(floor.id).map(a => ({ id: a.id, color: a.color, hidden: a.hidden, cells: [...areaCells(a)] })),

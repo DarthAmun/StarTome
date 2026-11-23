@@ -148,6 +148,15 @@ describe('Foundry converter — spells, feats, actions, conditions', () => {
     expect(as<Spell>(convert('Heal')).cast).toEqual({ min: 1, max: 3 })
   })
 
+  it('heightening: dice per rank by part, and fixed ranks', () => {
+    expect(as<Spell>(convert('Fireball'))).toMatchObject({ damage: [{ formula: '6d6', type: 'fire' }], heightening: { type: 'interval', interval: 1, damage: ['2d6'] } })
+    expect(as<Spell>(convert('Eclipse Burst')).heightening).toMatchObject({ type: 'interval', damage: ['1d10', '1d4'] })
+    const fixed = as<Spell>(convertWith('Fireball', (doc) => {
+      doc.system.heightening = { type: 'fixed', levels: { 5: { damage: { 0: { formula: '9d6', type: 'fire' } } }, 7: { range: { value: '1 mile' } } } }
+    }))
+    expect(fixed.heightening).toEqual({ type: 'fixed', levels: [{ rank: 5, damage: [{ formula: '9d6', type: 'fire' }] }] })
+  })
+
   it('feats keep action cost, category and prerequisites', () => {
     expect(convert('Sudden Charge')).toMatchObject({ kind: 'feat', category: 'class', cost: 2, level: 1 })
     expect(convert('Reactive Shield')).toMatchObject({ cost: 'reaction' })

@@ -16,6 +16,19 @@ export function drawGrid(g: PIXI.Graphics, grid: Grid, w: number, h: number, sca
   g.stroke({ width: 1 / scale, color: 0xeeeeee, alpha: 0.35 })
 }
 
+/** Numbered marks on squares (a starship's battle stations); `off` = malfunctioning. */
+export function drawMarkers(c: PIXI.Container, markers: { slot: number; x: number; y: number; off?: boolean }[], grid: Grid): void {
+  c.removeChildren().forEach(x => x.destroy({ children: true }))
+  const s = grid.size
+  for (const m of markers) {
+    const color = m.off ? 0xe0803a : 0x4ab8e8, cx = grid.offsetX + (m.x + 0.5) * s, cy = grid.offsetY + (m.y + 0.5) * s
+    const g = new PIXI.Graphics().roundRect(cx - s * 0.46, cy - s * 0.46, s * 0.92, s * 0.92, 4).fill({ color, alpha: 0.18 }).stroke({ color, width: 2, alpha: 0.9 })
+    const t = new PIXI.Text({ text: String(m.slot), style: { fontSize: s * 0.3, fill: color, fontFamily: 'system-ui', fontWeight: 'bold' } })
+    t.position.set(cx - s * 0.4, cy - s * 0.44)
+    c.addChild(g, t)
+  }
+}
+
 /** Fog: hidden squares, or everything but the revealed ones after "cover all". */
 export function drawFog(g: PIXI.Graphics, fog: Record<string, string>, grid: Grid, w: number, h: number, alpha: number): void {
   g.clear()

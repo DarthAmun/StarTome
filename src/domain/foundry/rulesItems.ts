@@ -1,5 +1,5 @@
 /** Foundry spell, feat, action, condition and character-option items → typed entries. */
-import type { Action, Condition, Feat, ReferenceEntry, Spell } from '@/domain/rules/types'
+import type { Action, Condition, DamageRoll, Feat, ReferenceEntry, Spell, SpellHeightening } from '@/domain/rules/types'
 import { baseFields, castOf, costOf, frequencyOf, humanizeSlug, text, type ConvertContext, type FoundryDoc } from './common'
 
 const SAVE: Record<string, 'fort' | 'ref' | 'will'> = { fortitude: 'fort', reflex: 'ref', will: 'will' }
@@ -31,12 +31,40 @@ export function convertSpell(doc: FoundryDoc, ctx: ConvertContext): Spell {
   if (s.duration?.sustained) spell.sustained = true
   if (s.defense?.save?.statistic && SAVE[s.defense.save.statistic]) spell.defense = { save: SAVE[s.defense.save.statistic]!, basic: !!s.defense.save.basic }
   else if (s.defense?.passive?.statistic === 'ac') spell.defense = { ac: true }
-  const damage = Object.values<any>(s.damage ?? {}).filter(d => d?.formula).map(d => ({
-    formula: String(d.formula),
-    type: [d.category === 'persistent' ? 'persistent' : '', d.type === 'untyped' ? '' : d.type ?? ''].filter(Boolean).join(' '),
-  }))
-  if (damage.length) spell.damage = damage
+  const parts = Object.entries<any>(s.damage ?? {}).filter(([, d]) => d?.formula)
+  if (parts.length) spell.damage = parts.map(([, d]) => damagePart(d))
+  const heightening = heighteningOf(s.heightening, parts)
+  if (heightening) spell.heightening = heightening
   return spell
+}
+
+/** A Foundry damage part: "persistent fire"; a part that only heals is "healing". */
+function damagePart(d: any): DamageRoll {
+  const kinds: string[] = Array.isArray(d.kinds) ? d.kinds : []
+  const healing = kinds.length > 0 && kinds.every(k => k === 'healing')
+  return {
+    formula: String(d.formula),
+    type: healing ? 'healing' : [d.category === 'persistent' ? 'persistent' : '', d.type === 'untyped' ? '' : d.type ?? ''].filter(Boolean).join(' '),
+  }
+}
+
+/** Foundry's heightening of the damage, keyed by the parts' ids, as lists in the order of the spell's parts. */
+function heighteningOf(h: any, parts: [string, any][]): SpellHeightening | undefined {
+  if (!h || !parts.length) return undefined
+  if (h.type === 'interval') {
+    const damage = parts.map(([id]) => String(h.damage?.[id] ?? '').trim())
+    return damage.some(Boolean) && Number(h.interval) > 0 ? { type: 'interval', interval: Number(h.interval), damage } : undefined
+  }
+  if (h.type !== 'fixed') return undefined
+  // Each fixed rank changes some parts; the ones it leaves alone keep what the ranks below gave them
+  const running = new Map<string, any>(parts)
+  const levels: { rank: number; damage: DamageRoll[] }[] = []
+  for (const [rank, level] of Object.entries<any>(h.levels ?? {}).sort(([a], [b]) => Number(a) - Number(b))) {
+    if (!level?.damage) continue
+    for (const [id, d] of Object.entries<any>(level.damage)) running.set(id, { ...running.get(id), ...d })
+    levels.push({ rank: Number(rank), damage: [...running.values()].filter(d => d?.formula).map(damagePart) })
+  }
+  return levels.length ? { type: 'fixed', levels } : undefined
 }
 
 export function convertFeat(doc: FoundryDoc, ctx: ConvertContext): Feat {

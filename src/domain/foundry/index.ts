@@ -31,8 +31,9 @@ export function kindOfFoundryType(type: string): RulesKind | null {
  * 5: class feat / skill increase levels (progression).
  * 6: strike range increments (SF2e Area Fire / Auto-Fire).
  * 7: vehicles.
+ * 8: spell heightening (damage by rank), healing parts.
  */
-export const CONVERTER_VERSION = 7
+export const CONVERTER_VERSION = 8
 
 export interface ConvertResult { entity: RulesEntity | null; issues: ConvertIssue[] }
 

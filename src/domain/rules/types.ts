@@ -213,7 +213,18 @@ export interface Spell extends RulesEntityBase {
   defense?: { save: 'fort' | 'ref' | 'will'; basic: boolean } | { ac: true } | null
   damage?: DamageRoll[]
   heightened?: { trigger: string; text: string }[]
+  /** How the damage grows with the rank cast at (Foundry's heightening); see spellDamage.ts. */
+  heightening?: SpellHeightening
 }
+
+/**
+ * `interval`: every `interval` ranks above the spell's, each damage part gains
+ * its dice ("" = none). `fixed`: the whole damage at set ranks; the highest
+ * at or below the rank cast at counts.
+ */
+export type SpellHeightening =
+  | { type: 'interval'; interval: number; damage: string[] }
+  | { type: 'fixed'; levels: { rank: number; damage: DamageRoll[] }[] }
 
 export interface Feat extends RulesEntityBase {
   kind: 'feat'

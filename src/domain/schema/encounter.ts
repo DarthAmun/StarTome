@@ -110,6 +110,8 @@ export const zEncounterMap = z.object({
   floors: z.array(zFloor).default([]),
   /** Stairs between two floors: a token on one end is offered the other (floorId null = the main floor). */
   stairs: z.array(zStair).default([]),
+  /** Square names ("A1") on the grid, in the GM's and the players' window. */
+  cellLabels: z.boolean().default(false),
 })
 export type EncounterMap = z.infer<typeof zEncounterMap>
 
