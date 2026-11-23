@@ -15,19 +15,23 @@ export class CellLabels {
   private ctx = this.canvas.getContext('2d')
   private on = false
 
-  constructor(container: HTMLElement) {
+  constructor(private container: HTMLElement) {
     Object.assign(this.canvas.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none' })
     this.canvas.dataset.test = 'cell-labels'
-    container.appendChild(this.canvas)
   }
 
-  set shown(on: boolean) { this.on = on }
+  /** The canvas is on the page only while names are shown: the map has a single canvas otherwise. */
+  set shown(on: boolean) {
+    this.on = on
+    if (on && !this.canvas.isConnected) this.container.appendChild(this.canvas)
+    else if (!on) this.canvas.remove()
+  }
   get shown(): boolean { return this.on }
 
   /** `map`: the map's size in pixels (the drawn grid's extent without one). */
   draw(view: Viewport, grid: Grid, map: { w: number; h: number }): void {
     const ctx = this.ctx, c = this.canvas
-    if (!ctx) return
+    if (!ctx || !this.on) return
     const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight
     if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr) }
     ctx.setTransform(1, 0, 0, 1, 0, 0)
