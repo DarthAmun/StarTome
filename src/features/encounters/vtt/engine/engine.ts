@@ -81,7 +81,8 @@ export class MapEngine {
     sight.enableRenderGroup()
     this.erase.blendMode = 'erase'
     sight.addChild(this.dark, this.erase)
-    this.pings.eventMode = 'none'
+    // Darkness, outlines and pings only show: clicks go through them to the tokens below (else no token moves while sight is drawn)
+    sight.eventMode = this.outline.eventMode = this.pings.eventMode = 'none'
     this.app.stage.addChild(this.world, sight, this.outline, this.pings)
     this.app.stage.eventMode = 'static'
     this.app.stage.hitArea = { contains: () => true }

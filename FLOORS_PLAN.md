@@ -12,7 +12,7 @@ Written 2026-11-17 against `main` at `6e860b0`.
 |---|---|---|
 | D1 | How does a token change floors? | **Stair links + menu.** Linked stair points (map maker stair tiles make them by themselves; on uploaded images the GM places two linked points). A token stepping onto one is offered "Go up / Go down" and lands on the linked spot. The token menu can always move a token a floor up or down. |
 | D2 | What does the GM see of other floors? | **The floor below shows faded only where the current floor is empty**: void squares on map-maker floors, transparent pixels on uploaded images. Never under painted tiles. Tokens below show faded in those gaps too. GM view only; tokens do not see down through gaps. |
-| D3 | Which floor do the players see? | **The GM's floor.** The GM can lock the players' window to one floor. |
+| D3 | Which floor do the players see? | **The GM's floor.** The GM can lock the players' window to one floor. *Changed 2026-11-23 (v1.1.3): players saw a floor none of their tokens stood on whenever the GM looked elsewhere. Now the floor their tokens stand on: the acting party token's, else the GM's if party tokens are there, else the one most of them are on; the GM's floor only without party tokens; a lock still wins. See [playerFloor.ts](src/domain/rules/playerFloor.ts).* |
 | D4 | Floor sizes in the map maker | **One size for all floors** of a map, so stairs and the faded floor below line up square for square. |
 | D5 | Players' window and the faded floor below (proposed 2026-11-17; built as proposed since no other answer came) | Shows it too, with that floor's fog, only the tokens players may see there, and under the same darkness, so only where their tokens' sight already reaches. |
 

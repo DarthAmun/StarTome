@@ -65,7 +65,7 @@ defineExpose({ step })
       <input v-if="naming" ref="nameEl" class="input name" :value="currentFloor()?.name" aria-label="Floor name" @change="setName" @blur="naming = false" @keydown.enter="($event.target as HTMLInputElement).blur()" />
       <button v-else class="btn cur" title="All floors" data-test="floor-current" @click="open = !open">{{ currentFloor()?.name }}</button>
       <button class="btn btn-icon" title="Floor above (PgUp)" :disabled="!above" data-test="floor-up" @click="step(1)"><ChevronUp :size="15" /></button>
-      <button class="btn btn-icon" :class="{ 'btn-primary': locked }" :title="locked ? `Players stay on ${floors().find(f => f.id === live.playerFloorId)?.name}: click to let them follow you` : 'Players see the floor you see: click to keep them on this one'" data-test="floor-lock" @click="lock"><component :is="locked ? Lock : LockOpen" :size="14" /></button>
+      <button class="btn btn-icon" :class="{ 'btn-primary': locked }" :title="locked ? `Players stay on ${floors().find(f => f.id === live.playerFloorId)?.name}: click to let them follow their tokens` : 'Players see the floor their tokens stand on (yours while they have none): click to keep them on this one'" data-test="floor-lock" @click="lock"><component :is="locked ? Lock : LockOpen" :size="14" /></button>
     </template>
     <button v-else class="btn" title="Floors: add one above or below this map" data-test="floor-current" @click="open = !open"><Layers :size="14" /> Floors</button>
 

@@ -8,8 +8,8 @@ import { DEFAULT_PLAYER_PREFS, readPlayerPrefs, toPlayerScene, type PlayerViewPr
 import { workspace } from '@/data/repo'
 import { onPlayerMessage, openPlayerWindow, sendToPlayers, type PlayerMessage } from '@/services/playerLink'
 import { areaCells } from './areasLive'
-import { floorBeside } from '@/domain/rules/floors'
-import { areasOn, floorOf, floors, floorWalls, live, tokensOn } from './live'
+import { playersFloor } from '@/domain/rules/playerFloor'
+import { areasOn, floors, floorWalls, live, mapTokens } from './live'
 import { sightFor } from './scene'
 import { zones } from './starshipLive'
 import { order, round } from './turns'
@@ -19,28 +19,34 @@ export const playerPrefs = ref<PlayerViewPrefs>({ ...DEFAULT_PLAYER_PREFS })
 export const mapSquares = ref<{ w: number; h: number } | undefined>(undefined)
 
 let queued = false
+/** The floor the players' window shows (FloorView id), as last sent. */
+let shownFloorId: string | null = null
 let stop: (() => void) | null = null
 
 function send(): void {
   queued = false
   const enc = live.encounter, map = live.map
   if (!enc || !map) return
-  // The GM's floor, unless the players are kept on one
-  const floor = floorOf(live.playerFloorId ?? live.floorId)
-  if (!floor) return
-  const tokens = tokensOn(floor.id)
-  const below = floorBeside(enc, map, floor.id, -1)
+  // The floor the players' tokens stand on (or the one they are kept on); nothing of the other floors is sent
+  const seen = playersFloor(enc, map, mapTokens(), { gmFloor: live.floorId, locked: live.playerFloorId, activeId: live.activeId })
+  const floor = seen.floor, tokens = seen.tokens, below = seen.below
+  shownFloorId = floor.id
+  // With sight on and the GM seeing everything, players see what their tokens see together;
+  // an acting token on another floor sees nothing here, so then the party's sight counts
+  const mode = live.fovMode === 'gm' || (live.fovMode === 'active' && !tokens.some(t => t.id === live.activeId)) ? 'group' : live.fovMode
+  const sight = sightFor(enc.fovEnabled, mode, tokens, live.activeId, floorWalls(floor), mapSquares.value, false).lit
+  // No darkness at all is drawn for an empty list: when the party stands on other floors only, this one stays dark
+  const lit = enc.fovEnabled && !sight.length && mapTokens().some(t => t.playerToken) ? [[]] : sight
   // The state is reactive; a message must be plain data
   sendToPlayers(JSON.parse(JSON.stringify({
     type: 'encounter',
     scene: toPlayerScene({
       encounterId: enc.id, map: floor.image, grid: floor.grid, fog: floor.fog, tokens: [...live.tokens.filter(t => t.sensor), ...tokens], order: order.value,
       floorName: floors().length > 1 ? floor.name : null,
-      below: below ? { map: below.image, grid: below.grid, fog: below.fog, tokens: tokensOn(below.id) } : null,
+      below: below ? { map: below.floor.image, grid: below.floor.grid, fog: below.floor.fog, tokens: below.tokens } : null,
       zones: live.tokens.some(t => t.sensor) ? zones.value : null,
       areas: areasOn(floor.id).map(a => ({ id: a.id, color: a.color, hidden: a.hidden, cells: [...areaCells(a)] })),
-      // With sight on and the GM seeing everything, players see what their tokens see together
-      lit: sightFor(enc.fovEnabled, live.fovMode === 'gm' ? 'group' : live.fovMode, tokens, live.activeId, floorWalls(floor), mapSquares.value, false).lit,
+      lit,
       running: enc.status === 'active', round: round.value, activeId: live.activeId, prefs: playerPrefs.value,
     }),
   })) as PlayerMessage)
@@ -73,5 +79,7 @@ export function openPlayers(): void {
 }
 
 export function pingPlayers(col: number, row: number, focus: boolean): void {
+  // A ping on another floor than the players' would point them at a spot of the wrong map
+  if (shownFloorId !== null && shownFloorId !== live.floorId) return
   sendToPlayers({ type: 'ping', col, row, focus })
 }
