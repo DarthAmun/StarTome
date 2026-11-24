@@ -6,6 +6,7 @@
  * can be seen.
  */
 import type { ImageRef } from '@/domain/schema/common'
+import { DEFAULT_GRID_LOOK, type GridLook } from './gridLabels'
 import { healthState, type HealthState, type TokenCondition, type TokenTimer } from './conditions'
 import type { Point } from './walls'
 
@@ -112,8 +113,8 @@ export interface PlayerScene {
   floorName: string | null
   /** The floor below, drawn faded where this one is empty: its map, fog and the tokens players may see on it. */
   below: { map: ImageRef | null; grid: PlayerScene['grid']; fog: Record<string, string>; tokens: PlayerToken[] } | null
-  /** Square names ("A1") on the grid. */
-  cellLabels: boolean
+  /** How the grid looks: colour, lines every 5 squares, square names. */
+  gridLook: GridLook
 }
 
 export function toPlayerToken(t: PlayerSource): PlayerToken {
@@ -156,7 +157,7 @@ export interface PlayerSceneInput {
   /** The floor shown, when the map has more than one; the tokens given are those on it. */
   floorName?: string | null
   below?: { map: ImageRef | null; grid: PlayerScene['grid']; fog: Record<string, string>; tokens: PlayerSource[] } | null
-  cellLabels?: boolean
+  gridLook?: GridLook
 }
 
 export function toPlayerScene(i: PlayerSceneInput): PlayerScene {
@@ -169,7 +170,7 @@ export function toPlayerScene(i: PlayerSceneInput): PlayerScene {
     running: i.running, round: i.round,
     // A hidden token's turn is nobody's turn, unless it shows as "?"
     activeId: turns.some(t => t.id === i.activeId) ? i.activeId : null,
-    turns, prefs: { ...i.prefs }, floorName: i.floorName ?? null, cellLabels: !!i.cellLabels,
+    turns, prefs: { ...i.prefs }, floorName: i.floorName ?? null, gridLook: { ...(i.gridLook ?? DEFAULT_GRID_LOOK) },
     below: i.below ? { map: i.below.map, grid: { ...i.below.grid }, fog: { ...i.below.fog }, tokens: i.below.tokens.filter(t => t.visible && !t.sensor).map(toPlayerToken) } : null,
     sensor: i.zones ? { zones: i.zones, ships: i.tokens.filter(t => t.visible && t.sensor).map(toPlayerShip) } : null,
   }

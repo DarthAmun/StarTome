@@ -1,5 +1,6 @@
 /** Drawing one token: ring, portrait or initial, HP arc, condition ring, badges. */
 import * as PIXI from 'pixi.js'
+import { cellName } from '@/domain/rules/gridLabels'
 import type { Grid, SceneToken } from './types'
 
 const TEMP_HP = 0x4a90d9
@@ -28,7 +29,7 @@ function badge(c: PIXI.Container, x: number, y: number, text: string, color: num
   c.addChild(bg, t)
 }
 
-export interface TokenDrawOptions { gm: boolean; active: boolean; /** Pixels a square takes on screen: small tokens drop their nameplate. */ screenCell: number }
+export interface TokenDrawOptions { gm: boolean; active: boolean; /** Pixels a square takes on screen: small tokens drop their nameplate. */ screenCell: number; /** The square it stands on beside its name: "Goblin · D5". */ cell?: boolean }
 
 export function drawToken(t: SceneToken, grid: Grid, texture: PIXI.Texture | null, opts: TokenDrawOptions): PIXI.Container {
   const size = grid.size * t.size, R = size / 2
@@ -91,8 +92,11 @@ export function drawToken(t: SceneToken, grid: Grid, texture: PIXI.Texture | nul
     })
   }
 
-  if (opts.screenCell >= 32) {
-    const label = new PIXI.Text({ text: t.name, style: { fontSize: 10, fill: 0xc8c8e8, fontFamily: 'system-ui', stroke: { color: 0x000000, width: 3 } } })
+  // The square is that of its top-left corner; zoomed far out only the square stays
+  const square = opts.cell ? cellName(Math.floor(t.x + 0.01), Math.floor(t.y + 0.01)) : ''
+  const plate = opts.screenCell >= 32 ? [t.name, square].filter(Boolean).join(' · ') : square
+  if (plate) {
+    const label = new PIXI.Text({ text: plate, style: { fontSize: 10, fill: 0xc8c8e8, fontFamily: 'system-ui', stroke: { color: 0x000000, width: 3 } } })
     label.anchor.set(0.5, 0)
     label.position.set(R, size + 2)
     c.addChild(label)

@@ -74,3 +74,4 @@ export interface FovView {
 }
 
 export type { Point, Wall, WallKind }
+export type { GridLook } from '@/domain/rules/gridLabels'

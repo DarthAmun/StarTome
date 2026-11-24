@@ -18,6 +18,7 @@ const scene = shallowRef<PlayerScene | null>(null)
 let engine: MapEngine | null = null
 let observer: ResizeObserver | null = null
 let shownMap: string | null | undefined
+let shownLook: string | undefined
 const offs: (() => void)[] = []
 
 const byId = computed(() => new Map((scene.value?.tokens ?? []).map(t => [t.id, t])))
@@ -26,7 +27,7 @@ async function draw(s: PlayerScene | null) {
   scene.value = s
   if (!engine || !s) return
   engine.setGrid(s.grid)
-  engine.setCellLabels(!!s.cellLabels)
+  if (JSON.stringify(s.gridLook) !== shownLook) { shownLook = JSON.stringify(s.gridLook); engine.setGridLook(s.gridLook) }
   const mapKey = JSON.stringify(s.map)
   if (mapKey !== shownMap) { shownMap = mapKey; await engine.setMap(await imageUrlOf(s.map, true)); engine.fit() }
   engine.setFog(s.fog)

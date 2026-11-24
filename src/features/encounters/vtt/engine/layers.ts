@@ -1,5 +1,6 @@
 /** Drawing the still parts of a scene: grid, fog, walls, areas, the ruler, sight and pings. */
 import * as PIXI from 'pixi.js'
+import { colorNumber, DEFAULT_GRID_LOOK, type GridLook } from '@/domain/rules/gridLabels'
 import { isDoorWall } from '@/domain/rules/walls'
 import type { Grid, Point, SceneArea, SceneStair, Viewport, Wall, WallKind } from './types'
 
@@ -8,12 +9,24 @@ const PING_COLOR = 0xffd24a
 const PING_MS = 2200
 const FOV_OUTLINES = [0x4ecdc4, 0xff9f43, 0xff6b6b, 0xa29bfe, 0x55efc4, 0xfd79a8]
 
-export function drawGrid(g: PIXI.Graphics, grid: Grid, w: number, h: number, scale: number): void {
+/** The grid lines in the map's colour; with `major`, every 5th line (from square A1's corner) is stronger. */
+export function drawGrid(g: PIXI.Graphics, grid: Grid, w: number, h: number, scale: number, look: GridLook = DEFAULT_GRID_LOOK): void {
   g.clear()
   if (!w || !h || grid.size < 4) return
-  for (let x = ((grid.offsetX % grid.size) + grid.size) % grid.size; x < w; x += grid.size) g.moveTo(x, 0).lineTo(x, h)
-  for (let y = ((grid.offsetY % grid.size) + grid.size) % grid.size; y < h; y += grid.size) g.moveTo(0, y).lineTo(w, y)
-  g.stroke({ width: 1 / scale, color: 0xeeeeee, alpha: 0.35 })
+  const color = colorNumber(look.color)
+  // Line positions across one axis, and which of them are every 5th from the grid's origin
+  const across = (offset: number, end: number) => {
+    const all: { p: number; major: boolean }[] = []
+    for (let p = ((offset % grid.size) + grid.size) % grid.size; p < end; p += grid.size) all.push({ p, major: look.major && Math.round((p - offset) / grid.size) % 5 === 0 })
+    return all
+  }
+  const xs = across(grid.offsetX, w), ys = across(grid.offsetY, h)
+  for (const major of [false, true]) {
+    for (const x of xs) if (x.major === major) g.moveTo(x.p, 0).lineTo(x.p, h)
+    for (const y of ys) if (y.major === major) g.moveTo(0, y.p).lineTo(w, y.p)
+    if (!major) g.stroke({ width: 1 / scale, color, alpha: look.alpha })
+    else if (look.major) g.stroke({ width: 2.2 / scale, color, alpha: Math.min(1, look.alpha * 1.8 + 0.1) })
+  }
 }
 
 /** Numbered marks on squares (a starship's battle stations); `off` = malfunctioning. */

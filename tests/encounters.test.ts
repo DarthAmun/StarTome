@@ -14,6 +14,7 @@ import { rateTokens } from '@/domain/rules/difficulty'
 import { newRulesEntity } from '@/domain/rules/factory'
 import { floorsOf, MAIN_FLOOR } from '@/domain/rules/floors'
 import { encounterOwner, STASH } from '@/domain/rules/inventory'
+import { DEFAULT_GRID_LOOK } from '@/domain/rules/gridLabels'
 import { DEFAULT_PLAYER_PREFS, toPlayerScene, type PlayerSource } from '@/domain/rules/playerView'
 import type { Creature, Item, RulesEntity } from '@/domain/rules/types'
 import { visibilityPolygon, wallAt, wallsToSegments, type Wall } from '@/domain/rules/walls'
@@ -301,6 +302,12 @@ describe('the players\' view of an encounter', () => {
     expect(scene.below?.tokens.map(t => [t.id, t.hp, t.health])).toEqual([['f', null, 'critical']])
     expect(JSON.stringify(scene.below)).not.toMatch(/Lurker|Doomed|Breath/)
     expect(toPlayerScene(input()).below).toBeNull()
+  })
+
+  it('sends how the map\'s grid looks, the default one for a map without', () => {
+    const look = { color: '#203040', alpha: 0.5, major: true, rulers: true, tokenCells: false }
+    expect(toPlayerScene({ ...input(), gridLook: look }).gridLook).toEqual(look)
+    expect(toPlayerScene(input()).gridLook).toEqual(DEFAULT_GRID_LOOK)
   })
 
   it('shows a hidden combatant\'s turn as "?" when asked to', () => {

@@ -20,6 +20,7 @@ import { rate } from '../difficulty'
 import TokenLibrary from '../TokenLibrary.vue'
 import { currentFloor, floors, flushSaves, live, placeActor, placeCreature, reloadMap, saveEncounter, saveFloor, saveMap, showFloor, tokensOn } from './live'
 import { offerImages } from './floorImages'
+import { DEFAULT_GRID_LOOK, type GridLook } from '@/domain/rules/gridLabels'
 import { playerPrefs, setPlayerPrefs } from './playerSync'
 
 const emit = defineEmits<{ unlinked: [id: string] }>()
@@ -59,6 +60,9 @@ function grid(field: 'size' | 'offsetX' | 'offsetY', e: Event) {
   const v = Number((e.target as HTMLInputElement).value)
   if (floor.value && Number.isFinite(v)) saveFloor({ grid: { ...floor.value.grid, [field]: field === 'size' ? Math.max(8, v) : v } })
 }
+/** The grid's look is the map's, for all its floors and both windows. */
+const gridLook = computed<GridLook>(() => live.map?.gridLook ?? DEFAULT_GRID_LOOK)
+function setLook(patch: Partial<GridLook>) { saveMap({ gridLook: { ...gridLook.value, ...patch } }) }
 async function addCreature(e: RulesEntity) { await placeCreature(e.id, 10, 5, null, { spread: true }).catch(err => reportError('Placing the creature', err)) }
 async function addActor(a: Actor) {
   const { token, unlinked } = await placeActor(a.id, 4, 5, { spread: true })
@@ -97,7 +101,14 @@ function openLoot() {
         <label><span class="label">Offset X</span><input class="input num" type="number" :value="floor?.grid.offsetX" @change="grid('offsetX', $event)" /></label>
         <label><span class="label">Offset Y</span><input class="input num" type="number" :value="floor?.grid.offsetY" @change="grid('offsetY', $event)" /></label>
       </div>
-      <label class="dim" title="Letters for columns, numbers for rows, small in a corner of each square; the players' window shows them too"><input type="checkbox" :checked="!!live.map?.cellLabels" data-test="cell-labels-switch" @change="saveMap({ cellLabels: !live.map?.cellLabels }, true)" /> Square names on the grid (A1, B2 …)</label>
+      <div class="row grid-look">
+        <label><span class="label">Grid colour</span><input type="color" :value="gridLook.color" aria-label="Grid colour" data-test="grid-color" @input="setLook({ color: ($event.target as HTMLInputElement).value })" /></label>
+        <label class="grow"><span class="label">Strength</span><input type="range" min="0.05" max="1" step="0.05" :value="gridLook.alpha" aria-label="Grid strength" @input="setLook({ alpha: Number(($event.target as HTMLInputElement).value) })" /></label>
+        <button v-if="gridLook.color !== DEFAULT_GRID_LOOK.color || gridLook.alpha !== DEFAULT_GRID_LOOK.alpha" class="btn btn-ghost" title="The default colour and strength" @click="setLook({ color: DEFAULT_GRID_LOOK.color, alpha: DEFAULT_GRID_LOOK.alpha })">Reset</button>
+      </div>
+      <label class="dim"><input type="checkbox" :checked="gridLook.major" data-test="grid-major" @change="setLook({ major: !gridLook.major })" /> A stronger line every 5 squares</label>
+      <label class="dim" title="Column letters along the top, row numbers down the left, in the players' window too"><input type="checkbox" :checked="gridLook.rulers" data-test="grid-rulers-switch" @change="setLook({ rulers: !gridLook.rulers })" /> Square names along the edges (A, B … and 1, 2 …)</label>
+      <label class="dim" title="The square each token stands on, beside its name: Goblin · D5"><input type="checkbox" :checked="gridLook.tokenCells" data-test="grid-token-cells" @change="setLook({ tokenCells: !gridLook.tokenCells })" /> Each token's square beside its name</label>
       <label class="dim"><input type="checkbox" :checked="enc.fovEnabled" data-test="fov-switch" @change="saveEncounter({ fovEnabled: !enc.fovEnabled })" /> Sight and walls: tokens see only what walls allow</label>
       <label v-if="playlists.length"><span class="label">Music</span>
         <select class="input" :value="enc.playlistId ?? ''" @change="saveEncounter({ playlistId: ($event.target as HTMLSelectElement).value || null })"><option value="">None</option><option v-for="p in playlists" :key="p.id" :value="p.id">{{ p.name }}</option></select>
@@ -128,7 +139,7 @@ function openLoot() {
 <style scoped>
 .prep { display: flex; flex-direction: column; flex: none; }
 section { display: flex; flex-direction: column; gap: .45rem; padding: .6rem .7rem; border-bottom: var(--frame); }
-.row { display: flex; gap: .5rem; align-items: end; flex-wrap: wrap; } .num { width: 5.2rem; } p { margin: 0; font-size: .8rem; }
+.row { display: flex; gap: .5rem; align-items: end; flex-wrap: wrap; } .grid-look .grow { flex: 1; display: flex; flex-direction: column; } input[type=color] { width: 3rem; height: 1.9rem; padding: 0; border: var(--frame); border-radius: var(--radius); background: none; } .num { width: 5.2rem; } p { margin: 0; font-size: .8rem; }
 .floor-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: var(--frame); border-radius: var(--radius); }
 .floor-list li { display: flex; align-items: center; gap: .3rem; padding: .1rem .3rem; } .floor-list li + li { border-top: var(--frame); }
 .floor-list li.on { background: var(--accent-soft); } .floor-list label { font-size: .78rem; display: flex; gap: .2rem; align-items: center; }

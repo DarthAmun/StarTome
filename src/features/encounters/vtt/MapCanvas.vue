@@ -4,6 +4,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { newId } from '@/domain/ids'
 import { healthState } from '@/domain/rules/conditions'
 import { floorBeside, MAIN_FLOOR, stairsOn } from '@/domain/rules/floors'
+import { DEFAULT_GRID_LOOK } from '@/domain/rules/gridLabels'
 import { isDoorWall, type Wall } from '@/domain/rules/walls'
 import { imageUrlOf } from '@/ui/imageUrl'
 import { areaCells } from './areasLive'
@@ -110,7 +111,7 @@ onMounted(async () => {
   stops.push(watch(() => [live.floorId, live.map?.stairs, live.map?.floors.length, live.map?.mainFloor.level], refreshStairs, { immediate: true, deep: true }))
   stops.push(watch(() => [live.fovMode, live.encounter?.fovEnabled], refreshSight))
   stops.push(watch(() => tools.tool, () => e.toolChanged()))
-  stops.push(watch(() => !!live.map?.cellLabels, on => e.setCellLabels(on), { immediate: true }))
+  stops.push(watch(() => live.map?.gridLook, look => e.setGridLook(look ?? DEFAULT_GRID_LOOK), { immediate: true, deep: true }))
   // Station markers on the deck shown (one placed before decks were possible stands on the main deck)
   stops.push(watch(() => [markers.value, info.value?.malfunctioning, live.floorId], () => e.setMarkers(markers.value.filter(m => tokenFloor(m) === (currentFloor()?.id ?? MAIN_FLOOR)).map(m => ({ slot: m.slot, x: m.x, y: m.y, off: malfunctioning(m.slot) }))), { immediate: true, deep: true }))
 })

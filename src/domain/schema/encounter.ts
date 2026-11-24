@@ -1,5 +1,6 @@
 /** Encounters and what stands in them. The old encounter row is split by how often each part is written. */
 import { z } from 'zod'
+import { DEFAULT_GRID_LOOK } from '@/domain/rules/gridLabels'
 import { zId, zImageRef, zIso, zOpaque, zPoint } from './common'
 
 /** What a token stands for: the one link that replaces v0.42's three link fields and three PC flags. */
@@ -110,8 +111,14 @@ export const zEncounterMap = z.object({
   floors: z.array(zFloor).default([]),
   /** Stairs between two floors: a token on one end is offered the other (floorId null = the main floor). */
   stairs: z.array(zStair).default([]),
-  /** Square names ("A1") on the grid, in the GM's and the players' window. */
-  cellLabels: z.boolean().default(false),
+  /** How the grid looks in the GM's and the players' window: colour, lines every 5 squares, square names (GridLook). */
+  gridLook: z.object({
+    color: z.string().default(DEFAULT_GRID_LOOK.color),
+    alpha: z.number().min(0).max(1).default(DEFAULT_GRID_LOOK.alpha),
+    major: z.boolean().default(false),
+    rulers: z.boolean().default(false),
+    tokenCells: z.boolean().default(false),
+  }).default(() => ({ ...DEFAULT_GRID_LOOK })),
 })
 export type EncounterMap = z.infer<typeof zEncounterMap>
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cellName, columnName } from '@/domain/rules/gridLabels'
+import { cellName, colorNumber, columnName, rulerStep } from '@/domain/rules/gridLabels'
 
 describe('square names', () => {
   it('letters for columns, after Z come AA, AB …', () => {
@@ -24,5 +24,21 @@ describe('square names', () => {
     expect(cellName(-1, 3)).toBe('')
     expect(cellName(3, -1)).toBe('')
     expect(columnName(-1)).toBe('')
+  })
+})
+
+describe('grid look', () => {
+  it('names every square on a ruler while there is room, else every 2nd, 5th, 10th …', () => {
+    expect(rulerStep(40, 22)).toBe(1)
+    expect(rulerStep(22, 22)).toBe(1)
+    expect(rulerStep(15, 22)).toBe(2)
+    expect(rulerStep(6, 22)).toBe(5)
+    expect(rulerStep(2, 22)).toBe(20)
+  })
+
+  it('reads the grid colour, falling back to the default', () => {
+    expect(colorNumber('#ff8000')).toBe(0xff8000)
+    expect(colorNumber('#FF8000')).toBe(0xff8000)
+    expect(colorNumber('red')).toBe(0xeeeeee)
   })
 })

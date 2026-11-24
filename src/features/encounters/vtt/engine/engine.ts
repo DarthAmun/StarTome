@@ -6,9 +6,9 @@
 import * as PIXI from 'pixi.js'
 import { isDoorWall, wallAt } from '@/domain/rules/walls'
 import { drawArea, drawFog, drawGrid, drawMarkers, drawStairs, drawRuler, drawSight, drawWallDraft, drawWalls, playPing } from './layers'
-import { CellLabels } from './labels'
+import { GridRulers } from './rulers'
 import { drawToken } from './tokens'
-import type { Cell, EngineHandlers, FovView, Grid, Point, SceneArea, SceneBelow, SceneStair, SceneToken, Viewport, Wall } from './types'
+import type { Cell, EngineHandlers, FovView, Grid, GridLook, Point, SceneArea, SceneBelow, SceneStair, SceneToken, Viewport, Wall } from './types'
 
 const LONG_PRESS_MS = 550
 
@@ -38,7 +38,9 @@ export class MapEngine {
   private erase = new PIXI.Graphics()
   private outline = new PIXI.Graphics()
   private pings = new PIXI.Container()
-  private labels: CellLabels | null = null
+  private labels: GridRulers | null = null
+  /** How the grid looks; null = the default look. */
+  private look: GridLook | null = null
 
   private view: Viewport = { x: 0, y: 0, scale: 1 }
   private grid: Grid = { size: 40, offsetX: 0, offsetY: 0 }
@@ -73,7 +75,7 @@ export class MapEngine {
     await this.app.init({ resizeTo: this.container, backgroundColor: 0x0e0e1a, antialias: true, autoDensity: true, resolution: window.devicePixelRatio || 1 })
     if (this.dead) { this.app.destroy(true); return }
     this.container.appendChild(this.app.canvas)
-    this.labels = new CellLabels(this.container)
+    this.labels = new GridRulers(this.container)
     this.belowC.addChild(this.belowMap, this.belowTokens, this.belowFog)
     this.belowC.alpha = 0.35
     this.belowC.eventMode = 'none'
@@ -131,8 +133,8 @@ export class MapEngine {
   setFog(fog: Record<string, string>): void { this.fog = fog; this.redrawFog() }
   setWalls(walls: Wall[]): void { this.walls = walls; if (this.gm && this.ready) drawWalls(this.wallsG, walls, this.grid) }
   setFov(fov: FovView): void { this.fov = fov; this.redrawSight() }
-  /** Square names ("A1") in a corner of each square. */
-  setCellLabels(on: boolean): void { if (this.labels) { this.labels.shown = on; this.redrawSight() } }
+  /** Grid colour, lines every 5 squares, square names on the edges and beside tokens. */
+  setGridLook(look: GridLook): void { this.look = { ...look }; if (this.labels) this.labels.shown = look.rulers; this.redrawStill(); void this.drawTokens() }
 
   setAreas(areas: SceneArea[]): void {
     this.areas = areas
@@ -171,8 +173,7 @@ export class MapEngine {
 
   setStairs(stairs: SceneStair[]): void {
     this.stairs = stairs
-    if (!this.ready) return
-    drawStairs(this.stairsC, stairs, this.grid)
+    if (this.ready) drawStairs(this.stairsC, stairs, this.grid)
   }
 
   setTokens(tokens: SceneToken[], activeId: string | null): void {
@@ -250,7 +251,7 @@ export class MapEngine {
 
   private redrawStill(): void {
     if (!this.ready) return
-    drawGrid(this.gridG, this.grid, this.mapSize.w || 60 * this.grid.size, this.mapSize.h || 40 * this.grid.size, this.view.scale)
+    this.redrawGrid()
     this.redrawFog()
     if (this.gm) drawWalls(this.wallsG, this.walls, this.grid)
     this.setAreas(this.areas)
@@ -258,6 +259,8 @@ export class MapEngine {
     this.setStairs(this.stairs)
     this.redrawSight()
   }
+
+  private redrawGrid(): void { drawGrid(this.gridG, this.grid, this.mapSize.w || 60 * this.grid.size, this.mapSize.h || 40 * this.grid.size, this.view.scale, this.look ?? undefined) }
 
   private redrawFog(): void {
     if (this.ready) drawFog(this.fogG, this.fog, this.grid, this.mapSize.w || 60 * this.grid.size, this.mapSize.h || 40 * this.grid.size, this.gm ? 0.6 : 1)
@@ -279,7 +282,7 @@ export class MapEngine {
     this.tokensC.removeChildren().forEach(c => c.destroy({ children: true }))
     const screenCell = this.grid.size * this.view.scale
     list.forEach((t, i) => {
-      const node = drawToken(t, this.grid, textures[i] ?? null, { gm: this.gm, active: t.id === this.activeId, screenCell })
+      const node = drawToken(t, this.grid, textures[i] ?? null, { gm: this.gm, active: t.id === this.activeId, screenCell, cell: !!this.look?.tokenCells })
       node.eventMode = 'static'
       node.cursor = this.gm ? 'grab' : 'default'
       node.on('pointerdown', e => this.tokenDown(e, t, node))
@@ -399,7 +402,7 @@ export class MapEngine {
     this.view.x = e.offsetX - wx * this.view.scale
     this.view.y = e.offsetY - wy * this.view.scale
     this.applyView()
-    drawGrid(this.gridG, this.grid, this.mapSize.w || 60 * this.grid.size, this.mapSize.h || 40 * this.grid.size, this.view.scale)
+    this.redrawGrid()
     this.handlers.onViewport?.(this.viewport)
   }
 
